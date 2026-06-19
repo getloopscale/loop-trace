@@ -6,5 +6,7 @@ export { type SpanRepository } from "./domain/span-repository.js";
 export {
   DrizzleSpanRepository,
   createPool,
+  createSpanRepository,
+  migrateLatest,
 } from "./infrastructure/db/drizzle-span-repository.js";
 export { spans } from "./infrastructure/db/schema.js";

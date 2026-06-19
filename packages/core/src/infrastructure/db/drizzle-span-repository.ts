@@ -1,5 +1,7 @@
+import { fileURLToPath } from "node:url";
 import { eq } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
 
 import type { Span } from "../../domain/span.js";
@@ -70,4 +72,23 @@ export class DrizzleSpanRepository implements SpanRepository {
   }
 }
 
-export { drizzle };
+/**
+ * Composition helper: build a {@link DrizzleSpanRepository} backed by a fresh pool
+ * for the given Postgres URI. Returns the pool too so callers can close it. Lets
+ * the API composition root wire persistence without importing drizzle internals.
+ */
+export function createSpanRepository(connectionString: string): {
+  repo: DrizzleSpanRepository;
+  pool: pg.Pool;
+} {
+  const pool = createPool(connectionString);
+  const db = drizzle(pool);
+  return { repo: new DrizzleSpanRepository(db), pool };
+}
+
+const MIGRATIONS_DIR = fileURLToPath(new URL("./migrations", import.meta.url));
+
+/** Apply the committed Drizzle migrations (the real release artifact) to `pool`. */
+export async function migrateLatest(pool: pg.Pool): Promise<void> {
+  await migrate(drizzle(pool), { migrationsFolder: MIGRATIONS_DIR });
+}
