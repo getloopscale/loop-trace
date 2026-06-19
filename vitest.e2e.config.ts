@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
 
 /**
  * E2E test config — exercises the full stack (API + Postgres) via docker compose.
@@ -6,6 +7,13 @@ import { defineConfig } from "vitest/config";
  * API over HTTP. Fails loudly if compose cannot start (no silent skip for e2e).
  */
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@usetheo/lens-core": fileURLToPath(
+        new URL("./packages/core/src/index.ts", import.meta.url),
+      ),
+    },
+  },
   test: {
     include: ["tests/e2e/**/*.e2e.test.ts"],
     exclude: ["**/node_modules/**", "**/dist/**"],
