@@ -1,0 +1,36 @@
+{
+  "name": "theo-lens-workspace",
+  "version": "0.0.0",
+  "description": "Workspace root for Theo Lens — OpenTelemetry-native observability for AI agents",
+  "type": "module",
+  "license": "Apache-2.0",
+  "private": true,
+  "packageManager": "pnpm@11.1.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --noEmit || tsc -b",
+    "lint": "eslint .",
+    "test": "vitest run -c vitest.contract.config.ts",
+    "test:integration": "vitest run -c vitest.integration.config.ts",
+    "test:e2e": "vitest run -c vitest.e2e.config.ts",
+    "coverage": "vitest run -c vitest.contract.config.ts --coverage",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "compose:up": "docker compose up -d",
+    "compose:down": "docker compose down"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/pg": "^8.11.0",
+    "@vitest/coverage-v8": "^4.0.0",
+    "drizzle-kit": "^0.31.0",
+    "eslint": "^9.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.4.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^4.0.0"
+  }
+}

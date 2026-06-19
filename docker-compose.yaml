@@ -1,0 +1,45 @@
+# Local dev + e2e stack for Theo Lens M0 walking skeleton.
+#
+# Two services: a plain Postgres (no pgvector — M0 has no embeddings, blueprint D2)
+# and the API. Usage:
+#   docker compose up -d postgres   # DB only (for integration tests)
+#   docker compose up -d            # full stack (for e2e / local run)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: theolens_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${THEOLENS_PG_USER:-theolens}
+      POSTGRES_PASSWORD: ${THEOLENS_PG_PASSWORD:-theolens}
+      POSTGRES_DB: ${THEOLENS_PG_DB:-theolens}
+    ports:
+      - "${THEOLENS_PG_PORT:-5432}:5432"
+    volumes:
+      - theolens_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${THEOLENS_PG_USER:-theolens} -d ${THEOLENS_PG_DB:-theolens}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: theolens_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      THEOLENS_PG_URI: postgresql://${THEOLENS_PG_USER:-theolens}:${THEOLENS_PG_PASSWORD:-theolens}@postgres:5432/${THEOLENS_PG_DB:-theolens}
+      THEOLENS_PORT: "4318"
+    ports:
+      - "${THEOLENS_API_PORT:-4318}:4318"
+
+volumes:
+  theolens_pgdata:
+    name: theolens_pgdata
