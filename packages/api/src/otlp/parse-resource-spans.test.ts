@@ -43,18 +43,59 @@ describe("parseResourceSpans", () => {
         { key: "i", value: { intValue: "42" } },
         { key: "b", value: { boolValue: true } },
         { key: "d", value: { doubleValue: 1.5 } },
-        { key: "arr", value: { arrayValue: { values: [] } } },
       ],
     };
     const span = parseResourceSpans(envelope([withAttrs]))[0];
-    expect(span?.attributes).toMatchObject({
-      s: "x",
-      i: "42",
-      b: true,
-      d: 1.5,
-    });
-    // unknown/array value kept raw, no throw
-    expect(span?.attributes?.["arr"]).toBeDefined();
+    expect(span?.attributes).toEqual({ s: "x", i: "42", b: true, d: 1.5 });
+  });
+
+  it("flattenAttrs_recursively_flattens_arrayValue_to_js_array", () => {
+    const withAttrs = {
+      ...rawSpan,
+      attributes: [
+        {
+          key: "gen_ai.prompt",
+          value: {
+            arrayValue: {
+              values: [{ stringValue: "a" }, { intValue: "7" }],
+            },
+          },
+        },
+        { key: "empty", value: { arrayValue: {} } },
+      ],
+    };
+    const span = parseResourceSpans(envelope([withAttrs]))[0];
+    // arrayValue must become a real JS array, NOT the {values:[...]} wrapper.
+    expect(span?.attributes?.["gen_ai.prompt"]).toEqual(["a", "7"]);
+    expect(span?.attributes?.["empty"]).toEqual([]);
+  });
+
+  it("flattenAttrs_flattens_kvlistValue_to_object", () => {
+    const withAttrs = {
+      ...rawSpan,
+      attributes: [
+        {
+          key: "meta",
+          value: {
+            kvlistValue: {
+              values: [{ key: "nested", value: { stringValue: "v" } }],
+            },
+          },
+        },
+      ],
+    };
+    const span = parseResourceSpans(envelope([withAttrs]))[0];
+    expect(span?.attributes?.["meta"]).toEqual({ nested: "v" });
+  });
+
+  it("flattenAttrs_degrades_unknown_value_kind_to_string_not_wrapper", () => {
+    const withAttrs = {
+      ...rawSpan,
+      attributes: [{ key: "weird", value: { somethingNew: 1 } }],
+    };
+    const span = parseResourceSpans(envelope([withAttrs]))[0];
+    // never persist an opaque wrapper object for an unknown kind
+    expect(typeof span?.attributes?.["weird"]).toBe("string");
   });
 
   it("parse_throws_OtlpParseError_on_malformed_span", () => {

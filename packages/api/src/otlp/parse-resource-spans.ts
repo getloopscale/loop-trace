@@ -8,16 +8,37 @@ export class OtlpParseError extends Error {
   }
 }
 
-/** Flatten an OTLP attribute value wrapper to a plain JS value. */
+/**
+ * Flatten an OTLP `AnyValue` wrapper to a plain JS value. Handles every oneof
+ * kind: string/bool/int/double/bytes scalars, and the recursive arrayValue /
+ * kvlistValue composites (mirrors the canonical receiver — list attributes like
+ * `gen_ai.prompt` MUST become real JS arrays, not the raw `{values:[...]}` wrapper).
+ * An unrecognized kind degrades to a JSON string, never an opaque wrapper object.
+ */
 function flattenValue(value: unknown): unknown {
   if (value == null || typeof value !== "object") return value;
   const v = value as Record<string, unknown>;
   if ("stringValue" in v) return v["stringValue"];
-  if ("intValue" in v) return v["intValue"]; // proto-json encodes int64 as string
   if ("boolValue" in v) return v["boolValue"];
+  if ("intValue" in v) return v["intValue"]; // proto-json encodes int64 as string
   if ("doubleValue" in v) return v["doubleValue"];
-  if ("arrayValue" in v) return v["arrayValue"]; // keep raw — degrade gracefully
-  return v;
+  if ("bytesValue" in v) return v["bytesValue"]; // base64 string per OTLP/JSON
+  if ("arrayValue" in v) {
+    const values = (v["arrayValue"] as { values?: unknown } | null)?.values;
+    return Array.isArray(values) ? values.map(flattenValue) : [];
+  }
+  if ("kvlistValue" in v) {
+    const kvs = (v["kvlistValue"] as { values?: unknown } | null)?.values;
+    const out: Record<string, unknown> = {};
+    if (Array.isArray(kvs)) {
+      for (const kv of kvs) {
+        const e = kv as { key?: unknown; value?: unknown };
+        if (typeof e.key === "string") out[e.key] = flattenValue(e.value);
+      }
+    }
+    return out;
+  }
+  return JSON.stringify(v); // unknown AnyValue kind — never persist a raw wrapper
 }
 
 /** Flatten OTLP `attributes: [{key, value}]` to a `Record<string, unknown>`. */

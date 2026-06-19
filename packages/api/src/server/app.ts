@@ -17,6 +17,22 @@ import { spansIngested, logIngest } from "./metrics.js";
 export function createApp(repo: SpanRepository): Hono {
   const app = new Hono();
 
+  // Fail-loud, fail-clear (Rule 8): any unhandled error (e.g. Postgres
+  // unavailable during repo.save/getBySpanId) is logged with context and
+  // surfaced as 500 — never a silent partial success.
+  app.onError((err, c) => {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        msg: "request_failed",
+        method: c.req.method,
+        path: c.req.path,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+    return c.json({ error: "internal error" }, 500);
+  });
+
   app.post("/v1/traces", async (c) => {
     const contentType = (c.req.header("content-type") ?? "").toLowerCase();
     if (!contentType.includes("application/json")) {
