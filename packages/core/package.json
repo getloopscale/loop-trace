@@ -1,0 +1,22 @@
+{
+  "name": "@usetheo/lens-core",
+  "version": "0.0.0",
+  "description": "Domain + persistence for Theo Lens (spans, repository port, Drizzle adapter)",
+  "type": "module",
+  "license": "Apache-2.0",
+  "private": true,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.0",
+    "pg": "^8.13.0",
+    "zod": "^3.25.0"
+  }
+}
