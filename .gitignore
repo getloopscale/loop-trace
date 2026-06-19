@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Test / coverage
+coverage/
+.vitest/
+
+# Cloned SOTA peer source (study-only, read-only) — NOT tracked.
+# The catalog metadata IS tracked.
+knowledge-base/references/*/
+!knowledge-base/references/_catalog.md
+
+# Logs / OS
+*.log
+.DS_Store
