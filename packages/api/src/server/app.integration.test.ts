@@ -61,8 +61,9 @@ suite("createApp (integration)", () => {
     });
   }
 
-  it("post_traces_rejects_non_json_content_type_415", async () => {
-    const res = await post(tracesEnvelope(rawSpan), "application/x-protobuf");
+  it("post_traces_rejects_unsupported_content_type_415", async () => {
+    // M1 accepts json + protobuf; csv is unsupported → 415.
+    const res = await post(tracesEnvelope(rawSpan), "text/csv");
     expect(res.status).toBe(415);
   });
 

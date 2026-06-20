@@ -10,9 +10,17 @@ export const spanSchema = z.object({
   traceId: z.string().min(1),
   parentSpanId: z.string().optional(),
   name: z.string(),
+  kind: z.string().optional(),
   startTimeUnixNano: z.string().regex(/^\d+$/),
   endTimeUnixNano: z.string().regex(/^\d+$/),
   statusCode: z.string().optional(),
+  statusMessage: z.string().optional(),
+  // GenAI typed fields extracted from attributes (M1)
+  model: z.string().optional(),
+  provider: z.string().optional(),
+  inputTokens: z.number().int().optional(),
+  outputTokens: z.number().int().optional(),
+  sessionId: z.string().optional(),
   attributes: z.record(z.string(), z.unknown()).optional(),
 });
 

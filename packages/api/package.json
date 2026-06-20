@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.14.4",
+    "@opentelemetry/otlp-transformer": "^0.205.0",
     "@usetheo/lens-core": "workspace:*",
     "hono": "^4.7.18",
     "pg": "^8.13.0",

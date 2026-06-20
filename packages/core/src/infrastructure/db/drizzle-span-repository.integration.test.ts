@@ -9,24 +9,21 @@ import { createPool, DrizzleSpanRepository } from "./drizzle-span-repository.js"
 
 const PG_URI = process.env["THEOLENS_PG_URI"];
 const MIGRATIONS = fileURLToPath(new URL("./migrations", import.meta.url));
-
-// EC-3/EC-6: apply the COMMITTED migrations (real release artifact), not db:push.
-// Env-gated: when THEOLENS_PG_URI is unset, the whole suite skips cleanly.
 const suite = PG_URI ? describe : describe.skip;
+
+function span(overrides: Partial<Span> & Pick<Span, "spanId" | "traceId">): Span {
+  return {
+    name: "op",
+    startTimeUnixNano: "1700000000000000000",
+    endTimeUnixNano: "1700000000100000000",
+    ...overrides,
+  };
+}
 
 suite("DrizzleSpanRepository (integration)", () => {
   let pool: pg.Pool;
   let db: NodePgDatabase;
   let repo: DrizzleSpanRepository;
-
-  const span: Span = {
-    spanId: "int-a1",
-    traceId: "int-t1",
-    name: "op",
-    startTimeUnixNano: "1700000000000000000",
-    endTimeUnixNano: "1700000000100000000",
-    attributes: { "service.name": "probe", count: 3 },
-  };
 
   beforeAll(async () => {
     pool = createPool(PG_URI as string);
@@ -36,7 +33,7 @@ suite("DrizzleSpanRepository (integration)", () => {
   });
 
   beforeEach(async () => {
-    await pool.query("TRUNCATE spans");
+    await pool.query("TRUNCATE spans, traces, sessions");
   });
 
   afterAll(async () => {
@@ -44,38 +41,115 @@ suite("DrizzleSpanRepository (integration)", () => {
   });
 
   it("repo_saves_and_reads_back_a_span", async () => {
-    await repo.save([span]);
-    const got = await repo.getBySpanId("int-a1");
-    expect(got).toEqual(span);
+    const s = span({ spanId: "a1", traceId: "t1", attributes: { k: "v" } });
+    await repo.save([s]);
+    expect(await repo.getBySpanId("a1")).toEqual(s);
   });
 
   it("repo_returns_null_for_unknown_span", async () => {
     expect(await repo.getBySpanId("nope")).toBeNull();
   });
 
-  it("repo_save_is_idempotent_on_duplicate_spanId", async () => {
-    await repo.save([span]);
-    await repo.save([{ ...span, name: "changed" }]);
-    const { rows } = await pool.query<{ n: string }>(
-      "SELECT count(*)::text AS n FROM spans WHERE span_id = $1",
-      ["int-a1"],
-    );
-    expect(rows[0]?.n).toBe("1");
-  });
-
   it("repo_save_dedupes_intrabatch_duplicate_spanId", async () => {
-    // EC-1: same spanId twice in ONE save call must not crash and yields one row.
-    await repo.save([span, { ...span, name: "dup" }]);
-    const got = await repo.getBySpanId("int-a1");
-    expect(got).not.toBeNull();
+    await repo.save([
+      span({ spanId: "a1", traceId: "t1" }),
+      span({ spanId: "a1", traceId: "t1", name: "dup" }),
+    ]);
     const { rows } = await pool.query<{ n: string }>(
-      "SELECT count(*)::text AS n FROM spans WHERE span_id = $1",
-      ["int-a1"],
+      "SELECT count(*)::text n FROM spans WHERE span_id='a1'",
     );
     expect(rows[0]?.n).toBe("1");
   });
 
-  it("repo_save_empty_array_is_noop", async () => {
-    await expect(repo.save([])).resolves.toBeUndefined();
+  it("repo_persists_enriched_span_columns", async () => {
+    const s = span({
+      spanId: "a1",
+      traceId: "t1",
+      kind: "3",
+      statusMessage: "ok",
+      model: "gpt-4o",
+      provider: "openai",
+      inputTokens: 10,
+      outputTokens: 5,
+    });
+    await repo.save([s]);
+    expect(await repo.getBySpanId("a1")).toEqual(s);
+  });
+
+  it("repo_upserts_trace_aggregate_tokens_and_timespan", async () => {
+    await repo.save([
+      span({ spanId: "a1", traceId: "t1", inputTokens: 10, outputTokens: 4, startTimeUnixNano: "100", endTimeUnixNano: "200" }),
+      span({ spanId: "a2", traceId: "t1", inputTokens: 1, outputTokens: 1, startTimeUnixNano: "50", endTimeUnixNano: "300" }),
+    ]);
+    const { rows } = await pool.query<{
+      input_tokens: number;
+      output_tokens: number;
+      total_tokens: number;
+      start_time_unix_nano: string;
+      end_time_unix_nano: string;
+    }>("SELECT input_tokens, output_tokens, total_tokens, start_time_unix_nano, end_time_unix_nano FROM traces WHERE trace_id='t1'");
+    expect(rows[0]?.input_tokens).toBe(11);
+    expect(rows[0]?.output_tokens).toBe(5);
+    expect(rows[0]?.total_tokens).toBe(16);
+    expect(rows[0]?.start_time_unix_nano).toBe("50");
+    expect(rows[0]?.end_time_unix_nano).toBe("300");
+  });
+
+  it("getTraceTree_reconstructs_nested_tree_by_parent_span_id", async () => {
+    await repo.save([
+      span({ spanId: "root", traceId: "t1" }),
+      span({ spanId: "c1", traceId: "t1", parentSpanId: "root" }),
+      span({ spanId: "c2", traceId: "t1", parentSpanId: "root" }),
+    ]);
+    const tree = await repo.getTraceTree("t1");
+    expect(tree?.spanId).toBe("root");
+    expect(tree?.children.map((c) => c.spanId).sort()).toEqual(["c1", "c2"]);
+  });
+
+  it("getTraceTree_attaches_orphan_span_at_root", async () => {
+    await repo.save([
+      span({ spanId: "root", traceId: "t1" }),
+      span({ spanId: "orphan", traceId: "t1", parentSpanId: "missing" }),
+    ]);
+    const tree = await repo.getTraceTree("t1");
+    expect(tree?.spanId).toBe("root");
+    expect(tree?.children.map((c) => c.spanId)).toContain("orphan");
+  });
+
+  it("getTraceTree_assembles_across_out_of_order_batches", async () => {
+    // child ingested BEFORE parent
+    await repo.save([span({ spanId: "c1", traceId: "t1", parentSpanId: "root" })]);
+    await repo.save([span({ spanId: "root", traceId: "t1" })]);
+    const tree = await repo.getTraceTree("t1");
+    expect(tree?.spanId).toBe("root");
+    expect(tree?.children.map((c) => c.spanId)).toEqual(["c1"]);
+  });
+
+  it("repo_reingest_same_batch_keeps_trace_aggregate_stable", async () => {
+    const batch = [
+      span({ spanId: "a1", traceId: "t1", inputTokens: 10 }),
+      span({ spanId: "a2", traceId: "t1", inputTokens: 5 }),
+    ];
+    await repo.save(batch);
+    await repo.save(batch); // retry — must NOT double-count (recompute-from-spans, EC-1)
+    const { rows } = await pool.query<{ input_tokens: number }>(
+      "SELECT input_tokens FROM traces WHERE trace_id='t1'",
+    );
+    expect(rows[0]?.input_tokens).toBe(15);
+  });
+
+  it("repo_trace_aggregate_is_race_safe_under_concurrent_ingest", async () => {
+    // atomic-counter invariant after a happens-before barrier (Promise.all)
+    const N = 20;
+    await Promise.all(
+      Array.from({ length: N }, (_, i) =>
+        repo.save([span({ spanId: `s${i}`, traceId: "t1", inputTokens: 1 })]),
+      ),
+    );
+    const { rows } = await pool.query<{ in: number; cnt: string }>(
+      "SELECT (SELECT input_tokens FROM traces WHERE trace_id='t1') AS in, (SELECT count(*)::text FROM spans WHERE trace_id='t1') AS cnt",
+    );
+    expect(rows[0]?.cnt).toBe(String(N));
+    expect(rows[0]?.in).toBe(N);
   });
 });

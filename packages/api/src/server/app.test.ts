@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { Span, SpanRepository } from "@usetheo/lens-core";
+import type { Span, SpanRepository, TraceTreeNode } from "@usetheo/lens-core";
 
 import { createApp } from "./app.js";
-import { spansIngested } from "./metrics.js";
+import { spansIngested, tracesIngested } from "./metrics.js";
+import { encodeOtlpProtobuf } from "../otlp/decode-protobuf.js";
 
 /**
  * Contract-level tests for the route logic using an in-memory stub repository —
@@ -23,6 +24,22 @@ class StubSpanRepository implements SpanRepository {
 
   async getBySpanId(spanId: string): Promise<Span | null> {
     return this.store.get(spanId) ?? null;
+  }
+
+  async getTraceTree(traceId: string): Promise<TraceTreeNode | null> {
+    const rows = [...this.store.values()].filter((s) => s.traceId === traceId);
+    if (rows.length === 0) return null;
+    const nodes = new Map<string, TraceTreeNode>(
+      rows.map((s) => [s.spanId, { ...s, children: [] }]),
+    );
+    const all = [...nodes.values()];
+    const root = all.find((n) => n.parentSpanId == null) ?? all[0]!;
+    for (const node of all) {
+      if (node === root) continue;
+      const parent = node.parentSpanId ? nodes.get(node.parentSpanId) : undefined;
+      (parent ?? root).children.push(node);
+    }
+    return root;
   }
 }
 
@@ -46,6 +63,7 @@ describe("createApp (contract, stub repo)", () => {
     repo = new StubSpanRepository();
     app = createApp(repo);
     spansIngested.reset();
+    tracesIngested.reset();
   });
 
   function post(body: BodyInit, contentType = "application/json"): Promise<Response> {
@@ -63,8 +81,9 @@ describe("createApp (contract, stub repo)", () => {
     expect(spansIngested.value).toBe(1);
   });
 
-  it("post_traces_non_json_415_no_save_no_metric", async () => {
-    const res = await post(tracesEnvelope(rawSpan), "application/x-protobuf");
+  it("post_traces_unsupported_content_type_415_no_save_no_metric", async () => {
+    // M1 accepts json + protobuf; an unsupported type (csv) is 415 with no side-effect.
+    const res = await post(tracesEnvelope(rawSpan), "text/csv");
     expect(res.status).toBe(415);
     expect(repo.saveCalls).toHaveLength(0);
     expect(spansIngested.value).toBe(0);
@@ -102,5 +121,55 @@ describe("createApp (contract, stub repo)", () => {
     const res = await app.request("/v1/spans/c-a1");
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ spanId: "c-a1" });
+  });
+
+  it("post_protobuf_persists_and_returns_200", async () => {
+    const bytes = encodeOtlpProtobuf({
+      resourceSpans: [
+        { scopeSpans: [{ spans: [{ name: "op", traceId: Buffer.from([1, 2]), spanId: Buffer.from([3, 4]), startTimeUnixNano: "1", endTimeUnixNano: "2" }] }] },
+      ],
+    });
+    const res = await app.request("/v1/traces", {
+      method: "POST",
+      headers: { "content-type": "application/x-protobuf" },
+      body: bytes,
+    });
+    expect(res.status).toBe(200);
+    expect(repo.saveCalls).toHaveLength(1);
+    expect(tracesIngested.value).toBe(1);
+    // ids normalized to hex
+    expect(await repo.getBySpanId("0304")).not.toBeNull();
+  });
+
+  it("post_unsupported_content_type_415", async () => {
+    const res = await app.request("/v1/traces", {
+      method: "POST",
+      headers: { "content-type": "text/csv" },
+      body: "a,b",
+    });
+    expect(res.status).toBe(415);
+  });
+
+  it("get_trace_tree_returns_reconstructed_tree", async () => {
+    await post(
+      JSON.stringify({
+        resourceSpans: [
+          { scopeSpans: [{ spans: [
+            { spanId: "root", traceId: "tt", name: "r", startTimeUnixNano: "1", endTimeUnixNano: "2" },
+            { spanId: "child", traceId: "tt", parentSpanId: "root", name: "c", startTimeUnixNano: "1", endTimeUnixNano: "2" },
+          ] }] },
+        ],
+      }),
+    );
+    const res = await app.request("/v1/traces/tt");
+    expect(res.status).toBe(200);
+    const tree = (await res.json()) as { spanId: string; children: { spanId: string }[] };
+    expect(tree.spanId).toBe("root");
+    expect(tree.children.map((c) => c.spanId)).toEqual(["child"]);
+  });
+
+  it("get_unknown_trace_returns_404", async () => {
+    const res = await app.request("/v1/traces/missing");
+    expect(res.status).toBe(404);
   });
 });

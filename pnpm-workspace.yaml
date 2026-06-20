@@ -2,8 +2,12 @@ packages:
   - "packages/*"
 allowBuilds:
   esbuild: true
+  protobufjs: true
 # Force the patched esbuild across the tree — clears GHSA-67mh-4wv8-2f99
 # (esbuild dev-server CORS, MEDIUM) pulled transitively via @esbuild-kit/core-utils.
 # pnpm 11 reads overrides from here, not from package.json#pnpm.overrides.
 overrides:
   esbuild: "^0.25.0"
+  # Clears GHSA-8988-4f7v-96qf (W3C Baggage OOM, MEDIUM) pulled transitively by
+  # @opentelemetry/otlp-transformer; fixed in @opentelemetry/core 2.8.0.
+  "@opentelemetry/core": "^2.8.0"

@@ -35,11 +35,18 @@ async function waitForApi(timeoutMs: number): Promise<void> {
   throw new Error(`API did not become reachable at ${BASE} within ${timeoutMs}ms`);
 }
 
+// When THEOLENS_E2E_EXTERNAL=1, run against an already-running stack (CI / local
+// server) instead of managing docker compose here. THEOLENS_E2E_BASE + PG must
+// already point at it. The default path (unset) still builds + runs compose.
+const EXTERNAL = process.env["THEOLENS_E2E_EXTERNAL"] === "1";
+
 export async function setup(): Promise<void> {
-  execSync("docker compose up -d --build", {
-    stdio: "inherit",
-    env: composeEnv,
-  });
+  if (!EXTERNAL) {
+    execSync("docker compose up -d --build", {
+      stdio: "inherit",
+      env: composeEnv,
+    });
+  }
   await waitForApi(120_000);
 
   const pool = createPool(PG_URI);
@@ -53,5 +60,6 @@ export async function setup(): Promise<void> {
 }
 
 export async function teardown(): Promise<void> {
+  if (EXTERNAL) return;
   execSync("docker compose down", { stdio: "inherit", env: composeEnv });
 }

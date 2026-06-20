@@ -1,13 +1,19 @@
 import type { Span } from "./span.js";
 
+/** A span plus its reconstructed children — the trace tree node. */
+export interface TraceTreeNode extends Span {
+  children: TraceTreeNode[];
+}
+
 /**
  * Persistence port for spans (DIP). The domain declares the contract; the
- * infrastructure layer (Drizzle/Postgres) implements it. M0 needs only the two
- * operations exercised by the walking skeleton: bulk save and read-one.
+ * infrastructure layer (Drizzle/Postgres) implements it.
  */
 export interface SpanRepository {
-  /** Persist a batch of spans. Idempotent on spanId; empty batch is a no-op. */
+  /** Persist a batch of spans and recompute the trace/session aggregates. */
   save(spans: Span[]): Promise<void>;
   /** Read a single span by its spanId, or null if absent. */
   getBySpanId(spanId: string): Promise<Span | null>;
+  /** Reconstruct the tree of spans sharing a trace_id, or null if none exist. */
+  getTraceTree(traceId: string): Promise<TraceTreeNode | null>;
 }
