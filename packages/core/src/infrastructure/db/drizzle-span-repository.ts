@@ -166,10 +166,14 @@ export class DrizzleSpanRepository implements SpanRepository {
   }
 
   async getTraceTree(traceId: string): Promise<TraceTreeNode | null> {
+    // Deterministic sibling order at the source: numeric start time, then spanId
+    // (the PK — a stable total order). Makes the persisted tree reproducible across
+    // fetches and aligns the rendered tree with the replay step order (review F-rp-1).
     const rows = await this.db
       .select()
       .from(spans)
-      .where(eq(spans.traceId, traceId));
+      .where(eq(spans.traceId, traceId))
+      .orderBy(sql`start_time_unix_nano::numeric`, spans.spanId);
     if (rows.length === 0) return null;
 
     // Read-time assembly over ALL persisted spans → out-of-order batches and

@@ -1,27 +1,47 @@
-import { useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useTraceTree } from "../hooks/useTraces.js";
+import { useReplay } from "../hooks/useReplay.js";
+import { buildReplaySteps } from "../lib/replay.js";
 import { ApiError } from "../api/client.js";
 import { SpanTree } from "../components/SpanTree.js";
 import { SpanDetail } from "../components/SpanDetail.js";
+import { ReplayControls } from "../components/ReplayControls.js";
 import { Loading, ErrorState } from "../components/states.js";
-import type { TraceTreeNode } from "../api/types.js";
 
-/** Depth-first lookup of a span in the tree by spanId. */
-function findSpan(node: TraceTreeNode, id: string): TraceTreeNode | undefined {
-  if (node.spanId === id) return node;
-  for (const child of node.children) {
-    const found = findSpan(child, id);
-    if (found) return found;
-  }
-  return undefined;
-}
-
-/** Trace view: span tree + detail of the selected span (default: root). */
+/**
+ * Trace view + Session Replay (M4). The replay step index IS the selection: the
+ * active span (`steps[index]`) drives `<SpanTree selectedId>`; `next`/`prev`
+ * (buttons + ArrowRight/Left) walk the deterministic order; clicking a span jumps
+ * the step. Replay is computed from the already-fetched tree — no re-execution.
+ */
 export function TracePage() {
   const { traceId = "" } = useParams();
   const { data, isLoading, isError, error } = useTraceTree(traceId);
-  const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+
+  // Hooks run unconditionally (steps is empty until data arrives).
+  const steps = useMemo(() => (data ? buildReplaySteps(data) : []), [data]);
+  const { index, active, next, prev, jumpTo } = useReplay(steps);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // Don't hijack arrows from text fields, selects, or modifier combos (F-fe-2).
+      const t = e.target as HTMLElement | null;
+      if (
+        t?.isContentEditable ||
+        (t != null && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) ||
+        e.altKey ||
+        e.ctrlKey ||
+        e.metaKey
+      ) {
+        return;
+      }
+      if (e.key === "ArrowRight") next();
+      else if (e.key === "ArrowLeft") prev();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [next, prev]);
 
   if (isLoading) return <Loading label="Loading trace…" />;
   if (isError || !data) {
@@ -33,19 +53,23 @@ export function TracePage() {
     );
   }
 
-  const selected =
-    (selectedId != null ? findSpan(data, selectedId) : undefined) ?? data;
-
   return (
     <main className="trace-page">
       <Link to="/">← Executions</Link>
+      <ReplayControls
+        index={index}
+        total={steps.length}
+        onPrev={prev}
+        onNext={next}
+        activeName={active?.name}
+      />
       <div className="trace-layout">
         <SpanTree
           root={data}
-          selectedId={selected.spanId}
-          onSelect={(span) => setSelectedId(span.spanId)}
+          selectedId={active?.spanId}
+          onSelect={(span) => jumpTo(span.spanId)}
         />
-        <SpanDetail span={selected} />
+        <SpanDetail span={active ?? data} />
       </div>
     </main>
   );
