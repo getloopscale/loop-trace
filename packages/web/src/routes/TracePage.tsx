@@ -2,7 +2,9 @@ import { useEffect, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useTraceTree } from "../hooks/useTraces.js";
 import { useReplay } from "../hooks/useReplay.js";
+import { useTraceCost } from "../hooks/useCost.js";
 import { buildReplaySteps } from "../lib/replay.js";
+import { formatUsd } from "../lib/money.js";
 import { ApiError } from "../api/client.js";
 import { SpanTree } from "../components/SpanTree.js";
 import { SpanDetail } from "../components/SpanDetail.js";
@@ -22,6 +24,8 @@ export function TracePage() {
   // Hooks run unconditionally (steps is empty until data arrives).
   const steps = useMemo(() => (data ? buildReplaySteps(data) : []), [data]);
   const { index, active, next, prev, jumpTo } = useReplay(steps);
+  // Per-trace cost is supplementary (M5 DoD #3) — never blocks the tree/replay.
+  const { data: cost } = useTraceCost(traceId);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -56,6 +60,11 @@ export function TracePage() {
   return (
     <main className="trace-page">
       <Link to="/">← Executions</Link>
+      {cost ? (
+        <p className="trace-cost">
+          Total cost: {formatUsd(cost.costUsd)} · {cost.totalTokens} tokens
+        </p>
+      ) : null}
       <ReplayControls
         index={index}
         total={steps.length}

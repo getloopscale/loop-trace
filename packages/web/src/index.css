@@ -35,6 +35,48 @@ a {
   font-weight: 600;
 }
 
+/* Cost analytics */
+.list-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.trace-cost {
+  margin: 0.5rem 0;
+  font-variant-numeric: tabular-nums;
+  color: #1a7f37;
+  font-weight: 600;
+}
+.period-toggle {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+.period-toggle button {
+  border: 1px solid #d0d7de;
+  background: #f6f8fa;
+  border-radius: 6px;
+  padding: 0.25rem 0.75rem;
+  cursor: pointer;
+}
+.period-toggle button[aria-pressed="true"] {
+  background: #0969da;
+  color: #fff;
+  border-color: #0969da;
+}
+.cost-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+.cost-table th,
+.cost-table td {
+  text-align: left;
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid #eaeef2;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Replay controls */
 .replay-controls {
   display: flex;

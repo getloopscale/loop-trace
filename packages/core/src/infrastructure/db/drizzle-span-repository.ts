@@ -13,6 +13,13 @@ import type {
   TraceListItem,
   TraceListResponse,
 } from "../../domain/trace-list.js";
+import { computeTraceCost, type PriceTable } from "../../domain/pricing.js";
+import { DEFAULT_PRICES } from "../../domain/default-prices.js";
+import type {
+  CostByPeriodResponse,
+  CostPeriod,
+  TraceCost,
+} from "../../domain/cost.js";
 import { spans, traces } from "./schema.js";
 
 /** Build a pg connection pool for the given Postgres URI. */
@@ -89,7 +96,11 @@ function traceRowToItem(row: typeof traces.$inferSelect): TraceListItem {
 }
 
 export class DrizzleSpanRepository implements SpanRepository {
-  constructor(private readonly db: NodePgDatabase) {}
+  constructor(
+    private readonly db: NodePgDatabase,
+    // Configurable per-model price table (M5 ADR D1 — injectable for risk #1).
+    private readonly priceTable: PriceTable = DEFAULT_PRICES,
+  ) {}
 
   async save(spansToSave: Span[]): Promise<void> {
     if (spansToSave.length === 0) return;
@@ -143,6 +154,27 @@ export class DrizzleSpanRepository implements SpanRepository {
             total_tokens = excluded.total_tokens,
             updated_at = now()
         `);
+
+        // Compute USD cost from per-model token sums via the pure price function
+        // (M5 ADR D1), inside the SAME advisory lock → race-safe + idempotent.
+        const usage = await tx.execute(sql`
+          SELECT model,
+                 coalesce(sum(input_tokens), 0)::int AS i,
+                 coalesce(sum(output_tokens), 0)::int AS o
+          FROM spans WHERE trace_id = ${traceId} AND model IS NOT NULL
+          GROUP BY model
+        `);
+        const cost = computeTraceCost(
+          (usage.rows as { model: string; i: number; o: number }[]).map((r) => ({
+            model: r.model,
+            inputTokens: r.i,
+            outputTokens: r.o,
+          })),
+          this.priceTable,
+        );
+        await tx.execute(
+          sql`UPDATE traces SET cost_usd = ${cost} WHERE trace_id = ${traceId}`,
+        );
       }
 
       for (const sessionId of sessionIds) {
@@ -225,6 +257,50 @@ export class DrizzleSpanRepository implements SpanRepository {
       .orderBy(desc(traces.updatedAt))
       .limit(limit);
     return { traces: rows.map(traceRowToItem) };
+  }
+
+  async getTraceCost(traceId: string): Promise<TraceCost | null> {
+    const rows = await this.db
+      .select()
+      .from(traces)
+      .where(eq(traces.traceId, traceId))
+      .limit(1);
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      traceId: row.traceId,
+      costUsd: row.costUsd ?? 0,
+      inputTokens: row.inputTokens ?? 0,
+      outputTokens: row.outputTokens ?? 0,
+      totalTokens: row.totalTokens ?? 0,
+    };
+  }
+
+  async aggregateCostByPeriod(
+    period: CostPeriod,
+  ): Promise<CostByPeriodResponse> {
+    // `period` is whitelisted to the union literal (no raw interpolation) AND
+    // bound as a parameter; date_trunc buckets the precomputed cost, index-backed.
+    const trunc = period === "week" ? "week" : "day";
+    const res = await this.db.execute(sql`
+      SELECT date_trunc(${trunc}, updated_at) AS bucket,
+             coalesce(sum(cost_usd), 0)::double precision AS cost,
+             coalesce(sum(total_tokens), 0)::int AS tokens,
+             count(*)::int AS n
+      FROM traces
+      GROUP BY bucket
+      ORDER BY bucket DESC
+    `);
+    const buckets = (
+      res.rows as { bucket: Date | string; cost: number; tokens: number; n: number }[]
+    ).map((r) => ({
+      periodStart:
+        r.bucket instanceof Date ? r.bucket.toISOString() : String(r.bucket),
+      costUsd: r.cost,
+      totalTokens: r.tokens,
+      traceCount: r.n,
+    }));
+    return { period, buckets };
   }
 }
 

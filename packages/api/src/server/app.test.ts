@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type {
+  CostByPeriodResponse,
+  CostPeriod,
   Span,
   SpanRepository,
+  TraceCost,
   TraceListResponse,
   TraceTreeNode,
 } from "@usetheo/lens-core";
@@ -29,6 +32,17 @@ class StubSpanRepository implements SpanRepository {
 
   async getBySpanId(spanId: string): Promise<Span | null> {
     return this.store.get(spanId) ?? null;
+  }
+
+  costByTrace = new Map<string, TraceCost>();
+  buckets: CostByPeriodResponse["buckets"] = [];
+
+  async getTraceCost(traceId: string): Promise<TraceCost | null> {
+    return this.costByTrace.get(traceId) ?? null;
+  }
+
+  async aggregateCostByPeriod(period: CostPeriod): Promise<CostByPeriodResponse> {
+    return { period, buckets: this.buckets };
   }
 
   async listTraces(): Promise<TraceListResponse> {
@@ -255,5 +269,33 @@ describe("createApp (contract, stub repo)", () => {
     const res = await createApp(ordered).request("/v1/traces");
     const body = (await res.json()) as { traces: { traceId: string }[] };
     expect(body.traces.map((t) => t.traceId)).toEqual(["newest", "oldest"]);
+  });
+
+  it("get_trace_cost_returns_dto_and_404_when_absent", async () => {
+    repo.costByTrace.set("t1", {
+      traceId: "t1",
+      costUsd: 0.0125,
+      inputTokens: 1000,
+      outputTokens: 500,
+      totalTokens: 1500,
+    });
+    const ok = await app.request("/v1/traces/t1/cost");
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toMatchObject({ traceId: "t1", costUsd: 0.0125 });
+    const missing = await app.request("/v1/traces/nope/cost");
+    expect(missing.status).toBe(404);
+  });
+
+  it("get_analytics_cost_buckets_by_period_and_rejects_invalid_period", async () => {
+    repo.buckets = [
+      { periodStart: "2026-06-20T00:00:00.000Z", costUsd: 0.5, totalTokens: 100, traceCount: 3 },
+    ];
+    const day = await app.request("/v1/analytics/cost");
+    expect(day.status).toBe(200);
+    expect(await day.json()).toMatchObject({ period: "day", buckets: [{ traceCount: 3 }] });
+    const week = await app.request("/v1/analytics/cost?period=week");
+    expect((await week.json()).period).toBe("week");
+    const bad = await app.request("/v1/analytics/cost?period=month");
+    expect(bad.status).toBe(400);
   });
 });

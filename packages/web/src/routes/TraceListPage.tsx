@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useTraceList } from "../hooks/useTraces.js";
 import { TraceList } from "../components/TraceList.js";
 import { Loading, ErrorState } from "../components/states.js";
@@ -9,7 +10,10 @@ export function TraceListPage() {
   if (isError || !data) return <ErrorState message="Failed to load executions" />;
   return (
     <main className="trace-list-page">
-      <h1>Executions</h1>
+      <header className="list-header">
+        <h1>Executions</h1>
+        <Link to="/analytics">Cost analytics →</Link>
+      </header>
       <TraceList traces={data.traces} />
     </main>
   );

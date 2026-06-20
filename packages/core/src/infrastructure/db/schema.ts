@@ -61,7 +61,11 @@ export const traces = pgTable(
       .defaultNow()
       .notNull(),
   },
-  (t) => [index("traces_session_id_idx").on(t.sessionId)],
+  (t) => [
+    index("traces_session_id_idx").on(t.sessionId),
+    // Backs the day/week cost aggregation (M5 risk #2 — period GROUP BY date_trunc(updated_at)).
+    index("traces_updated_at_idx").on(t.updatedAt),
+  ],
 );
 
 export const sessions = pgTable("sessions", {

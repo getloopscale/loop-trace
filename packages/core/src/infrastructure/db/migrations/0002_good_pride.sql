@@ -1,0 +1,1 @@
+CREATE INDEX "traces_updated_at_idx" ON "traces" USING btree ("updated_at");

@@ -10,6 +10,22 @@ export {
   type TraceListResponse,
 } from "./domain/trace-list.js";
 export { extractGenAi, type GenAiFields } from "./domain/genai-attributes.js";
+export {
+  computeTraceCost,
+  type ModelPrice,
+  type PriceTable,
+  type ModelUsage,
+} from "./domain/pricing.js";
+export { DEFAULT_PRICES } from "./domain/default-prices.js";
+export {
+  traceCostSchema,
+  costBucketSchema,
+  costByPeriodResponseSchema,
+  type TraceCost,
+  type CostBucket,
+  type CostByPeriodResponse,
+  type CostPeriod,
+} from "./domain/cost.js";
 export { spans, traces, sessions } from "./infrastructure/db/schema.js";
 export {
   DrizzleSpanRepository,
