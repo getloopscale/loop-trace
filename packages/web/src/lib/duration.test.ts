@@ -17,4 +17,9 @@ describe("duration", () => {
     expect(formatDuration(5)).toBe("5 ms");
     expect(formatDuration(0)).toBe("<1 ms");
   });
+
+  it("sub_millisecond_durations_truncate_to_under_1ms_end_to_end", () => {
+    // 900_000 ns = 0.9 ms → integer-truncates to 0 → "<1 ms" (M3 ms-granularity).
+    expect(formatDuration(durationMs("0", "900000"))).toBe("<1 ms");
+  });
 });

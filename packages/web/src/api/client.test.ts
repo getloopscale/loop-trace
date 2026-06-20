@@ -39,4 +39,14 @@ describe("api client", () => {
     vi.stubGlobal("fetch", fetchReturning(404, { error: "not found" }));
     await expect(getTraceTree("missing")).rejects.toMatchObject({ status: 404 });
   });
+
+  it("client_propagates_network_rejection_unreachable", async () => {
+    // fetch itself rejects (offline / connection refused) — the raw rejection
+    // propagates (not an ApiError); the caller's error state handles it.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.reject(new TypeError("fetch failed"))),
+    );
+    await expect(listTraces()).rejects.toThrow("fetch failed");
+  });
 });

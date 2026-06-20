@@ -6,6 +6,15 @@ function isErrorStatus(code?: string): boolean {
   return code === "2" || code === "ERROR";
 }
 
+/** Pretty-print attributes; never throw into render on a non-serializable value. */
+function prettyAttributes(attrs: Record<string, unknown>): string {
+  try {
+    return JSON.stringify(attrs, null, 2);
+  } catch {
+    return String(attrs);
+  }
+}
+
 /**
  * Detail panel for a selected span (M3 DoD #2). Fixed sections — Overview / Model
  * / Tokens / Attributes (the raw gen_ai bag: prompt/output/tool/metadata) / Error.
@@ -47,9 +56,7 @@ export function SpanDetail({ span }: { span: SpanNodeData }) {
 
       <h3>Attributes</h3>
       {hasAttrs ? (
-        <pre className="detail-attributes">
-          {JSON.stringify(span.attributes, null, 2)}
-        </pre>
+        <pre className="detail-attributes">{prettyAttributes(span.attributes!)}</pre>
       ) : (
         <EmptyState message="No attributes" />
       )}

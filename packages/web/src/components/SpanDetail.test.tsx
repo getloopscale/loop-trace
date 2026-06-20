@@ -46,4 +46,28 @@ describe("SpanDetail", () => {
     expect(screen.getByText("No token usage")).toBeInTheDocument();
     expect(screen.getByText("No attributes")).toBeInTheDocument();
   });
+
+  it("span_detail_pretty_prints_nested_attributes", () => {
+    render(
+      <SpanDetail
+        span={{
+          ...base,
+          attributes: {
+            "gen_ai.input.messages": [{ role: "user", content: "hi" }],
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText(/gen_ai\.input\.messages/)).toBeInTheDocument();
+    expect(screen.getByText(/"role": "user"/)).toBeInTheDocument();
+  });
+
+  it("span_detail_never_throws_on_non_serializable_attribute", () => {
+    // A BigInt would make JSON.stringify throw; prettyAttributes guards it (no crash).
+    expect(() =>
+      render(
+        <SpanDetail span={{ ...base, attributes: { big: 10n as unknown } }} />,
+      ),
+    ).not.toThrow();
+  });
 });
