@@ -77,6 +77,35 @@ describe("TracePage (integration)", () => {
     );
   });
 
+  it("replay_steps_through_session_in_deterministic_order", async () => {
+    vi.mocked(client.getTraceTree).mockResolvedValue(tree);
+    renderAt("/traces/t1");
+
+    // replay starts at step 1 (root) of 2; detail = root
+    await waitFor(() => expect(screen.getByText("Step 1 of 2")).toBeInTheDocument());
+    expect(screen.getByLabelText("span detail")).toHaveTextContent("checkout");
+
+    // next advances through the deterministic order → search-products
+    await userEvent.click(screen.getByLabelText("next step"));
+    await waitFor(() => expect(screen.getByText("Step 2 of 2")).toBeInTheDocument());
+    expect(screen.getByLabelText("span detail")).toHaveTextContent("search-products");
+
+    // keyboard ArrowLeft steps back to the root
+    await userEvent.keyboard("{ArrowLeft}");
+    await waitFor(() => expect(screen.getByText("Step 1 of 2")).toBeInTheDocument());
+    expect(screen.getByLabelText("span detail")).toHaveTextContent("checkout");
+  });
+
+  it("replay_click_span_jumps_step", async () => {
+    vi.mocked(client.getTraceTree).mockResolvedValue(tree);
+    renderAt("/traces/t1");
+    await waitFor(() => expect(screen.getByText("Step 1 of 2")).toBeInTheDocument());
+    // clicking a span jumps the replay to that step
+    await userEvent.click(screen.getByText("search-products"));
+    await waitFor(() => expect(screen.getByText("Step 2 of 2")).toBeInTheDocument());
+    expect(screen.getByLabelText("span detail")).toHaveTextContent("search-products");
+  });
+
   it("trace_page_shows_not_found_on_404", async () => {
     vi.mocked(client.getTraceTree).mockRejectedValue(new ApiError(404));
     renderAt("/traces/missing");

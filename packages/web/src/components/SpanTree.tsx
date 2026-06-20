@@ -59,7 +59,7 @@ function SpanNode({ node, depth, selectedId, onSelect }: SpanNodeProps) {
 
 export interface SpanTreeProps {
   root: TraceTreeNode;
-  selectedId?: string;
+  selectedId?: string | undefined;
   onSelect: (span: TraceTreeNode) => void;
 }
 

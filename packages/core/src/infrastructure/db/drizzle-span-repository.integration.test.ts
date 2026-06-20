@@ -198,6 +198,29 @@ suite("DrizzleSpanRepository (integration)", () => {
     expect(await repo.listTraces()).toEqual({ traces: [] });
   });
 
+  it("replay_source_tree_is_deterministic_from_persisted_session_with_parallel_tools", async () => {
+    // M4: a fixture session with two PARALLEL tool calls (equal start time) under an
+    // agent + an output span. The replay source (getTraceTree) must be deterministic
+    // across fetches — proving replay reads persisted spans, never re-executes (DoD #2).
+    await repo.save([
+      span({ spanId: "agent", traceId: "s1", name: "agent", startTimeUnixNano: "100", endTimeUnixNano: "900" }),
+      span({ spanId: "tool-b", traceId: "s1", parentSpanId: "agent", name: "tool-b", startTimeUnixNano: "200", endTimeUnixNano: "400" }),
+      span({ spanId: "tool-a", traceId: "s1", parentSpanId: "agent", name: "tool-a", startTimeUnixNano: "200", endTimeUnixNano: "400" }),
+      span({ spanId: "output", traceId: "s1", parentSpanId: "agent", name: "output", startTimeUnixNano: "500", endTimeUnixNano: "800" }),
+    ]);
+    const first = await repo.getTraceTree("s1");
+    const second = await repo.getTraceTree("s1");
+    // identical across fetches (deterministic persisted source)
+    expect(JSON.stringify(second)).toBe(JSON.stringify(first));
+    // every persisted span is present under the agent (gap-free)
+    expect(first?.spanId).toBe("agent");
+    expect(first?.children.map((c) => c.spanId).sort()).toEqual([
+      "output",
+      "tool-a",
+      "tool-b",
+    ]);
+  });
+
   it("repo_trace_aggregate_is_race_safe_under_concurrent_ingest", async () => {
     // atomic-counter invariant after a happens-before barrier (Promise.all)
     const N = 20;
