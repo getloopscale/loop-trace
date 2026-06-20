@@ -1,5 +1,10 @@
 import { Hono } from "hono";
-import { type SpanRepository, traceListResponseSchema } from "@usetheo/lens-core";
+import {
+  type SpanRepository,
+  traceListResponseSchema,
+  traceCostSchema,
+  costByPeriodResponseSchema,
+} from "@usetheo/lens-core";
 
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
 import { OtlpParseError } from "../otlp/otlp-error.js";
@@ -14,6 +19,8 @@ import { spansIngested, tracesIngested, logIngest } from "./metrics.js";
  *  - GET  /v1/traces         : list executions newest-first (stable list DTO, M3)
  *  - GET  /v1/spans/:id      : read one span back (404 when absent)
  *  - GET  /v1/traces/:id     : reconstructed trace tree (404 when absent)
+ *  - GET  /v1/traces/:id/cost: per-trace cost summary (404 when absent, M5)
+ *  - GET  /v1/analytics/cost : day/week cost aggregation (?period=day|week, M5)
  */
 export function createApp(repo: SpanRepository): Hono {
   const app = new Hono();
@@ -86,9 +93,26 @@ export function createApp(repo: SpanRepository): Hono {
     return span ? c.json(span, 200) : c.json({ error: "not found" }, 404);
   });
 
+  app.get("/v1/traces/:traceId/cost", async (c) => {
+    const cost = await repo.getTraceCost(c.req.param("traceId"));
+    return cost
+      ? c.json(traceCostSchema.parse(cost), 200)
+      : c.json({ error: "not found" }, 404);
+  });
+
   app.get("/v1/traces/:traceId", async (c) => {
     const tree = await repo.getTraceTree(c.req.param("traceId"));
     return tree ? c.json(tree, 200) : c.json({ error: "not found" }, 404);
+  });
+
+  app.get("/v1/analytics/cost", async (c) => {
+    // Whitelist the period (fail-fast on anything but day/week, Rule 8); default day.
+    const raw = c.req.query("period");
+    if (raw !== undefined && raw !== "day" && raw !== "week") {
+      return c.json({ error: "invalid period (use day or week)" }, 400);
+    }
+    const result = await repo.aggregateCostByPeriod(raw === "week" ? "week" : "day");
+    return c.json(costByPeriodResponseSchema.parse(result), 200);
   });
 
   return app;

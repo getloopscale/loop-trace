@@ -222,6 +222,67 @@ suite("DrizzleSpanRepository (integration)", () => {
     ]);
   });
 
+  it("ingest_fills_trace_cost_usd_from_price_table", async () => {
+    // gpt-4o default: $2.5/1M in, $10/1M out → 1000*2.5e-6 + 500*10e-6 = 0.0025+0.005 = 0.0075
+    await repo.save([
+      span({ spanId: "a1", traceId: "t1", model: "gpt-4o", inputTokens: 1000, outputTokens: 500 }),
+    ]);
+    const cost = await repo.getTraceCost("t1");
+    expect(cost?.costUsd).toBeCloseTo(0.0075, 9);
+    expect(cost?.inputTokens).toBe(1000);
+    expect(cost?.outputTokens).toBe(500);
+  });
+
+  it("ingest_unknown_model_costs_zero_but_counts_tokens", async () => {
+    await repo.save([
+      span({ spanId: "a1", traceId: "t1", model: "mystery-llm", inputTokens: 100, outputTokens: 50 }),
+    ]);
+    const cost = await repo.getTraceCost("t1");
+    expect(cost?.costUsd).toBe(0);
+    expect(cost?.totalTokens).toBe(150);
+  });
+
+  it("ingest_cost_is_idempotent_and_stable_under_concurrent_ingest", async () => {
+    // N parallel saves of the same trace — cost equals the single-shot cost (no double count).
+    const N = 10;
+    await Promise.all(
+      Array.from({ length: N }, () =>
+        repo.save([span({ spanId: "a1", traceId: "t1", model: "gpt-4o", inputTokens: 1000, outputTokens: 0 })]),
+      ),
+    );
+    const cost = await repo.getTraceCost("t1");
+    expect(cost?.costUsd).toBeCloseTo(0.0025, 9); // 1000*2.5e-6 — counted once
+  });
+
+  it("getTraceCost_returns_null_for_absent_trace", async () => {
+    expect(await repo.getTraceCost("nope")).toBeNull();
+  });
+
+  it("aggregateCostByPeriod_buckets_by_day_and_week_newest_first", async () => {
+    await repo.save([span({ spanId: "a1", traceId: "older", model: "gpt-4o", inputTokens: 1000, outputTokens: 0 })]);
+    await repo.save([span({ spanId: "b1", traceId: "newer", model: "gpt-4o", inputTokens: 2000, outputTokens: 0 })]);
+    // Anchor both inside the CURRENT ISO week (Mon = date_trunc('week')) on distinct
+    // days — deterministic regardless of the run weekday: exercises day (2 buckets) vs
+    // week (1 bucket) without a week-boundary flake, and both stay inside the 90-day window.
+    await pool.query("UPDATE traces SET updated_at = date_trunc('week', now()) + interval '1 day' WHERE trace_id='older'");
+    await pool.query("UPDATE traces SET updated_at = date_trunc('week', now()) + interval '2 days' WHERE trace_id='newer'");
+
+    // day → two distinct buckets, newest first (newer's day before older's day)
+    const day = await repo.aggregateCostByPeriod("day");
+    expect(day.period).toBe("day");
+    expect(day.buckets.length).toBe(2);
+    expect(day.buckets[0]!.periodStart > day.buckets[1]!.periodStart).toBe(true); // DESC
+    expect(day.buckets[0]?.costUsd).toBeCloseTo(0.005, 9); // newer = 2000*2.5e-6
+    expect(day.buckets[1]?.costUsd).toBeCloseTo(0.0025, 9); // older = 1000*2.5e-6
+
+    // week → both collapse into one bucket (2 days apart = same ISO week here)
+    const week = await repo.aggregateCostByPeriod("week");
+    expect(week.period).toBe("week");
+    expect(week.buckets.length).toBe(1);
+    expect(week.buckets[0]?.traceCount).toBe(2);
+    expect(week.buckets[0]?.costUsd).toBeCloseTo(0.0075, 9);
+  });
+
   it("repo_trace_aggregate_is_race_safe_under_concurrent_ingest", async () => {
     // atomic-counter invariant after a happens-before barrier (Promise.all)
     const N = 20;

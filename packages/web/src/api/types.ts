@@ -38,3 +38,23 @@ export interface TraceListItem {
 export interface TraceListResponse {
   traces: TraceListItem[];
 }
+
+export interface TraceCost {
+  traceId: string;
+  costUsd: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
+export interface CostBucket {
+  periodStart: string;
+  costUsd: number;
+  totalTokens: number;
+  traceCount: number;
+}
+
+export interface CostByPeriodResponse {
+  period: "day" | "week";
+  buckets: CostBucket[];
+}

@@ -1,4 +1,9 @@
-import type { TraceListResponse, TraceTreeNode } from "./types.js";
+import type {
+  CostByPeriodResponse,
+  TraceCost,
+  TraceListResponse,
+  TraceTreeNode,
+} from "./types.js";
 
 /** Base URL of the M1 ingestion/read API. Override via `VITE_THEOLENS_API`. */
 const BASE = import.meta.env["VITE_THEOLENS_API"] ?? "http://localhost:4318";
@@ -25,4 +30,16 @@ export function listTraces(): Promise<TraceListResponse> {
 /** Fetch the reconstructed span tree for one trace. */
 export function getTraceTree(traceId: string): Promise<TraceTreeNode> {
   return getJson<TraceTreeNode>(`/v1/traces/${encodeURIComponent(traceId)}`);
+}
+
+/** Fetch a trace's cost summary (M5). */
+export function getTraceCost(traceId: string): Promise<TraceCost> {
+  return getJson<TraceCost>(`/v1/traces/${encodeURIComponent(traceId)}/cost`);
+}
+
+/** Fetch day/week cost aggregation (M5). */
+export function getCostByPeriod(
+  period: "day" | "week",
+): Promise<CostByPeriodResponse> {
+  return getJson<CostByPeriodResponse>(`/v1/analytics/cost?period=${period}`);
 }
