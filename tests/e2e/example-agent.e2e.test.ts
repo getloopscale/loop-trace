@@ -31,13 +31,20 @@ describe("Example agent ingestion (e2e)", () => {
   });
 
   it("example_instrumentation_is_at_most_10_lines", () => {
-    // The instrumented body (excluding the import + the e2e-only trace-id glue
-    // and console.log) must be ≤ 10 lines — the M2 onboarding promise.
+    // The M2 onboarding promise measures ONLY the user-written instrumentation,
+    // delimited in the example by `// theo:instrument:start/end` markers — so the
+    // e2e-only harness (env default, trace-id print) is genuinely excluded, not
+    // just claimed to be (review F-test-7).
     const src = readFileSync(EXAMPLE, "utf8");
-    const lines = src
-      .split("\n")
+    const all = src.split("\n");
+    const start = all.findIndex((l) => l.includes("theo:instrument:start"));
+    const end = all.findIndex((l) => l.includes("theo:instrument:end"));
+    expect(start, "instrumentation start marker missing").toBeGreaterThanOrEqual(0);
+    expect(end, "instrumentation end marker missing").toBeGreaterThan(start);
+    const body = all
+      .slice(start + 1, end)
       .map((l) => l.trim())
-      .filter((l) => l.length > 0 && !l.startsWith("//") && !l.startsWith("import "));
-    expect(lines.length).toBeLessThanOrEqual(10);
+      .filter((l) => l.length > 0 && !l.startsWith("//"));
+    expect(body.length).toBeLessThanOrEqual(10);
   });
 });

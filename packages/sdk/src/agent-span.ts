@@ -12,7 +12,10 @@ import { GEN_AI } from "./attributes.js";
 export interface AgentSpan {
   readonly raw: Span;
   readonly tracer: Tracer;
+  /** Requested model (`gen_ai.request.model`). */
   setModel(model: string): AgentSpan;
+  /** Model the provider actually served (`gen_ai.response.model`); M1 prefers this over the requested one. */
+  setResponseModel(model: string): AgentSpan;
   setProvider(provider: string): AgentSpan;
   setUsage(usage: { inputTokens?: number; outputTokens?: number }): AgentSpan;
 }
@@ -31,6 +34,10 @@ function wrap(span: Span, tracer: Tracer): AgentSpan {
     tracer,
     setModel(model) {
       span.setAttribute(GEN_AI.REQUEST_MODEL, model);
+      return handle;
+    },
+    setResponseModel(model) {
+      span.setAttribute(GEN_AI.RESPONSE_MODEL, model);
       return handle;
     },
     setProvider(provider) {
@@ -55,6 +62,14 @@ function wrap(span: Span, tracer: Tracer): AgentSpan {
  * error is recorded (exception + ERROR status) and re-thrown; the span always
  * ends. Export failures are handled by the processor (fail-open) — they never
  * surface here.
+ *
+ * Nesting note (M2): child spans nest correctly ONLY when created through this
+ * SDK's helpers (e.g. {@link recordToolCall}), because the parent context is
+ * rebuilt from the handle. The SDK does NOT call `provider.register()` in M2 (so
+ * `initTheoLens` stays side-effect-free and multiple inits / tests stay isolated),
+ * which means a bare `tracer.startSpan()` or a third-party OTel instrumentation
+ * running inside `fn` will NOT auto-nest under the agent span. Auto-instrumentation
+ * (enabling a global context manager) is deferred to a later milestone.
  */
 export function startAgent<T>(
   tracer: Tracer,

@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/core" },
     { "path": "./packages/api" },
-    { "path": "./packages/sdk" }
+    { "path": "./packages/sdk" },
+    { "path": "./examples/agent" }
   ]
 }

@@ -2,9 +2,15 @@ import { describe, it, expect } from "vitest";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-base";
 import { SpanStatusCode } from "@opentelemetry/api";
 
+import { trace, context } from "@opentelemetry/api";
+
 import { initTheoLens } from "./sdk.js";
 import { startAgent, recordToolCall } from "./agent-span.js";
-import { collectingExporter, failingExporter } from "./__fixtures__/collecting-exporter.js";
+import {
+  collectingExporter,
+  failingExporter,
+  throwingExporter,
+} from "./__fixtures__/collecting-exporter.js";
 
 function parentSpanIdOf(s: ReadableSpan): string | undefined {
   return (
@@ -26,6 +32,17 @@ describe("startAgent / recordToolCall", () => {
     expect(s?.attributes["gen_ai.system"]).toBe("openai");
     expect(s?.attributes["gen_ai.usage.input_tokens"]).toBe(10);
     expect(s?.attributes["gen_ai.usage.output_tokens"]).toBe(5);
+  });
+
+  it("setResponseModel_emits_gen_ai_response_model", async () => {
+    const { exporter, spans } = collectingExporter();
+    const theo = initTheoLens({ endpoint: "http://x", serviceName: "t", exporter });
+    await startAgent(theo.tracer, "agent", async (span) => {
+      span.setResponseModel("gpt-4o-2024-08-06");
+    });
+    await theo.shutdown();
+    const s = spans.find((x) => x.name === "agent");
+    expect(s?.attributes["gen_ai.response.model"]).toBe("gpt-4o-2024-08-06");
   });
 
   it("startAgent_records_exception_and_sets_error_status_on_throw", async () => {
@@ -55,10 +72,52 @@ describe("startAgent / recordToolCall", () => {
     expect(parentSpanIdOf(tool)).toBe(agent.spanContext().spanId);
   });
 
+  it("recordToolCall_does_not_throw_on_non_serializable_args", async () => {
+    // safeJson guards circular refs / BigInt so a bad args object can never crash
+    // the instrumented app — the attribute degrades to a string (T1.2 edge case).
+    const { exporter, spans } = collectingExporter();
+    const theo = initTheoLens({ endpoint: "http://x", serviceName: "t", exporter });
+    const circular: Record<string, unknown> = {};
+    circular["self"] = circular;
+    await startAgent(theo.tracer, "agent", async (span) => {
+      expect(() => recordToolCall(span, "search", circular)).not.toThrow();
+    });
+    await theo.shutdown();
+    const tool = spans.find((x) => x.name === "search");
+    expect(typeof tool?.attributes["gen_ai.tool.arguments"]).toBe("string");
+  });
+
   it("export_failure_does_not_throw_into_agent_fn", async () => {
     const theo = initTheoLens({ endpoint: "http://x", serviceName: "t", exporter: failingExporter() });
     const result = await startAgent(theo.tracer, "agent", async () => "ok");
     expect(result).toBe("ok");
     await theo.shutdown();
+  });
+
+  it("synchronous_exporter_throw_is_isolated_from_agent_fn_and_shutdown", async () => {
+    // Harshest fail-open adversary: export() THROWS synchronously. The agent fn
+    // must still complete (export runs only at flush, never during fn) AND
+    // shutdown must swallow the throw and resolve (EC-2 / Failure-scenarios row 1).
+    const theo = initTheoLens({ endpoint: "http://x", serviceName: "t", exporter: throwingExporter() });
+    const result = await startAgent(theo.tracer, "agent", async () => "ok");
+    expect(result).toBe("ok");
+    await expect(theo.shutdown()).resolves.toBeUndefined();
+  });
+
+  it("bare_startSpan_inside_agent_fn_does_not_auto_nest_M2_contract", async () => {
+    // Pins the documented M2 limitation: without provider.register() there is no
+    // global context manager, so a span NOT created via the SDK helpers does not
+    // auto-nest under the agent. Flipping this is a deliberate later-milestone change.
+    const { exporter, spans } = collectingExporter();
+    const theo = initTheoLens({ endpoint: "http://x", serviceName: "t", exporter });
+    await startAgent(theo.tracer, "agent", async () => {
+      // Bare OTel span, no explicit context — relies on ambient context (noop in M2).
+      theo.tracer.startSpan("bare").end();
+      expect(trace.getSpan(context.active())).toBeUndefined();
+    });
+    await theo.shutdown();
+    const agent = spans.find((x) => x.name === "agent")!;
+    const bare = spans.find((x) => x.name === "bare")!;
+    expect(parentSpanIdOf(bare)).not.toBe(agent.spanContext().spanId);
   });
 });

@@ -37,3 +37,14 @@ await theo.shutdown(); // flushes buffered spans before exit
 - `recordToolCall` records a nested tool span.
 - `await shutdown()` flushes — **always call it before the process exits**, or
   buffered spans are dropped.
+
+## Nesting scope (M2)
+
+Spans nest correctly when created through the SDK helpers (`startAgent`,
+`recordToolCall`) — they rebuild the parent context from the handle. The SDK does
+**not** install a global OpenTelemetry context manager in M2 (so `initTheoLens` is
+side-effect-free and multiple inits / tests stay isolated), so a bare
+`tracer.startSpan()` or a third-party OTel auto-instrumentation running inside your
+agent function will **not** auto-nest under the agent span. Automatic context
+propagation (auto-instrumenting LLM client libraries) is planned for a later
+milestone.

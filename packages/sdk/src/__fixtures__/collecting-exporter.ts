@@ -38,3 +38,42 @@ export function failingExporter(): SpanExporter {
     },
   };
 }
+
+/**
+ * A duck-typed exporter whose `export` THROWS synchronously (the harshest
+ * adversary for the fail-open contract — a failing exporter callback only
+ * reports failure, a synchronous throw could otherwise escape into the flush).
+ */
+export function throwingExporter(): SpanExporter {
+  return {
+    export() {
+      throw new Error("export boom");
+    },
+    shutdown() {
+      return Promise.resolve();
+    },
+  };
+}
+
+/**
+ * A duck-typed exporter whose `export` resolves only after `delayMs` — proves
+ * `shutdown()` AWAITS an in-flight flush instead of racing past it.
+ */
+export function slowExporter(delayMs: number): {
+  exporter: SpanExporter;
+  spans: ReadableSpan[];
+} {
+  const spans: ReadableSpan[] = [];
+  const exporter: SpanExporter = {
+    export(batch, resultCallback) {
+      setTimeout(() => {
+        spans.push(...batch);
+        resultCallback({ code: 0 });
+      }, delayMs);
+    },
+    shutdown() {
+      return Promise.resolve();
+    },
+  };
+  return { exporter, spans };
+}

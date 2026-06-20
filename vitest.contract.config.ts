@@ -13,6 +13,9 @@ export default defineConfig({
       "@usetheo/lens-core": fileURLToPath(
         new URL("./packages/core/src/index.ts", import.meta.url),
       ),
+      "@usetheo/lens-api": fileURLToPath(
+        new URL("./packages/api/src/index.ts", import.meta.url),
+      ),
     },
   },
   test: {
