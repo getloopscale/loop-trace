@@ -16,23 +16,32 @@ interface SpanNodeProps {
 /**
  * One tree row + its recursive children (M3 ADR D1 — render by recursion over the
  * pre-nested `TraceTreeNode`; virtualization is deferred behind this component).
+ *
+ * Presented as a plain nested list of <button> rows (every row is keyboard-focusable
+ * and Enter/Space-activatable) rather than a WAI-ARIA `tree` widget — a full tree
+ * widget needs roving-tabindex + arrow-key navigation we are not implementing in M3
+ * (review F-fe-2). Selection is exposed via `aria-current`.
  */
 function SpanNode({ node, depth, selectedId, onSelect }: SpanNodeProps) {
   const dur = durationMs(node.startTimeUnixNano, node.endTimeUnixNano);
+  const errored = isErrorStatus(node.statusCode);
   return (
-    <li role="treeitem" aria-selected={selectedId === node.spanId}>
+    <li>
       <button
         type="button"
         data-depth={depth}
-        className={isErrorStatus(node.statusCode) ? "span-row span-status-error" : "span-row span-status-ok"}
+        aria-current={selectedId === node.spanId ? "true" : undefined}
+        className={errored ? "span-row span-status-error" : "span-row span-status-ok"}
         style={{ paddingLeft: `${depth * 16}px` }}
         onClick={() => onSelect(node)}
       >
         <span className="span-name">{node.name}</span>
+        {/* Status is conveyed by text, not color alone (review F-fe-3). */}
+        {errored && <span className="span-status-badge">⚠ error</span>}
         <span className="span-duration">{formatDuration(dur)}</span>
       </button>
       {node.children.length > 0 && (
-        <ul role="group">
+        <ul>
           {node.children.map((child) => (
             <SpanNode
               key={child.spanId}
@@ -56,7 +65,7 @@ export interface SpanTreeProps {
 
 export function SpanTree({ root, selectedId, onSelect }: SpanTreeProps) {
   return (
-    <ul className="span-tree" role="tree" aria-label="span tree">
+    <ul className="span-tree" aria-label="span tree">
       <SpanNode node={root} depth={0} selectedId={selectedId} onSelect={onSelect} />
     </ul>
   );

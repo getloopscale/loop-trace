@@ -5,9 +5,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { TracePage } from "./TracePage.js";
 import * as client from "../api/client.js";
+import { ApiError } from "../api/client.js";
 import type { TraceTreeNode } from "../api/types.js";
 
-vi.mock("../api/client.js");
+// Partial mock: stub the fetch functions but keep the REAL ApiError class so
+// `instanceof ApiError` + `.status` work in TracePage's error branching + retry.
+vi.mock("../api/client.js", async (orig) => {
+  const actual = await orig<typeof import("../api/client.js")>();
+  return { ...actual, getTraceTree: vi.fn(), listTraces: vi.fn() };
+});
 
 const tree: TraceTreeNode = {
   spanId: "root",
@@ -33,7 +39,9 @@ const tree: TraceTreeNode = {
 };
 
 function renderAt(path: string) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false, retryDelay: 0 } },
+  });
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[path]}>
@@ -52,8 +60,10 @@ describe("TracePage (integration)", () => {
     vi.mocked(client.getTraceTree).mockResolvedValue(tree);
     renderAt("/traces/t1");
 
-    // tree rendered from the fetched data
-    await waitFor(() => expect(screen.getByRole("tree")).toBeInTheDocument());
+    // tree rendered from the fetched data (nested list of span buttons)
+    await waitFor(() =>
+      expect(screen.getByRole("list", { name: "span tree" })).toBeInTheDocument(),
+    );
     expect(screen.getAllByText("search-products").length).toBeGreaterThan(0);
     // default detail = root span
     expect(screen.getByLabelText("span detail")).toHaveTextContent("checkout");
@@ -67,11 +77,23 @@ describe("TracePage (integration)", () => {
     );
   });
 
-  it("trace_page_shows_error_state_on_api_failure", async () => {
-    vi.mocked(client.getTraceTree).mockRejectedValue(new Error("boom"));
-    renderAt("/traces/bad");
+  it("trace_page_shows_not_found_on_404", async () => {
+    vi.mocked(client.getTraceTree).mockRejectedValue(new ApiError(404));
+    renderAt("/traces/missing");
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent("Trace not found"),
+    );
+  });
+
+  it("trace_page_shows_generic_error_on_server_error", async () => {
+    vi.mocked(client.getTraceTree).mockRejectedValue(new ApiError(500));
+    renderAt("/traces/bad");
+    await waitFor(
+      () =>
+        expect(screen.getByRole("alert")).toHaveTextContent(
+          "Could not load this trace",
+        ),
+      { timeout: 3000 },
     );
   });
 });

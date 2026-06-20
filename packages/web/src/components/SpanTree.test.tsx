@@ -48,8 +48,9 @@ describe("SpanTree", () => {
     );
     // duration shown (5_000_000 ns = 5 ms)
     expect(screen.getByText("5 ms")).toBeInTheDocument();
-    // status: the failed span carries the error class
+    // status: the failed span carries the error class AND a non-color text badge
     expect(screen.getByText("charge").closest("button")!.className).toContain("error");
+    expect(screen.getByText("⚠ error")).toBeInTheDocument();
   });
 
   it("fires_onSelect_with_clicked_span", async () => {

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import type { SpanRepository } from "@usetheo/lens-core";
+import { type SpanRepository, traceListResponseSchema } from "@usetheo/lens-core";
 
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
 import { OtlpParseError } from "../otlp/otlp-error.js";
@@ -75,7 +75,9 @@ export function createApp(repo: SpanRepository): Hono {
   });
 
   app.get("/v1/traces", async (c) => {
-    const list = await repo.listTraces();
+    // Parse through the strict DTO at the boundary so the no-column-leak invariant
+    // (risk #2) is enforced at runtime, not just by adapter discipline (review F-arch-1).
+    const list = traceListResponseSchema.parse(await repo.listTraces());
     return c.json(list, 200);
   });
 

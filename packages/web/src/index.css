@@ -70,6 +70,13 @@ a {
 .span-status-error .span-name {
   color: #cf222e;
 }
+.span-status-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #cf222e;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
 .span-duration,
 .trace-duration,
 .trace-tokens,

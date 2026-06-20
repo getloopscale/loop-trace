@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useTraceTree } from "../hooks/useTraces.js";
+import { ApiError } from "../api/client.js";
 import { SpanTree } from "../components/SpanTree.js";
 import { SpanDetail } from "../components/SpanDetail.js";
 import { Loading, ErrorState } from "../components/states.js";
@@ -19,11 +20,18 @@ function findSpan(node: TraceTreeNode, id: string): TraceTreeNode | undefined {
 /** Trace view: span tree + detail of the selected span (default: root). */
 export function TracePage() {
   const { traceId = "" } = useParams();
-  const { data, isLoading, isError } = useTraceTree(traceId);
+  const { data, isLoading, isError, error } = useTraceTree(traceId);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
 
   if (isLoading) return <Loading label="Loading trace…" />;
-  if (isError || !data) return <ErrorState message="Trace not found" />;
+  if (isError || !data) {
+    const notFound = error instanceof ApiError && error.status === 404;
+    return (
+      <ErrorState
+        message={notFound ? "Trace not found" : "Could not load this trace"}
+      />
+    );
+  }
 
   const selected =
     (selectedId != null ? findSpan(data, selectedId) : undefined) ?? data;
