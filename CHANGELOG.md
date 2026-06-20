@@ -8,8 +8,6 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- `@usetheo/lens-sdk`: instrument a TS/Node agent in ≤10 lines and emit OTLP `gen_ai` spans to Theo Lens — `initTheoLens`, `startAgent`, `recordToolCall`, with `setModel`/`setResponseModel`/`setProvider`/`setUsage` helpers (M2)
-- Example agent under `examples/agent/` showing the ≤10-line onboarding, validated end-to-end (M2)
 
 ### Changed
 
@@ -20,6 +18,12 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 ### Security
+
+## [0.3.0] - 2026-06-20
+
+### Added
+- `@usetheo/lens-sdk`: instrument a TS/Node agent in ≤10 lines and emit OTLP `gen_ai` spans to Theo Lens — `initTheoLens`, `startAgent`, `recordToolCall`, with `setModel`/`setResponseModel`/`setProvider`/`setUsage` helpers (M2)
+- Example agent under `examples/agent/` showing the ≤10-line onboarding, validated end-to-end (M2)
 
 ## [0.2.0] - 2026-06-20
 
