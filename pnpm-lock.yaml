@@ -46,7 +46,7 @@ importers:
         specifier: ^1.14.4
         version: 1.19.14(hono@4.12.26)
       '@opentelemetry/otlp-transformer':
-        specifier: ^0.205.0
+        specifier: ~0.205.0
         version: 0.205.0(@opentelemetry/api@1.9.1)
       '@usetheo/lens-core':
         specifier: workspace:*

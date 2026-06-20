@@ -125,6 +125,38 @@ suite("DrizzleSpanRepository (integration)", () => {
     expect(tree?.children.map((c) => c.spanId)).toEqual(["c1"]);
   });
 
+  it("getTraceTree_multiple_roots_attach_extra_roots_under_earliest", async () => {
+    // Documented M1 simplification (F-otlp-6): a trace with >1 root span returns
+    // the earliest as the tree root; extra roots attach under it (single-tree API).
+    await repo.save([
+      span({ spanId: "r1", traceId: "t1", startTimeUnixNano: "100" }),
+      span({ spanId: "r2", traceId: "t1", startTimeUnixNano: "50" }),
+    ]);
+    const tree = await repo.getTraceTree("t1");
+    expect(tree?.spanId).toBe("r2"); // earliest start wins
+    expect(tree?.children.map((c) => c.spanId)).toEqual(["r1"]);
+  });
+
+  it("getTraceTree_breaks_parent_cycle_without_crashing", async () => {
+    // Adversarial: A.parent=B, B.parent=A. Must not produce a circular structure
+    // (would 500 on JSON.stringify) — cyclic edges are severed (F-otlp-7).
+    await repo.save([
+      span({ spanId: "a", traceId: "t1", parentSpanId: "b" }),
+      span({ spanId: "b", traceId: "t1", parentSpanId: "a" }),
+    ]);
+    const tree = await repo.getTraceTree("t1");
+    expect(tree).not.toBeNull();
+    // serializable (no cycle) — JSON.stringify must not throw
+    expect(() => JSON.stringify(tree)).not.toThrow();
+  });
+
+  it("getTraceTree_breaks_self_parent_cycle", async () => {
+    await repo.save([span({ spanId: "s", traceId: "t1", parentSpanId: "s" })]);
+    const tree = await repo.getTraceTree("t1");
+    expect(tree?.spanId).toBe("s");
+    expect(() => JSON.stringify(tree)).not.toThrow();
+  });
+
   it("repo_reingest_same_batch_keeps_trace_aggregate_stable", async () => {
     const batch = [
       span({ spanId: "a1", traceId: "t1", inputTokens: 10 }),

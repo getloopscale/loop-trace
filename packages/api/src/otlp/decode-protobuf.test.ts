@@ -1,6 +1,7 @@
 import { gzipSync } from "node:zlib";
 import { describe, it, expect } from "vitest";
-import { decodeOtlpBody, encodeOtlpProtobuf } from "./decode-protobuf.js";
+import { decodeOtlpBody } from "./decode-protobuf.js";
+import { encodeOtlpProtobuf } from "./__fixtures__/otlp-protobuf.js";
 import { OtlpParseError } from "./otlp-error.js";
 
 const jsonEnvelope = {
@@ -55,6 +56,12 @@ describe("decodeOtlpBody", () => {
     }>;
     expect(rs).toHaveLength(1);
     expect(rs[0]?.scopeSpans[0]?.spans[0]?.name).toBe("op");
+  });
+
+  it("decode_corrupt_gzip_throws_OtlpParseError", () => {
+    expect(() =>
+      decodeOtlpBody(Buffer.from("not gzip"), "application/json", "gzip"),
+    ).toThrow(OtlpParseError);
   });
 
   it("decode_unsupported_content_type_throws", () => {

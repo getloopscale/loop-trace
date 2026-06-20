@@ -3,7 +3,7 @@ import type { Span, SpanRepository, TraceTreeNode } from "@usetheo/lens-core";
 
 import { createApp } from "./app.js";
 import { spansIngested, tracesIngested } from "./metrics.js";
-import { encodeOtlpProtobuf } from "../otlp/decode-protobuf.js";
+import { encodeOtlpProtobuf } from "../otlp/__fixtures__/otlp-protobuf.js";
 
 /**
  * Contract-level tests for the route logic using an in-memory stub repository —
@@ -139,6 +139,27 @@ describe("createApp (contract, stub repo)", () => {
     expect(tracesIngested.value).toBe(1);
     // ids normalized to hex
     expect(await repo.getBySpanId("0304")).not.toBeNull();
+  });
+
+  it("post_malformed_protobuf_400_no_save_no_metric", async () => {
+    const res = await app.request("/v1/traces", {
+      method: "POST",
+      headers: { "content-type": "application/x-protobuf" },
+      body: Buffer.from([0xff, 0xff, 0xff, 0xff]),
+    });
+    expect(res.status).toBe(400);
+    expect(repo.saveCalls).toHaveLength(0);
+    expect(spansIngested.value).toBe(0);
+  });
+
+  it("post_corrupt_gzip_400_no_save", async () => {
+    const res = await app.request("/v1/traces", {
+      method: "POST",
+      headers: { "content-type": "application/json", "content-encoding": "gzip" },
+      body: Buffer.from("not gzip at all"),
+    });
+    expect(res.status).toBe(400);
+    expect(repo.saveCalls).toHaveLength(0);
   });
 
   it("post_unsupported_content_type_415", async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { encodeOtlpProtobuf } from "../../packages/api/src/otlp/decode-protobuf.js";
+import { encodeOtlpProtobuf } from "../../packages/api/src/otlp/__fixtures__/otlp-protobuf.js";
 
 const BASE = process.env["THEOLENS_E2E_BASE"] ?? "http://localhost:44318";
 

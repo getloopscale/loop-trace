@@ -4,6 +4,11 @@
  * reads (OtelIngestionProcessor.ts) — both current and legacy token names — since
  * the OTel GenAI conventions moved to a separate repo (blueprint EC-1).
  */
+/**
+ * M1 scope: model, provider, input/output tokens (OTel `gen_ai.*` + OpenInference
+ * `llm.*`). Cost is deferred to M5 (token×price); tool name and role/messages and
+ * Vercel `ai.*` keys are deferred to a later milestone (review F-test-7 / F-otlp-3).
+ */
 export interface GenAiFields {
   model?: string;
   provider?: string;

@@ -10,33 +10,42 @@ import { OtlpParseError } from "./otlp-error.js";
  * NOTE (course-correction from blueprint ADR D1): `@opentelemetry/otlp-transformer`'s
  * public `ProtobufTraceSerializer` is client-side (serializeRequest + deserializeResponse)
  * and does NOT expose request decoding. We reuse the package's generated protobuf
- * `ExportTraceServiceRequest` (Apache-2.0, maintained) via a deep `require` — the
- * package declares no `exports` map, so this resolves to the file directly. The
- * decode is isolated here and pinned by contract tests, so a version path-drift
- * surfaces immediately in CI rather than in production.
+ * `ExportTraceServiceRequest` (Apache-2.0, maintained) via a single deep `require` —
+ * the package declares no `exports` map, so this resolves to the file directly. The
+ * dependency is pinned (`~0.205.0`) so an internal-path move arrives only via a
+ * reviewed bump, and the decode is isolated here + pinned by contract tests.
  */
 const require = createRequire(import.meta.url);
 
-interface ProtoType {
+export interface ExportTraceServiceRequestType {
   decode(buf: Uint8Array): unknown;
   toObject(
     msg: unknown,
     opts?: Record<string, unknown>,
   ): { resourceSpans?: unknown };
+  fromObject(o: unknown): unknown;
+  encode(m: unknown): { finish(): Uint8Array };
 }
 
-let cachedType: ProtoType | undefined;
-function exportTraceServiceRequestType(): ProtoType {
+let cachedType: ExportTraceServiceRequestType | undefined;
+
+/** Resolve the generated `ExportTraceServiceRequest` proto type (single fragile site). */
+export function exportTraceServiceRequestType(): ExportTraceServiceRequestType {
   if (cachedType) return cachedType;
   try {
     const root = require(
       "@opentelemetry/otlp-transformer/build/esm/generated/root.js",
     ) as {
       opentelemetry: {
-        proto: { collector: { trace: { v1: { ExportTraceServiceRequest: ProtoType } } } };
+        proto: {
+          collector: {
+            trace: { v1: { ExportTraceServiceRequest: ExportTraceServiceRequestType } };
+          };
+        };
       };
     };
-    cachedType = root.opentelemetry.proto.collector.trace.v1.ExportTraceServiceRequest;
+    cachedType =
+      root.opentelemetry.proto.collector.trace.v1.ExportTraceServiceRequest;
     return cachedType;
   } catch (err) {
     throw new OtlpParseError(
@@ -73,7 +82,9 @@ export function decodeOtlpBody(
     try {
       const type = exportTraceServiceRequestType();
       const decoded = type.decode(new Uint8Array(buf));
-      return type.toObject(decoded, { defaults: false });
+      // longs:String guarantees 64-bit nano timestamps stay precise strings,
+      // independent of protobuf-js Long defaults (review F-otlp-9).
+      return type.toObject(decoded, { defaults: false, longs: String });
     } catch (err) {
       if (err instanceof OtlpParseError) throw err;
       throw new OtlpParseError("failed to decode OTLP protobuf body", {
@@ -82,30 +93,4 @@ export function decodeOtlpBody(
     }
   }
   throw new OtlpParseError(`unsupported content-type: ${contentType}`);
-}
-
-/** Encode a `{ resourceSpans }` envelope to protobuf bytes (test fixture helper). */
-export function encodeOtlpProtobuf(envelope: {
-  resourceSpans: unknown[];
-}): Buffer {
-  const root = require(
-    "@opentelemetry/otlp-transformer/build/esm/generated/root.js",
-  ) as {
-    opentelemetry: {
-      proto: {
-        collector: {
-          trace: {
-            v1: {
-              ExportTraceServiceRequest: {
-                fromObject(o: unknown): unknown;
-                encode(m: unknown): { finish(): Uint8Array };
-              };
-            };
-          };
-        };
-      };
-    };
-  };
-  const T = root.opentelemetry.proto.collector.trace.v1.ExportTraceServiceRequest;
-  return Buffer.from(T.encode(T.fromObject(envelope)).finish());
 }

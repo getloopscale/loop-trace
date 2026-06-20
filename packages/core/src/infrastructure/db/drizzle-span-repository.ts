@@ -67,7 +67,9 @@ export class DrizzleSpanRepository implements SpanRepository {
     if (spansToSave.length === 0) return;
     // Dedupe intra-batch duplicate spanId (M0 EC-1).
     const unique = [...new Map(spansToSave.map((s) => [s.spanId, s])).values()];
-    const traceIds = [...new Set(unique.map((s) => s.traceId))];
+    // Sorted so concurrent multi-trace batches acquire advisory locks in a
+    // consistent order — eliminates the AB/BA deadlock window (review F-otlp-5).
+    const traceIds = [...new Set(unique.map((s) => s.traceId))].sort();
     const sessionIds = [
       ...new Set(
         unique.map((s) => s.sessionId).filter((id): id is string => id != null),
@@ -146,17 +148,40 @@ export class DrizzleSpanRepository implements SpanRepository {
     // orphans (parent absent) resolve correctly (EC-2 / Q3).
     const nodes = new Map<string, TraceTreeNode>();
     for (const r of rows) nodes.set(r.spanId, { ...fromRow(r), children: [] });
-
     const all = [...nodes.values()];
-    const root = all.find((n) => n.parentSpanId == null) ?? all[0]!;
+
+    // Effective parent: null when the parent is absent, self-referential, or
+    // would form a cycle (walk up bounded by node count). Severing cyclic edges
+    // keeps the result a DAG/tree so JSON serialization can never blow up on a
+    // malicious/buggy parent loop (review F-otlp-7).
+    const effectiveParent = (node: TraceTreeNode): TraceTreeNode | undefined => {
+      const pid = node.parentSpanId;
+      if (pid == null || pid === node.spanId || !nodes.has(pid)) return undefined;
+      let cur = nodes.get(pid);
+      let steps = 0;
+      while (cur && steps++ <= nodes.size) {
+        if (cur.spanId === node.spanId) return undefined; // cycle → treat as root
+        const next = cur.parentSpanId;
+        if (next == null || next === cur.spanId || !nodes.has(next)) break;
+        cur = nodes.get(next);
+      }
+      return nodes.get(pid);
+    };
+
+    // Primary root = earliest true root (parent null), else earliest node. M1
+    // returns a single tree: a trace with MULTIPLE root spans attaches the extra
+    // roots (and orphans) under the primary root — a documented M1 simplification
+    // (review F-otlp-6); a forest API is deferred.
+    const byStart = (a: TraceTreeNode, b: TraceTreeNode) =>
+      a.startTimeUnixNano.length - b.startTimeUnixNano.length ||
+      (a.startTimeUnixNano < b.startTimeUnixNano ? -1 : 1);
+    const trueRoots = all.filter((n) => n.parentSpanId == null).sort(byStart);
+    const primary = trueRoots[0] ?? [...all].sort(byStart)[0]!;
     for (const node of all) {
-      if (node === root) continue;
-      const parent = node.parentSpanId
-        ? nodes.get(node.parentSpanId)
-        : undefined;
-      (parent ?? root).children.push(node); // orphans attach at root
+      if (node === primary) continue;
+      (effectiveParent(node) ?? primary).children.push(node);
     }
-    return root;
+    return primary;
   }
 }
 
