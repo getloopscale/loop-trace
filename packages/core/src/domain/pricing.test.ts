@@ -31,6 +31,27 @@ describe("computeTraceCost", () => {
     ).toBe(0);
     expect(computeTraceCost([], table)).toBe(0);
   });
+
+  it("compute_trace_cost_prices_dated_snapshot_ids_by_longest_prefix", () => {
+    const t: PriceTable = {
+      "gpt-4o": { inputPerToken: 5e-6, outputPerToken: 15e-6 },
+      "gpt-4o-mini": { inputPerToken: 0.15e-6, outputPerToken: 0.6e-6 },
+    };
+    // dated snapshot prices as its base model
+    expect(
+      computeTraceCost([{ model: "gpt-4o-2024-08-06", inputTokens: 1000, outputTokens: 0 }], t),
+    ).toBe(0.005);
+    // longest-prefix wins: a dated mini is NOT mispriced as the (pricier) gpt-4o
+    expect(
+      computeTraceCost([{ model: "gpt-4o-mini-2024-07-18", inputTokens: 1000, outputTokens: 0 }], t),
+    ).toBe(0.00015);
+  });
+
+  it("compute_trace_cost_rounds_to_six_decimals", () => {
+    const t: PriceTable = { m: { inputPerToken: 1e-9, outputPerToken: 0 } };
+    // 1234 * 1e-9 = 0.000001234 → round6 → 0.000001
+    expect(computeTraceCost([{ model: "m", inputTokens: 1234, outputTokens: 0 }], t)).toBe(0.000001);
+  });
 });
 
 describe("cost DTOs", () => {

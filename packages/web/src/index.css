@@ -59,10 +59,21 @@ a {
   padding: 0.25rem 0.75rem;
   cursor: pointer;
 }
-.period-toggle button[aria-pressed="true"] {
+.period-toggle button[aria-checked="true"] {
   background: #0969da;
   color: #fff;
   border-color: #0969da;
+  font-weight: 700; /* non-color cue (WCAG 1.4.1) */
+}
+.period-toggle button:focus-visible {
+  outline: 2px solid #0969da;
+  outline-offset: 2px;
+}
+.cost-table-caption {
+  text-align: left;
+  font-size: 0.8rem;
+  color: #656d76;
+  margin-bottom: 0.25rem;
 }
 .cost-table {
   border-collapse: collapse;

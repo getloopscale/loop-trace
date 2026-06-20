@@ -36,12 +36,16 @@ class StubSpanRepository implements SpanRepository {
 
   costByTrace = new Map<string, TraceCost>();
   buckets: CostByPeriodResponse["buckets"] = [];
+  failOnCost = false;
+  failOnAggregate = false;
 
   async getTraceCost(traceId: string): Promise<TraceCost | null> {
+    if (this.failOnCost) throw new Error("simulated postgres unavailable");
     return this.costByTrace.get(traceId) ?? null;
   }
 
   async aggregateCostByPeriod(period: CostPeriod): Promise<CostByPeriodResponse> {
+    if (this.failOnAggregate) throw new Error("simulated postgres unavailable");
     return { period, buckets: this.buckets };
   }
 
@@ -297,5 +301,34 @@ describe("createApp (contract, stub repo)", () => {
     expect((await week.json()).period).toBe("week");
     const bad = await app.request("/v1/analytics/cost?period=month");
     expect(bad.status).toBe(400);
+  });
+
+  it("cost_routes_return_5xx_on_repo_failure", async () => {
+    // DB error mid-query → structured 500 via onError (Rule 8) for both new read routes.
+    repo.costByTrace.set("t1", {
+      traceId: "t1", costUsd: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0,
+    });
+    repo.failOnCost = true;
+    expect((await app.request("/v1/traces/t1/cost")).status).toBeGreaterThanOrEqual(500);
+    repo.failOnAggregate = true;
+    expect((await app.request("/v1/analytics/cost")).status).toBeGreaterThanOrEqual(500);
+  });
+
+  it("cost_routes_reject_leaked_column_at_boundary_with_5xx", async () => {
+    // The strict DTO parse at the boundary rejects a leaked persistence column (M3 F-arch-1).
+    const leaky: SpanRepository = {
+      ...repo,
+      save: repo.save.bind(repo),
+      getBySpanId: repo.getBySpanId.bind(repo),
+      getTraceTree: repo.getTraceTree.bind(repo),
+      listTraces: repo.listTraces.bind(repo),
+      getTraceCost: async () =>
+        ({ traceId: "t1", costUsd: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0, secret: 1 }) as never,
+      aggregateCostByPeriod: async (period) =>
+        ({ period, buckets: [{ periodStart: "x", costUsd: 0, totalTokens: 0, traceCount: 0, leak: 1 }] }) as never,
+    };
+    const leakyApp = createApp(leaky);
+    expect((await leakyApp.request("/v1/traces/t1/cost")).status).toBeGreaterThanOrEqual(500);
+    expect((await leakyApp.request("/v1/analytics/cost")).status).toBeGreaterThanOrEqual(500);
   });
 });

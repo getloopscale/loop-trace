@@ -12,6 +12,7 @@ export {
 export { extractGenAi, type GenAiFields } from "./domain/genai-attributes.js";
 export {
   computeTraceCost,
+  resolveModelPrice,
   type ModelPrice,
   type PriceTable,
   type ModelUsage,

@@ -137,6 +137,19 @@ describe("TracePage (integration)", () => {
     );
   });
 
+  it("trace_page_cost_fetch_failure_does_not_block_the_tree", async () => {
+    // Cost is supplementary — a failing cost fetch must not break the tree/replay.
+    vi.mocked(client.getTraceTree).mockResolvedValue(tree);
+    vi.mocked(client.getTraceCost).mockRejectedValue(new ApiError(500));
+    renderAt("/traces/t1");
+    // tree still renders
+    await waitFor(() =>
+      expect(screen.getByRole("list", { name: "span tree" })).toBeInTheDocument(),
+    );
+    // cost line is omitted, no crash
+    expect(screen.queryByText(/Total cost/)).toBeNull();
+  });
+
   it("trace_page_shows_not_found_on_404", async () => {
     vi.mocked(client.getTraceTree).mockRejectedValue(new ApiError(404));
     renderAt("/traces/missing");

@@ -9,12 +9,13 @@ export function CostByPeriod({ buckets }: { buckets: CostBucket[] }) {
   }
   return (
     <table className="cost-table">
+      <caption className="cost-table-caption">Cost by period</caption>
       <thead>
         <tr>
-          <th>Period</th>
-          <th>Cost</th>
-          <th>Tokens</th>
-          <th>Executions</th>
+          <th scope="col">Period</th>
+          <th scope="col">Cost</th>
+          <th scope="col">Tokens</th>
+          <th scope="col">Executions</th>
         </tr>
       </thead>
       <tbody>

@@ -12,17 +12,19 @@ export function AnalyticsPage() {
     <main className="analytics-page">
       <Link to="/">← Executions</Link>
       <h1>Cost analytics</h1>
-      <div className="period-toggle" role="group" aria-label="period">
+      <div className="period-toggle" role="radiogroup" aria-label="period">
         <button
           type="button"
-          aria-pressed={period === "day"}
+          role="radio"
+          aria-checked={period === "day"}
           onClick={() => setPeriod("day")}
         >
           Day
         </button>
         <button
           type="button"
-          aria-pressed={period === "week"}
+          role="radio"
+          aria-checked={period === "week"}
           onClick={() => setPeriod("week")}
         >
           Week

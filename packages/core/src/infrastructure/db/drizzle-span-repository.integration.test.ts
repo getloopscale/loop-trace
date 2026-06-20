@@ -258,18 +258,29 @@ suite("DrizzleSpanRepository (integration)", () => {
     expect(await repo.getTraceCost("nope")).toBeNull();
   });
 
-  it("aggregateCostByPeriod_buckets_by_day_newest_first", async () => {
-    await repo.save([span({ spanId: "a1", traceId: "old", model: "gpt-4o", inputTokens: 1000, outputTokens: 0 })]);
-    await repo.save([span({ spanId: "b1", traceId: "new", model: "gpt-4o", inputTokens: 2000, outputTokens: 0 })]);
-    // both ingested "today" → one day bucket summing both costs (0.0025 + 0.005 = 0.0075)
+  it("aggregateCostByPeriod_buckets_by_day_and_week_newest_first", async () => {
+    await repo.save([span({ spanId: "a1", traceId: "older", model: "gpt-4o", inputTokens: 1000, outputTokens: 0 })]);
+    await repo.save([span({ spanId: "b1", traceId: "newer", model: "gpt-4o", inputTokens: 2000, outputTokens: 0 })]);
+    // Anchor both inside the CURRENT ISO week (Mon = date_trunc('week')) on distinct
+    // days — deterministic regardless of the run weekday: exercises day (2 buckets) vs
+    // week (1 bucket) without a week-boundary flake, and both stay inside the 90-day window.
+    await pool.query("UPDATE traces SET updated_at = date_trunc('week', now()) + interval '1 day' WHERE trace_id='older'");
+    await pool.query("UPDATE traces SET updated_at = date_trunc('week', now()) + interval '2 days' WHERE trace_id='newer'");
+
+    // day → two distinct buckets, newest first (newer's day before older's day)
     const day = await repo.aggregateCostByPeriod("day");
     expect(day.period).toBe("day");
-    expect(day.buckets.length).toBeGreaterThanOrEqual(1);
-    expect(day.buckets[0]?.traceCount).toBe(2);
-    expect(day.buckets[0]?.costUsd).toBeCloseTo(0.0075, 9);
+    expect(day.buckets.length).toBe(2);
+    expect(day.buckets[0]!.periodStart > day.buckets[1]!.periodStart).toBe(true); // DESC
+    expect(day.buckets[0]?.costUsd).toBeCloseTo(0.005, 9); // newer = 2000*2.5e-6
+    expect(day.buckets[1]?.costUsd).toBeCloseTo(0.0025, 9); // older = 1000*2.5e-6
+
+    // week → both collapse into one bucket (2 days apart = same ISO week here)
     const week = await repo.aggregateCostByPeriod("week");
     expect(week.period).toBe("week");
+    expect(week.buckets.length).toBe(1);
     expect(week.buckets[0]?.traceCount).toBe(2);
+    expect(week.buckets[0]?.costUsd).toBeCloseTo(0.0075, 9);
   });
 
   it("repo_trace_aggregate_is_race_safe_under_concurrent_ingest", async () => {

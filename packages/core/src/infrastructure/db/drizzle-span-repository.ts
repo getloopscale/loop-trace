@@ -280,7 +280,9 @@ export class DrizzleSpanRepository implements SpanRepository {
     period: CostPeriod,
   ): Promise<CostByPeriodResponse> {
     // `period` is whitelisted to the union literal (no raw interpolation) AND
-    // bound as a parameter; date_trunc buckets the precomputed cost, index-backed.
+    // bound as a parameter; date_trunc buckets the precomputed cost. The 90-day
+    // `updated_at` window bounds the scan and lets `traces_updated_at_idx` serve a
+    // range scan (risk #2) instead of a full-table aggregate.
     const trunc = period === "week" ? "week" : "day";
     const res = await this.db.execute(sql`
       SELECT date_trunc(${trunc}, updated_at) AS bucket,
@@ -288,6 +290,7 @@ export class DrizzleSpanRepository implements SpanRepository {
              coalesce(sum(total_tokens), 0)::int AS tokens,
              count(*)::int AS n
       FROM traces
+      WHERE updated_at >= now() - interval '90 days'
       GROUP BY bucket
       ORDER BY bucket DESC
     `);
