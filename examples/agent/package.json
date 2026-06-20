@@ -1,0 +1,14 @@
+{
+  "name": "@usetheo/lens-example-agent",
+  "version": "0.0.0",
+  "description": "Runnable ≤10-line example of instrumenting an agent with @usetheo/lens-sdk",
+  "type": "module",
+  "license": "Apache-2.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@usetheo/lens-sdk": "workspace:*"
+  }
+}
