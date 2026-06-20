@@ -3,7 +3,7 @@
 # stage 2 ships only prod deps + compiled dist.
 
 FROM node:22-alpine AS build
-RUN corepack enable
+RUN npm install -g pnpm@11.1.0
 WORKDIR /app
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json tsconfig.json ./
 COPY packages/core/package.json ./packages/core/
@@ -13,7 +13,7 @@ COPY packages ./packages
 RUN pnpm build
 
 FROM node:22-alpine AS runtime
-RUN corepack enable
+RUN npm install -g pnpm@11.1.0
 WORKDIR /app
 ENV NODE_ENV=production
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./

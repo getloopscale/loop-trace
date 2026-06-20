@@ -20,6 +20,19 @@ describe("parseResourceSpans", () => {
     expect(spans[0]).toMatchObject({ spanId: "a1", traceId: "t1", name: "op" });
   });
 
+  it("parse_applies_normalizeId_to_trace_span_parent_ids", () => {
+    const withByteIds = {
+      ...rawSpan,
+      spanId: [44, 206, 24, 247],
+      traceId: "ABCD",
+      parentSpanId: { data: [1, 2] },
+    };
+    const span = parseResourceSpans(envelope([withByteIds]))[0];
+    expect(span?.spanId).toBe("2cce18f7"); // byte array → hex
+    expect(span?.traceId).toBe("abcd"); // hex string → lowercased
+    expect(span?.parentSpanId).toBe("0102"); // {data} wrapper → hex
+  });
+
   it("parse_returns_empty_for_empty_resourceSpans", () => {
     expect(parseResourceSpans({ resourceSpans: [] })).toEqual([]);
     expect(parseResourceSpans({})).toEqual([]);
@@ -101,5 +114,42 @@ describe("parseResourceSpans", () => {
   it("parse_throws_OtlpParseError_on_malformed_span", () => {
     const bad = { ...rawSpan, spanId: "" };
     expect(() => parseResourceSpans(envelope([bad]))).toThrow(OtlpParseError);
+  });
+
+  it("parse_attaches_model_and_tokens_from_genai_attrs", () => {
+    const span = parseResourceSpans(
+      envelope([
+        {
+          ...rawSpan,
+          attributes: [
+            { key: "gen_ai.request.model", value: { stringValue: "gpt-4o" } },
+            { key: "gen_ai.usage.input_tokens", value: { intValue: "10" } },
+            { key: "gen_ai.usage.output_tokens", value: { intValue: "5" } },
+            { key: "gen_ai.system", value: { stringValue: "openai" } },
+          ],
+        },
+      ]),
+    )[0];
+    expect(span?.model).toBe("gpt-4o");
+    expect(span?.inputTokens).toBe(10);
+    expect(span?.outputTokens).toBe(5);
+    expect(span?.provider).toBe("openai");
+  });
+
+  it("parse_attaches_kind_and_status_message", () => {
+    const span = parseResourceSpans(
+      envelope([
+        { ...rawSpan, kind: 3, status: { code: 2, message: "boom" } },
+      ]),
+    )[0];
+    expect(span?.kind).toBe("3");
+    expect(span?.statusCode).toBe("2");
+    expect(span?.statusMessage).toBe("boom");
+  });
+
+  it("parse_span_without_genai_attrs_has_no_genai_fields", () => {
+    const span = parseResourceSpans(envelope([rawSpan]))[0];
+    expect(span?.model).toBeUndefined();
+    expect(span?.inputTokens).toBeUndefined();
   });
 });

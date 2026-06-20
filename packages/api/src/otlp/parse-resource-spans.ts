@@ -1,12 +1,10 @@
-import { spanSchema, type Span } from "@usetheo/lens-core";
+import { spanSchema, extractGenAi, type Span } from "@usetheo/lens-core";
 
-/** Thrown when an OTLP/JSON envelope contains a span that fails validation. */
-export class OtlpParseError extends Error {
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
-    this.name = "OtlpParseError";
-  }
-}
+import { normalizeId } from "./normalize-id.js";
+import { OtlpParseError } from "./otlp-error.js";
+
+// Re-export so existing importers (`app.ts`, tests) keep their import path.
+export { OtlpParseError } from "./otlp-error.js";
 
 /**
  * Flatten an OTLP `AnyValue` wrapper to a plain JS value. Handles every oneof
@@ -58,6 +56,15 @@ function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+/** Session id from a session attribute, when present (plan Q1; nullable otherwise). */
+function sessionIdOf(
+  attrs: Record<string, unknown> | undefined,
+): string | undefined {
+  if (!attrs) return undefined;
+  const v = attrs["session.id"] ?? attrs["gen_ai.conversation.id"];
+  return typeof v === "string" && v.length > 0 ? v : undefined;
+}
+
 /**
  * Map an OTLP/JSON envelope (`resourceSpans[].scopeSpans[].spans[]`) to validated
  * domain {@link Span}s. Fail-fast: a malformed span throws {@link OtlpParseError}
@@ -72,10 +79,16 @@ export function parseResourceSpans(envelope: unknown): Span[] {
     for (const ss of asArray((rs as { scopeSpans?: unknown })?.scopeSpans)) {
       for (const raw of asArray((ss as { spans?: unknown })?.spans)) {
         const r = raw as Record<string, unknown>;
-        const status = r["status"] as { code?: unknown } | undefined;
+        const status = r["status"] as
+          | { code?: unknown; message?: unknown }
+          | undefined;
+        const attrs =
+          r["attributes"] != null ? flattenAttrs(r["attributes"]) : undefined;
+        const genai = extractGenAi(attrs);
         const candidate = {
-          spanId: r["spanId"],
-          traceId: r["traceId"],
+          // Normalize all ids to canonical lowercase hex (resolves M0 F-otlp-6).
+          spanId: normalizeId(r["spanId"]),
+          traceId: normalizeId(r["traceId"]),
           name: r["name"],
           startTimeUnixNano:
             r["startTimeUnixNano"] != null
@@ -86,12 +99,18 @@ export function parseResourceSpans(envelope: unknown): Span[] {
               ? String(r["endTimeUnixNano"])
               : undefined,
           ...(r["parentSpanId"] != null
-            ? { parentSpanId: r["parentSpanId"] }
+            ? { parentSpanId: normalizeId(r["parentSpanId"]) }
             : {}),
+          ...(r["kind"] != null ? { kind: String(r["kind"]) } : {}),
           ...(status?.code != null ? { statusCode: String(status.code) } : {}),
-          ...(r["attributes"] != null
-            ? { attributes: flattenAttrs(r["attributes"]) }
+          ...(status?.message != null
+            ? { statusMessage: String(status.message) }
             : {}),
+          ...genai, // model/provider/inputTokens/outputTokens (only defined)
+          ...(sessionIdOf(attrs) !== undefined
+            ? { sessionId: sessionIdOf(attrs) }
+            : {}),
+          ...(attrs !== undefined ? { attributes: attrs } : {}),
         };
         const parsed = spanSchema.safeParse(candidate);
         if (!parsed.success) {

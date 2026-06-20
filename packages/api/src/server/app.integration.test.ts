@@ -14,7 +14,8 @@ import {
 import type pg from "pg";
 
 import { createApp } from "./app.js";
-import { spansIngested } from "./metrics.js";
+import { spansIngested, tracesIngested } from "./metrics.js";
+import { encodeOtlpProtobuf } from "../otlp/__fixtures__/otlp-protobuf.js";
 
 const PG_URI = process.env["THEOLENS_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
@@ -45,8 +46,9 @@ suite("createApp (integration)", () => {
   });
 
   beforeEach(async () => {
-    await pool.query("TRUNCATE spans");
+    await pool.query("TRUNCATE spans, traces, sessions");
     spansIngested.reset();
+    tracesIngested.reset();
   });
 
   afterAll(async () => {
@@ -61,8 +63,9 @@ suite("createApp (integration)", () => {
     });
   }
 
-  it("post_traces_rejects_non_json_content_type_415", async () => {
-    const res = await post(tracesEnvelope(rawSpan), "application/x-protobuf");
+  it("post_traces_rejects_unsupported_content_type_415", async () => {
+    // M1 accepts json + protobuf; csv is unsupported → 415.
+    const res = await post(tracesEnvelope(rawSpan), "text/csv");
     expect(res.status).toBe(415);
   });
 
@@ -70,8 +73,25 @@ suite("createApp (integration)", () => {
     const res = await post(tracesEnvelope(rawSpan));
     expect(res.status).toBe(200);
     expect(spansIngested.value).toBe(1);
+    expect(tracesIngested.value).toBe(1); // metric proof at integration level (F-wiring-1)
     const got = await repo.getBySpanId("api-a1");
     expect(got).toMatchObject({ spanId: "api-a1", traceId: "api-t1" });
+  });
+
+  it("post_protobuf_real_db_roundtrip_increments_tracesIngested", async () => {
+    const bytes = encodeOtlpProtobuf({
+      resourceSpans: [
+        { scopeSpans: [{ spans: [{ name: "op", traceId: Buffer.from([0x0a, 0x0b]), spanId: Buffer.from([0x0c, 0x0d]), startTimeUnixNano: "1", endTimeUnixNano: "2" }] }] },
+      ],
+    });
+    const res = await app.request("/v1/traces", {
+      method: "POST",
+      headers: { "content-type": "application/x-protobuf" },
+      body: bytes,
+    });
+    expect(res.status).toBe(200);
+    expect(tracesIngested.value).toBe(1);
+    expect(await repo.getBySpanId("0c0d")).not.toBeNull(); // hex-normalized id persisted
   });
 
   it("post_traces_empty_envelope_returns_200_empty", async () => {

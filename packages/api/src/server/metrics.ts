@@ -4,19 +4,23 @@
  * full OTel self-instrumentation is a later milestone. The counter is exported so
  * integration/e2e tests can assert ingestion actually fired.
  */
-let ingested = 0;
+function counter() {
+  let n = 0;
+  return {
+    add(delta: number): void {
+      n += delta;
+    },
+    get value(): number {
+      return n;
+    },
+    reset(): void {
+      n = 0;
+    },
+  };
+}
 
-export const spansIngested = {
-  add(n: number): void {
-    ingested += n;
-  },
-  get value(): number {
-    return ingested;
-  },
-  reset(): void {
-    ingested = 0;
-  },
-};
+export const spansIngested = counter();
+export const tracesIngested = counter();
 
 /** Structured ingest log line on stderr (stdout stays clean for piping). */
 export function logIngest(spans: number): void {

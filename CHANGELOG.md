@@ -19,6 +19,23 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [0.2.0] - 2026-06-20
+
+### Added
+- OTLP protobuf ingestion: `POST /v1/traces` now accepts `application/x-protobuf` (and gzip) in addition to JSON (M1)
+- Trace data model: `sessions` / `traces` / `spans` tables; traces and sessions are aggregates recomputed from spans (M1)
+- Trace tree reconstruction: `GET /v1/traces/:traceId` returns the nested span tree assembled by parent/child relationships (M1)
+- GenAI attribute extraction: model, provider, and input/output token counts are extracted from spans into typed columns (M1)
+
+
+### Changed
+- Trace/span ids are normalized to canonical lowercase hex on ingestion, so the same trace is consistent across SDK encoders (M1)
+
+
+### Fixed
+- Trace tree reconstruction is robust to malformed input: cyclic parent links are broken so the trace view never fails to render, and traces with multiple root spans return a single tree (M1)
+- Concurrent ingestion of the same trace computes exact, stable token/cost totals (no double-counting on retried batches, no lost updates under load) (M1)
+
 ## [0.1.0] - 2026-06-19
 
 ### Added
