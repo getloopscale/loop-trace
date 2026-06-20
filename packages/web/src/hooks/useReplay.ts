@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { SpanNodeData } from "../api/types.js";
 
 export interface Replay {
@@ -20,6 +20,10 @@ export function useReplay(steps: SpanNodeData[]): Replay {
   const [index, setIndex] = useState(0);
   const stepsRef = useRef(steps);
   stepsRef.current = steps;
+
+  // A new session (new steps array) restarts replay at step 1 — without this a stale
+  // index would carry over when navigating between traces (review F-fe-3).
+  useEffect(() => setIndex(0), [steps]);
 
   const next = useCallback(
     () => setIndex((i) => Math.min(i + 1, stepsRef.current.length - 1)),

@@ -4,6 +4,8 @@ export interface ReplayControlsProps {
   total: number;
   onPrev: () => void;
   onNext: () => void;
+  /** Name of the active span, announced with the step for screen readers. */
+  activeName?: string | undefined;
 }
 
 export function ReplayControls({
@@ -11,6 +13,7 @@ export function ReplayControls({
   total,
   onPrev,
   onNext,
+  activeName,
 }: ReplayControlsProps) {
   return (
     <div className="replay-controls" role="group" aria-label="replay controls">
@@ -21,10 +24,12 @@ export function ReplayControls({
         disabled={index <= 0}
         aria-label="previous step"
       >
-        ◀
+        <span aria-hidden="true">◀</span>
       </button>
-      <span className="replay-counter">
-        Step {total === 0 ? 0 : index + 1} of {total}
+      {/* role=status (implies aria-live=polite) announces each step to screen readers. */}
+      <span className="replay-counter" role="status">
+        Step {index + 1} of {total}
+        {activeName ? ` — ${activeName}` : ""}
       </span>
       <button
         type="button"
@@ -33,7 +38,7 @@ export function ReplayControls({
         disabled={index >= total - 1}
         aria-label="next step"
       >
-        ▶
+        <span aria-hidden="true">▶</span>
       </button>
     </div>
   );

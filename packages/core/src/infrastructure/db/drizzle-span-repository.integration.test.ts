@@ -212,12 +212,13 @@ suite("DrizzleSpanRepository (integration)", () => {
     const second = await repo.getTraceTree("s1");
     // identical across fetches (deterministic persisted source)
     expect(JSON.stringify(second)).toBe(JSON.stringify(first));
-    // every persisted span is present under the agent (gap-free)
+    // children come back in DETERMINISTIC order (NOT .sort()ed here): equal-start
+    // parallel tools by spanId (tool-a < tool-b), then the later output span.
     expect(first?.spanId).toBe("agent");
-    expect(first?.children.map((c) => c.spanId).sort()).toEqual([
-      "output",
+    expect(first?.children.map((c) => c.spanId)).toEqual([
       "tool-a",
       "tool-b",
+      "output",
     ]);
   });
 

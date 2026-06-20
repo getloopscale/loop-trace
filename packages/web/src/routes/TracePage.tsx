@@ -25,6 +25,17 @@ export function TracePage() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Don't hijack arrows from text fields, selects, or modifier combos (F-fe-2).
+      const t = e.target as HTMLElement | null;
+      if (
+        t?.isContentEditable ||
+        (t != null && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) ||
+        e.altKey ||
+        e.ctrlKey ||
+        e.metaKey
+      ) {
+        return;
+      }
       if (e.key === "ArrowRight") next();
       else if (e.key === "ArrowLeft") prev();
     };
@@ -50,6 +61,7 @@ export function TracePage() {
         total={steps.length}
         onPrev={prev}
         onNext={next}
+        activeName={active?.name}
       />
       <div className="trace-layout">
         <SpanTree

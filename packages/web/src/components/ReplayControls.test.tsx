@@ -24,4 +24,19 @@ describe("ReplayControls", () => {
     await userEvent.click(screen.getByLabelText("previous step"));
     expect(onPrev).toHaveBeenCalledOnce();
   });
+
+  it("replay_controls_single_step_disables_both_buttons", () => {
+    render(<ReplayControls index={0} total={1} onPrev={vi.fn()} onNext={vi.fn()} />);
+    expect(screen.getByText("Step 1 of 1")).toBeInTheDocument();
+    expect(screen.getByLabelText("previous step")).toBeDisabled();
+    expect(screen.getByLabelText("next step")).toBeDisabled();
+  });
+
+  it("replay_controls_announce_active_span_via_status_role", () => {
+    render(
+      <ReplayControls index={1} total={3} onPrev={vi.fn()} onNext={vi.fn()} activeName="search-products" />,
+    );
+    // role=status (aria-live=polite) carries the step + active span name for SR users
+    expect(screen.getByRole("status")).toHaveTextContent("Step 2 of 3 — search-products");
+  });
 });

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { TraceTreeNode } from "../api/types.js";
 import { durationMs, formatDuration } from "../lib/duration.js";
 
@@ -64,8 +65,15 @@ export interface SpanTreeProps {
 }
 
 export function SpanTree({ root, selectedId, onSelect }: SpanTreeProps) {
+  const ref = useRef<HTMLUListElement>(null);
+  // Keep the active (replay) span in view as the step advances (review F-fe-4).
+  useEffect(() => {
+    if (selectedId == null) return;
+    const el = ref.current?.querySelector('[aria-current="true"]');
+    (el as HTMLElement | null)?.scrollIntoView?.({ block: "nearest" });
+  }, [selectedId]);
   return (
-    <ul className="span-tree" aria-label="span tree">
+    <ul ref={ref} className="span-tree" aria-label="span tree">
       <SpanNode node={root} depth={0} selectedId={selectedId} onSelect={onSelect} />
     </ul>
   );
