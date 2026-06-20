@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { eq, sql } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
@@ -9,7 +9,11 @@ import type {
   SpanRepository,
   TraceTreeNode,
 } from "../../domain/span-repository.js";
-import { spans } from "./schema.js";
+import type {
+  TraceListItem,
+  TraceListResponse,
+} from "../../domain/trace-list.js";
+import { spans, traces } from "./schema.js";
 
 /** Build a pg connection pool for the given Postgres URI. */
 export function createPool(connectionString: string): pg.Pool {
@@ -58,6 +62,30 @@ function fromRow(row: typeof spans.$inferSelect): Span {
       ? { attributes: row.attributes as Record<string, unknown> }
       : {}),
   };
+}
+
+/**
+ * Map a `traces` aggregate row to the stable list DTO (M3 D2). Computes
+ * `durationMs` from the nano timestamps with BigInt math (no 2^53 precision
+ * loss); omits keys that are null so the `.strict()` DTO never carries a column.
+ */
+function traceRowToItem(row: typeof traces.$inferSelect): TraceListItem {
+  const item: TraceListItem = { traceId: row.traceId };
+  if (row.sessionId != null) item.sessionId = row.sessionId;
+  if (row.name != null) item.name = row.name;
+  if (row.startTimeUnixNano != null) {
+    item.startTimeUnixNano = row.startTimeUnixNano;
+    if (row.endTimeUnixNano != null) {
+      const dur = Number(
+        (BigInt(row.endTimeUnixNano) - BigInt(row.startTimeUnixNano)) /
+          1_000_000n,
+      );
+      if (dur >= 0) item.durationMs = dur;
+    }
+  }
+  if (row.statusCode != null) item.statusCode = row.statusCode;
+  if (row.totalTokens != null) item.totalTokens = row.totalTokens;
+  return item;
 }
 
 export class DrizzleSpanRepository implements SpanRepository {
@@ -182,6 +210,17 @@ export class DrizzleSpanRepository implements SpanRepository {
       (effectiveParent(node) ?? primary).children.push(node);
     }
     return primary;
+  }
+
+  async listTraces(limit = 50): Promise<TraceListResponse> {
+    // Newest-active first (the traces aggregate stamps updated_at on each
+    // recompute). Maps rows → strict DTO so no Drizzle column leaks (D2).
+    const rows = await this.db
+      .select()
+      .from(traces)
+      .orderBy(desc(traces.updatedAt))
+      .limit(limit);
+    return { traces: rows.map(traceRowToItem) };
   }
 }
 

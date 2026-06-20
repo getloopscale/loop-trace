@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { Span, SpanRepository, TraceTreeNode } from "@usetheo/lens-core";
+import type {
+  Span,
+  SpanRepository,
+  TraceListResponse,
+  TraceTreeNode,
+} from "@usetheo/lens-core";
 
 import { createApp } from "./app.js";
 import { spansIngested, tracesIngested } from "./metrics.js";
@@ -24,6 +29,19 @@ class StubSpanRepository implements SpanRepository {
 
   async getBySpanId(spanId: string): Promise<Span | null> {
     return this.store.get(spanId) ?? null;
+  }
+
+  async listTraces(): Promise<TraceListResponse> {
+    const byTrace = new Map<string, Span>();
+    for (const s of this.store.values()) {
+      if (!byTrace.has(s.traceId)) byTrace.set(s.traceId, s);
+    }
+    return {
+      traces: [...byTrace.values()].map((s) => ({
+        traceId: s.traceId,
+        name: s.name,
+      })),
+    };
   }
 
   async getTraceTree(traceId: string): Promise<TraceTreeNode | null> {
@@ -192,5 +210,50 @@ describe("createApp (contract, stub repo)", () => {
   it("get_unknown_trace_returns_404", async () => {
     const res = await app.request("/v1/traces/missing");
     expect(res.status).toBe(404);
+  });
+
+  it("get_v1_traces_returns_list_dto", async () => {
+    await post(tracesEnvelope(rawSpan));
+    const res = await app.request("/v1/traces");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { traces: { traceId: string }[] };
+    expect(body.traces.map((t) => t.traceId)).toContain("c-t1");
+  });
+
+  it("get_v1_traces_empty_returns_empty_list", async () => {
+    const res = await app.request("/v1/traces");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ traces: [] });
+  });
+
+  it("get_v1_traces_rejects_leaked_column_at_boundary_with_5xx", async () => {
+    // The route parses through the strict DTO so a future adapter regression that
+    // leaks a persistence column is caught at runtime, not shipped (review F-arch-1).
+    const leaky: SpanRepository = {
+      ...repo,
+      save: repo.save.bind(repo),
+      getBySpanId: repo.getBySpanId.bind(repo),
+      getTraceTree: repo.getTraceTree.bind(repo),
+      listTraces: async () =>
+        ({ traces: [{ traceId: "x", cost_usd: 0.01 }] }) as never,
+    };
+    const leakyApp = createApp(leaky);
+    const res = await leakyApp.request("/v1/traces");
+    expect(res.status).toBeGreaterThanOrEqual(500);
+  });
+
+  it("get_v1_traces_preserves_repo_order", async () => {
+    const ordered: SpanRepository = {
+      ...repo,
+      save: repo.save.bind(repo),
+      getBySpanId: repo.getBySpanId.bind(repo),
+      getTraceTree: repo.getTraceTree.bind(repo),
+      listTraces: async () => ({
+        traces: [{ traceId: "newest" }, { traceId: "oldest" }],
+      }),
+    };
+    const res = await createApp(ordered).request("/v1/traces");
+    const body = (await res.json()) as { traces: { traceId: string }[] };
+    expect(body.traces.map((t) => t.traceId)).toEqual(["newest", "oldest"]);
   });
 });

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import type { SpanRepository } from "@usetheo/lens-core";
+import { type SpanRepository, traceListResponseSchema } from "@usetheo/lens-core";
 
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
 import { OtlpParseError } from "../otlp/otlp-error.js";
@@ -11,6 +11,7 @@ import { spansIngested, tracesIngested, logIngest } from "./metrics.js";
  * concrete Drizzle adapter is injected by the composition root.
  *
  *  - POST /v1/traces        : OTLP ingest, JSON + protobuf (+ gzip); 415 on other
+ *  - GET  /v1/traces         : list executions newest-first (stable list DTO, M3)
  *  - GET  /v1/spans/:id      : read one span back (404 when absent)
  *  - GET  /v1/traces/:id     : reconstructed trace tree (404 when absent)
  */
@@ -71,6 +72,13 @@ export function createApp(repo: SpanRepository): Hono {
     tracesIngested.add(new Set(toSave.map((s) => s.traceId)).size);
     logIngest(toSave.length);
     return c.json({ partialSuccess: {} }, 200);
+  });
+
+  app.get("/v1/traces", async (c) => {
+    // Parse through the strict DTO at the boundary so the no-column-leak invariant
+    // (risk #2) is enforced at runtime, not just by adapter discipline (review F-arch-1).
+    const list = traceListResponseSchema.parse(await repo.listTraces());
+    return c.json(list, 200);
   });
 
   app.get("/v1/spans/:spanId", async (c) => {

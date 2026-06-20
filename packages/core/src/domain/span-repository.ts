@@ -1,4 +1,5 @@
 import type { Span } from "./span.js";
+import type { TraceListResponse } from "./trace-list.js";
 
 /** A span plus its reconstructed children — the trace tree node. */
 export interface TraceTreeNode extends Span {
@@ -16,4 +17,6 @@ export interface SpanRepository {
   getBySpanId(spanId: string): Promise<Span | null>;
   /** Reconstruct the tree of spans sharing a trace_id, or null if none exist. */
   getTraceTree(traceId: string): Promise<TraceTreeNode | null>;
+  /** List executions (traces) newest-first as the stable UI list DTO (M3 D2). */
+  listTraces(limit?: number): Promise<TraceListResponse>;
 }

@@ -3,6 +3,12 @@
  */
 export { type Span, spanSchema } from "./domain/span.js";
 export { type SpanRepository, type TraceTreeNode } from "./domain/span-repository.js";
+export {
+  traceListItemSchema,
+  traceListResponseSchema,
+  type TraceListItem,
+  type TraceListResponse,
+} from "./domain/trace-list.js";
 export { extractGenAi, type GenAiFields } from "./domain/genai-attributes.js";
 export { spans, traces, sessions } from "./infrastructure/db/schema.js";
 export {
