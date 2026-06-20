@@ -11,6 +11,7 @@ import { spansIngested, tracesIngested, logIngest } from "./metrics.js";
  * concrete Drizzle adapter is injected by the composition root.
  *
  *  - POST /v1/traces        : OTLP ingest, JSON + protobuf (+ gzip); 415 on other
+ *  - GET  /v1/traces         : list executions newest-first (stable list DTO, M3)
  *  - GET  /v1/spans/:id      : read one span back (404 when absent)
  *  - GET  /v1/traces/:id     : reconstructed trace tree (404 when absent)
  */
@@ -71,6 +72,11 @@ export function createApp(repo: SpanRepository): Hono {
     tracesIngested.add(new Set(toSave.map((s) => s.traceId)).size);
     logIngest(toSave.length);
     return c.json({ partialSuccess: {} }, 200);
+  });
+
+  app.get("/v1/traces", async (c) => {
+    const list = await repo.listTraces();
+    return c.json(list, 200);
   });
 
   app.get("/v1/spans/:spanId", async (c) => {

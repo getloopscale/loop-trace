@@ -8,6 +8,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Trace Explorer UI (`packages/web`, React + Vite): list executions, explore a session's span tree (nesting, duration, status), and inspect span detail (model/provider/tokens/attributes/error) with loading/error/empty states (M3)
+- `GET /v1/traces`: list executions newest-first as a stable JSON contract decoupled from the storage schema (M3)
 
 ### Changed
 

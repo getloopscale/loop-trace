@@ -170,6 +170,34 @@ suite("DrizzleSpanRepository (integration)", () => {
     expect(rows[0]?.input_tokens).toBe(15);
   });
 
+  it("listTraces_returns_traces_newest_first_with_durationMs", async () => {
+    await repo.save([
+      span({ spanId: "a1", traceId: "old", startTimeUnixNano: "100", endTimeUnixNano: "200", inputTokens: 3, outputTokens: 1 }),
+    ]);
+    await repo.save([
+      span({ spanId: "b1", traceId: "new", startTimeUnixNano: "1000000", endTimeUnixNano: "6000000" }),
+    ]);
+    const { traces: list } = await repo.listTraces();
+    expect(list.map((t) => t.traceId)).toEqual(["new", "old"]); // newest updated first
+    const newest = list[0]!;
+    expect(newest.durationMs).toBe(5); // (6_000_000 - 1_000_000) / 1e6 ns→ms
+    const old = list[1]!;
+    expect(old.totalTokens).toBe(4);
+  });
+
+  it("listTraces_omits_durationMs_when_endTime_missing", async () => {
+    // A trace whose aggregate has no end time → durationMs key absent (strict DTO).
+    await repo.save([span({ spanId: "a1", traceId: "t1" })]);
+    await pool.query("UPDATE traces SET end_time_unix_nano = NULL WHERE trace_id='t1'");
+    const { traces: list } = await repo.listTraces();
+    expect(list[0]?.traceId).toBe("t1");
+    expect(list[0]?.durationMs).toBeUndefined();
+  });
+
+  it("listTraces_returns_empty_array_when_no_traces", async () => {
+    expect(await repo.listTraces()).toEqual({ traces: [] });
+  });
+
   it("repo_trace_aggregate_is_race_safe_under_concurrent_ingest", async () => {
     // atomic-counter invariant after a happens-before barrier (Promise.all)
     const N = 20;

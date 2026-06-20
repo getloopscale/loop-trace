@@ -1,0 +1,111 @@
+:root {
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  color: #1f2328;
+  background: #fff;
+}
+body {
+  margin: 0;
+  padding: 1.5rem;
+}
+h1 {
+  font-size: 1.25rem;
+}
+a {
+  color: #0969da;
+}
+
+/* Executions list */
+.trace-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.trace-row {
+  display: flex;
+  gap: 1rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #eaeef2;
+  text-decoration: none;
+}
+.trace-row:hover {
+  background: #f6f8fa;
+}
+.trace-name {
+  flex: 1;
+  font-weight: 600;
+}
+
+/* Trace view: tree + detail side by side */
+.trace-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) 2fr;
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+/* Span tree */
+.span-tree,
+.span-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.span-row {
+  display: flex;
+  width: 100%;
+  gap: 0.75rem;
+  padding: 0.35rem 0.5rem;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.span-row:hover {
+  background: #f6f8fa;
+}
+.span-row .span-name {
+  flex: 1;
+}
+.span-status-error .span-name {
+  color: #cf222e;
+}
+.span-duration,
+.trace-duration,
+.trace-tokens,
+.trace-status {
+  color: #656d76;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Span detail */
+.span-detail h3 {
+  margin: 1rem 0 0.25rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #656d76;
+}
+.detail-attributes {
+  background: #f6f8fa;
+  padding: 0.75rem;
+  border-radius: 6px;
+  overflow: auto;
+  font-size: 0.8rem;
+}
+.detail-error {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  border-radius: 6px;
+  background: #ffebe9;
+  color: #cf222e;
+}
+
+/* Async states */
+.state-error {
+  color: #cf222e;
+}
+.state-empty {
+  color: #656d76;
+  font-style: italic;
+}

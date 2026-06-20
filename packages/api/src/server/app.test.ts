@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { Span, SpanRepository, TraceTreeNode } from "@usetheo/lens-core";
+import type {
+  Span,
+  SpanRepository,
+  TraceListResponse,
+  TraceTreeNode,
+} from "@usetheo/lens-core";
 
 import { createApp } from "./app.js";
 import { spansIngested, tracesIngested } from "./metrics.js";
@@ -24,6 +29,19 @@ class StubSpanRepository implements SpanRepository {
 
   async getBySpanId(spanId: string): Promise<Span | null> {
     return this.store.get(spanId) ?? null;
+  }
+
+  async listTraces(): Promise<TraceListResponse> {
+    const byTrace = new Map<string, Span>();
+    for (const s of this.store.values()) {
+      if (!byTrace.has(s.traceId)) byTrace.set(s.traceId, s);
+    }
+    return {
+      traces: [...byTrace.values()].map((s) => ({
+        traceId: s.traceId,
+        name: s.name,
+      })),
+    };
   }
 
   async getTraceTree(traceId: string): Promise<TraceTreeNode | null> {
@@ -192,5 +210,19 @@ describe("createApp (contract, stub repo)", () => {
   it("get_unknown_trace_returns_404", async () => {
     const res = await app.request("/v1/traces/missing");
     expect(res.status).toBe(404);
+  });
+
+  it("get_v1_traces_returns_list_dto", async () => {
+    await post(tracesEnvelope(rawSpan));
+    const res = await app.request("/v1/traces");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { traces: { traceId: string }[] };
+    expect(body.traces.map((t) => t.traceId)).toContain("c-t1");
+  });
+
+  it("get_v1_traces_empty_returns_empty_list", async () => {
+    const res = await app.request("/v1/traces");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ traces: [] });
   });
 });

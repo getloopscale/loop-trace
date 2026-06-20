@@ -20,7 +20,14 @@ export default defineConfig({
   },
   test: {
     include: ["packages/**/src/**/*.test.ts"],
-    exclude: ["**/node_modules/**", "**/dist/**", "**/*.integration.test.ts"],
+    // packages/web runs under its own jsdom config (pnpm --filter @usetheo/lens-web test);
+    // exclude it here so UI tests don't run in the node-env contract suite.
+    exclude: [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/*.integration.test.ts",
+      "packages/web/**",
+    ],
     globals: false,
   },
 });
