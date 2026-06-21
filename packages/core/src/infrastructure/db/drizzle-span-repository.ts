@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
@@ -20,6 +20,7 @@ import type {
   CostPeriod,
   TraceCost,
 } from "../../domain/cost.js";
+import { round3, ERROR_STATUS_CODES, type ToolStatsResponse } from "../../domain/tool-stats.js";
 import { spans, traces } from "./schema.js";
 
 /** Build a pg connection pool for the given Postgres URI. */
@@ -44,6 +45,7 @@ function toRow(span: Span): SpanRow {
     provider: span.provider ?? null,
     inputTokens: span.inputTokens ?? null,
     outputTokens: span.outputTokens ?? null,
+    toolName: span.toolName ?? null,
     sessionId: span.sessionId ?? null,
     attributes: span.attributes ?? null,
   };
@@ -64,6 +66,7 @@ function fromRow(row: typeof spans.$inferSelect): Span {
     ...(row.provider != null ? { provider: row.provider } : {}),
     ...(row.inputTokens != null ? { inputTokens: row.inputTokens } : {}),
     ...(row.outputTokens != null ? { outputTokens: row.outputTokens } : {}),
+    ...(row.toolName != null ? { toolName: row.toolName } : {}),
     ...(row.sessionId != null ? { sessionId: row.sessionId } : {}),
     ...(row.attributes != null
       ? { attributes: row.attributes as Record<string, unknown> }
@@ -304,6 +307,75 @@ export class DrizzleSpanRepository implements SpanRepository {
       traceCount: r.n,
     }));
     return { period, buckets };
+  }
+
+  async aggregateToolStats(): Promise<ToolStatsResponse> {
+    // Per-tool stats over execute_tool spans in a 90-day window, GROUP BY the typed
+    // indexed tool_name, ORDER BY call count DESC + top-100 (bounds high cardinality,
+    // risk #2). p50/p95 via engine-side percentile_cont over latency-in-ms; the pure
+    // computeToolStats is the unit-tested contract this is cross-checked against (D1).
+    // Error tokens kept in sync with the UI status mapping (review F-st-1); latency
+    // clamped to >= 0 for clock skew (review F-st-2). Tool spans are identified by
+    // tool_name IS NOT NULL — the SDK only sets gen_ai.tool.name on execute_tool spans.
+    const errorList = ERROR_STATUS_CODES.map((c) => `'${c}'`).join(", ");
+    const res = await this.db.execute(sql`
+      SELECT tool_name,
+             count(*)::int AS call_count,
+             count(*) FILTER (WHERE status_code IN (${sql.raw(errorList)}))::int AS error_count,
+             percentile_cont(0.5) WITHIN GROUP (
+               ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6)
+             )::double precision AS p50,
+             percentile_cont(0.95) WITHIN GROUP (
+               ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6)
+             )::double precision AS p95
+      FROM spans
+      WHERE tool_name IS NOT NULL AND ingested_at >= now() - interval '90 days'
+      GROUP BY tool_name
+      ORDER BY call_count DESC
+      LIMIT 100
+    `);
+    const tools = (
+      res.rows as {
+        tool_name: string;
+        call_count: number;
+        error_count: number;
+        p50: number;
+        p95: number;
+      }[]
+    ).map((r) => ({
+      toolName: r.tool_name,
+      callCount: r.call_count,
+      errorCount: r.error_count,
+      errorRate: r.call_count === 0 ? 0 : round3(r.error_count / r.call_count),
+      p50Ms: round3(r.p50),
+      p95Ms: round3(r.p95),
+    }));
+    return { tools };
+  }
+
+  async listTracesForTool(
+    toolName: string,
+    limit = 50,
+  ): Promise<TraceListResponse> {
+    // Drill-down (M6): executions whose spans include this tool, newest-active first.
+    // Reuses the M3 TraceListResponse DTO (no new shape). Uses the query builder so
+    // rows map to the camelCase row type `traceRowToItem` expects.
+    const callingTraceIds = this.db
+      .selectDistinct({ traceId: spans.traceId })
+      .from(spans)
+      .where(
+        and(
+          eq(spans.toolName, toolName),
+          gte(spans.ingestedAt, sql`now() - interval '90 days'`),
+        ),
+      );
+    const rows = await this.db
+      .select()
+      .from(traces)
+      .where(inArray(traces.traceId, callingTraceIds))
+      .orderBy(desc(traces.updatedAt))
+      .limit(limit);
+    return { traces: rows.map(traceRowToItem) };
   }
 }
 

@@ -12,6 +12,7 @@ export function AnalyticsPage() {
     <main className="analytics-page">
       <Link to="/">← Executions</Link>
       <h1>Cost analytics</h1>
+      <Link to="/tools">Tool analytics →</Link>
       <div className="period-toggle" role="radiogroup" aria-label="period">
         <button
           type="button"

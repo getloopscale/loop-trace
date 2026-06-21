@@ -5,6 +5,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import type pg from "pg";
 
 import type { Span } from "../../domain/span.js";
+import { computeToolStats } from "../../domain/tool-stats.js";
 import { createPool, DrizzleSpanRepository } from "./drizzle-span-repository.js";
 
 const PG_URI = process.env["THEOLENS_PG_URI"];
@@ -281,6 +282,101 @@ suite("DrizzleSpanRepository (integration)", () => {
     expect(week.buckets.length).toBe(1);
     expect(week.buckets[0]?.traceCount).toBe(2);
     expect(week.buckets[0]?.costUsd).toBeCloseTo(0.0075, 9);
+  });
+
+  it("ingest_persists_tool_name_typed_column", async () => {
+    await repo.save([
+      span({ spanId: "a1", traceId: "t1", name: "search", toolName: "search" }),
+    ]);
+    expect((await repo.getBySpanId("a1"))?.toolName).toBe("search");
+  });
+
+  it("aggregate_tool_stats_matches_pure_fn_on_fixture", async () => {
+    // durations 10/20/30/40 ms; the 30ms call errored (status_code '2').
+    const mk = (id: string, durMs: number, err: boolean) =>
+      span({
+        spanId: id,
+        traceId: "t1",
+        name: "search",
+        toolName: "search",
+        startTimeUnixNano: "0",
+        endTimeUnixNano: String(durMs * 1_000_000),
+        ...(err ? { statusCode: "2" } : {}),
+      });
+    await repo.save([
+      mk("s1", 10, false),
+      mk("s2", 20, false),
+      mk("s3", 30, true),
+      mk("s4", 40, false),
+    ]);
+    const { tools } = await repo.aggregateToolStats();
+    const search = tools.find((t) => t.toolName === "search");
+    const expected = computeToolStats("search", [
+      { durationMs: 10, errored: false },
+      { durationMs: 20, errored: false },
+      { durationMs: 30, errored: true },
+      { durationMs: 40, errored: false },
+    ]);
+    // SQL percentile_cont aggregation == the pure unit-tested contract (M6 D1)
+    expect(search?.callCount).toBe(expected.callCount);
+    expect(search?.errorCount).toBe(expected.errorCount);
+    expect(search?.errorRate).toBeCloseTo(expected.errorRate, 6);
+    expect(search?.p50Ms).toBeCloseTo(expected.p50Ms, 6);
+    expect(search?.p95Ms).toBeCloseTo(expected.p95Ms, 6);
+  });
+
+  it("aggregate_tool_stats_single_call_p50_equals_p95", async () => {
+    await repo.save([
+      span({ spanId: "s1", traceId: "t1", toolName: "once", startTimeUnixNano: "0", endTimeUnixNano: "7000000" }),
+    ]);
+    const { tools } = await repo.aggregateToolStats();
+    const once = tools.find((t) => t.toolName === "once");
+    expect(once?.p50Ms).toBe(7);
+    expect(once?.p95Ms).toBe(7); // single sample → percentile_cont over one row
+  });
+
+  it("aggregate_tool_stats_counts_textual_ERROR_status", async () => {
+    // A tool span whose status_code is the textual "ERROR" (not "2") must still count
+    // as an error — the SQL filter matches the same tokens as the UI (review F-st-1).
+    await repo.save([
+      span({ spanId: "ok", traceId: "t1", toolName: "search" }),
+      span({ spanId: "bad", traceId: "t1", toolName: "search", statusCode: "ERROR" }),
+    ]);
+    const search = (await repo.aggregateToolStats()).tools.find((t) => t.toolName === "search");
+    expect(search?.callCount).toBe(2);
+    expect(search?.errorCount).toBe(1);
+    expect(search?.errorRate).toBe(0.5);
+  });
+
+  it("aggregate_tool_stats_caps_at_top_100_by_call_count", async () => {
+    // 101 distinct tools; the least-called must be excluded by the top-100 cap (risk #2).
+    const batch = Array.from({ length: 101 }, (_, i) =>
+      // tool i called (i+1) times would be huge; instead give each 1 call and rely on the
+      // LIMIT — assert exactly 100 returned and the count never exceeds the cap.
+      span({ spanId: `s${i}`, traceId: "t1", toolName: `tool-${String(i).padStart(3, "0")}` }),
+    );
+    await repo.save(batch);
+    const { tools } = await repo.aggregateToolStats();
+    expect(tools.length).toBe(100); // top-100 cap fires (101 distinct tools ingested)
+  });
+
+  it("aggregate_tool_stats_orders_by_call_count_desc", async () => {
+    await repo.save([
+      span({ spanId: "a1", traceId: "t1", toolName: "alpha" }),
+      span({ spanId: "a2", traceId: "t1", toolName: "alpha" }),
+      span({ spanId: "a3", traceId: "t1", toolName: "alpha" }),
+      span({ spanId: "b1", traceId: "t1", toolName: "beta" }),
+    ]);
+    const { tools } = await repo.aggregateToolStats();
+    expect(tools.map((t) => t.toolName)).toEqual(["alpha", "beta"]);
+    expect(tools[0]?.callCount).toBe(3);
+  });
+
+  it("list_traces_for_tool_returns_calling_executions_newest_first", async () => {
+    await repo.save([span({ spanId: "x1", traceId: "calls-search", toolName: "search" })]);
+    await repo.save([span({ spanId: "y1", traceId: "no-tool" })]);
+    const { traces: list } = await repo.listTracesForTool("search");
+    expect(list.map((t) => t.traceId)).toEqual(["calls-search"]);
   });
 
   it("repo_trace_aggregate_is_race_safe_under_concurrent_ingest", async () => {

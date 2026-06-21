@@ -1,6 +1,7 @@
 import type { Span } from "./span.js";
 import type { TraceListResponse } from "./trace-list.js";
 import type { CostByPeriodResponse, CostPeriod, TraceCost } from "./cost.js";
+import type { ToolStatsResponse } from "./tool-stats.js";
 
 /** A span plus its reconstructed children — the trace tree node. */
 export interface TraceTreeNode extends Span {
@@ -24,4 +25,8 @@ export interface SpanRepository {
   getTraceCost(traceId: string): Promise<TraceCost | null>;
   /** Cost aggregated into day/week time buckets (M5). */
   aggregateCostByPeriod(period: CostPeriod): Promise<CostByPeriodResponse>;
+  /** Per-tool operational stats (count/p50/p95/error-rate) over a recent window (M6). */
+  aggregateToolStats(): Promise<ToolStatsResponse>;
+  /** Executions (traces) that called a given tool, newest-first (M6 drill-down). */
+  listTracesForTool(toolName: string, limit?: number): Promise<TraceListResponse>;
 }

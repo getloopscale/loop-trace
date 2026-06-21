@@ -1,5 +1,6 @@
 import type {
   CostByPeriodResponse,
+  ToolStatsResponse,
   TraceCost,
   TraceListResponse,
   TraceTreeNode,
@@ -42,4 +43,16 @@ export function getCostByPeriod(
   period: "day" | "week",
 ): Promise<CostByPeriodResponse> {
   return getJson<CostByPeriodResponse>(`/v1/analytics/cost?period=${period}`);
+}
+
+/** Fetch per-tool operational stats (M6). */
+export function getToolStats(): Promise<ToolStatsResponse> {
+  return getJson<ToolStatsResponse>("/v1/analytics/tools");
+}
+
+/** Fetch the executions that called a given tool (M6 drill-down). */
+export function getTracesForTool(toolName: string): Promise<TraceListResponse> {
+  return getJson<TraceListResponse>(
+    `/v1/analytics/tools/${encodeURIComponent(toolName)}/traces`,
+  );
 }
