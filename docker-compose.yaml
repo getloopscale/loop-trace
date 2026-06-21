@@ -1,9 +1,11 @@
-# Local dev + e2e stack for Theo Lens M0 walking skeleton.
+# One-command stack for Theo Lens (M7).
 #
-# Two services: a plain Postgres (no pgvector — M0 has no embeddings, blueprint D2)
-# and the API. Usage:
+# Two services: a plain Postgres (no pgvector — blueprint D2) and the API. The
+# API migrates the schema on boot and serves BOTH the ingestion API (/v1/*) and
+# the Trace Explorer UI at the same port (same-origin, no CORS — M7 D1), so the
+# whole stack is reachable at http://localhost:4318 from a clean checkout. Usage:
 #   docker compose up -d postgres   # DB only (for integration tests)
-#   docker compose up -d            # full stack (for e2e / local run)
+#   docker compose up -d            # full stack: API + UI at http://localhost:4318
 
 services:
   postgres:
