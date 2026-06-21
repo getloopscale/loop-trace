@@ -389,3 +389,32 @@ describe("createApp (contract, stub repo)", () => {
     expect((await leakyApp.request("/v1/analytics/cost")).status).toBeGreaterThanOrEqual(500);
   });
 });
+
+describe("createApp serves the UI when a web-dist dir is provided (M7)", () => {
+  // CWD-relative fixture (serveStatic rejects absolute roots — EC-1).
+  const FIXTURE_ROOT = "packages/api/src/server/__fixtures__/web-dist";
+
+  it("test_createApp_serves_ui_when_dist_provided", async () => {
+    const app = createApp(new StubSpanRepository(), FIXTURE_ROOT);
+    const res = await app.request("/");
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('id="root"');
+  });
+
+  it("test_createApp_does_not_shadow_v1_routes", async () => {
+    // Static is mounted AFTER /v1/*; the API must still return JSON, not index.html.
+    const app = createApp(new StubSpanRepository(), FIXTURE_ROOT);
+    const res = await app.request("/v1/traces");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("application/json");
+    const body = (await res.json()) as { traces: unknown[] };
+    expect(Array.isArray(body.traces)).toBe(true);
+  });
+
+  it("test_createApp_api_only_when_no_dist", async () => {
+    // Backward compatible: no web-dist arg → API-only, GET / unhandled (404).
+    const app = createApp(new StubSpanRepository());
+    const res = await app.request("/");
+    expect(res.status).toBe(404);
+  });
+});
