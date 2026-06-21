@@ -12,6 +12,9 @@
     }
   },
   "files": ["dist"],
+  "scripts": {
+    "prepack": "tsc -b"
+  },
   "engines": {
     "node": ">=20.0.0"
   },
