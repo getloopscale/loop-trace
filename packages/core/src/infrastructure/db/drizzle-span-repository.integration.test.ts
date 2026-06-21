@@ -325,6 +325,41 @@ suite("DrizzleSpanRepository (integration)", () => {
     expect(search?.p95Ms).toBeCloseTo(expected.p95Ms, 6);
   });
 
+  it("aggregate_tool_stats_single_call_p50_equals_p95", async () => {
+    await repo.save([
+      span({ spanId: "s1", traceId: "t1", toolName: "once", startTimeUnixNano: "0", endTimeUnixNano: "7000000" }),
+    ]);
+    const { tools } = await repo.aggregateToolStats();
+    const once = tools.find((t) => t.toolName === "once");
+    expect(once?.p50Ms).toBe(7);
+    expect(once?.p95Ms).toBe(7); // single sample → percentile_cont over one row
+  });
+
+  it("aggregate_tool_stats_counts_textual_ERROR_status", async () => {
+    // A tool span whose status_code is the textual "ERROR" (not "2") must still count
+    // as an error — the SQL filter matches the same tokens as the UI (review F-st-1).
+    await repo.save([
+      span({ spanId: "ok", traceId: "t1", toolName: "search" }),
+      span({ spanId: "bad", traceId: "t1", toolName: "search", statusCode: "ERROR" }),
+    ]);
+    const search = (await repo.aggregateToolStats()).tools.find((t) => t.toolName === "search");
+    expect(search?.callCount).toBe(2);
+    expect(search?.errorCount).toBe(1);
+    expect(search?.errorRate).toBe(0.5);
+  });
+
+  it("aggregate_tool_stats_caps_at_top_100_by_call_count", async () => {
+    // 101 distinct tools; the least-called must be excluded by the top-100 cap (risk #2).
+    const batch = Array.from({ length: 101 }, (_, i) =>
+      // tool i called (i+1) times would be huge; instead give each 1 call and rely on the
+      // LIMIT — assert exactly 100 returned and the count never exceeds the cap.
+      span({ spanId: `s${i}`, traceId: "t1", toolName: `tool-${String(i).padStart(3, "0")}` }),
+    );
+    await repo.save(batch);
+    const { tools } = await repo.aggregateToolStats();
+    expect(tools.length).toBe(100); // top-100 cap fires (101 distinct tools ingested)
+  });
+
   it("aggregate_tool_stats_orders_by_call_count_desc", async () => {
     await repo.save([
       span({ spanId: "a1", traceId: "t1", toolName: "alpha" }),

@@ -52,12 +52,15 @@ class StubSpanRepository implements SpanRepository {
 
   toolStats: ToolStatsResponse["tools"] = [];
   tracesForTool = new Map<string, TraceListResponse["traces"]>();
+  failOnTools = false;
 
   async aggregateToolStats(): Promise<ToolStatsResponse> {
+    if (this.failOnTools) throw new Error("simulated postgres unavailable");
     return { tools: this.toolStats };
   }
 
   async listTracesForTool(toolName: string): Promise<TraceListResponse> {
+    if (this.failOnTools) throw new Error("simulated postgres unavailable");
     return { traces: this.tracesForTool.get(toolName) ?? [] };
   }
 
@@ -344,6 +347,28 @@ describe("createApp (contract, stub repo)", () => {
     expect((await ok.json()).traces[0].traceId).toBe("t1");
     const empty = await app.request("/v1/analytics/tools/unknown/traces");
     expect(await empty.json()).toEqual({ traces: [] });
+  });
+
+  it("tool_routes_return_5xx_on_repo_failure", async () => {
+    repo.failOnTools = true;
+    expect((await app.request("/v1/analytics/tools")).status).toBeGreaterThanOrEqual(500);
+    expect(
+      (await app.request("/v1/analytics/tools/search/traces")).status,
+    ).toBeGreaterThanOrEqual(500);
+  });
+
+  it("tool_routes_reject_leaked_column_at_boundary_with_5xx", async () => {
+    const leaky: SpanRepository = {
+      ...repo,
+      save: repo.save.bind(repo),
+      getBySpanId: repo.getBySpanId.bind(repo),
+      getTraceTree: repo.getTraceTree.bind(repo),
+      listTraces: repo.listTraces.bind(repo),
+      aggregateToolStats: async () =>
+        ({ tools: [{ toolName: "x", callCount: 1, errorCount: 0, errorRate: 0, p50Ms: 1, p95Ms: 1, leak: 9 }] }) as never,
+    };
+    const res = await createApp(leaky).request("/v1/analytics/tools");
+    expect(res.status).toBeGreaterThanOrEqual(500);
   });
 
   it("cost_routes_reject_leaked_column_at_boundary_with_5xx", async () => {

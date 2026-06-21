@@ -23,9 +23,17 @@ export function percentile(sortedAsc: number[], q: number): number {
   return sortedAsc[lo]! + (sortedAsc[hi]! - sortedAsc[lo]!) * frac;
 }
 
-function round3(x: number): number {
+/** Round to 3 decimals (shared by the pure fn + the SQL adapter mapping — DRY). */
+export function round3(x: number): number {
   return Math.round(x * 1000) / 1000;
 }
+
+/**
+ * Canonical span status_code values meaning ERROR. OTLP/protobuf yields the numeric
+ * enum ("2"); some producers/JSON paths yield the textual name. The tool-stats error
+ * filter and the UI status mapping both key on this set (kept in sync by review F-st-1).
+ */
+export const ERROR_STATUS_CODES = ["2", "ERROR", "STATUS_CODE_ERROR"] as const;
 
 /** Per-tool operational metrics (M6). */
 export const toolStatSchema = z
@@ -57,7 +65,11 @@ export function computeToolStats(
 ): ToolStat {
   const callCount = samples.length;
   const errorCount = samples.reduce((n, s) => n + (s.errored ? 1 : 0), 0);
-  const durations = samples.map((s) => s.durationMs).sort((a, b) => a - b);
+  // Clamp negative durations (clock skew: end < start) to 0 — consistent with the
+  // trace-list duration guard and the SQL `greatest(0, …)` (review F-st-2).
+  const durations = samples
+    .map((s) => Math.max(0, s.durationMs))
+    .sort((a, b) => a - b);
   return {
     toolName,
     callCount,

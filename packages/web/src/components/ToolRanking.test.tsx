@@ -25,7 +25,7 @@ describe("ToolRanking", () => {
     expect(rows[0]).toHaveTextContent("search");
 
     // sort by p95 → slow-fetch (900) first
-    await userEvent.click(screen.getByRole("button", { name: "p95" }));
+    await userEvent.click(screen.getByRole("button", { name: "p95 (ms)" }));
     rows = screen.getAllByRole("row").slice(1);
     expect(rows[0]).toHaveTextContent("slow-fetch");
   });

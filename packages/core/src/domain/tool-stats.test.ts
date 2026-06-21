@@ -9,6 +9,7 @@ describe("percentile", () => {
     expect(percentile([10, 20, 30, 40], 0.5)).toBe(25); // interpolated midpoint
     expect(percentile([10, 20, 30, 40], 0)).toBe(10);
     expect(percentile([10, 20, 30, 40], 1)).toBe(40);
+    expect(percentile([10, 20, 30], 0.5)).toBe(20); // odd count → exact-rank (no interpolation)
   });
 });
 
@@ -37,6 +38,23 @@ describe("computeToolStats", () => {
         { durationMs: 10, errored: false },
       ]),
     ).toEqual(stat);
+  });
+
+  it("compute_tool_stats_all_errored_yields_error_rate_one", () => {
+    const stat = computeToolStats("flaky", [
+      { durationMs: 5, errored: true },
+      { durationMs: 7, errored: true },
+    ]);
+    expect(stat.callCount).toBe(2);
+    expect(stat.errorCount).toBe(2);
+    expect(stat.errorRate).toBe(1);
+  });
+
+  it("compute_tool_stats_clamps_negative_durations_to_zero", () => {
+    // clock skew (end < start) → negative durationMs clamped to 0 (review F-st-2)
+    const stat = computeToolStats("skewed", [{ durationMs: -50, errored: false }]);
+    expect(stat.p50Ms).toBe(0);
+    expect(stat.p95Ms).toBe(0);
   });
 
   it("compute_tool_stats_zeros_for_no_samples", () => {

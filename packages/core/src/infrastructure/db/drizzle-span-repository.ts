@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
@@ -20,7 +20,7 @@ import type {
   CostPeriod,
   TraceCost,
 } from "../../domain/cost.js";
-import type { ToolStatsResponse } from "../../domain/tool-stats.js";
+import { round3, ERROR_STATUS_CODES, type ToolStatsResponse } from "../../domain/tool-stats.js";
 import { spans, traces } from "./schema.js";
 
 /** Build a pg connection pool for the given Postgres URI. */
@@ -314,15 +314,19 @@ export class DrizzleSpanRepository implements SpanRepository {
     // indexed tool_name, ORDER BY call count DESC + top-100 (bounds high cardinality,
     // risk #2). p50/p95 via engine-side percentile_cont over latency-in-ms; the pure
     // computeToolStats is the unit-tested contract this is cross-checked against (D1).
+    // Error tokens kept in sync with the UI status mapping (review F-st-1); latency
+    // clamped to >= 0 for clock skew (review F-st-2). Tool spans are identified by
+    // tool_name IS NOT NULL — the SDK only sets gen_ai.tool.name on execute_tool spans.
+    const errorList = ERROR_STATUS_CODES.map((c) => `'${c}'`).join(", ");
     const res = await this.db.execute(sql`
       SELECT tool_name,
              count(*)::int AS call_count,
-             count(*) FILTER (WHERE status_code = '2')::int AS error_count,
+             count(*) FILTER (WHERE status_code IN (${sql.raw(errorList)}))::int AS error_count,
              percentile_cont(0.5) WITHIN GROUP (
-               ORDER BY (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6
+               ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6)
              )::double precision AS p50,
              percentile_cont(0.95) WITHIN GROUP (
-               ORDER BY (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6
+               ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6)
              )::double precision AS p95
       FROM spans
       WHERE tool_name IS NOT NULL AND ingested_at >= now() - interval '90 days'
@@ -330,7 +334,6 @@ export class DrizzleSpanRepository implements SpanRepository {
       ORDER BY call_count DESC
       LIMIT 100
     `);
-    const round3 = (x: number): number => Math.round(x * 1000) / 1000;
     const tools = (
       res.rows as {
         tool_name: string;
@@ -360,7 +363,12 @@ export class DrizzleSpanRepository implements SpanRepository {
     const callingTraceIds = this.db
       .selectDistinct({ traceId: spans.traceId })
       .from(spans)
-      .where(eq(spans.toolName, toolName));
+      .where(
+        and(
+          eq(spans.toolName, toolName),
+          gte(spans.ingestedAt, sql`now() - interval '90 days'`),
+        ),
+      );
     const rows = await this.db
       .select()
       .from(traces)

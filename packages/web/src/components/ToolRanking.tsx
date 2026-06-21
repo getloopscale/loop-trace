@@ -12,26 +12,35 @@ export function ToolRanking({ tools }: { tools: ToolStat[] }) {
     return <EmptyState message="No tool calls yet" />;
   }
   const sorted = [...tools].sort((a, b) => b[sortKey] - a[sortKey]);
-  const sortBtn = (key: SortKey, label: string) => (
-    <button
-      type="button"
-      className="tool-sort"
-      aria-pressed={sortKey === key}
-      onClick={() => setSortKey(key)}
-    >
-      {label}
-    </button>
+  const LABELS: Record<SortKey, string> = {
+    callCount: "calls",
+    errorRate: "error rate",
+    p95Ms: "p95 latency",
+  };
+  // Sortable column header: carries aria-sort (WAI-ARIA table-sort convention) so AT
+  // announces the active sort; the button is the operable control (review F-fe-1).
+  const sortableTh = (key: SortKey, label: string) => (
+    <th scope="col" aria-sort={sortKey === key ? "descending" : "none"}>
+      <button
+        type="button"
+        className="tool-sort"
+        aria-pressed={sortKey === key}
+        onClick={() => setSortKey(key)}
+      >
+        {label}
+      </button>
+    </th>
   );
   return (
     <table className="tool-table">
-      <caption className="cost-table-caption">Tools ranked by {sortKey}</caption>
+      <caption className="cost-table-caption">Tools ranked by {LABELS[sortKey]} (descending)</caption>
       <thead>
         <tr>
           <th scope="col">Tool</th>
-          <th scope="col">{sortBtn("callCount", "Calls")}</th>
-          <th scope="col">{sortBtn("errorRate", "Error rate")}</th>
-          <th scope="col">p50</th>
-          <th scope="col">{sortBtn("p95Ms", "p95")}</th>
+          {sortableTh("callCount", "Calls")}
+          {sortableTh("errorRate", "Error rate")}
+          <th scope="col">p50 (ms)</th>
+          {sortableTh("p95Ms", "p95 (ms)")}
         </tr>
       </thead>
       <tbody>
