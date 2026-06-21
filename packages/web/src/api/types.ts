@@ -58,3 +58,16 @@ export interface CostByPeriodResponse {
   period: "day" | "week";
   buckets: CostBucket[];
 }
+
+export interface ToolStat {
+  toolName: string;
+  callCount: number;
+  errorCount: number;
+  errorRate: number;
+  p50Ms: number;
+  p95Ms: number;
+}
+
+export interface ToolStatsResponse {
+  tools: ToolStat[];
+}

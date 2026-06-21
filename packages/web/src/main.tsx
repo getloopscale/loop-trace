@@ -5,6 +5,8 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { TraceListPage } from "./routes/TraceListPage.js";
 import { TracePage } from "./routes/TracePage.js";
 import { AnalyticsPage } from "./routes/AnalyticsPage.js";
+import { ToolAnalyticsPage } from "./routes/ToolAnalyticsPage.js";
+import { ToolTracesPage } from "./routes/ToolTracesPage.js";
 import "./index.css";
 
 const queryClient = new QueryClient();
@@ -13,6 +15,8 @@ const router = createBrowserRouter([
   { path: "/", element: <TraceListPage /> },
   { path: "/traces/:traceId", element: <TracePage /> },
   { path: "/analytics", element: <AnalyticsPage /> },
+  { path: "/tools", element: <ToolAnalyticsPage /> },
+  { path: "/tools/:toolName", element: <ToolTracesPage /> },
 ]);
 
 const el = document.getElementById("root");

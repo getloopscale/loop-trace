@@ -20,6 +20,7 @@ export const spanSchema = z.object({
   provider: z.string().optional(),
   inputTokens: z.number().int().optional(),
   outputTokens: z.number().int().optional(),
+  toolName: z.string().optional(),
   sessionId: z.string().optional(),
   attributes: z.record(z.string(), z.unknown()).optional(),
 });

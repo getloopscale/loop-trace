@@ -11,6 +11,15 @@ export {
 } from "./domain/trace-list.js";
 export { extractGenAi, type GenAiFields } from "./domain/genai-attributes.js";
 export {
+  percentile,
+  computeToolStats,
+  toolStatSchema,
+  toolStatsResponseSchema,
+  type ToolSample,
+  type ToolStat,
+  type ToolStatsResponse,
+} from "./domain/tool-stats.js";
+export {
   computeTraceCost,
   resolveModelPrice,
   type ModelPrice,

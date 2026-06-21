@@ -4,6 +4,7 @@ import {
   traceListResponseSchema,
   traceCostSchema,
   costByPeriodResponseSchema,
+  toolStatsResponseSchema,
 } from "@usetheo/lens-core";
 
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
@@ -21,6 +22,8 @@ import { spansIngested, tracesIngested, logIngest } from "./metrics.js";
  *  - GET  /v1/traces/:id     : reconstructed trace tree (404 when absent)
  *  - GET  /v1/traces/:id/cost: per-trace cost summary (404 when absent, M5)
  *  - GET  /v1/analytics/cost : day/week cost aggregation (?period=day|week, M5)
+ *  - GET  /v1/analytics/tools: per-tool stats ranking (M6)
+ *  - GET  /v1/analytics/tools/:name/traces : executions that called a tool (M6 drill-down)
  */
 export function createApp(repo: SpanRepository): Hono {
   const app = new Hono();
@@ -103,6 +106,16 @@ export function createApp(repo: SpanRepository): Hono {
   app.get("/v1/traces/:traceId", async (c) => {
     const tree = await repo.getTraceTree(c.req.param("traceId"));
     return tree ? c.json(tree, 200) : c.json({ error: "not found" }, 404);
+  });
+
+  app.get("/v1/analytics/tools", async (c) => {
+    const stats = await repo.aggregateToolStats();
+    return c.json(toolStatsResponseSchema.parse(stats), 200);
+  });
+
+  app.get("/v1/analytics/tools/:toolName/traces", async (c) => {
+    const list = await repo.listTracesForTool(c.req.param("toolName"));
+    return c.json(traceListResponseSchema.parse(list), 200);
   });
 
   app.get("/v1/analytics/cost", async (c) => {

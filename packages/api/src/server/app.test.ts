@@ -4,6 +4,7 @@ import type {
   CostPeriod,
   Span,
   SpanRepository,
+  ToolStatsResponse,
   TraceCost,
   TraceListResponse,
   TraceTreeNode,
@@ -47,6 +48,17 @@ class StubSpanRepository implements SpanRepository {
   async aggregateCostByPeriod(period: CostPeriod): Promise<CostByPeriodResponse> {
     if (this.failOnAggregate) throw new Error("simulated postgres unavailable");
     return { period, buckets: this.buckets };
+  }
+
+  toolStats: ToolStatsResponse["tools"] = [];
+  tracesForTool = new Map<string, TraceListResponse["traces"]>();
+
+  async aggregateToolStats(): Promise<ToolStatsResponse> {
+    return { tools: this.toolStats };
+  }
+
+  async listTracesForTool(toolName: string): Promise<TraceListResponse> {
+    return { traces: this.tracesForTool.get(toolName) ?? [] };
   }
 
   async listTraces(): Promise<TraceListResponse> {
@@ -312,6 +324,26 @@ describe("createApp (contract, stub repo)", () => {
     expect((await app.request("/v1/traces/t1/cost")).status).toBeGreaterThanOrEqual(500);
     repo.failOnAggregate = true;
     expect((await app.request("/v1/analytics/cost")).status).toBeGreaterThanOrEqual(500);
+  });
+
+  it("get_analytics_tools_returns_ranked_stats", async () => {
+    repo.toolStats = [
+      { toolName: "search", callCount: 9, errorCount: 1, errorRate: 0.111, p50Ms: 12, p95Ms: 40 },
+      { toolName: "fetch", callCount: 3, errorCount: 0, errorRate: 0, p50Ms: 5, p95Ms: 8 },
+    ];
+    const res = await app.request("/v1/analytics/tools");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { tools: { toolName: string }[] };
+    expect(body.tools.map((t) => t.toolName)).toEqual(["search", "fetch"]);
+  });
+
+  it("get_tool_traces_returns_list_dto_and_empty", async () => {
+    repo.tracesForTool.set("search", [{ traceId: "t1", name: "checkout" }]);
+    const ok = await app.request("/v1/analytics/tools/search/traces");
+    expect(ok.status).toBe(200);
+    expect((await ok.json()).traces[0].traceId).toBe("t1");
+    const empty = await app.request("/v1/analytics/tools/unknown/traces");
+    expect(await empty.json()).toEqual({ traces: [] });
   });
 
   it("cost_routes_reject_leaked_column_at_boundary_with_5xx", async () => {

@@ -32,6 +32,7 @@ export const spans = pgTable(
     provider: text("provider"),
     inputTokens: integer("input_tokens"),
     outputTokens: integer("output_tokens"),
+    toolName: text("tool_name"),
     sessionId: text("session_id"),
     attributes: jsonb("attributes"),
     ingestedAt: timestamp("ingested_at", { withTimezone: true })
@@ -41,6 +42,8 @@ export const spans = pgTable(
   (t) => [
     index("spans_trace_id_idx").on(t.traceId),
     index("spans_parent_span_id_idx").on(t.parentSpanId),
+    // Backs per-tool aggregation + drill-down (M6 risk #2).
+    index("spans_tool_name_idx").on(t.toolName),
   ],
 );
 

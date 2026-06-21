@@ -14,6 +14,8 @@ export interface GenAiFields {
   provider?: string;
   inputTokens?: number;
   outputTokens?: number;
+  /** Tool name of a tool-call span (`gen_ai.tool.name`), trim-normalized (M6). */
+  toolName?: string;
 }
 
 // Model resolution order (langfuse OtelIngestionProcessor.ts:2237-2242).
@@ -58,11 +60,15 @@ export function extractGenAi(attributes: unknown): GenAiFields {
     attrs["gen_ai.usage.output_tokens"] ??
       attrs["gen_ai.usage.completion_tokens"],
   );
+  // Tool name, trim-normalized (M6 risk #1); only set when non-empty after trim.
+  const rawTool = firstString(attrs, ["gen_ai.tool.name"]);
+  const toolName = rawTool !== undefined ? rawTool.trim() : "";
 
   return {
     ...(model !== undefined ? { model } : {}),
     ...(provider !== undefined ? { provider } : {}),
     ...(inputTokens !== undefined ? { inputTokens } : {}),
     ...(outputTokens !== undefined ? { outputTokens } : {}),
+    ...(toolName !== "" ? { toolName } : {}),
   };
 }

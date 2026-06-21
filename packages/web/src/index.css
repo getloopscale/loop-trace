@@ -81,11 +81,35 @@ a {
   margin-top: 0.5rem;
 }
 .cost-table th,
-.cost-table td {
+.cost-table td,
+.tool-table th,
+.tool-table td {
   text-align: left;
   padding: 0.4rem 0.75rem;
   border-bottom: 1px solid #eaeef2;
   font-variant-numeric: tabular-nums;
+}
+.tool-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+.tool-sort {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  color: #1f2328;
+}
+.tool-sort[aria-pressed="true"] {
+  color: #0969da;
+  text-decoration: underline;
+}
+.tool-sort:focus-visible {
+  outline: 2px solid #0969da;
+  outline-offset: 2px;
 }
 
 /* Replay controls */
