@@ -11,6 +11,7 @@ import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
 import { OtlpParseError } from "../otlp/otlp-error.js";
 import { decodeOtlpBody } from "../otlp/decode-protobuf.js";
 import { spansIngested, tracesIngested, logIngest } from "./metrics.js";
+import { mountStatic } from "./static.js";
 
 /**
  * Build the Hono app. Depends only on the {@link SpanRepository} port (DIP) — the
@@ -24,8 +25,13 @@ import { spansIngested, tracesIngested, logIngest } from "./metrics.js";
  *  - GET  /v1/analytics/cost : day/week cost aggregation (?period=day|week, M5)
  *  - GET  /v1/analytics/tools: per-tool stats ranking (M6)
  *  - GET  /v1/analytics/tools/:name/traces : executions that called a tool (M6 drill-down)
+ *
+ * When `webDistDir` (CWD-relative) is provided AND exists, the built web bundle
+ * is served same-origin at `/` with an SPA fallback, mounted AFTER all /v1/*
+ * routes so the API is never shadowed (M7, D1). Omitting it keeps API-only
+ * behavior (backward compatible).
  */
-export function createApp(repo: SpanRepository): Hono {
+export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
   const app = new Hono();
 
   // Fail-loud, fail-clear (Rule 8): any unhandled error (e.g. Postgres
@@ -127,6 +133,11 @@ export function createApp(repo: SpanRepository): Hono {
     const result = await repo.aggregateCostByPeriod(raw === "week" ? "week" : "day");
     return c.json(costByPeriodResponseSchema.parse(result), 200);
   });
+
+  // Mount static UI serving LAST so the catch-all never shadows /v1/* (M7, D1).
+  if (webDistDir !== undefined) {
+    mountStatic(app, webDistDir);
+  }
 
   return app;
 }
