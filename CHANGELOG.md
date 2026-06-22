@@ -8,7 +8,6 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Sessions: `GET /v1/sessions` (newest-first) + `GET /v1/sessions/:id` group related traces (a multi-turn conversation / workflow sharing a `session.id` / `gen_ai.conversation.id`) and show session-scoped metrics — total cost, tokens, latency p50/p95, error rate — plus the member trace list. A `/sessions` view + a trace→session link render these with loading/error/empty states; traces without a session id stay standalone and are never grouped into a fabricated session (M13)
 
 ### Changed
 
@@ -19,6 +18,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 ### Security
+
+## [0.13.0] - 2026-06-22
+
+### Added
+- Sessions: `GET /v1/sessions` (newest-first) + `GET /v1/sessions/:id` group related traces (a multi-turn conversation / workflow sharing a `session.id` / `gen_ai.conversation.id`) and show session-scoped metrics — total cost, tokens, latency p50/p95, error rate — plus the member trace list. A `/sessions` view + a trace→session link render these with loading/error/empty states; traces without a session id stay standalone and are never grouped into a fabricated session (M13)
 
 ## [0.12.0] - 2026-06-22
 
