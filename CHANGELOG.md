@@ -19,6 +19,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [0.12.0] - 2026-06-22
+
+### Added
+- Rich span detail: the span detail panel now renders distinct Input / Output / Events / Attributes / Status sections — input/output as XSS-safe markdown, events and attributes as collapsible JSON with copy-to-clipboard — instead of one raw JSON dump. The SDK gains `setInput`/`setOutput` (emitting `input.value`/`output.value`), ingest captures those plus OTLP span events (bounded to 8 KiB text / 50 events to avoid storing unbounded blobs), and spans without the new fields still render gracefully (M12)
+
 ## [0.11.0] - 2026-06-22
 
 ### Added

@@ -21,6 +21,13 @@ coverage/
 knowledge-base/references/*/
 !knowledge-base/references/_catalog.md
 
+# Cycle (.claude/) — Python tooling caches (never track; regenerated per machine)
+.claude/**/__pycache__/
+.claude/**/*.pyc
+
 # Logs / OS
 *.log
 .DS_Store
+
+# Stray QA/Playwright run log (never tracked)
+playwright-log.txt

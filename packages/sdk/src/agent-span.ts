@@ -18,6 +18,14 @@ export interface AgentSpan {
   setResponseModel(model: string): AgentSpan;
   setProvider(provider: string): AgentSpan;
   setUsage(usage: { inputTokens?: number; outputTokens?: number }): AgentSpan;
+  /**
+   * Attach the span's input text (`input.value`). REDACTION NOTE (M12 D5): Lens
+   * stores whatever you send and caps it at ingest — redact secrets/PII here,
+   * client-side, before calling this.
+   */
+  setInput(text: string): AgentSpan;
+  /** Attach the span's output text (`output.value`). Same redaction note as {@link setInput}. */
+  setOutput(text: string): AgentSpan;
 }
 
 function safeJson(value: unknown): string {
@@ -51,6 +59,14 @@ function wrap(span: Span, tracer: Tracer): AgentSpan {
       if (usage.outputTokens != null) {
         span.setAttribute(GEN_AI.USAGE_OUTPUT_TOKENS, usage.outputTokens);
       }
+      return handle;
+    },
+    setInput(text) {
+      span.setAttribute(GEN_AI.INPUT_VALUE, text);
+      return handle;
+    },
+    setOutput(text) {
+      span.setAttribute(GEN_AI.OUTPUT_VALUE, text);
       return handle;
     },
   };

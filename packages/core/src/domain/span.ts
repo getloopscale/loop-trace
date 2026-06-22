@@ -22,6 +22,18 @@ export const spanSchema = z.object({
   outputTokens: z.number().int().optional(),
   toolName: z.string().optional(),
   sessionId: z.string().optional(),
+  // M12: span input/output text + events (all optional → backward-compatible).
+  inputValue: z.string().optional(),
+  outputValue: z.string().optional(),
+  events: z
+    .array(
+      z.object({
+        name: z.string(),
+        timeUnixNano: z.string().optional(),
+        attributes: z.record(z.string(), z.unknown()).optional(),
+      }),
+    )
+    .optional(),
   attributes: z.record(z.string(), z.unknown()).optional(),
 });
 

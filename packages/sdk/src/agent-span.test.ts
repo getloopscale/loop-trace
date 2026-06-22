@@ -34,6 +34,41 @@ describe("startAgent / recordToolCall", () => {
     expect(s?.attributes["gen_ai.usage.output_tokens"]).toBe(5);
   });
 
+  it("test_set_input_emits_input_value_attribute", async () => {
+    const { exporter, spans } = collectingExporter();
+    const theo = initTheoLens({ endpoint: "http://x", serviceName: "t", exporter });
+    await startAgent(theo.tracer, "agent", async (span) => {
+      span.setInput("hi");
+    });
+    await theo.shutdown();
+    const s = spans.find((x) => x.name === "agent");
+    expect(s?.attributes["input.value"]).toBe("hi");
+  });
+
+  it("test_set_output_emits_output_value_attribute", async () => {
+    const { exporter, spans } = collectingExporter();
+    const theo = initTheoLens({ endpoint: "http://x", serviceName: "t", exporter });
+    await startAgent(theo.tracer, "agent", async (span) => {
+      span.setOutput("ok");
+    });
+    await theo.shutdown();
+    const s = spans.find((x) => x.name === "agent");
+    expect(s?.attributes["output.value"]).toBe("ok");
+  });
+
+  it("test_input_output_setters_chain", async () => {
+    const { exporter, spans } = collectingExporter();
+    const theo = initTheoLens({ endpoint: "http://x", serviceName: "t", exporter });
+    await startAgent(theo.tracer, "agent", async (span) => {
+      span.setInput("q").setOutput("a").setModel("gpt-4o");
+    });
+    await theo.shutdown();
+    const s = spans.find((x) => x.name === "agent");
+    expect(s?.attributes["input.value"]).toBe("q");
+    expect(s?.attributes["output.value"]).toBe("a");
+    expect(s?.attributes["gen_ai.request.model"]).toBe("gpt-4o");
+  });
+
   it("setResponseModel_emits_gen_ai_response_model", async () => {
     const { exporter, spans } = collectingExporter();
     const theo = initTheoLens({ endpoint: "http://x", serviceName: "t", exporter });

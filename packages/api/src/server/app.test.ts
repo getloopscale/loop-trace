@@ -282,6 +282,39 @@ describe("createApp (contract, stub repo)", () => {
     expect(res.status).toBe(404);
   });
 
+  it("test_get_trace_tree_returns_input_output_events", async () => {
+    await post(
+      tracesEnvelope({
+        spanId: "rich",
+        traceId: "rt",
+        name: "agent",
+        startTimeUnixNano: "1700000000000000000",
+        endTimeUnixNano: "1700000000100000000",
+        attributes: [
+          { key: "input.value", value: { stringValue: "ask" } },
+          { key: "output.value", value: { stringValue: "answer" } },
+        ],
+        events: [{ name: "chunk", timeUnixNano: "1700000000050000000" }],
+      }),
+    );
+    const tree = (await (await app.request("/v1/traces/rt")).json()) as {
+      inputValue?: string;
+      outputValue?: string;
+      events?: { name: string }[];
+    };
+    expect(tree.inputValue).toBe("ask");
+    expect(tree.outputValue).toBe("answer");
+    expect(tree.events?.[0]?.name).toBe("chunk");
+  });
+
+  it("test_span_without_new_fields_omits_them", async () => {
+    await post(tracesEnvelope(rawSpan));
+    const tree = (await (await app.request("/v1/traces/c-t1")).json()) as Record<string, unknown>;
+    expect(tree.inputValue).toBeUndefined();
+    expect(tree.outputValue).toBeUndefined();
+    expect(tree.events).toBeUndefined();
+  });
+
   it("get_v1_traces_returns_list_dto", async () => {
     await post(tracesEnvelope(rawSpan));
     const res = await app.request("/v1/traces");

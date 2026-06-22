@@ -1,3 +1,5 @@
+import { capText } from "./span-events.js";
+
 /**
  * Extract GenAI semantic-convention attributes from a span's flattened attribute
  * bag into typed fields. Attribute names are anchored on what langfuse actually
@@ -16,6 +18,10 @@ export interface GenAiFields {
   outputTokens?: number;
   /** Tool name of a tool-call span (`gen_ai.tool.name`), trim-normalized (M6). */
   toolName?: string;
+  /** Span input text (`input.value`), capped (M12 — OpenInference convention). */
+  inputValue?: string;
+  /** Span output text (`output.value`), capped (M12). */
+  outputValue?: string;
 }
 
 // Model resolution order (langfuse OtelIngestionProcessor.ts:2237-2242).
@@ -64,11 +70,25 @@ export function extractGenAi(attributes: unknown): GenAiFields {
   const rawTool = firstString(attrs, ["gen_ai.tool.name"]);
   const toolName = rawTool !== undefined ? rawTool.trim() : "";
 
+  // M12: input/output text (OpenInference input.value/output.value). Only a
+  // non-empty STRING is extracted (EC-1: a non-string stays in the bag; EC-7: ""
+  // is treated as absent) and it is size-capped at the boundary (D5).
+  const inputValue = capStringAttr(attrs["input.value"]);
+  const outputValue = capStringAttr(attrs["output.value"]);
+
   return {
     ...(model !== undefined ? { model } : {}),
     ...(provider !== undefined ? { provider } : {}),
     ...(inputTokens !== undefined ? { inputTokens } : {}),
     ...(outputTokens !== undefined ? { outputTokens } : {}),
     ...(toolName !== "" ? { toolName } : {}),
+    ...(inputValue !== undefined ? { inputValue } : {}),
+    ...(outputValue !== undefined ? { outputValue } : {}),
   };
+}
+
+/** A non-empty string attribute, size-capped (M12 D5); anything else → undefined (EC-1/EC-7). */
+function capStringAttr(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length === 0) return undefined;
+  return capText(value);
 }

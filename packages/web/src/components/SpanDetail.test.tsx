@@ -63,11 +63,38 @@ describe("SpanDetail", () => {
   });
 
   it("span_detail_never_throws_on_non_serializable_attribute", () => {
-    // A BigInt would make JSON.stringify throw; prettyAttributes guards it (no crash).
+    // A BigInt would make JSON.stringify throw; JsonBlock guards it (no crash).
     expect(() =>
       render(
         <SpanDetail span={{ ...base, attributes: { big: 10n as unknown } }} />,
       ),
     ).not.toThrow();
+  });
+
+  it("test_span_detail_renders_input_output_events_sections", () => {
+    const { container } = render(
+      <SpanDetail
+        span={{
+          ...base,
+          inputValue: "# Prompt\n\nwhat is 2+2?",
+          outputValue: "The answer is **4**.",
+          events: [{ name: "chunk", attributes: { i: 1 } }],
+        }}
+      />,
+    );
+    // input/output rendered as markdown (heading + bold), not raw.
+    expect(container.querySelector("h1")?.textContent).toBe("Prompt");
+    expect(container.querySelector("strong")?.textContent).toBe("4");
+    // events section lists the event by name.
+    expect(screen.getByText("chunk")).toBeInTheDocument();
+  });
+
+  it("test_span_detail_backward_compatible_empty_sections", () => {
+    // A span without input/output/events shows EmptyStates, no crash (DoD#3).
+    expect(() => render(<SpanDetail span={{ ...base, name: "plain" }} />)).not.toThrow();
+    expect(screen.getByText("No input recorded")).toBeInTheDocument();
+    expect(screen.getByText("No output recorded")).toBeInTheDocument();
+    expect(screen.getByText("No events")).toBeInTheDocument();
+    expect(screen.getByText("No attributes")).toBeInTheDocument();
   });
 });
