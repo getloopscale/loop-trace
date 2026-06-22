@@ -49,7 +49,9 @@ function SpanNode({ node, depth, selectedId, onSelect, timeline }: SpanNodeProps
         style={{ paddingLeft: `${depth * 16}px` }}
         onClick={() => onSelect(node)}
       >
-        <span className="span-kind" aria-label={`kind: ${kind}`} title={kind}>
+        {/* role=img + aria-label so the kind is announced reliably (the emoji's
+            own Unicode name is overridden by the label) — review F-fe-1/F-fe-2. */}
+        <span className="span-kind" role="img" aria-label={`kind: ${kind}`} title={kind}>
           {KIND_GLYPH[kind]}
         </span>
         <span className="span-name">{node.name}</span>
@@ -106,7 +108,7 @@ export function SpanTree({ root, selectedId, onSelect }: SpanTreeProps) {
       {/* Error propagated from any descendant to the trace root (M10, D3). */}
       {traceErrored && (
         <p className="trace-error-summary" role="status">
-          ⚠ This trace contains an error
+          <span aria-hidden="true">⚠ </span>This trace contains an error
         </p>
       )}
       <ul ref={ref} className="span-tree" aria-label="span tree">

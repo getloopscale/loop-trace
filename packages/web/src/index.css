@@ -168,6 +168,10 @@ a {
 }
 .span-row .span-name {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* M10 — span-kind glyph + proportional waterfall bar */
 .span-kind {

@@ -48,6 +48,20 @@ describe("buildTimeline (M10)", () => {
     expect(c.durationMs).toBe(100);
   });
 
+  it("test_build_timeline_sub_ms_offset_survives_bigint_above_2pow53", () => {
+    // A 1-NANOSECOND offset on top of a base > 2^53: a naive `Number(start)`
+    // implementation would round the low bits away and lose it; BigInt keeps it.
+    // We assert via percentage (offsetMs truncates sub-ms): a 1ns offset of a
+    // 2ns-total trace is 50% — float coercion of these nanos would drift.
+    const big = 9_007_199_254_740_993n; // 2^53 + 1
+    const root: TraceTreeNode = {
+      ...node("r", String(big), String(big + 2n)),
+      children: [node("c", String(big + 1n), String(big + 2n))],
+    };
+    const c = buildTimeline(root).get("c")!;
+    expect(c.leftPct).toBeCloseTo(50, 1); // 1ns of a 2ns span — exact only via BigInt
+  });
+
   it("test_build_timeline_clamps_skew_and_tolerates_malformed", () => {
     const root = node("r", at(0), at(1000), [
       node("skew", at(800), at(200)), // end < start
@@ -64,6 +78,9 @@ describe("buildTimeline (M10)", () => {
     const c = buildTimeline(root).get("c")!;
     expect(Number.isNaN(c.leftPct)).toBe(false);
     expect(Number.isNaN(c.widthPct)).toBe(false);
+    // Pins the documented zero-total behavior (offset 0, full width), not just non-NaN.
+    expect(c.leftPct).toBe(0);
+    expect(c.widthPct).toBe(100);
   });
 
   it("test_build_timeline_min_width_floor", () => {
@@ -72,11 +89,15 @@ describe("buildTimeline (M10)", () => {
   });
 
   it("test_build_timeline_child_before_root_clamps_to_zero", () => {
-    // child starts BEFORE the root (skew / re-rooted orphan)
+    // child starts BEFORE the root (skew / re-rooted orphan); total span = [0,1000]
     const root = node("r", at(500), at(1000), [node("early", at(0), at(300))]);
-    const e = buildTimeline(root).get("early")!;
-    expect(e.leftPct).toBeGreaterThanOrEqual(0);
+    const tl = buildTimeline(root);
+    const e = tl.get("early")!;
+    expect(e.leftPct).toBe(0); // the early child is the aggregate min → offset 0
     expect(e.leftPct + e.widthPct).toBeLessThanOrEqual(100);
+    // Proves offsets are relative to the AGGREGATE min (not the root's own start):
+    // the root at 500ms of a [0,1000] span sits at ~50%, not 0.
+    expect(tl.get("r")!.leftPct).toBeCloseTo(50, 0);
   });
 
   it("test_build_timeline_span_without_end_renders_min_width", () => {
