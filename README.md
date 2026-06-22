@@ -89,6 +89,35 @@ npm install ./usetheo-lens-sdk-0.0.0.tgz
 | `THEOLENS_PG_PORT` | `5432` | Host port mapped to Postgres in compose |
 | `THEOLENS_API_PORT` | `4318` | Host port mapped to the API in compose |
 
+## V1 ship criterion
+
+The V1 ship criterion is a single automated end-to-end test that walks the whole
+journey from a clean `docker compose up`: bring up the stack, instrument and run
+the example agent, ingest spans over OTLP, see the execution tree in the
+Explorer, walk the session replay, and check cost + tool analytics. It is the
+binary gate — when it is green, the journey works end to end:
+
+```bash
+pnpm test:e2e   # includes the 6-step ship gate from a clean composed stack
+```
+
+The product target is that a developer completes this journey in **under 15
+minutes**. The automated gate runs in seconds; the 15-minute figure is the
+human-onboarding budget, stated against a **reference environment** so the number
+is reproducible:
+
+- **Reference environment:** a developer laptop with a 4-core/8-thread CPU, 16 GB
+  RAM, an SSD, and a broadband connection (for the first image pull). Cold start
+  is dominated by the one-time Docker image build/pull; subsequent `docker
+  compose up` runs are near-instant. On constrained hardware or a slow network
+  the first run can take longer — the budget is about the steps, not the bytes.
+
+## North-star metrics
+
+Lens watches its own usage. The `/metrics` view (and `GET /v1/metrics/north-star`)
+shows **traces ingested per day** (real telemetry arriving) and **replay sessions
+per week** (active debugging engagement).
+
 ## Development
 
 ```bash
