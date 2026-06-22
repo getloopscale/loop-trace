@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, getTraceTree, listTraces } from "../api/client.js";
+import type { ListTracesQuery } from "../api/types.js";
 
 /** Don't retry deterministic 4xx (e.g. 404); retry transient errors up to twice. */
 function retry(failureCount: number, err: unknown): boolean {
@@ -9,9 +10,13 @@ function retry(failureCount: number, err: unknown): boolean {
   return failureCount < 2;
 }
 
-/** Executions list query (M3 D3 — react-query keying + caching). */
-export function useTraceList() {
-  return useQuery({ queryKey: ["traces"], queryFn: listTraces, retry });
+/** Executions list query keyed by the filter/sort query (M9 — refetches on change). */
+export function useTraceList(query: ListTracesQuery = {}) {
+  return useQuery({
+    queryKey: ["traces", query],
+    queryFn: () => listTraces(query),
+    retry,
+  });
 }
 
 /** Single-trace tree query, keyed by traceId. */

@@ -39,6 +39,14 @@ export interface TraceListResponse {
   traces: TraceListItem[];
 }
 
+/** Whitelisted executions-list query (M9 — mirrors the API param whitelist). */
+export interface ListTracesQuery {
+  status?: "ok" | "error";
+  model?: string;
+  orderBy?: "recent" | "latency" | "tokens" | "cost";
+  dir?: "asc" | "desc";
+}
+
 export interface TraceCost {
   traceId: string;
   costUsd: number;
