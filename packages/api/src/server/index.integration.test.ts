@@ -21,7 +21,9 @@ suite("composition root migrate-on-boot (integration)", () => {
     // Make the database pristine: drop the drizzle journal + the domain tables
     // so `bootstrap` must recreate them from the committed migrations.
     await pool.query("DROP SCHEMA IF EXISTS drizzle CASCADE");
-    await pool.query("DROP TABLE IF EXISTS spans, traces, sessions CASCADE");
+    await pool.query(
+      "DROP TABLE IF EXISTS spans, traces, sessions, replay_sessions CASCADE",
+    );
   });
 
   afterAll(async () => {
