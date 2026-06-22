@@ -2,6 +2,8 @@ import type {
   CostByPeriodResponse,
   ListTracesQuery,
   NorthStarResponse,
+  ObservabilityRange,
+  ObservabilityResponse,
   ToolStatsResponse,
   TraceCost,
   TraceListResponse,
@@ -94,6 +96,15 @@ export function getTracesForTool(toolName: string): Promise<TraceListResponse> {
 /** Fetch the north-star metrics: traces/day + replay-sessions/week (M8). */
 export function getNorthStar(): Promise<NorthStarResponse> {
   return getJson<NorthStarResponse>("/v1/metrics/north-star");
+}
+
+/** Fetch the time-series observability metrics over a range (M11). */
+export function getObservability(
+  range: ObservabilityRange,
+): Promise<ObservabilityResponse> {
+  return getJson<ObservabilityResponse>(
+    `/v1/metrics/observability?range=${range}`,
+  );
 }
 
 /**

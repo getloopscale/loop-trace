@@ -3,6 +3,7 @@ import type { ListTracesOptions, TraceListResponse } from "./trace-list.js";
 import type { CostByPeriodResponse, CostPeriod, TraceCost } from "./cost.js";
 import type { ToolStatsResponse } from "./tool-stats.js";
 import type { NorthStarResponse } from "./north-star.js";
+import type { ObservabilityRange, ObservabilityResponse } from "./observability.js";
 
 /** A span plus its reconstructed children — the trace tree node. */
 export interface TraceTreeNode extends Span {
@@ -38,4 +39,6 @@ export interface SpanRepository {
   recordReplaySession(traceId: string): Promise<void>;
   /** North-star metrics: traces ingested per day + replay sessions per week (M8). */
   aggregateNorthStar(): Promise<NorthStarResponse>;
+  /** Time-series observability over a range: traffic+error-rate, latency percentiles, tokens/cost by model (M11). */
+  aggregateObservability(range: ObservabilityRange): Promise<ObservabilityResponse>;
 }

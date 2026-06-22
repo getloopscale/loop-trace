@@ -4,6 +4,7 @@ import type {
   CostPeriod,
   ListTracesOptions,
   NorthStarResponse,
+  ObservabilityResponse,
   Span,
   SpanRepository,
   ToolStatsResponse,
@@ -110,6 +111,23 @@ class StubSpanRepository implements SpanRepository {
   async aggregateNorthStar(): Promise<NorthStarResponse> {
     if (this.failOnNorthStar) throw new Error("simulated postgres unavailable");
     return this.northStar;
+  }
+
+  observability: ObservabilityResponse = {
+    range: "24h",
+    traffic: [],
+    latency: [],
+    tokensByModel: [],
+  };
+  lastObservabilityRange: string | undefined;
+  failOnObservability = false;
+
+  async aggregateObservability(
+    range: ObservabilityResponse["range"],
+  ): Promise<ObservabilityResponse> {
+    if (this.failOnObservability) throw new Error("simulated postgres unavailable");
+    this.lastObservabilityRange = range;
+    return { ...this.observability, range };
   }
 }
 
@@ -505,6 +523,43 @@ describe("createApp (contract, stub repo)", () => {
         ({ tracesPerDay: [{ period: "2026-06-22", count: 1, leak: 9 }], replaySessionsPerWeek: [] }) as never,
     };
     expect((await createApp(leaky).request("/v1/metrics/north-star")).status).toBeGreaterThanOrEqual(500);
+  });
+
+  it("test_get_observability_returns_dto", async () => {
+    repo.observability = {
+      range: "24h",
+      traffic: [{ periodStart: "2026-06-22T00:00:00Z", traceCount: 4, errorCount: 1, errorRate: 0.25 }],
+      latency: [{ periodStart: "2026-06-22T00:00:00Z", p50Ms: 10, p75Ms: 20, p95Ms: 40, p99Ms: 99 }],
+      tokensByModel: [{ periodStart: "2026-06-22T00:00:00Z", model: "gpt-4o", totalTokens: 150, costUsd: 0.01 }],
+    };
+    const res = await app.request("/v1/metrics/observability?range=7d");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as typeof repo.observability;
+    expect(body.range).toBe("7d"); // route passes the validated range
+    expect(body.traffic[0]?.errorRate).toBe(0.25);
+    expect(repo.lastObservabilityRange).toBe("7d");
+  });
+
+  it("test_get_observability_rejects_bad_range_with_400", async () => {
+    expect((await app.request("/v1/metrics/observability?range=banana")).status).toBe(400);
+  });
+
+  it("test_get_observability_returns_5xx_on_repo_failure", async () => {
+    repo.failOnObservability = true;
+    expect((await app.request("/v1/metrics/observability")).status).toBeGreaterThanOrEqual(500);
+  });
+
+  it("test_observability_route_rejects_leaked_column_at_boundary_with_5xx", async () => {
+    const leaky: SpanRepository = {
+      ...repo,
+      save: repo.save.bind(repo),
+      getBySpanId: repo.getBySpanId.bind(repo),
+      getTraceTree: repo.getTraceTree.bind(repo),
+      listTraces: repo.listTraces.bind(repo),
+      aggregateObservability: async () =>
+        ({ range: "24h", traffic: [{ periodStart: "x", traceCount: 1, errorCount: 0, errorRate: 0, leak: 9 }], latency: [], tokensByModel: [] }) as never,
+    };
+    expect((await createApp(leaky).request("/v1/metrics/observability")).status).toBeGreaterThanOrEqual(500);
   });
 });
 

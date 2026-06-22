@@ -47,6 +47,8 @@ export const spans = pgTable(
     index("spans_tool_name_idx").on(t.toolName),
     // Backs the M9 model filter subquery (traces whose spans use a model).
     index("spans_model_idx").on(t.model),
+    // Backs the M11 time-windowed span scans (tokens-by-model over a range).
+    index("spans_ingested_at_idx").on(t.ingestedAt),
   ],
 );
 

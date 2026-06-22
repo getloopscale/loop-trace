@@ -92,3 +92,35 @@ export interface NorthStarResponse {
   tracesPerDay: NorthStarBucket[];
   replaySessionsPerWeek: NorthStarBucket[];
 }
+
+/** Time-range presets for the observability dashboard (M11 — mirrors the API whitelist). */
+export type ObservabilityRange = "1h" | "24h" | "7d" | "30d";
+
+export interface TrafficBucket {
+  periodStart: string;
+  traceCount: number;
+  errorCount: number;
+  errorRate: number;
+}
+
+export interface LatencyBucket {
+  periodStart: string;
+  p50Ms: number;
+  p75Ms: number;
+  p95Ms: number;
+  p99Ms: number;
+}
+
+export interface ModelTokenBucket {
+  periodStart: string;
+  model: string;
+  totalTokens: number;
+  costUsd: number;
+}
+
+export interface ObservabilityResponse {
+  range: ObservabilityRange;
+  traffic: TrafficBucket[];
+  latency: LatencyBucket[];
+  tokensByModel: ModelTokenBucket[];
+}

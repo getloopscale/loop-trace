@@ -27,6 +27,13 @@ import {
   type BucketRow,
   type NorthStarResponse,
 } from "../../domain/north-star.js";
+import {
+  shapeObservability,
+  RANGE_BUCKETS,
+  type ObservabilityRange,
+  type ObservabilityResponse,
+  type RawObservability,
+} from "../../domain/observability.js";
 import { spans, traces, replaySessions } from "./schema.js";
 
 /** Build a pg connection pool for the given Postgres URI. */
@@ -477,6 +484,74 @@ export class DrizzleSpanRepository implements SpanRepository {
         sessionsRes.rows as unknown as BucketRow[],
       ),
     };
+  }
+
+  async aggregateObservability(
+    range: ObservabilityRange,
+  ): Promise<ObservabilityResponse> {
+    // M11: three windowed time-series, reusing the M5 date_trunc bucket + the M6
+    // percentile_cont/error-FILTER templates. `trunc`/`interval` come from the
+    // fixed RANGE_BUCKETS whitelist (sql.raw of a hardcoded constant, never the
+    // request string). Cost-by-model is shaped from tokens × price (D2), not SQL.
+    const { interval, trunc } = RANGE_BUCKETS[range];
+
+    // Traffic: trace count + error count per bucket. traces.status_code is the M9
+    // recompute ('error' when any span errored, else 'ok') — NOT a raw OTLP code,
+    // so the FILTER matches the literal 'error', not ERROR_STATUS_CODES.
+    const trafficRes = await this.db.execute(sql`
+      SELECT date_trunc(${trunc}, updated_at) AS bucket,
+             count(*)::int AS "traceCount",
+             count(*) FILTER (WHERE status_code = 'error')::int AS "errorCount"
+      FROM traces
+      WHERE updated_at >= now() - ${sql.raw(`interval '${interval}'`)}
+      GROUP BY bucket
+      ORDER BY bucket ASC
+    `);
+
+    // Latency percentiles over clamped duration (ms). EC-1: only rows with BOTH
+    // bounds present AND numeric enter the percentile (a NULL/garbage bound must
+    // not error the cast nor count as a spurious 0ms); skew clamped via greatest.
+    const latencyRes = await this.db.execute(sql`
+      SELECT date_trunc(${trunc}, updated_at) AS bucket,
+             percentile_cont(0.5)  WITHIN GROUP (ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6))::double precision AS p50,
+             percentile_cont(0.75) WITHIN GROUP (ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6))::double precision AS p75,
+             percentile_cont(0.95) WITHIN GROUP (ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6))::double precision AS p95,
+             percentile_cont(0.99) WITHIN GROUP (ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6))::double precision AS p99
+      FROM traces
+      WHERE updated_at >= now() - ${sql.raw(`interval '${interval}'`)}
+        AND start_time_unix_nano ~ '^\\d+$' AND end_time_unix_nano ~ '^\\d+$'
+      GROUP BY bucket
+      ORDER BY bucket ASC
+    `);
+
+    // Tokens per (model, bucket) from spans (model lives on spans). EC-4: model
+    // must be present. Index-backed by spans_ingested_at_idx (D4) + spans_model_idx.
+    const modelRes = await this.db.execute(sql`
+      SELECT date_trunc(${trunc}, ingested_at) AS bucket,
+             model,
+             coalesce(sum(input_tokens), 0)::int AS "inputTokens",
+             coalesce(sum(output_tokens), 0)::int AS "outputTokens"
+      FROM spans
+      WHERE ingested_at >= now() - ${sql.raw(`interval '${interval}'`)}
+        AND model IS NOT NULL
+      GROUP BY bucket, model
+      ORDER BY bucket ASC
+    `);
+
+    const raw: RawObservability = {
+      traffic: trafficRes.rows as unknown as RawObservability["traffic"],
+      latency: (latencyRes.rows as unknown as { bucket: Date; p50: number | null; p75: number | null; p95: number | null; p99: number | null }[]).map(
+        (r) => ({
+          bucket: r.bucket,
+          p50: r.p50 ?? 0,
+          p75: r.p75 ?? 0,
+          p95: r.p95 ?? 0,
+          p99: r.p99 ?? 0,
+        }),
+      ),
+      tokensByModel: modelRes.rows as unknown as RawObservability["tokensByModel"],
+    };
+    return shapeObservability(raw, range, this.priceTable);
   }
 }
 

@@ -7,6 +7,8 @@ import {
   costByPeriodResponseSchema,
   toolStatsResponseSchema,
   northStarResponseSchema,
+  observabilityRangeSchema,
+  observabilityResponseSchema,
 } from "@usetheo/lens-core";
 
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
@@ -30,6 +32,7 @@ import { tracesToCsv } from "./csv.js";
  *  - GET  /v1/analytics/tools/:name/traces : executions that called a tool (M6 drill-down)
  *  - POST /v1/replay-sessions: record a replay-open event (M8 north-star)
  *  - GET  /v1/metrics/north-star: traces/day + replay-sessions/week (M8)
+ *  - GET  /v1/metrics/observability: time-series traffic/error-rate, latency percentiles, tokens/cost by model (M11)
  *
  * When `webDistDir` (CWD-relative) is provided AND exists, the built web bundle
  * is served same-origin at `/` with an SPA fallback, mounted AFTER all /v1/*
@@ -183,6 +186,17 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
   app.get("/v1/metrics/north-star", async (c) => {
     const ns = await repo.aggregateNorthStar();
     return c.json(northStarResponseSchema.parse(ns), 200);
+  });
+
+  app.get("/v1/metrics/observability", async (c) => {
+    // Validate the range at the boundary (fail-fast 400, Rule 8); default 24h.
+    const raw = c.req.query("range");
+    const parsed = observabilityRangeSchema.safeParse(raw ?? "24h");
+    if (!parsed.success) {
+      return c.json({ error: "invalid range (use 1h|24h|7d|30d)" }, 400);
+    }
+    const obs = await repo.aggregateObservability(parsed.data);
+    return c.json(observabilityResponseSchema.parse(obs), 200);
   });
 
   // Mount static UI serving LAST so the catch-all never shadows /v1/* (M7, D1).
