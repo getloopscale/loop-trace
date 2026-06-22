@@ -5,6 +5,7 @@ import { Sparkbar } from "../components/Sparkbar.js";
 import { Loading, ErrorState, EmptyState } from "../components/states.js";
 import { formatDuration } from "../lib/duration.js";
 import { formatUsd } from "../lib/money.js";
+import { formatPercent } from "../lib/percent.js";
 import type {
   LatencyBucket,
   ModelTokenBucket,
@@ -13,11 +14,6 @@ import type {
 } from "../api/types.js";
 
 const RANGES: ObservabilityRange[] = ["1h", "24h", "7d", "30d"];
-
-/** error-rate (0..1) → a compact percentage label, e.g. 0.25 → "25%", 0.333 → "33.3%". */
-function formatRate(rate: number): string {
-  return `${+(rate * 100).toFixed(1)}%`;
-}
 
 /** A metric section: an accessible data table + an aria-hidden sparkbar enhancement. */
 function MetricSection({
@@ -105,7 +101,7 @@ function TrafficTable({ buckets }: { buckets: TrafficBucket[] }) {
               <td>{b.periodStart}</td>
               <td>{b.traceCount}</td>
               <td>{b.errorCount}</td>
-              <td>{formatRate(b.errorRate)}</td>
+              <td>{formatPercent(b.errorRate)}</td>
             </tr>
           ))}
         </tbody>

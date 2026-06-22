@@ -51,7 +51,8 @@ suite("sessions grouping (integration, M13)", () => {
     expect(d!.totalTokens).toBe(165);
     expect(d!.costUsd).toBeGreaterThan(0);
     expect(d!.errorRate).toBe(round3(1 / 3));
-    expect(d!.latencyP50Ms).toBeGreaterThanOrEqual(0);
+    // all three spans are 100ms → p50 is exactly 100 (pins the nanos→ms scaling).
+    expect(d!.latencyP50Ms).toBe(100);
     expect(d!.traces).toHaveLength(3);
   });
 
@@ -76,6 +77,15 @@ suite("sessions grouping (integration, M13)", () => {
     expect(sessions.map((s) => s.sessionId)).toEqual(["S2", "S1"]); // newest first
   });
 
+  it("test_list_sessions_deterministic_tiebreaker_on_equal_last_seen", async () => {
+    // EC-7: two sessions with IDENTICAL last_seen_at order by session_id DESC.
+    await pool.query(
+      "INSERT INTO sessions (session_id, first_seen_at, last_seen_at) VALUES ('Sa', now(), '2026-06-22T12:00:00Z'), ('Sb', now(), '2026-06-22T12:00:00Z')",
+    );
+    const { sessions } = await repo.listSessions();
+    expect(sessions.map((s) => s.sessionId)).toEqual(["Sb", "Sa"]);
+  });
+
   it("test_ungrouped_trace_not_in_any_session", async () => {
     // a trace with NO session id (risk #1): never grouped, list stays empty.
     await repo.save([span({ spanId: "x", traceId: "tx" })]);
@@ -93,7 +103,8 @@ suite("sessions grouping (integration, M13)", () => {
     );
     const d = await repo.getSessionDetail("S1");
     expect(d!.traceCount).toBe(2); // both counted
-    expect(d!.latencyP50Ms).toBeGreaterThanOrEqual(400); // ~500ms, NULL-bound excluded (EC-1)
+    // only the 500ms member enters the percentile; the NULL-bound is excluded (EC-1) → exactly 500.
+    expect(d!.latencyP50Ms).toBe(500);
   });
 
   it("test_get_session_detail_zero_traces_is_safe", async () => {

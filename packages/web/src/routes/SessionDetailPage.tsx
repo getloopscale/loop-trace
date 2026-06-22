@@ -4,6 +4,8 @@ import { TraceList } from "../components/TraceList.js";
 import { Loading, ErrorState } from "../components/states.js";
 import { formatUsd } from "../lib/money.js";
 import { formatDuration } from "../lib/duration.js";
+import { formatPercent } from "../lib/percent.js";
+import { formatDateTime } from "../lib/datetime.js";
 
 /**
  * Session view (M13): session-scoped metrics + the member trace list (reuses the
@@ -25,9 +27,10 @@ export function SessionDetailPage() {
         <div><dt>Traces</dt><dd>{data.traceCount}</dd></div>
         <div><dt>Cost</dt><dd>{formatUsd(data.costUsd)}</dd></div>
         <div><dt>Tokens</dt><dd>{data.totalTokens}</dd></div>
-        <div><dt>Error rate</dt><dd>{`${+(data.errorRate * 100).toFixed(1)}%`}</dd></div>
+        <div><dt>Error rate</dt><dd>{formatPercent(data.errorRate)}</dd></div>
         <div><dt>Latency p50</dt><dd>{formatDuration(data.latencyP50Ms)}</dd></div>
         <div><dt>Latency p95</dt><dd>{formatDuration(data.latencyP95Ms)}</dd></div>
+        <div><dt>Last seen</dt><dd>{formatDateTime(data.lastSeenAt)}</dd></div>
       </dl>
       <h2>Traces in this session</h2>
       <TraceList traces={data.traces} />

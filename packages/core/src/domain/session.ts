@@ -60,8 +60,8 @@ export interface RawSessionDetail {
   traces: TraceListItem[];
 }
 
-/** A bucket timestamp → ISO date-time; an unparseable value falls back to its string. */
-function iso(value: Date | string): string {
+/** A timestamp → ISO date-time; an unparseable value falls back to its string. */
+export function isoTimestamp(value: Date | string): string {
   const d = value instanceof Date ? value : new Date(value);
   return Number.isNaN(d.getTime()) ? String(value) : d.toISOString();
 }
@@ -75,8 +75,8 @@ function iso(value: Date | string): string {
 export function shapeSessionDetail(raw: RawSessionDetail): SessionDetailResponse {
   return {
     sessionId: raw.sessionId,
-    firstSeenAt: iso(raw.firstSeenAt),
-    lastSeenAt: iso(raw.lastSeenAt),
+    firstSeenAt: isoTimestamp(raw.firstSeenAt),
+    lastSeenAt: isoTimestamp(raw.lastSeenAt),
     traceCount: raw.traceCount,
     costUsd: round3(raw.costUsd ?? 0),
     totalTokens: raw.totalTokens ?? 0,

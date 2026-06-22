@@ -1,12 +1,9 @@
 import { Link } from "react-router-dom";
 import type { SessionListItem } from "../api/types.js";
 import { formatUsd } from "../lib/money.js";
+import { formatPercent } from "../lib/percent.js";
+import { formatDateTime } from "../lib/datetime.js";
 import { EmptyState } from "./states.js";
-
-/** error-rate (0..1) → a compact percentage label. */
-function formatRate(rate: number): string {
-  return `${+(rate * 100).toFixed(1)}%`;
-}
 
 /**
  * Sessions list (M13) — each row links to its session view. The empty state
@@ -43,8 +40,8 @@ export function SessionList({ sessions }: { sessions: SessionListItem[] }) {
             <td>{s.traceCount}</td>
             <td>{formatUsd(s.costUsd)}</td>
             <td>{s.totalTokens}</td>
-            <td>{formatRate(s.errorRate)}</td>
-            <td>{s.lastSeenAt}</td>
+            <td>{formatPercent(s.errorRate)}</td>
+            <td>{formatDateTime(s.lastSeenAt)}</td>
           </tr>
         ))}
       </tbody>

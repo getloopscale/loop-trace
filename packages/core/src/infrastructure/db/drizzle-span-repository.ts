@@ -36,6 +36,7 @@ import {
 } from "../../domain/observability.js";
 import {
   shapeSessionDetail,
+  isoTimestamp,
   type SessionListResponse,
   type SessionListItem,
   type SessionDetailResponse,
@@ -600,8 +601,8 @@ export class DrizzleSpanRepository implements SpanRepository {
     }[];
     const sessionsOut: SessionListItem[] = rows.map((r) => ({
       sessionId: r.sessionId,
-      firstSeenAt: new Date(r.firstSeenAt).toISOString(),
-      lastSeenAt: new Date(r.lastSeenAt).toISOString(),
+      firstSeenAt: isoTimestamp(r.firstSeenAt),
+      lastSeenAt: isoTimestamp(r.lastSeenAt),
       traceCount: r.traceCount,
       costUsd: round3(r.costUsd ?? 0),
       totalTokens: r.totalTokens ?? 0,
