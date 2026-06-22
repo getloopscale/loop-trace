@@ -36,7 +36,14 @@ export {
   type CostByPeriodResponse,
   type CostPeriod,
 } from "./domain/cost.js";
-export { spans, traces, sessions } from "./infrastructure/db/schema.js";
+export {
+  northStarBucketSchema,
+  northStarResponseSchema,
+  shapeNorthStarBuckets,
+  type NorthStarBucket,
+  type NorthStarResponse,
+} from "./domain/north-star.js";
+export { spans, traces, sessions, replaySessions } from "./infrastructure/db/schema.js";
 export {
   DrizzleSpanRepository,
   createPool,

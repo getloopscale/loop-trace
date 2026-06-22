@@ -2,6 +2,7 @@ import type { Span } from "./span.js";
 import type { TraceListResponse } from "./trace-list.js";
 import type { CostByPeriodResponse, CostPeriod, TraceCost } from "./cost.js";
 import type { ToolStatsResponse } from "./tool-stats.js";
+import type { NorthStarResponse } from "./north-star.js";
 
 /** A span plus its reconstructed children — the trace tree node. */
 export interface TraceTreeNode extends Span {
@@ -29,4 +30,8 @@ export interface SpanRepository {
   aggregateToolStats(): Promise<ToolStatsResponse>;
   /** Executions (traces) that called a given tool, newest-first (M6 drill-down). */
   listTracesForTool(toolName: string, limit?: number): Promise<TraceListResponse>;
+  /** Record that a trace's replay was opened in the UI (M8 north-star). */
+  recordReplaySession(traceId: string): Promise<void>;
+  /** North-star metrics: traces ingested per day + replay sessions per week (M8). */
+  aggregateNorthStar(): Promise<NorthStarResponse>;
 }

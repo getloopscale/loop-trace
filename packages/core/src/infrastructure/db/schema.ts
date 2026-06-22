@@ -6,6 +6,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uuid,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -76,3 +77,21 @@ export const sessions = pgTable("sessions", {
   firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull(),
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull(),
 });
+
+/**
+ * M8 north-star: one row per replay opened in the UI. Replay is otherwise
+ * client-only and ephemeral, so this is the sole data source for the
+ * "replay sessions per week" metric. `opened_at` is indexed to back the weekly
+ * date_trunc aggregation.
+ */
+export const replaySessions = pgTable(
+  "replay_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    traceId: text("trace_id").notNull(),
+    openedAt: timestamp("opened_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [index("replay_sessions_opened_at_idx").on(t.openedAt)],
+);

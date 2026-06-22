@@ -21,7 +21,12 @@ import type {
   TraceCost,
 } from "../../domain/cost.js";
 import { round3, ERROR_STATUS_CODES, type ToolStatsResponse } from "../../domain/tool-stats.js";
-import { spans, traces } from "./schema.js";
+import {
+  shapeNorthStarBuckets,
+  type BucketRow,
+  type NorthStarResponse,
+} from "../../domain/north-star.js";
+import { spans, traces, replaySessions } from "./schema.js";
 
 /** Build a pg connection pool for the given Postgres URI. */
 export function createPool(connectionString: string): pg.Pool {
@@ -376,6 +381,42 @@ export class DrizzleSpanRepository implements SpanRepository {
       .orderBy(desc(traces.updatedAt))
       .limit(limit);
     return { traces: rows.map(traceRowToItem) };
+  }
+
+  async recordReplaySession(traceId: string): Promise<void> {
+    // One row per replay opened in the UI — the sole data source for the
+    // "replay sessions per week" north-star (replay is otherwise client-only).
+    await this.db.insert(replaySessions).values({ traceId });
+  }
+
+  async aggregateNorthStar(): Promise<NorthStarResponse> {
+    // North-star (M8, D2): traces ingested per day (real telemetry arriving) +
+    // replay sessions opened per week (active debugging). Both via date_trunc
+    // over an indexed timestamp + a bounded recent window (reuses the M5 cost
+    // aggregation pattern). traces/day uses COUNT(DISTINCT trace_id) so a
+    // multi-span trace counts once (EC-1 of the cost work, applied here).
+    const tracesRes = await this.db.execute(sql`
+      SELECT date_trunc('day', ingested_at) AS bucket,
+             count(DISTINCT trace_id)::int AS count
+      FROM spans
+      WHERE ingested_at >= now() - interval '30 days'
+      GROUP BY bucket
+      ORDER BY bucket DESC
+    `);
+    const sessionsRes = await this.db.execute(sql`
+      SELECT date_trunc('week', opened_at) AS bucket,
+             count(*)::int AS count
+      FROM replay_sessions
+      WHERE opened_at >= now() - interval '12 weeks'
+      GROUP BY bucket
+      ORDER BY bucket DESC
+    `);
+    return {
+      tracesPerDay: shapeNorthStarBuckets(tracesRes.rows as unknown as BucketRow[]),
+      replaySessionsPerWeek: shapeNorthStarBuckets(
+        sessionsRes.rows as unknown as BucketRow[],
+      ),
+    };
   }
 }
 
