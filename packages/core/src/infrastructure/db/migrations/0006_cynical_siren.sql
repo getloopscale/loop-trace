@@ -1,0 +1,1 @@
+CREATE INDEX "spans_ingested_at_idx" ON "spans" USING btree ("ingested_at");

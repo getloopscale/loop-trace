@@ -19,6 +19,7 @@ export function TraceListPage() {
       <header className="list-header">
         <h1>Executions</h1>
         <Link to="/analytics">Cost analytics →</Link>
+        <Link to="/dashboards">Observability →</Link>
         <Link to="/metrics">North-star metrics →</Link>
       </header>
       <TraceFilters query={query} onChange={setQuery} />

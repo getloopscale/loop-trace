@@ -46,6 +46,15 @@ export {
   type NorthStarBucket,
   type NorthStarResponse,
 } from "./domain/north-star.js";
+export {
+  observabilityRangeSchema,
+  observabilityResponseSchema,
+  shapeObservability,
+  RANGE_BUCKETS,
+  type ObservabilityRange,
+  type ObservabilityResponse,
+  type RawObservability,
+} from "./domain/observability.js";
 export { spans, traces, sessions, replaySessions } from "./infrastructure/db/schema.js";
 export {
   DrizzleSpanRepository,
