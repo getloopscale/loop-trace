@@ -41,9 +41,14 @@ export interface BucketRow {
 export function shapeNorthStarBuckets(rows: BucketRow[]): NorthStarBucket[] {
   return rows.map((r) => {
     const date = r.bucket instanceof Date ? r.bucket : new Date(r.bucket);
+    // Guard an unparseable bucket so `.toISOString()` cannot throw a RangeError
+    // (the live pg path always yields a Date; this hardens the string branch).
+    const period = Number.isNaN(date.getTime())
+      ? String(r.bucket)
+      : date.toISOString().slice(0, 10);
     return {
-      period: date.toISOString().slice(0, 10),
-      count: Math.max(0, Math.trunc(Number(r.count))),
+      period,
+      count: Math.max(0, Math.trunc(Number(r.count) || 0)),
     };
   });
 }

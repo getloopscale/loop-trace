@@ -395,6 +395,12 @@ export class DrizzleSpanRepository implements SpanRepository {
     // over an indexed timestamp + a bounded recent window (reuses the M5 cost
     // aggregation pattern). traces/day uses COUNT(DISTINCT trace_id) so a
     // multi-span trace counts once (EC-1 of the cost work, applied here).
+    //
+    // This is a DIRECTIONAL trend signal, not a billing figure: date_trunc
+    // buckets in the server TimeZone (not pinned to UTC, consistent with
+    // aggregateCostByPeriod), and a trace whose spans straddle a day boundary
+    // can appear in two day buckets. Both are acceptable for a usage trend; the
+    // integration test sums over the window rather than asserting a bucket label.
     const tracesRes = await this.db.execute(sql`
       SELECT date_trunc('day', ingested_at) AS bucket,
              count(DISTINCT trace_id)::int AS count

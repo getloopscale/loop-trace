@@ -24,4 +24,13 @@ describe("shapeNorthStarBuckets", () => {
   it("test_shape_north_star_buckets_empty", () => {
     expect(shapeNorthStarBuckets([])).toEqual([]);
   });
+
+  it("test_shape_north_star_buckets_tolerates_invalid_bucket", () => {
+    // An unparseable bucket must not throw RangeError from toISOString (F-data-2).
+    expect(() =>
+      shapeNorthStarBuckets([{ bucket: "not-a-date", count: 1 }]),
+    ).not.toThrow();
+    const out = shapeNorthStarBuckets([{ bucket: "not-a-date", count: 1 }]);
+    expect(out[0]?.count).toBe(1);
+  });
 });

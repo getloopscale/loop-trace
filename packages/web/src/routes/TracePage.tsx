@@ -27,9 +27,11 @@ export function TracePage() {
   // Per-trace cost is supplementary (M5 DoD #3) — never blocks the tree/replay.
   const { data: cost } = useTraceCost(traceId);
 
-  // Record one replay session per trace open (M8 north-star). The ref guards
-  // against React StrictMode's double-invoke + re-mounts so a single open is not
-  // double-counted (EC-3); the POST is fire-and-forget + fail-soft (D3).
+  // Record one replay session per trace open (M8 north-star). The ref guards a
+  // single open against React StrictMode's paired effect invoke + same-mount
+  // re-renders so it is not double-counted (EC-3). A genuine re-navigation back
+  // to the same trace is, by design, a new "open" (a new session). The POST is
+  // fire-and-forget + fail-soft (D3).
   const recordedRef = useRef<string | null>(null);
   useEffect(() => {
     if (data && traceId && recordedRef.current !== traceId) {

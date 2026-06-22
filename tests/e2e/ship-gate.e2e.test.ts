@@ -82,14 +82,17 @@ describe("V1 ship gate — 6-step Success Criteria from a clean stack (e2e)", ()
       "step 6: the tool appears in tool analytics",
     ).toContain("search-products");
 
-    // The V1 product criterion is < 15 min; the gate runs in seconds. Assert with
-    // a wide margin (risk #2 — the budget is documented against a reference env).
+    // The V1 product criterion is < 15 min (human onboarding, documented against
+    // a reference env — risk #2). The automated journey runs in seconds; the
+    // logged elapsed is the real telemetry. This assertion is a SANITY CEILING
+    // (well under the 120s vitest testTimeout that is the true hang-guard), not
+    // the 15-min product-criterion enforcement (review F-test-2 / F-xv-10).
     const elapsedMs = Date.now() - startedAt;
     console.error(
       JSON.stringify({ level: "info", msg: "ship_gate_elapsed_ms", elapsedMs }),
     );
-    expect(elapsedMs, "the 6-step journey is well within the <15-min budget").toBeLessThan(
-      10 * 60 * 1000,
+    expect(elapsedMs, "sanity ceiling — the journey runs in seconds").toBeLessThan(
+      90_000,
     );
   });
 });
