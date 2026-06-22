@@ -525,7 +525,8 @@ export class DrizzleSpanRepository implements SpanRepository {
     `);
 
     // Tokens per (model, bucket) from spans (model lives on spans). EC-4: model
-    // must be present. Index-backed by spans_ingested_at_idx (D4) + spans_model_idx.
+    // must be present. The range scan is index-backed by spans_ingested_at_idx (D4);
+    // the GROUP BY model + non-selective IS NOT NULL are not served by spans_model_idx.
     const modelRes = await this.db.execute(sql`
       SELECT date_trunc(${trunc}, ingested_at) AS bucket,
              model,

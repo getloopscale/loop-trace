@@ -50,27 +50,38 @@ suite("aggregateObservability (integration, M11)", () => {
     const totalErrors = obs.traffic.reduce((s, b) => s + b.errorCount, 0);
     expect(totalTraces).toBe(4);
     expect(totalErrors).toBe(1);
-    // errorRate per bucket is in [0,1]; with all 4 in one bucket → 0.25
-    expect(obs.traffic.some((b) => b.errorRate === 0.25)).toBe(true);
+    // Window-total error rate is deterministic regardless of how the 4 traces fall
+    // across hour buckets (avoids an hour-boundary flake — F-test-5): 1/4 = 0.25.
+    expect(Math.round((totalErrors / totalTraces) * 1000) / 1000).toBe(0.25);
+    // Every per-bucket rate is a well-formed fraction in [0,1].
+    for (const b of obs.traffic) {
+      expect(b.errorRate).toBeGreaterThanOrEqual(0);
+      expect(b.errorRate).toBeLessThanOrEqual(1);
+    }
   });
 
   it("test_aggregate_observability_latency_percentiles_clamp_skew", async () => {
-    await repo.save([
-      span({ spanId: "f", traceId: "t-f", startTimeUnixNano: "1700000000000000000", endTimeUnixNano: "1700000000010000000" }), // 10ms
-    ]);
-    await repo.save([
-      span({ spanId: "s", traceId: "t-s", startTimeUnixNano: "1700000000000000000", endTimeUnixNano: "1700000000900000000" }), // 900ms
-    ]);
-    await repo.save([
-      span({ spanId: "k", traceId: "t-skew", startTimeUnixNano: "1700000000900000000", endTimeUnixNano: "1700000000000000000" }), // end<start
-    ]);
+    // Three traces in ONE bucket via a single statement-level now() (deterministic,
+    // no hour-boundary flake): 10ms, 900ms, and a skewed end<start row. The skew row
+    // passes the numeric-bound regex (both bounds are digits) so it is INCLUDED and
+    // clamped to 0ms — durations = {0, 10, 900}.
+    await pool.query(
+      `INSERT INTO traces (trace_id, status_code, start_time_unix_nano, end_time_unix_nano, updated_at) VALUES
+        ('t-f','ok','1700000000000000000','1700000000010000000', now()),
+        ('t-s','ok','1700000000000000000','1700000000900000000', now()),
+        ('t-skew','ok','1700000000900000000','1700000000000000000', now())`,
+    );
     const obs = await repo.aggregateObservability("24h");
-    // percentiles exist + are non-negative (skew clamped to 0, never negative)
-    expect(obs.latency.length).toBeGreaterThan(0);
-    for (const b of obs.latency) {
-      expect(b.p50Ms).toBeGreaterThanOrEqual(0);
-      expect(b.p99Ms).toBeGreaterThanOrEqual(b.p50Ms);
-    }
+    expect(obs.latency).toHaveLength(1);
+    const b = obs.latency[0]!;
+    // Concrete clamp proof: median of {0,10,900} is 10. If the skew row had been
+    // EXCLUDED (durations {10,900}) the median would be 455; if it had leaked a
+    // negative, below 10. p50 ≈ 10 pins "clamped to 0 AND included".
+    expect(b.p50Ms).toBeGreaterThan(0);
+    expect(b.p50Ms).toBeLessThan(100);
+    // p99 of {0,10,900} ≈ 882 — the 900ms tail is reflected, never negative.
+    expect(b.p99Ms).toBeGreaterThan(800);
+    expect(b.p99Ms).toBeGreaterThanOrEqual(b.p50Ms);
   });
 
   it("test_aggregate_observability_latency_excludes_null_bound_trace", async () => {
@@ -92,7 +103,7 @@ suite("aggregateObservability (integration, M11)", () => {
       span({ spanId: "m1", traceId: "t-m1", model: "gpt-4o", inputTokens: 100, outputTokens: 50 }),
     ]);
     await repo.save([
-      span({ spanId: "m2", traceId: "t-m2", model: "claude-3-5-sonnet", inputTokens: 10, outputTokens: 5 }),
+      span({ spanId: "m2", traceId: "t-m2", model: "claude-3-5-sonnet", inputTokens: 1000, outputTokens: 500 }),
     ]);
     // a tool span with NO model must be excluded (EC-4)
     await repo.save([
@@ -100,11 +111,20 @@ suite("aggregateObservability (integration, M11)", () => {
     ]);
     const obs = await repo.aggregateObservability("24h");
     const models = obs.tokensByModel.map((m) => m.model);
+    // Multi-model bucket (Coverage Matrix #1): BOTH models surface as distinct rows
+    // — a GROUP-BY regression collapsing models or a top-1 cap would fail here.
     expect(models).toContain("gpt-4o");
+    expect(models).toContain("claude-3-5-sonnet");
     expect(models).not.toContain(null);
+    expect(new Set(models).size).toBe(2);
     const gpt = obs.tokensByModel.find((m) => m.model === "gpt-4o")!;
     expect(gpt.totalTokens).toBe(150);
     expect(gpt.costUsd).toBeGreaterThan(0);
+    const claude = obs.tokensByModel.find((m) => m.model === "claude-3-5-sonnet")!;
+    expect(claude.totalTokens).toBe(1500);
+    // claude-3-5-sonnet is priced ($3/$15 per 1M) → 1000·3/1e6 + 500·15/1e6 = 0.0105
+    // → round3 0.011 (distinct from an unpriced model, which would be $0).
+    expect(claude.costUsd).toBeGreaterThan(0);
   });
 
   it("test_aggregate_observability_tokens_by_model_excludes_null_model", async () => {

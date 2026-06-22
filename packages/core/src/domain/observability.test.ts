@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { shapeObservability } from "./observability.js";
 import { DEFAULT_PRICES } from "./default-prices.js";
+import { computeTraceCost } from "./pricing.js";
+import { round3 } from "./tool-stats.js";
 
 const empty = { traffic: [], latency: [], tokensByModel: [] };
 
@@ -38,7 +40,16 @@ describe("shapeObservability (M11)", () => {
       DEFAULT_PRICES,
     );
     expect(out.tokensByModel[0]?.totalTokens).toBe(2000);
-    expect(out.tokensByModel[0]?.costUsd).toBeGreaterThan(0); // priced model → real cost
+    // Exact cost = the price-table result (D2), not merely >0 — a mispricing /
+    // swapped-rate / wrong-model-lookup regression would change this value (F-test-3).
+    const expectedCost = round3(
+      computeTraceCost(
+        [{ model: "gpt-4o", inputTokens: 1000, outputTokens: 1000 }],
+        DEFAULT_PRICES,
+      ),
+    );
+    expect(expectedCost).toBeGreaterThan(0); // guard: the price table actually prices gpt-4o
+    expect(out.tokensByModel[0]?.costUsd).toBe(expectedCost);
   });
 
   it("test_shape_observability_rounds_error_rate_and_cost", () => {
@@ -46,12 +57,26 @@ describe("shapeObservability (M11)", () => {
       {
         ...empty,
         traffic: [{ bucket: "2026-06-22T00:00:00Z", traceCount: 3, errorCount: 1 }],
+        // odd token counts → a float-noisy raw cost that round3 must trim.
+        tokensByModel: [
+          {
+            bucket: "2026-06-22T00:00:00Z",
+            model: "gpt-4o",
+            inputTokens: 777,
+            outputTokens: 333,
+          },
+        ],
       },
       "24h",
       DEFAULT_PRICES,
     );
     // 1/3 = 0.3333… must be round3-ed, not leak float noise.
     expect(out.traffic[0]?.errorRate).toBe(0.333);
+    // cost is round3-ed too: at most 3 decimal places (no float tail).
+    const cost = out.tokensByModel[0]!.costUsd;
+    expect(cost).toBeGreaterThan(0);
+    expect(Number.isInteger(Math.round(cost * 1000))).toBe(true);
+    expect(cost).toBe(Math.round(cost * 1000) / 1000);
   });
 
   it("test_shape_observability_maps_bucket_to_iso_date", () => {
