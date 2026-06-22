@@ -2,25 +2,23 @@ import type { SpanNodeData } from "../api/types.js";
 import { durationMs, formatDuration } from "../lib/duration.js";
 import { isErrorStatus } from "../lib/span-kind.js";
 import { EmptyState } from "./states.js";
-
-/** Pretty-print attributes; never throw into render on a non-serializable value. */
-function prettyAttributes(attrs: Record<string, unknown>): string {
-  try {
-    return JSON.stringify(attrs, null, 2);
-  } catch {
-    return String(attrs);
-  }
-}
+import { MarkdownText } from "./MarkdownText.js";
+import { JsonBlock } from "./JsonBlock.js";
 
 /**
- * Detail panel for a selected span (M3 DoD #2). Fixed sections — Overview / Model
- * / Tokens / Attributes (the raw gen_ai bag: prompt/output/tool/metadata) / Error.
- * Each data section degrades to an EmptyState when the span carries no such data.
+ * Detail panel for a selected span (M3 → M12). Distinct sections — Overview /
+ * Model / Tokens / Input / Output / Events / Attributes / Error. Input & output
+ * render as XSS-safe markdown (M12 D4); events & attributes as collapsible
+ * JSON-with-copy. Every data section degrades to an EmptyState when the span
+ * carries no such data (backward-compatible — DoD#3).
  */
 export function SpanDetail({ span }: { span: SpanNodeData }) {
   const dur = durationMs(span.startTimeUnixNano, span.endTimeUnixNano);
   const hasModel = span.model != null || span.provider != null;
   const hasTokens = span.inputTokens != null || span.outputTokens != null;
+  const hasInput = span.inputValue != null && span.inputValue.length > 0;
+  const hasOutput = span.outputValue != null && span.outputValue.length > 0;
+  const hasEvents = span.events != null && span.events.length > 0;
   const hasAttrs =
     span.attributes != null && Object.keys(span.attributes).length > 0;
 
@@ -51,9 +49,36 @@ export function SpanDetail({ span }: { span: SpanNodeData }) {
         <EmptyState message="No token usage" />
       )}
 
+      <h3>Input</h3>
+      {hasInput ? (
+        <MarkdownText text={span.inputValue!} />
+      ) : (
+        <EmptyState message="No input recorded" />
+      )}
+
+      <h3>Output</h3>
+      {hasOutput ? (
+        <MarkdownText text={span.outputValue!} />
+      ) : (
+        <EmptyState message="No output recorded" />
+      )}
+
+      <h3>Events</h3>
+      {hasEvents ? (
+        <ul className="detail-events">
+          {span.events!.map((e, i) => (
+            <li key={`${e.name}-${i}`}>
+              <JsonBlock value={e} summary={e.name} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <EmptyState message="No events" />
+      )}
+
       <h3>Attributes</h3>
       {hasAttrs ? (
-        <pre className="detail-attributes">{prettyAttributes(span.attributes!)}</pre>
+        <JsonBlock value={span.attributes} summary="Attributes" open />
       ) : (
         <EmptyState message="No attributes" />
       )}

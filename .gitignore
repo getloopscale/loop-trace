@@ -28,3 +28,6 @@ knowledge-base/references/*/
 # Logs / OS
 *.log
 .DS_Store
+
+# Stray QA/Playwright run log (never tracked)
+playwright-log.txt

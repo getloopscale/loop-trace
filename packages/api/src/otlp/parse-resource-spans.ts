@@ -1,4 +1,9 @@
-import { spanSchema, extractGenAi, type Span } from "@usetheo/lens-core";
+import {
+  spanSchema,
+  extractGenAi,
+  extractSpanEvents,
+  type Span,
+} from "@usetheo/lens-core";
 
 import { normalizeId } from "./normalize-id.js";
 import { OtlpParseError } from "./otlp-error.js";
@@ -85,6 +90,16 @@ export function parseResourceSpans(envelope: unknown): Span[] {
         const attrs =
           r["attributes"] != null ? flattenAttrs(r["attributes"]) : undefined;
         const genai = extractGenAi(attrs);
+        // M12 (D2/EC-8): move-not-copy — when input/output text was actually
+        // extracted (string path) into the capped typed field, delete the key
+        // from the persisted bag so the uncapped duplicate never lands on disk.
+        // A non-string input.value is NOT extracted, so it stays in the bag.
+        if (attrs) {
+          if (genai.inputValue !== undefined) delete attrs["input.value"];
+          if (genai.outputValue !== undefined) delete attrs["output.value"];
+        }
+        // M12 (D3): OTLP span events are parsed (capped) — previously dropped.
+        const events = extractSpanEvents(r["events"], flattenAttrs);
         const candidate = {
           // Normalize all ids to canonical lowercase hex (resolves M0 F-otlp-6).
           spanId: normalizeId(r["spanId"]),
@@ -106,10 +121,11 @@ export function parseResourceSpans(envelope: unknown): Span[] {
           ...(status?.message != null
             ? { statusMessage: String(status.message) }
             : {}),
-          ...genai, // model/provider/inputTokens/outputTokens (only defined)
+          ...genai, // model/provider/tokens/inputValue/outputValue (only defined)
           ...(sessionIdOf(attrs) !== undefined
             ? { sessionId: sessionIdOf(attrs) }
             : {}),
+          ...(events.length > 0 ? { events } : {}),
           ...(attrs !== undefined ? { attributes: attrs } : {}),
         };
         const parsed = spanSchema.safeParse(candidate);

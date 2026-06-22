@@ -3,6 +3,13 @@
  * `@usetheo/lens-core`) so the UI depends only on the stable HTTP shape, never on
  * the server's domain/persistence types (ROADMAP M3 risk #2 / ADR D2).
  */
+/** A normalized OTLP span event (M12). */
+export interface SpanEvent {
+  name: string;
+  timeUnixNano?: string;
+  attributes?: Record<string, unknown>;
+}
+
 export interface SpanNodeData {
   spanId: string;
   traceId: string;
@@ -18,6 +25,12 @@ export interface SpanNodeData {
   inputTokens?: number;
   outputTokens?: number;
   sessionId?: string;
+  /** Span input text (`input.value`), capped at ingest (M12). */
+  inputValue?: string;
+  /** Span output text (`output.value`), capped at ingest (M12). */
+  outputValue?: string;
+  /** OTLP span events, capped at ingest (M12). */
+  events?: SpanEvent[];
   attributes?: Record<string, unknown>;
 }
 

@@ -60,6 +60,10 @@ function toRow(span: Span): SpanRow {
     outputTokens: span.outputTokens ?? null,
     toolName: span.toolName ?? null,
     sessionId: span.sessionId ?? null,
+    // M12: input/output text + events (already capped by ingest extraction).
+    inputValue: span.inputValue ?? null,
+    outputValue: span.outputValue ?? null,
+    events: span.events ?? null,
     attributes: span.attributes ?? null,
   };
 }
@@ -81,6 +85,11 @@ function fromRow(row: typeof spans.$inferSelect): Span {
     ...(row.outputTokens != null ? { outputTokens: row.outputTokens } : {}),
     ...(row.toolName != null ? { toolName: row.toolName } : {}),
     ...(row.sessionId != null ? { sessionId: row.sessionId } : {}),
+    ...(row.inputValue != null ? { inputValue: row.inputValue } : {}),
+    ...(row.outputValue != null ? { outputValue: row.outputValue } : {}),
+    ...(row.events != null
+      ? { events: row.events as Span["events"] }
+      : {}),
     ...(row.attributes != null
       ? { attributes: row.attributes as Record<string, unknown> }
       : {}),

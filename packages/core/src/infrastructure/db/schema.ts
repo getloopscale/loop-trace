@@ -35,6 +35,11 @@ export const spans = pgTable(
     outputTokens: integer("output_tokens"),
     toolName: text("tool_name"),
     sessionId: text("session_id"),
+    // M12: span input/output text (capped at ingest) + OTLP events. Nullable →
+    // existing rows read graceful (backward-compatible).
+    inputValue: text("input_value"),
+    outputValue: text("output_value"),
+    events: jsonb("events"),
     attributes: jsonb("attributes"),
     ingestedAt: timestamp("ingested_at", { withTimezone: true })
       .defaultNow()

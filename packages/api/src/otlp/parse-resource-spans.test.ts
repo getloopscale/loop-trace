@@ -152,4 +152,64 @@ describe("parseResourceSpans", () => {
     expect(span?.model).toBeUndefined();
     expect(span?.inputTokens).toBeUndefined();
   });
+
+  it("test_parse_extracts_input_output_and_strips_from_bag", () => {
+    const withIo = {
+      ...rawSpan,
+      attributes: [
+        { key: "input.value", value: { stringValue: "what is 2+2?" } },
+        { key: "output.value", value: { stringValue: "4" } },
+        { key: "service.name", value: { stringValue: "probe" } },
+      ],
+    };
+    const span = parseResourceSpans(envelope([withIo]))[0];
+    expect(span?.inputValue).toBe("what is 2+2?");
+    expect(span?.outputValue).toBe("4");
+    // moved out of the bag (D2/EC-8) — only the unrelated attr remains.
+    expect(span?.attributes).toEqual({ "service.name": "probe" });
+  });
+
+  it("test_parse_keeps_non_string_input_value_in_bag", () => {
+    // A kvlist flattens to an OBJECT (a genuinely non-string value). EC-1/EC-8:
+    // not extracted to the typed field → NOT stripped, stays in the bag.
+    const withNonString = {
+      ...rawSpan,
+      attributes: [
+        {
+          key: "input.value",
+          value: { kvlistValue: { values: [{ key: "role", value: { stringValue: "user" } }] } },
+        },
+      ],
+    };
+    const span = parseResourceSpans(envelope([withNonString]))[0];
+    expect(span?.inputValue).toBeUndefined();
+    expect(span?.attributes).toEqual({ "input.value": { role: "user" } });
+  });
+
+  it("test_parse_extracts_span_events", () => {
+    const withEvents = {
+      ...rawSpan,
+      events: [
+        {
+          name: "chunk",
+          timeUnixNano: "1700000000050000000",
+          attributes: [{ key: "i", value: { intValue: "1" } }],
+        },
+      ],
+    };
+    const span = parseResourceSpans(envelope([withEvents]))[0];
+    expect(span?.events).toHaveLength(1);
+    expect(span?.events?.[0]).toMatchObject({
+      name: "chunk",
+      timeUnixNano: "1700000000050000000",
+      attributes: { i: "1" },
+    });
+  });
+
+  it("test_parse_span_without_events_or_io_is_backward_compatible", () => {
+    const span = parseResourceSpans(envelope([rawSpan]))[0];
+    expect(span?.events).toBeUndefined();
+    expect(span?.inputValue).toBeUndefined();
+    expect(span?.outputValue).toBeUndefined();
+  });
 });
