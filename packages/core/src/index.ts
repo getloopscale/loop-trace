@@ -6,8 +6,11 @@ export { type SpanRepository, type TraceTreeNode } from "./domain/span-repositor
 export {
   traceListItemSchema,
   traceListResponseSchema,
+  listTracesOptionsSchema,
+  LIST_TRACES_LIMIT_CAP,
   type TraceListItem,
   type TraceListResponse,
+  type ListTracesOptions,
 } from "./domain/trace-list.js";
 export { extractGenAi, type GenAiFields } from "./domain/genai-attributes.js";
 export {

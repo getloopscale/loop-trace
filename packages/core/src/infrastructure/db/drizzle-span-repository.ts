@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte, notInArray, or, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
@@ -10,6 +10,7 @@ import type {
   TraceTreeNode,
 } from "../../domain/span-repository.js";
 import type {
+  ListTracesOptions,
   TraceListItem,
   TraceListResponse,
 } from "../../domain/trace-list.js";
@@ -138,8 +139,13 @@ export class DrizzleSpanRepository implements SpanRepository {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtext(${traceId}))`,
         );
+        // Trace-level status = 'error' if ANY span errored (error propagates from
+        // child to parent — Phoenix convention), else 'ok'. This populates the
+        // previously-unset traces.status_code so the list can surface + filter it
+        // (M9); error tokens are the same constant the UI/tool-stats use.
+        const errorList = ERROR_STATUS_CODES.map((c) => `'${c}'`).join(", ");
         await tx.execute(sql`
-          INSERT INTO traces (trace_id, session_id, name, start_time_unix_nano, end_time_unix_nano, input_tokens, output_tokens, total_tokens, cost_usd, updated_at)
+          INSERT INTO traces (trace_id, session_id, name, start_time_unix_nano, end_time_unix_nano, input_tokens, output_tokens, total_tokens, cost_usd, status_code, updated_at)
           SELECT
             ${traceId},
             max(session_id),
@@ -150,6 +156,7 @@ export class DrizzleSpanRepository implements SpanRepository {
             sum(output_tokens)::int,
             (coalesce(sum(input_tokens),0) + coalesce(sum(output_tokens),0))::int,
             NULL,
+            CASE WHEN bool_or(status_code IN (${sql.raw(errorList)})) THEN 'error' ELSE 'ok' END,
             now()
           FROM spans WHERE trace_id = ${traceId}
           ON CONFLICT (trace_id) DO UPDATE SET
@@ -160,6 +167,7 @@ export class DrizzleSpanRepository implements SpanRepository {
             input_tokens = excluded.input_tokens,
             output_tokens = excluded.output_tokens,
             total_tokens = excluded.total_tokens,
+            status_code = excluded.status_code,
             updated_at = now()
         `);
 
@@ -256,13 +264,52 @@ export class DrizzleSpanRepository implements SpanRepository {
     return primary;
   }
 
-  async listTraces(limit = 50): Promise<TraceListResponse> {
-    // Newest-active first (the traces aggregate stamps updated_at on each
-    // recompute). Maps rows → strict DTO so no Drizzle column leaks (D2).
+  async listTraces(opts: ListTracesOptions = {}): Promise<TraceListResponse> {
+    // M9: whitelisted filter (status/model/time) + sort (recent/latency/tokens/
+    // cost, dir) + bounded limit. No opts → newest-50 by updated_at (legacy).
+    // Maps rows → strict DTO so no Drizzle column leaks (M3 D2).
+    const conds = [];
+    if (opts.from) conds.push(gte(traces.updatedAt, new Date(opts.from)));
+    if (opts.to) conds.push(lte(traces.updatedAt, new Date(opts.to)));
+    if (opts.status === "error") {
+      conds.push(eq(traces.statusCode, "error"));
+    } else if (opts.status === "ok") {
+      // EC-1: a bare NOT-error would drop NULL-status rows (NULL NOT IN → NULL);
+      // treat unset status as ok so legacy rows are not silently hidden.
+      conds.push(
+        or(isNull(traces.statusCode), notInArray(traces.statusCode, ["error"])),
+      );
+    }
+    if (opts.model) {
+      // model lives on spans, not the traces aggregate (D2) — same selectDistinct
+      // + inArray subquery the M6 tool drill-down uses.
+      const modelTraceIds = this.db
+        .selectDistinct({ traceId: spans.traceId })
+        .from(spans)
+        .where(eq(spans.model, opts.model));
+      conds.push(inArray(traces.traceId, modelTraceIds));
+    }
+    const where = conds.length > 0 ? and(...conds) : undefined;
+
+    // EC-2: latency sorts on the nullable TEXT nanos via a numeric cast, clamping
+    // clock-skew negatives to 0 (M6 consistency); NULLS LAST so missing values
+    // never lead; secondary updated_at DESC makes ties deterministic (Q1).
+    const sortCol =
+      opts.orderBy === "latency"
+        ? sql`greatest(0, (${traces.endTimeUnixNano}::numeric - ${traces.startTimeUnixNano}::numeric))`
+        : opts.orderBy === "tokens"
+          ? sql`${traces.totalTokens}`
+          : opts.orderBy === "cost"
+            ? sql`${traces.costUsd}`
+            : sql`${traces.updatedAt}`;
+    const dir = opts.dir === "asc" ? sql`asc` : sql`desc`;
+    const limit = opts.limit ?? 50;
+
     const rows = await this.db
       .select()
       .from(traces)
-      .orderBy(desc(traces.updatedAt))
+      .where(where)
+      .orderBy(sql`${sortCol} ${dir} nulls last`, desc(traces.updatedAt))
       .limit(limit);
     return { traces: rows.map(traceRowToItem) };
   }

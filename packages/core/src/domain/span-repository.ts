@@ -1,5 +1,5 @@
 import type { Span } from "./span.js";
-import type { TraceListResponse } from "./trace-list.js";
+import type { ListTracesOptions, TraceListResponse } from "./trace-list.js";
 import type { CostByPeriodResponse, CostPeriod, TraceCost } from "./cost.js";
 import type { ToolStatsResponse } from "./tool-stats.js";
 import type { NorthStarResponse } from "./north-star.js";
@@ -20,8 +20,12 @@ export interface SpanRepository {
   getBySpanId(spanId: string): Promise<Span | null>;
   /** Reconstruct the tree of spans sharing a trace_id, or null if none exist. */
   getTraceTree(traceId: string): Promise<TraceTreeNode | null>;
-  /** List executions (traces) newest-first as the stable UI list DTO (M3 D2). */
-  listTraces(limit?: number): Promise<TraceListResponse>;
+  /**
+   * List executions (traces) as the stable UI list DTO (M3 D2). With no options,
+   * newest-first by updated_at (legacy behavior). With options (M9): whitelisted
+   * filter (status/model/time) + sort (recent/latency/tokens/cost, dir) + limit.
+   */
+  listTraces(opts?: ListTracesOptions): Promise<TraceListResponse>;
   /** Per-trace cost summary (M5), or null if the trace is absent. */
   getTraceCost(traceId: string): Promise<TraceCost | null>;
   /** Cost aggregated into day/week time buckets (M5). */

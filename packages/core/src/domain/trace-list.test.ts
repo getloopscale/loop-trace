@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { traceListItemSchema, traceListResponseSchema } from "./trace-list.js";
+import {
+  traceListItemSchema,
+  traceListResponseSchema,
+  listTracesOptionsSchema,
+  LIST_TRACES_LIMIT_CAP,
+} from "./trace-list.js";
 
 describe("trace-list DTO", () => {
   it("trace_list_schema_parses_valid_item_and_rejects_unknown_key", () => {
@@ -23,5 +28,39 @@ describe("trace-list DTO", () => {
     expect(
       traceListResponseSchema.safeParse({ traces: [{ traceId: "t1" }] }).success,
     ).toBe(true);
+  });
+});
+
+describe("listTracesOptionsSchema (M9)", () => {
+  it("test_list_options_schema_accepts_whitelisted_values", () => {
+    const parsed = listTracesOptionsSchema.parse({
+      status: "error",
+      orderBy: "latency",
+      dir: "asc",
+      model: "gpt-4o",
+      from: "2026-06-01T00:00:00Z",
+      to: "2026-06-22T00:00:00Z",
+      limit: "100",
+      format: "csv",
+    });
+    expect(parsed.status).toBe("error");
+    expect(parsed.orderBy).toBe("latency");
+    expect(parsed.limit).toBe(100); // coerced from a query-string
+  });
+
+  it("test_list_options_schema_rejects_unknown_enum", () => {
+    expect(() => listTracesOptionsSchema.parse({ orderBy: "banana" })).toThrow();
+    expect(() => listTracesOptionsSchema.parse({ status: "maybe" })).toThrow();
+  });
+
+  it("test_list_options_schema_caps_limit", () => {
+    expect(() =>
+      listTracesOptionsSchema.parse({ limit: LIST_TRACES_LIMIT_CAP + 1 }),
+    ).toThrow();
+    expect(() => listTracesOptionsSchema.parse({ limit: 0 })).toThrow();
+  });
+
+  it("test_list_options_schema_empty_is_valid", () => {
+    expect(listTracesOptionsSchema.parse({})).toEqual({});
   });
 });

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import {
   type SpanRepository,
   traceListResponseSchema,
+  listTracesOptionsSchema,
   traceCostSchema,
   costByPeriodResponseSchema,
   toolStatsResponseSchema,
@@ -13,6 +14,7 @@ import { OtlpParseError } from "../otlp/otlp-error.js";
 import { decodeOtlpBody } from "../otlp/decode-protobuf.js";
 import { spansIngested, tracesIngested, logIngest } from "./metrics.js";
 import { mountStatic } from "./static.js";
+import { tracesToCsv } from "./csv.js";
 
 /**
  * Build the Hono app. Depends only on the {@link SpanRepository} port (DIP) — the
@@ -94,9 +96,32 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
   });
 
   app.get("/v1/traces", async (c) => {
+    // M9: whitelisted filter/sort/export. Validate query params at the boundary
+    // (fail-fast 400, Rule 8) — a fixed enum whitelist, NOT a DSL (D1).
+    const parsed = listTracesOptionsSchema.safeParse({
+      status: c.req.query("status"),
+      model: c.req.query("model"),
+      from: c.req.query("from"),
+      to: c.req.query("to"),
+      orderBy: c.req.query("order_by"),
+      dir: c.req.query("dir"),
+      limit: c.req.query("limit"),
+      format: c.req.query("format"),
+    });
+    if (!parsed.success) {
+      return c.json({ error: "invalid query parameters" }, 400);
+    }
     // Parse through the strict DTO at the boundary so the no-column-leak invariant
-    // (risk #2) is enforced at runtime, not just by adapter discipline (review F-arch-1).
-    const list = traceListResponseSchema.parse(await repo.listTraces());
+    // (risk #2) is enforced at runtime, not just by adapter discipline (F-arch-1).
+    const list = traceListResponseSchema.parse(await repo.listTraces(parsed.data));
+    if (parsed.data.format === "csv") {
+      // Export reuses the SAME filtered query (D3) → the CSV always honors the
+      // current filter; bounded by the validated limit (never a full-table dump).
+      return c.body(tracesToCsv(list.traces), 200, {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": 'attachment; filename="theo-lens-traces.csv"',
+      });
+    }
     return c.json(list, 200);
   });
 
