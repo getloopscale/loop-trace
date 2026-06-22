@@ -13,13 +13,10 @@ export {
   type ListTracesOptions,
 } from "./domain/trace-list.js";
 export { extractGenAi, type GenAiFields } from "./domain/genai-attributes.js";
-export {
-  extractSpanEvents,
-  capText,
-  type SpanEvent,
-  INPUT_OUTPUT_CAP,
-  MAX_EVENTS,
-} from "./domain/span-events.js";
+// Only extractSpanEvents has a cross-package consumer (the OTLP ingest parser);
+// the caps + capText + SpanEvent type stay module-internal (YAGNI — no orphan
+// public exports). Tests import them via relative path.
+export { extractSpanEvents } from "./domain/span-events.js";
 export {
   percentile,
   computeToolStats,

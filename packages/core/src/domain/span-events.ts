@@ -73,6 +73,7 @@ function boundAttrs(attrs: Record<string, unknown>): Record<string, unknown> {
   } catch {
     return { __unserializable: true };
   }
-  if (serialized.length <= EVENT_ATTRS_CAP) return attrs;
+  // Measure in code points (consistent with capText's truncation unit).
+  if ([...serialized].length <= EVENT_ATTRS_CAP) return attrs;
   return { __truncated: capText(serialized, EVENT_ATTRS_CAP) };
 }

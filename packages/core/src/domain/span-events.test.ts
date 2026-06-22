@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   capText,
   extractSpanEvents,
+  EVENT_ATTRS_CAP,
   INPUT_OUTPUT_CAP,
   MAX_EVENTS,
 } from "./span-events.js";
@@ -53,7 +54,10 @@ describe("extractSpanEvents (M12 D3)", () => {
   it("test_extract_span_events_caps_per_event_attribute_size", () => {
     const big = { blob: "x".repeat(10000) };
     const [event] = extractSpanEvents([{ name: "e", attributes: big }], flat);
-    expect(JSON.stringify(event!.attributes).length).toBeLessThan(10000);
+    // bound to the real per-event cap (+ small marker overhead), not a loose limit.
+    expect(JSON.stringify(event!.attributes).length).toBeLessThanOrEqual(
+      EVENT_ATTRS_CAP + 64,
+    );
     expect(event!.attributes).toHaveProperty("__truncated");
   });
 

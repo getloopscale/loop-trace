@@ -25,9 +25,12 @@ describe("MarkdownText (M12 D4 / risk #2)", () => {
     expect(container.querySelector("script")).toBeNull();
     // no element carries an onerror handler.
     expect(container.querySelector("[onerror]")).toBeNull();
-    // a javascript: link href is dropped/sanitized (never executable).
+    // the anchor survives (markdown link syntax) but its javascript: href is
+    // dropped by sanitization — asserted unconditionally (a security check must
+    // never silently skip, F-test-2). A sanitized <a> has no href at all.
     const a = container.querySelector("a");
-    if (a) expect(a.getAttribute("href")?.startsWith("javascript:")).not.toBe(true);
+    expect(a).not.toBeNull();
+    expect(a!.getAttribute("href") ?? "").not.toMatch(/^(javascript|data):/i);
     // the payload never executed.
     expect((window as unknown as { __pwned?: number }).__pwned).toBeUndefined();
   });
