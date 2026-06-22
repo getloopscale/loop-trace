@@ -1,10 +1,7 @@
 import type { SpanNodeData } from "../api/types.js";
 import { durationMs, formatDuration } from "../lib/duration.js";
+import { isErrorStatus } from "../lib/span-kind.js";
 import { EmptyState } from "./states.js";
-
-function isErrorStatus(code?: string): boolean {
-  return code === "2" || code === "ERROR";
-}
 
 /** Pretty-print attributes; never throw into render on a non-serializable value. */
 function prettyAttributes(attrs: Record<string, unknown>): string {

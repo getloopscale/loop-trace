@@ -61,4 +61,42 @@ describe("SpanTree", () => {
       expect.objectContaining({ spanId: "c1" }),
     );
   });
+
+  it("test_span_tree_renders_proportional_waterfall_bars", () => {
+    const { container } = render(<SpanTree root={tree} onSelect={() => {}} />);
+    const bars = container.querySelectorAll(".span-waterfall-bar");
+    expect(bars.length).toBeGreaterThanOrEqual(3); // one per span
+    // child c1 [1ms,3ms] of root [0,5ms] → left≈20%
+    const childBar = screen
+      .getByText("search-products")
+      .closest("button")!
+      .querySelector(".span-waterfall-bar") as HTMLElement;
+    expect(childBar.style.width).toMatch(/%$/);
+    expect(parseFloat(childBar.style.left)).toBeCloseTo(20, 0);
+  });
+
+  it("test_span_tree_renders_span_kind_label", () => {
+    const withKinds: TraceTreeNode = {
+      ...tree,
+      children: [
+        { ...tree.children[0]!, attributes: { "gen_ai.tool.name": "search-products" } },
+        tree.children[1]!,
+      ],
+    };
+    render(<SpanTree root={withKinds} onSelect={() => {}} />);
+    expect(screen.getByLabelText("kind: tool")).toBeInTheDocument();
+    expect(screen.getByLabelText("kind: chain")).toBeInTheDocument(); // root has children, no signal
+  });
+
+  it("test_span_tree_shows_propagated_error_at_root", () => {
+    // root ok ("1"), child "charge" errored ("2") → root-level error summary.
+    render(<SpanTree root={tree} onSelect={() => {}} />);
+    expect(screen.getByText(/This trace contains an error/)).toBeInTheDocument();
+  });
+
+  it("test_span_tree_no_error_summary_when_all_ok", () => {
+    const ok: TraceTreeNode = { ...tree, children: [{ ...tree.children[0]! }] };
+    render(<SpanTree root={ok} onSelect={() => {}} />);
+    expect(screen.queryByText(/This trace contains an error/)).not.toBeInTheDocument();
+  });
 });

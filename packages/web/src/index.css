@@ -168,6 +168,45 @@ a {
 }
 .span-row .span-name {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* M10 — span-kind glyph + proportional waterfall bar */
+.span-kind {
+  width: 1.2em;
+  text-align: center;
+  color: #656d76;
+}
+.span-row[data-kind="llm"] .span-kind { color: #8250df; }
+.span-row[data-kind="tool"] .span-kind { color: #0969da; }
+.span-row[data-kind="retriever"] .span-kind { color: #1a7f37; }
+.span-waterfall {
+  position: relative;
+  flex: 2;
+  min-width: 80px;
+  height: 0.8em;
+  align-self: center;
+  background: #f0f3f6;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.span-waterfall-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: #6e7781;
+  border-radius: 3px;
+}
+.span-status-error .span-waterfall-bar { background: #cf222e; }
+.trace-error-summary {
+  margin: 0 0 0.5rem;
+  padding: 0.4rem 0.6rem;
+  background: #ffebe9;
+  color: #cf222e;
+  border-radius: 4px;
+  font-weight: 600;
 }
 .span-status-error .span-name {
   color: #cf222e;
