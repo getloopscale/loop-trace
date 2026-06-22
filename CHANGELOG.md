@@ -8,7 +8,6 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Trace waterfall: the span tree now shows a time-aligned bar per span (proportional offset + duration) so you can see where a trace spent its time, plus a span-kind icon (LLM / tool / retriever / chain) and a trace-level "contains an error" indicator that surfaces a failure anywhere in the tree (M10)
 
 ### Changed
 
@@ -19,6 +18,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 ### Security
+
+## [0.10.0] - 2026-06-22
+
+### Added
+- Trace waterfall: the span tree now shows a time-aligned bar per span (proportional offset + duration) so you can see where a trace spent its time, plus a span-kind icon (LLM / tool / retriever / chain) and a trace-level "contains an error" indicator that surfaces a failure anywhere in the tree (M10)
 
 ## [0.9.0] - 2026-06-22
 
