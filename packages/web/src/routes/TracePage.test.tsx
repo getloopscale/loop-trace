@@ -172,6 +172,27 @@ describe("TracePage (integration)", () => {
     );
   });
 
+  it("test_trace_page_links_to_session_when_session_id_present", async () => {
+    // M13: a trace carrying a session id links to its session; an ungrouped
+    // trace (no session id) shows NO link (honest fallback D3).
+    vi.mocked(client.getTraceTree).mockResolvedValue({ ...tree, sessionId: "S1" });
+    const { unmount } = renderAt("/traces/t1");
+    await waitFor(() =>
+      expect(screen.getByRole("link", { name: /View session/ })).toHaveAttribute(
+        "href",
+        "/sessions/S1",
+      ),
+    );
+    unmount();
+    // no session id → no link
+    vi.mocked(client.getTraceTree).mockResolvedValue(tree);
+    renderAt("/traces/t1");
+    await waitFor(() =>
+      expect(screen.getByRole("list", { name: "span tree" })).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole("link", { name: /View session/ })).toBeNull();
+  });
+
   it("test_trace_page_records_replay_session_once_per_trace", async () => {
     // M8 north-star: opening a trace's replay records exactly one session, even
     // under React StrictMode's double-invoke (the ref guard — EC-3). Rendering

@@ -5,6 +5,8 @@ import type {
   ListTracesOptions,
   NorthStarResponse,
   ObservabilityResponse,
+  SessionListResponse,
+  SessionDetailResponse,
   Span,
   SpanRepository,
   ToolStatsResponse,
@@ -128,6 +130,21 @@ class StubSpanRepository implements SpanRepository {
     if (this.failOnObservability) throw new Error("simulated postgres unavailable");
     this.lastObservabilityRange = range;
     return { ...this.observability, range };
+  }
+
+  sessionList: SessionListResponse = { sessions: [] };
+  sessionDetail: SessionDetailResponse | null = null;
+  failOnSessions = false;
+
+  async listSessions(): Promise<SessionListResponse> {
+    if (this.failOnSessions) throw new Error("simulated postgres unavailable");
+    return this.sessionList;
+  }
+
+  async getSessionDetail(sessionId: string): Promise<SessionDetailResponse | null> {
+    if (this.failOnSessions) throw new Error("simulated postgres unavailable");
+    if (!this.sessionDetail) return null;
+    return { ...this.sessionDetail, sessionId };
   }
 }
 
@@ -593,6 +610,58 @@ describe("createApp (contract, stub repo)", () => {
         ({ range: "24h", traffic: [{ periodStart: "x", traceCount: 1, errorCount: 0, errorRate: 0, leak: 9 }], latency: [], tokensByModel: [] }) as never,
     };
     expect((await createApp(leaky).request("/v1/metrics/observability")).status).toBeGreaterThanOrEqual(500);
+  });
+
+  it("test_get_sessions_returns_list_dto", async () => {
+    repo.sessionList = {
+      sessions: [
+        { sessionId: "S1", firstSeenAt: "2026-06-22T00:00:00.000Z", lastSeenAt: "2026-06-22T01:00:00.000Z", traceCount: 3, costUsd: 0.012, totalTokens: 1500, errorRate: 0.333 },
+      ],
+    };
+    const res = await app.request("/v1/sessions");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as typeof repo.sessionList;
+    expect(body.sessions[0]?.sessionId).toBe("S1");
+    expect(body.sessions[0]?.traceCount).toBe(3);
+  });
+
+  it("test_get_session_returns_detail_dto", async () => {
+    repo.sessionDetail = {
+      sessionId: "ignored",
+      firstSeenAt: "2026-06-22T00:00:00.000Z",
+      lastSeenAt: "2026-06-22T01:00:00.000Z",
+      traceCount: 2,
+      costUsd: 0.02,
+      totalTokens: 300,
+      errorRate: 0.5,
+      latencyP50Ms: 12,
+      latencyP95Ms: 88,
+      traces: [{ traceId: "ta", durationMs: 12, statusCode: "ok" }],
+    };
+    const res = await app.request("/v1/sessions/S1");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as typeof repo.sessionDetail & { sessionId: string };
+    expect(body.sessionId).toBe("S1"); // route passes the path id
+    expect(body.traceCount).toBe(2);
+    expect(body.traces[0]?.traceId).toBe("ta");
+  });
+
+  it("test_get_session_absent_returns_404", async () => {
+    repo.sessionDetail = null;
+    expect((await app.request("/v1/sessions/nope")).status).toBe(404);
+  });
+
+  it("test_session_route_rejects_leaked_column_at_boundary_with_5xx", async () => {
+    const leaky: SpanRepository = {
+      ...repo,
+      save: repo.save.bind(repo),
+      getBySpanId: repo.getBySpanId.bind(repo),
+      getTraceTree: repo.getTraceTree.bind(repo),
+      listTraces: repo.listTraces.bind(repo),
+      listSessions: async () =>
+        ({ sessions: [{ sessionId: "S1", firstSeenAt: "x", lastSeenAt: "y", traceCount: 1, costUsd: 0, totalTokens: 0, errorRate: 0, leak: 9 }] }) as never,
+    };
+    expect((await createApp(leaky).request("/v1/sessions")).status).toBeGreaterThanOrEqual(500);
   });
 });
 

@@ -9,6 +9,8 @@ import {
   northStarResponseSchema,
   observabilityRangeSchema,
   observabilityResponseSchema,
+  sessionListResponseSchema,
+  sessionDetailResponseSchema,
 } from "@usetheo/lens-core";
 
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
@@ -33,6 +35,8 @@ import { tracesToCsv } from "./csv.js";
  *  - POST /v1/replay-sessions: record a replay-open event (M8 north-star)
  *  - GET  /v1/metrics/north-star: traces/day + replay-sessions/week (M8)
  *  - GET  /v1/metrics/observability: time-series traffic/error-rate, latency percentiles, tokens/cost by model (M11)
+ *  - GET  /v1/sessions          : sessions list newest-first + scoped aggregates (M13)
+ *  - GET  /v1/sessions/:id       : session detail (scoped aggregates + member traces; 404 when absent) (M13)
  *
  * When `webDistDir` (CWD-relative) is provided AND exists, the built web bundle
  * is served same-origin at `/` with an SPA fallback, mounted AFTER all /v1/*
@@ -197,6 +201,18 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
     }
     const obs = await repo.aggregateObservability(parsed.data);
     return c.json(observabilityResponseSchema.parse(obs), 200);
+  });
+
+  app.get("/v1/sessions", async (c) => {
+    const list = await repo.listSessions();
+    return c.json(sessionListResponseSchema.parse(list), 200);
+  });
+
+  app.get("/v1/sessions/:sessionId", async (c) => {
+    const detail = await repo.getSessionDetail(c.req.param("sessionId"));
+    return detail
+      ? c.json(sessionDetailResponseSchema.parse(detail), 200)
+      : c.json({ error: "not found" }, 404);
   });
 
   // Mount static UI serving LAST so the catch-all never shadows /v1/* (M7, D1).

@@ -34,7 +34,14 @@ import {
   type ObservabilityResponse,
   type RawObservability,
 } from "../../domain/observability.js";
-import { spans, traces, replaySessions } from "./schema.js";
+import {
+  shapeSessionDetail,
+  type SessionListResponse,
+  type SessionListItem,
+  type SessionDetailResponse,
+  type RawSessionDetail,
+} from "../../domain/session.js";
+import { spans, traces, sessions, replaySessions } from "./schema.js";
 
 /** Build a pg connection pool for the given Postgres URI. */
 export function createPool(connectionString: string): pg.Pool {
@@ -562,6 +569,102 @@ export class DrizzleSpanRepository implements SpanRepository {
       tokensByModel: modelRes.rows as unknown as RawObservability["tokensByModel"],
     };
     return shapeObservability(raw, range, this.priceTable);
+  }
+
+  async listSessions(): Promise<SessionListResponse> {
+    // One row per real session (only session.id-bearing traces — D3), with
+    // scoped aggregates summed over the spans-derived traces table (D2). LEFT JOIN
+    // so a session with zero member traces still lists (traceCount 0). Deterministic
+    // tiebreaker on session_id (EC-7). Backed by sessions_last_seen_at_idx (D4).
+    const res = await this.db.execute(sql`
+      SELECT s.session_id AS "sessionId",
+             s.first_seen_at AS "firstSeenAt",
+             s.last_seen_at AS "lastSeenAt",
+             count(t.trace_id)::int AS "traceCount",
+             coalesce(sum(t.cost_usd), 0)::double precision AS "costUsd",
+             coalesce(sum(t.total_tokens), 0)::int AS "totalTokens",
+             count(t.trace_id) FILTER (WHERE t.status_code = 'error')::int AS "errorCount"
+      FROM sessions s
+      LEFT JOIN traces t ON t.session_id = s.session_id
+      GROUP BY s.session_id, s.first_seen_at, s.last_seen_at
+      ORDER BY s.last_seen_at DESC, s.session_id DESC
+    `);
+    const rows = res.rows as unknown as {
+      sessionId: string;
+      firstSeenAt: Date;
+      lastSeenAt: Date;
+      traceCount: number;
+      costUsd: number;
+      totalTokens: number;
+      errorCount: number;
+    }[];
+    const sessionsOut: SessionListItem[] = rows.map((r) => ({
+      sessionId: r.sessionId,
+      firstSeenAt: new Date(r.firstSeenAt).toISOString(),
+      lastSeenAt: new Date(r.lastSeenAt).toISOString(),
+      traceCount: r.traceCount,
+      costUsd: round3(r.costUsd ?? 0),
+      totalTokens: r.totalTokens ?? 0,
+      errorRate: r.traceCount === 0 ? 0 : round3(r.errorCount / r.traceCount),
+    }));
+    return { sessions: sessionsOut };
+  }
+
+  async getSessionDetail(sessionId: string): Promise<SessionDetailResponse | null> {
+    // Absent session → null (route 404). "Absent" = no row in the sessions table.
+    const sessionRows = await this.db
+      .select()
+      .from(sessions)
+      .where(eq(sessions.sessionId, sessionId))
+      .limit(1);
+    const session = sessionRows[0];
+    if (!session) return null;
+
+    // Scoped aggregates over the member traces. count/cost/tokens cover ALL member
+    // traces; the latency percentile FILTERs to numeric-bound traces only (M11 EC-1:
+    // the cast runs only for filtered-in rows, so a NULL/garbage bound neither errors
+    // nor counts as 0ms) and clamps clock skew via greatest(0, …).
+    const aggRes = await this.db.execute(sql`
+      SELECT count(*)::int AS "traceCount",
+             coalesce(sum(cost_usd), 0)::double precision AS "costUsd",
+             coalesce(sum(total_tokens), 0)::int AS "totalTokens",
+             count(*) FILTER (WHERE status_code = 'error')::int AS "errorCount",
+             percentile_cont(0.5) WITHIN GROUP (ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6))
+               FILTER (WHERE start_time_unix_nano ~ '^\\d+$' AND end_time_unix_nano ~ '^\\d+$')::double precision AS p50,
+             percentile_cont(0.95) WITHIN GROUP (ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6))
+               FILTER (WHERE start_time_unix_nano ~ '^\\d+$' AND end_time_unix_nano ~ '^\\d+$')::double precision AS p95
+      FROM traces
+      WHERE session_id = ${sessionId}
+    `);
+    const agg = (aggRes.rows as unknown as {
+      traceCount: number;
+      costUsd: number | null;
+      totalTokens: number | null;
+      errorCount: number;
+      p50: number | null;
+      p95: number | null;
+    }[])[0]!;
+
+    // Member traces as the stable list DTO (reuses the M3 mapping).
+    const memberRows = await this.db
+      .select()
+      .from(traces)
+      .where(eq(traces.sessionId, sessionId))
+      .orderBy(desc(traces.updatedAt));
+
+    const raw: RawSessionDetail = {
+      sessionId: session.sessionId,
+      firstSeenAt: session.firstSeenAt,
+      lastSeenAt: session.lastSeenAt,
+      traceCount: agg.traceCount,
+      costUsd: agg.costUsd,
+      totalTokens: agg.totalTokens,
+      errorCount: agg.errorCount,
+      p50: agg.p50,
+      p95: agg.p95,
+      traces: memberRows.map(traceRowToItem),
+    };
+    return shapeSessionDetail(raw);
   }
 }
 

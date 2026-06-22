@@ -106,6 +106,35 @@ export interface NorthStarResponse {
   replaySessionsPerWeek: NorthStarBucket[];
 }
 
+/** A session in the sessions list (M13). */
+export interface SessionListItem {
+  sessionId: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  traceCount: number;
+  costUsd: number;
+  totalTokens: number;
+  errorRate: number;
+}
+
+export interface SessionListResponse {
+  sessions: SessionListItem[];
+}
+
+/** Session detail: scoped aggregates + member traces (M13). */
+export interface SessionDetail {
+  sessionId: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  traceCount: number;
+  costUsd: number;
+  totalTokens: number;
+  errorRate: number;
+  latencyP50Ms: number;
+  latencyP95Ms: number;
+  traces: TraceListItem[];
+}
+
 /** Time-range presets for the observability dashboard (M11 — mirrors the API whitelist). */
 export type ObservabilityRange = "1h" | "24h" | "7d" | "30d";
 
