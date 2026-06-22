@@ -34,7 +34,7 @@ suite("DrizzleSpanRepository (integration)", () => {
   });
 
   beforeEach(async () => {
-    await pool.query("TRUNCATE spans, traces, sessions");
+    await pool.query("TRUNCATE spans, traces, sessions, replay_sessions");
   });
 
   afterAll(async () => {

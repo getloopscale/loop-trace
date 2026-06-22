@@ -1,11 +1,11 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useTraceTree } from "../hooks/useTraces.js";
 import { useReplay } from "../hooks/useReplay.js";
 import { useTraceCost } from "../hooks/useCost.js";
 import { buildReplaySteps } from "../lib/replay.js";
 import { formatUsd } from "../lib/money.js";
-import { ApiError } from "../api/client.js";
+import { ApiError, recordReplaySession } from "../api/client.js";
 import { SpanTree } from "../components/SpanTree.js";
 import { SpanDetail } from "../components/SpanDetail.js";
 import { ReplayControls } from "../components/ReplayControls.js";
@@ -26,6 +26,19 @@ export function TracePage() {
   const { index, active, next, prev, jumpTo } = useReplay(steps);
   // Per-trace cost is supplementary (M5 DoD #3) — never blocks the tree/replay.
   const { data: cost } = useTraceCost(traceId);
+
+  // Record one replay session per trace open (M8 north-star). The ref guards a
+  // single open against React StrictMode's paired effect invoke + same-mount
+  // re-renders so it is not double-counted (EC-3). A genuine re-navigation back
+  // to the same trace is, by design, a new "open" (a new session). The POST is
+  // fire-and-forget + fail-soft (D3).
+  const recordedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (data && traceId && recordedRef.current !== traceId) {
+      recordedRef.current = traceId;
+      recordReplaySession(traceId);
+    }
+  }, [data, traceId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

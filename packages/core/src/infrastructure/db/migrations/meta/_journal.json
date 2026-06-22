@@ -29,6 +29,20 @@
       "when": 1782028134830,
       "tag": "0003_real_terrax",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782133566578,
+      "tag": "0004_dark_songbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782147323282,
+      "tag": "0005_free_union_jack",
+      "breakpoints": true
     }
   ]
 }

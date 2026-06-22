@@ -6,8 +6,11 @@ export { type SpanRepository, type TraceTreeNode } from "./domain/span-repositor
 export {
   traceListItemSchema,
   traceListResponseSchema,
+  listTracesOptionsSchema,
+  LIST_TRACES_LIMIT_CAP,
   type TraceListItem,
   type TraceListResponse,
+  type ListTracesOptions,
 } from "./domain/trace-list.js";
 export { extractGenAi, type GenAiFields } from "./domain/genai-attributes.js";
 export {
@@ -36,7 +39,14 @@ export {
   type CostByPeriodResponse,
   type CostPeriod,
 } from "./domain/cost.js";
-export { spans, traces, sessions } from "./infrastructure/db/schema.js";
+export {
+  northStarBucketSchema,
+  northStarResponseSchema,
+  shapeNorthStarBuckets,
+  type NorthStarBucket,
+  type NorthStarResponse,
+} from "./domain/north-star.js";
+export { spans, traces, sessions, replaySessions } from "./infrastructure/db/schema.js";
 export {
   DrizzleSpanRepository,
   createPool,

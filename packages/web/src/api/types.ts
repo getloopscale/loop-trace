@@ -39,6 +39,17 @@ export interface TraceListResponse {
   traces: TraceListItem[];
 }
 
+/** Whitelisted executions-list query (M9 — mirrors the API param whitelist). */
+export interface ListTracesQuery {
+  status?: "ok" | "error";
+  model?: string;
+  /** ISO datetime (with offset) lower/upper bound on updated_at. */
+  from?: string;
+  to?: string;
+  orderBy?: "recent" | "latency" | "tokens" | "cost";
+  dir?: "asc" | "desc";
+}
+
 export interface TraceCost {
   traceId: string;
   costUsd: number;
@@ -70,4 +81,14 @@ export interface ToolStat {
 
 export interface ToolStatsResponse {
   tools: ToolStat[];
+}
+
+export interface NorthStarBucket {
+  period: string;
+  count: number;
+}
+
+export interface NorthStarResponse {
+  tracesPerDay: NorthStarBucket[];
+  replaySessionsPerWeek: NorthStarBucket[];
 }

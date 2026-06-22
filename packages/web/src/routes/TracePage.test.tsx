@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -17,6 +18,7 @@ vi.mock("../api/client.js", async (orig) => {
     getTraceTree: vi.fn(),
     listTraces: vi.fn(),
     getTraceCost: vi.fn(),
+    recordReplaySession: vi.fn(),
   };
 });
 
@@ -168,5 +170,32 @@ describe("TracePage (integration)", () => {
         ),
       { timeout: 3000 },
     );
+  });
+
+  it("test_trace_page_records_replay_session_once_per_trace", async () => {
+    // M8 north-star: opening a trace's replay records exactly one session, even
+    // under React StrictMode's double-invoke (the ref guard — EC-3). Rendering
+    // INSIDE <StrictMode> is what makes this catch a removed guard: without the
+    // ref, StrictMode's paired effect invoke would fire the POST twice.
+    vi.mocked(client.getTraceTree).mockResolvedValue(tree);
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false, retryDelay: 0 } },
+    });
+    render(
+      <StrictMode>
+        <QueryClientProvider client={qc}>
+          <MemoryRouter initialEntries={["/traces/t1"]}>
+            <Routes>
+              <Route path="/traces/:traceId" element={<TracePage />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>
+      </StrictMode>,
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("list", { name: "span tree" })).toBeInTheDocument(),
+    );
+    expect(vi.mocked(client.recordReplaySession)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(client.recordReplaySession)).toHaveBeenCalledWith("t1");
   });
 });

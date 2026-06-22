@@ -6,6 +6,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uuid,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -44,6 +45,8 @@ export const spans = pgTable(
     index("spans_parent_span_id_idx").on(t.parentSpanId),
     // Backs per-tool aggregation + drill-down (M6 risk #2).
     index("spans_tool_name_idx").on(t.toolName),
+    // Backs the M9 model filter subquery (traces whose spans use a model).
+    index("spans_model_idx").on(t.model),
   ],
 );
 
@@ -68,6 +71,8 @@ export const traces = pgTable(
     index("traces_session_id_idx").on(t.sessionId),
     // Backs the day/week cost aggregation (M5 risk #2 — period GROUP BY date_trunc(updated_at)).
     index("traces_updated_at_idx").on(t.updatedAt),
+    // Backs the M9 status filter (ok/error).
+    index("traces_status_code_idx").on(t.statusCode),
   ],
 );
 
@@ -76,3 +81,21 @@ export const sessions = pgTable("sessions", {
   firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull(),
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull(),
 });
+
+/**
+ * M8 north-star: one row per replay opened in the UI. Replay is otherwise
+ * client-only and ephemeral, so this is the sole data source for the
+ * "replay sessions per week" metric. `opened_at` is indexed to back the weekly
+ * date_trunc aggregation.
+ */
+export const replaySessions = pgTable(
+  "replay_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    traceId: text("trace_id").notNull(),
+    openedAt: timestamp("opened_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [index("replay_sessions_opened_at_idx").on(t.openedAt)],
+);

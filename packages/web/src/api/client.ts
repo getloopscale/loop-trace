@@ -1,10 +1,32 @@
 import type {
   CostByPeriodResponse,
+  ListTracesQuery,
+  NorthStarResponse,
   ToolStatsResponse,
   TraceCost,
   TraceListResponse,
   TraceTreeNode,
 } from "./types.js";
+
+/** Hard cap mirrored from the API so an export pulls the full filtered set, not one page. */
+const EXPORT_LIMIT = 500;
+
+/** Build the `/v1/traces` query string from a whitelisted query (+ optional extras). */
+function listQueryString(
+  q: ListTracesQuery,
+  extra?: Record<string, string>,
+): string {
+  const p = new URLSearchParams();
+  if (q.status) p.set("status", q.status);
+  if (q.model) p.set("model", q.model);
+  if (q.from) p.set("from", q.from);
+  if (q.to) p.set("to", q.to);
+  if (q.orderBy) p.set("order_by", q.orderBy);
+  if (q.dir) p.set("dir", q.dir);
+  for (const [k, v] of Object.entries(extra ?? {})) p.set(k, v);
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
 
 /** Base URL of the M1 ingestion/read API. Override via `VITE_THEOLENS_API`. */
 const BASE = import.meta.env["VITE_THEOLENS_API"] ?? "http://localhost:4318";
@@ -23,9 +45,21 @@ async function getJson<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** List executions (traces) newest-first. */
-export function listTraces(): Promise<TraceListResponse> {
-  return getJson<TraceListResponse>("/v1/traces");
+/** List executions (traces) with an optional whitelisted filter/sort (M9). */
+export function listTraces(query: ListTracesQuery = {}): Promise<TraceListResponse> {
+  return getJson<TraceListResponse>(`/v1/traces${listQueryString(query)}`);
+}
+
+/**
+ * Same-origin href for the CSV export of the current filtered list (M9). Carries
+ * `format=csv` + the export cap limit so "Export" returns the full filtered set
+ * (up to the cap), not just the first page (EC-4).
+ */
+export function tracesExportHref(query: ListTracesQuery = {}): string {
+  return `${BASE}/v1/traces${listQueryString(query, {
+    format: "csv",
+    limit: String(EXPORT_LIMIT),
+  })}`;
 }
 
 /** Fetch the reconstructed span tree for one trace. */
@@ -55,4 +89,24 @@ export function getTracesForTool(toolName: string): Promise<TraceListResponse> {
   return getJson<TraceListResponse>(
     `/v1/analytics/tools/${encodeURIComponent(toolName)}/traces`,
   );
+}
+
+/** Fetch the north-star metrics: traces/day + replay-sessions/week (M8). */
+export function getNorthStar(): Promise<NorthStarResponse> {
+  return getJson<NorthStarResponse>("/v1/metrics/north-star");
+}
+
+/**
+ * Record that a trace's replay was opened (M8 north-star). Fire-and-forget +
+ * fail-soft (D3): a metrics ping must never degrade the replay UX, so any error
+ * (network/5xx) is swallowed — the replay works from already-fetched data.
+ */
+export function recordReplaySession(traceId: string): void {
+  void fetch(`${BASE}/v1/replay-sessions`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ traceId }),
+  }).catch(() => {
+    /* fail-soft: the replay does not depend on this metric ping */
+  });
 }

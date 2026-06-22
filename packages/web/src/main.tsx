@@ -7,6 +7,7 @@ import { TracePage } from "./routes/TracePage.js";
 import { AnalyticsPage } from "./routes/AnalyticsPage.js";
 import { ToolAnalyticsPage } from "./routes/ToolAnalyticsPage.js";
 import { ToolTracesPage } from "./routes/ToolTracesPage.js";
+import { NorthStarPage } from "./routes/NorthStarPage.js";
 import "./index.css";
 
 const queryClient = new QueryClient();
@@ -17,6 +18,7 @@ const router = createBrowserRouter([
   { path: "/analytics", element: <AnalyticsPage /> },
   { path: "/tools", element: <ToolAnalyticsPage /> },
   { path: "/tools/:toolName", element: <ToolTracesPage /> },
+  { path: "/metrics", element: <NorthStarPage /> },
 ]);
 
 const el = document.getElementById("root");

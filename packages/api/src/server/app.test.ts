@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type {
   CostByPeriodResponse,
   CostPeriod,
+  ListTracesOptions,
+  NorthStarResponse,
   Span,
   SpanRepository,
   ToolStatsResponse,
@@ -64,7 +66,10 @@ class StubSpanRepository implements SpanRepository {
     return { traces: this.tracesForTool.get(toolName) ?? [] };
   }
 
-  async listTraces(): Promise<TraceListResponse> {
+  lastListOpts: ListTracesOptions | undefined;
+
+  async listTraces(opts?: ListTracesOptions): Promise<TraceListResponse> {
+    this.lastListOpts = opts; // capture so route param→opts mapping is assertable
     const byTrace = new Map<string, Span>();
     for (const s of this.store.values()) {
       if (!byTrace.has(s.traceId)) byTrace.set(s.traceId, s);
@@ -91,6 +96,20 @@ class StubSpanRepository implements SpanRepository {
       (parent ?? root).children.push(node);
     }
     return root;
+  }
+
+  replayCalls: string[] = [];
+  northStar: NorthStarResponse = { tracesPerDay: [], replaySessionsPerWeek: [] };
+  failOnNorthStar = false;
+
+  async recordReplaySession(traceId: string): Promise<void> {
+    if (this.failOnNorthStar) throw new Error("simulated postgres unavailable");
+    this.replayCalls.push(traceId);
+  }
+
+  async aggregateNorthStar(): Promise<NorthStarResponse> {
+    if (this.failOnNorthStar) throw new Error("simulated postgres unavailable");
+    return this.northStar;
   }
 }
 
@@ -387,6 +406,105 @@ describe("createApp (contract, stub repo)", () => {
     const leakyApp = createApp(leaky);
     expect((await leakyApp.request("/v1/traces/t1/cost")).status).toBeGreaterThanOrEqual(500);
     expect((await leakyApp.request("/v1/analytics/cost")).status).toBeGreaterThanOrEqual(500);
+  });
+
+  it("test_get_traces_rejects_bad_param_with_400", async () => {
+    expect((await app.request("/v1/traces?order_by=banana")).status).toBe(400);
+    expect((await app.request("/v1/traces?status=maybe")).status).toBe(400);
+    expect((await app.request("/v1/traces?limit=999999")).status).toBe(400);
+  });
+
+  it("test_get_traces_passes_validated_opts_to_repo", async () => {
+    const res = await app.request("/v1/traces?status=error&order_by=latency&dir=asc");
+    expect(res.status).toBe(200);
+    expect(repo.lastListOpts).toMatchObject({
+      status: "error",
+      orderBy: "latency",
+      dir: "asc",
+    });
+  });
+
+  it("test_get_traces_csv_export_has_header_and_rows", async () => {
+    await repo.save([{ spanId: "csv1", traceId: "csv-t1", name: "checkout", startTimeUnixNano: "1700000000000000000", endTimeUnixNano: "1700000000100000000" }]);
+    const res = await app.request("/v1/traces?format=csv");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/csv");
+    const body = await res.text();
+    const lines = body.trim().split("\r\n");
+    expect(lines[0]).toBe("traceId,name,statusCode,durationMs,totalTokens");
+    expect(lines.some((l) => l.includes("csv-t1"))).toBe(true);
+  });
+
+  it("test_get_traces_csv_escapes_formula_injection", async () => {
+    await repo.save([{ spanId: "inj1", traceId: "inj-t1", name: "=cmd()", startTimeUnixNano: "1700000000000000000", endTimeUnixNano: "1700000000100000000" }]);
+    const body = await (await app.request("/v1/traces?format=csv")).text();
+    // The formula char is neutralized with a leading quote inside the quoted field.
+    expect(body).toContain(`"'=cmd()"`);
+    expect(body).not.toContain(`,=cmd()`); // never a bare live formula
+  });
+
+  it("test_get_traces_csv_escapes_delimiters_and_quotes", async () => {
+    await repo.save([{ spanId: "rfc1", traceId: "rfc-t1", name: 'a,b"c', startTimeUnixNano: "1700000000000000000", endTimeUnixNano: "1700000000100000000" }]);
+    const body = await (await app.request("/v1/traces?format=csv")).text();
+    // RFC-4180: comma stays inside quotes; internal quote is doubled.
+    expect(body).toContain(`"a,b""c"`);
+  });
+
+  it("test_post_replay_session_records_and_returns_200", async () => {
+    const res = await app.request("/v1/replay-sessions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ traceId: "t1" }),
+    });
+    expect(res.status).toBe(200);
+    expect(repo.replayCalls).toEqual(["t1"]);
+  });
+
+  it("test_post_replay_session_rejects_missing_traceId_with_400", async () => {
+    const res = await app.request("/v1/replay-sessions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+    expect(repo.replayCalls).toEqual([]);
+  });
+
+  it("test_get_north_star_returns_aggregation_dto", async () => {
+    repo.northStar = {
+      tracesPerDay: [{ period: "2026-06-22", count: 3 }],
+      replaySessionsPerWeek: [{ period: "2026-06-15", count: 2 }],
+    };
+    const res = await app.request("/v1/metrics/north-star");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as typeof repo.northStar;
+    expect(body.tracesPerDay[0]).toEqual({ period: "2026-06-22", count: 3 });
+    expect(body.replaySessionsPerWeek[0]).toEqual({ period: "2026-06-15", count: 2 });
+  });
+
+  it("test_north_star_route_returns_5xx_on_repo_failure", async () => {
+    repo.failOnNorthStar = true;
+    expect((await app.request("/v1/metrics/north-star")).status).toBeGreaterThanOrEqual(500);
+    const post = await app.request("/v1/replay-sessions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ traceId: "t1" }),
+    });
+    expect(post.status).toBeGreaterThanOrEqual(500);
+  });
+
+  it("test_north_star_route_rejects_leaked_column_at_boundary_with_5xx", async () => {
+    const leaky: SpanRepository = {
+      ...repo,
+      save: repo.save.bind(repo),
+      getBySpanId: repo.getBySpanId.bind(repo),
+      getTraceTree: repo.getTraceTree.bind(repo),
+      listTraces: repo.listTraces.bind(repo),
+      recordReplaySession: repo.recordReplaySession.bind(repo),
+      aggregateNorthStar: async () =>
+        ({ tracesPerDay: [{ period: "2026-06-22", count: 1, leak: 9 }], replaySessionsPerWeek: [] }) as never,
+    };
+    expect((await createApp(leaky).request("/v1/metrics/north-star")).status).toBeGreaterThanOrEqual(500);
   });
 });
 
