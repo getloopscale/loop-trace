@@ -1,5 +1,6 @@
 import type {
   CostByPeriodResponse,
+  NorthStarResponse,
   ToolStatsResponse,
   TraceCost,
   TraceListResponse,
@@ -55,4 +56,24 @@ export function getTracesForTool(toolName: string): Promise<TraceListResponse> {
   return getJson<TraceListResponse>(
     `/v1/analytics/tools/${encodeURIComponent(toolName)}/traces`,
   );
+}
+
+/** Fetch the north-star metrics: traces/day + replay-sessions/week (M8). */
+export function getNorthStar(): Promise<NorthStarResponse> {
+  return getJson<NorthStarResponse>("/v1/metrics/north-star");
+}
+
+/**
+ * Record that a trace's replay was opened (M8 north-star). Fire-and-forget +
+ * fail-soft (D3): a metrics ping must never degrade the replay UX, so any error
+ * (network/5xx) is swallowed — the replay works from already-fetched data.
+ */
+export function recordReplaySession(traceId: string): void {
+  void fetch(`${BASE}/v1/replay-sessions`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ traceId }),
+  }).catch(() => {
+    /* fail-soft: the replay does not depend on this metric ping */
+  });
 }

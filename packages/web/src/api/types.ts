@@ -71,3 +71,13 @@ export interface ToolStat {
 export interface ToolStatsResponse {
   tools: ToolStat[];
 }
+
+export interface NorthStarBucket {
+  period: string;
+  count: number;
+}
+
+export interface NorthStarResponse {
+  tracesPerDay: NorthStarBucket[];
+  replaySessionsPerWeek: NorthStarBucket[];
+}

@@ -5,6 +5,7 @@ import {
   traceCostSchema,
   costByPeriodResponseSchema,
   toolStatsResponseSchema,
+  northStarResponseSchema,
 } from "@usetheo/lens-core";
 
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
@@ -25,6 +26,8 @@ import { mountStatic } from "./static.js";
  *  - GET  /v1/analytics/cost : day/week cost aggregation (?period=day|week, M5)
  *  - GET  /v1/analytics/tools: per-tool stats ranking (M6)
  *  - GET  /v1/analytics/tools/:name/traces : executions that called a tool (M6 drill-down)
+ *  - POST /v1/replay-sessions: record a replay-open event (M8 north-star)
+ *  - GET  /v1/metrics/north-star: traces/day + replay-sessions/week (M8)
  *
  * When `webDistDir` (CWD-relative) is provided AND exists, the built web bundle
  * is served same-origin at `/` with an SPA fallback, mounted AFTER all /v1/*
@@ -132,6 +135,29 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
     }
     const result = await repo.aggregateCostByPeriod(raw === "week" ? "week" : "day");
     return c.json(costByPeriodResponseSchema.parse(result), 200);
+  });
+
+  app.post("/v1/replay-sessions", async (c) => {
+    // Record a replay-open event (M8 north-star). Fail-fast 400 on a missing
+    // traceId (Rule 8); the UI calls this fire-and-forget so a 5xx never
+    // degrades the replay UX (D3).
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "invalid json body" }, 400);
+    }
+    const traceId = (body as { traceId?: unknown })?.traceId;
+    if (typeof traceId !== "string" || traceId.length === 0) {
+      return c.json({ error: "traceId is required" }, 400);
+    }
+    await repo.recordReplaySession(traceId);
+    return c.json({ recorded: true }, 200);
+  });
+
+  app.get("/v1/metrics/north-star", async (c) => {
+    const ns = await repo.aggregateNorthStar();
+    return c.json(northStarResponseSchema.parse(ns), 200);
   });
 
   // Mount static UI serving LAST so the catch-all never shadows /v1/* (M7, D1).

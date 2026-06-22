@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { ApiError, getTraceTree, listTraces } from "./client.js";
+import {
+  ApiError,
+  getTraceTree,
+  listTraces,
+  recordReplaySession,
+} from "./client.js";
 
 function fetchReturning(status: number, body: unknown): typeof fetch {
   return vi.fn(async () => ({
@@ -48,5 +53,27 @@ describe("api client", () => {
       vi.fn(() => Promise.reject(new TypeError("fetch failed"))),
     );
     await expect(listTraces()).rejects.toThrow("fetch failed");
+  });
+
+  it("test_record_replay_session_is_fail_soft", async () => {
+    // M8 D3: the metrics ping must never degrade the replay UX — a rejected POST
+    // is swallowed, not thrown.
+    const fetchMock = vi.fn(() => Promise.reject(new Error("network down")));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(() => recordReplaySession("t1")).not.toThrow();
+    await Promise.resolve(); // let the swallowed rejection settle
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("test_record_replay_session_posts_trace_id", () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({ ok: true, status: 200 } as Response),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    recordReplaySession("trace-42");
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const call = fetchMock.mock.calls[0] as unknown as [string, RequestInit?];
+    expect(call[1]?.method).toBe("POST");
+    expect(String(call[1]?.body)).toContain("trace-42");
   });
 });

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type {
   CostByPeriodResponse,
   CostPeriod,
+  NorthStarResponse,
   Span,
   SpanRepository,
   ToolStatsResponse,
@@ -91,6 +92,20 @@ class StubSpanRepository implements SpanRepository {
       (parent ?? root).children.push(node);
     }
     return root;
+  }
+
+  replayCalls: string[] = [];
+  northStar: NorthStarResponse = { tracesPerDay: [], replaySessionsPerWeek: [] };
+  failOnNorthStar = false;
+
+  async recordReplaySession(traceId: string): Promise<void> {
+    if (this.failOnNorthStar) throw new Error("simulated postgres unavailable");
+    this.replayCalls.push(traceId);
+  }
+
+  async aggregateNorthStar(): Promise<NorthStarResponse> {
+    if (this.failOnNorthStar) throw new Error("simulated postgres unavailable");
+    return this.northStar;
   }
 }
 
@@ -387,6 +402,63 @@ describe("createApp (contract, stub repo)", () => {
     const leakyApp = createApp(leaky);
     expect((await leakyApp.request("/v1/traces/t1/cost")).status).toBeGreaterThanOrEqual(500);
     expect((await leakyApp.request("/v1/analytics/cost")).status).toBeGreaterThanOrEqual(500);
+  });
+
+  it("test_post_replay_session_records_and_returns_200", async () => {
+    const res = await app.request("/v1/replay-sessions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ traceId: "t1" }),
+    });
+    expect(res.status).toBe(200);
+    expect(repo.replayCalls).toEqual(["t1"]);
+  });
+
+  it("test_post_replay_session_rejects_missing_traceId_with_400", async () => {
+    const res = await app.request("/v1/replay-sessions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+    expect(repo.replayCalls).toEqual([]);
+  });
+
+  it("test_get_north_star_returns_aggregation_dto", async () => {
+    repo.northStar = {
+      tracesPerDay: [{ period: "2026-06-22", count: 3 }],
+      replaySessionsPerWeek: [{ period: "2026-06-15", count: 2 }],
+    };
+    const res = await app.request("/v1/metrics/north-star");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as typeof repo.northStar;
+    expect(body.tracesPerDay[0]).toEqual({ period: "2026-06-22", count: 3 });
+    expect(body.replaySessionsPerWeek[0]).toEqual({ period: "2026-06-15", count: 2 });
+  });
+
+  it("test_north_star_route_returns_5xx_on_repo_failure", async () => {
+    repo.failOnNorthStar = true;
+    expect((await app.request("/v1/metrics/north-star")).status).toBeGreaterThanOrEqual(500);
+    const post = await app.request("/v1/replay-sessions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ traceId: "t1" }),
+    });
+    expect(post.status).toBeGreaterThanOrEqual(500);
+  });
+
+  it("test_north_star_route_rejects_leaked_column_at_boundary_with_5xx", async () => {
+    const leaky: SpanRepository = {
+      ...repo,
+      save: repo.save.bind(repo),
+      getBySpanId: repo.getBySpanId.bind(repo),
+      getTraceTree: repo.getTraceTree.bind(repo),
+      listTraces: repo.listTraces.bind(repo),
+      recordReplaySession: repo.recordReplaySession.bind(repo),
+      aggregateNorthStar: async () =>
+        ({ tracesPerDay: [{ period: "2026-06-22", count: 1, leak: 9 }], replaySessionsPerWeek: [] }) as never,
+    };
+    expect((await createApp(leaky).request("/v1/metrics/north-star")).status).toBeGreaterThanOrEqual(500);
   });
 });
 

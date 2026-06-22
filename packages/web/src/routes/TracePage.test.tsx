@@ -17,6 +17,7 @@ vi.mock("../api/client.js", async (orig) => {
     getTraceTree: vi.fn(),
     listTraces: vi.fn(),
     getTraceCost: vi.fn(),
+    recordReplaySession: vi.fn(),
   };
 });
 
@@ -168,5 +169,17 @@ describe("TracePage (integration)", () => {
         ),
       { timeout: 3000 },
     );
+  });
+
+  it("test_trace_page_records_replay_session_once_per_trace", async () => {
+    // M8 north-star: opening a trace's replay records exactly one session, even
+    // under React StrictMode's double-invoke (the ref guard — EC-3).
+    vi.mocked(client.getTraceTree).mockResolvedValue(tree);
+    renderAt("/traces/t1");
+    await waitFor(() =>
+      expect(screen.getByRole("list", { name: "span tree" })).toBeInTheDocument(),
+    );
+    expect(vi.mocked(client.recordReplaySession)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(client.recordReplaySession)).toHaveBeenCalledWith("t1");
   });
 });
