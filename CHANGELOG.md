@@ -8,7 +8,6 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Observability dashboards: a `/dashboards` view and `GET /v1/metrics/observability?range=1h|24h|7d|30d` show time-series traffic + error rate, latency percentiles (p50/p75/p95/p99), and tokens + cost broken down by model over a selectable time range — each metric as an accessible data table plus a lightweight inline-SVG sparkline (no charting dependency added) (M11)
 
 ### Changed
 
@@ -19,6 +18,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 ### Security
+
+## [0.11.0] - 2026-06-22
+
+### Added
+- Observability dashboards: a `/dashboards` view and `GET /v1/metrics/observability?range=1h|24h|7d|30d` show time-series traffic + error rate, latency percentiles (p50/p75/p95/p99), and tokens + cost broken down by model over a selectable time range — each metric as an accessible data table plus a lightweight inline-SVG sparkline (no charting dependency added) (M11)
 
 ## [0.10.0] - 2026-06-22
 
