@@ -19,6 +19,8 @@ function listQueryString(
   const p = new URLSearchParams();
   if (q.status) p.set("status", q.status);
   if (q.model) p.set("model", q.model);
+  if (q.from) p.set("from", q.from);
+  if (q.to) p.set("to", q.to);
   if (q.orderBy) p.set("order_by", q.orderBy);
   if (q.dir) p.set("dir", q.dir);
   for (const [k, v] of Object.entries(extra ?? {})) p.set(k, v);

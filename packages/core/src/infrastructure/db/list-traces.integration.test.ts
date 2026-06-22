@@ -126,4 +126,63 @@ suite("listTraces filter/sort (integration, M9)", () => {
     expect(traces[0]?.traceId).toBe("t-2");
     expect(traces).toHaveLength(2);
   });
+
+  it("test_list_traces_latency_clamps_clock_skew_to_zero", async () => {
+    // F-data-1/F-test-1: a clock-skewed span (end < start) must clamp to 0, so it
+    // does NOT lead the descending-latency list (it ranks with the fastest).
+    await repo.save([
+      span({
+        spanId: "k1",
+        traceId: "t-skew",
+        startTimeUnixNano: "1700000000900000000",
+        endTimeUnixNano: "1700000000000000000", // end < start
+      }),
+    ]);
+    await repo.save([
+      span({
+        spanId: "sl1",
+        traceId: "t-slow2",
+        startTimeUnixNano: "1700000000000000000",
+        endTimeUnixNano: "1700000000900000000",
+      }),
+    ]);
+    const { traces } = await repo.listTraces({ orderBy: "latency", dir: "desc" });
+    expect(traces[0]?.traceId).toBe("t-slow2"); // skew clamped to 0, never leads
+  });
+
+  it("test_list_traces_sorts_by_latency_asc_inverts_order", async () => {
+    // F-test-3: dir=asc must reverse the order (fast before slow).
+    await repo.save([
+      span({ spanId: "fa1", traceId: "t-f", startTimeUnixNano: "1700000000000000000", endTimeUnixNano: "1700000000010000000" }),
+    ]);
+    await repo.save([
+      span({ spanId: "sa1", traceId: "t-s", startTimeUnixNano: "1700000000000000000", endTimeUnixNano: "1700000000900000000" }),
+    ]);
+    const { traces } = await repo.listTraces({ orderBy: "latency", dir: "asc" });
+    const ids = traces.map((t) => t.traceId);
+    expect(ids.indexOf("t-f")).toBeLessThan(ids.indexOf("t-s"));
+  });
+
+  it("test_list_traces_sorts_by_tokens_and_cost", async () => {
+    // F-test-2: tokens + cost sort columns over real PG.
+    await repo.save([
+      span({ spanId: "hi", traceId: "t-hi", model: "gpt-4o", inputTokens: 100, outputTokens: 100 }),
+    ]);
+    await repo.save([
+      span({ spanId: "lo", traceId: "t-lo", model: "gpt-4o", inputTokens: 1, outputTokens: 1 }),
+    ]);
+    const byTokens = await repo.listTraces({ orderBy: "tokens", dir: "desc" });
+    expect(byTokens.traces[0]?.traceId).toBe("t-hi");
+    const byCost = await repo.listTraces({ orderBy: "cost", dir: "desc" });
+    expect(byCost.traces[0]?.traceId).toBe("t-hi"); // more tokens → higher cost
+  });
+
+  it("test_list_traces_inverted_range_returns_empty", async () => {
+    // F-test-6 / EC-5: from > to yields an empty result (honest), not an error.
+    await repo.save([span({ spanId: "iv1", traceId: "t-iv" })]);
+    const from = new Date(Date.now() + 3600_000).toISOString(); // 1h in the future
+    const to = new Date(Date.now() - 3600_000).toISOString(); // 1h in the past
+    const { traces } = await repo.listTraces({ from, to });
+    expect(traces).toEqual([]);
+  });
 });

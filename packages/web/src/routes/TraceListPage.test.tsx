@@ -84,20 +84,43 @@ describe("TraceListPage (integration)", () => {
     );
   });
 
-  it("test_trace_list_sort_header_sets_aria_sort", async () => {
+  it("test_trace_list_sort_button_sets_active_and_toggles_dir", async () => {
     vi.mocked(client.listTraces).mockResolvedValue({ traces: [] });
     renderPage();
     await waitFor(() => expect(client.listTraces).toHaveBeenCalled());
-    const latency = screen.getByRole("columnheader", { name: /Latency/ });
+    // The sort control is a group of toggle buttons (aria-pressed), not a grid
+    // columnheader (the list is a <ul>) — review F-fe-2.
+    const latency = screen.getByRole("button", { name: /Latency/ });
     await userEvent.click(latency);
     await waitFor(() =>
       expect(client.listTraces).toHaveBeenCalledWith(
-        expect.objectContaining({ orderBy: "latency" }),
+        expect.objectContaining({ orderBy: "latency", dir: "desc" }),
       ),
     );
-    expect(
-      screen.getByRole("columnheader", { name: /Latency/ }),
-    ).toHaveAttribute("aria-sort", "descending");
+    expect(screen.getByRole("button", { name: /Latency/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    // Clicking the active column again toggles direction to asc.
+    await userEvent.click(screen.getByRole("button", { name: /Latency/ }));
+    await waitFor(() =>
+      expect(client.listTraces).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: "latency", dir: "asc" }),
+      ),
+    );
+  });
+
+  it("test_trace_filters_time_range_passes_iso", async () => {
+    vi.mocked(client.listTraces).mockResolvedValue({ traces: [] });
+    renderPage();
+    await waitFor(() => expect(client.listTraces).toHaveBeenCalled());
+    const from = screen.getByLabelText("from time");
+    await userEvent.type(from, "2026-06-01T00:00");
+    await waitFor(() =>
+      expect(client.listTraces).toHaveBeenCalledWith(
+        expect.objectContaining({ from: expect.stringMatching(/^2026-0/) }),
+      ),
+    );
   });
 
   it("test_trace_list_renders_ok_error_status_indicator", async () => {
@@ -112,7 +135,16 @@ describe("TraceListPage (integration)", () => {
     expect(screen.queryByText("2")).not.toBeInTheDocument();
   });
 
-  it("test_trace_export_href_carries_current_query_and_cap_limit", async () => {
+  it("test_trace_export_href_default_carries_csv_and_cap_limit", async () => {
+    vi.mocked(client.listTraces).mockResolvedValue({ traces: [] });
+    renderPage();
+    // Even with no filter, the export href carries format=csv + the cap limit.
+    const href = screen.getByText("Export CSV").getAttribute("href") ?? "";
+    expect(href).toContain("format=csv");
+    expect(href).toContain("limit=500"); // EC-4
+  });
+
+  it("test_trace_export_href_carries_current_query", async () => {
     vi.mocked(client.listTraces).mockResolvedValue({ traces: [] });
     renderPage();
     await userEvent.selectOptions(
@@ -122,6 +154,6 @@ describe("TraceListPage (integration)", () => {
     const href = screen.getByText("Export CSV").getAttribute("href") ?? "";
     expect(href).toContain("status=error");
     expect(href).toContain("format=csv");
-    expect(href).toContain("limit=500"); // EC-4: export the full filtered set, not one page
+    expect(href).toContain("limit=500");
   });
 });

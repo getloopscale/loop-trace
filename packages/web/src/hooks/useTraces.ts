@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { ApiError, getTraceTree, listTraces } from "../api/client.js";
 import type { ListTracesQuery } from "../api/types.js";
 
@@ -10,11 +10,16 @@ function retry(failureCount: number, err: unknown): boolean {
   return failureCount < 2;
 }
 
-/** Executions list query keyed by the filter/sort query (M9 — refetches on change). */
+/**
+ * Executions list query keyed by the filter/sort query (M9 — refetches on change).
+ * keepPreviousData holds the prior list visible while a new filter loads, so the
+ * list does not flash empty/Loading on every filter change (review F-fe-6).
+ */
 export function useTraceList(query: ListTracesQuery = {}) {
   return useQuery({
     queryKey: ["traces", query],
     queryFn: () => listTraces(query),
+    placeholderData: keepPreviousData,
     retry,
   });
 }

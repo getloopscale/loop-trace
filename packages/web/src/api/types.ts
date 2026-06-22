@@ -43,6 +43,9 @@ export interface TraceListResponse {
 export interface ListTracesQuery {
   status?: "ok" | "error";
   model?: string;
+  /** ISO datetime (with offset) lower/upper bound on updated_at. */
+  from?: string;
+  to?: string;
   orderBy?: "recent" | "latency" | "tokens" | "cost";
   dir?: "asc" | "desc";
 }

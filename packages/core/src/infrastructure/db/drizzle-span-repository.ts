@@ -272,6 +272,10 @@ export class DrizzleSpanRepository implements SpanRepository {
     if (opts.from) conds.push(gte(traces.updatedAt, new Date(opts.from)));
     if (opts.to) conds.push(lte(traces.updatedAt, new Date(opts.to)));
     if (opts.status === "error") {
+      // The status filter is coupled to the recompute's normalized vocabulary
+      // ('ok'/'error'), the ONLY writer of traces.status_code. A trace ingested
+      // before M9 and never re-recomputed carries NULL (→ counts as ok); a future
+      // raw-token write would break this — keep status_code normalized at write.
       conds.push(eq(traces.statusCode, "error"));
     } else if (opts.status === "ok") {
       // EC-1: a bare NOT-error would drop NULL-status rows (NULL NOT IN → NULL);
@@ -296,7 +300,10 @@ export class DrizzleSpanRepository implements SpanRepository {
     // never lead; secondary updated_at DESC makes ties deterministic (Q1).
     const sortCol =
       opts.orderBy === "latency"
-        ? sql`greatest(0, (${traces.endTimeUnixNano}::numeric - ${traces.startTimeUnixNano}::numeric))`
+        ? // A one-sided NULL (only start OR only end) must sort NULLS LAST, not as
+          // 0 — `greatest(0, end - NULL)` returns 0, so guard with an explicit CASE
+          // that yields NULL unless BOTH bounds are present (F-data-1).
+          sql`CASE WHEN ${traces.startTimeUnixNano} IS NULL OR ${traces.endTimeUnixNano} IS NULL THEN NULL ELSE greatest(0, (${traces.endTimeUnixNano}::numeric - ${traces.startTimeUnixNano}::numeric)) END`
         : opts.orderBy === "tokens"
           ? sql`${traces.totalTokens}`
           : opts.orderBy === "cost"

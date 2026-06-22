@@ -13,7 +13,7 @@ import type { ListTracesQuery } from "../api/types.js";
  */
 export function TraceListPage() {
   const [query, setQuery] = useState<ListTracesQuery>({});
-  const { data, isLoading, isError } = useTraceList(query);
+  const { data, isError } = useTraceList(query);
   return (
     <main className="trace-list-page">
       <header className="list-header">
@@ -22,12 +22,14 @@ export function TraceListPage() {
         <Link to="/metrics">North-star metrics →</Link>
       </header>
       <TraceFilters query={query} onChange={setQuery} />
-      {isLoading ? (
-        <Loading label="Loading executions…" />
-      ) : isError || !data ? (
+      {/* Prefer showing data (even stale, via keepPreviousData) over an error, so a
+          transient refetch failure does not wipe a populated list (review F-fe-6). */}
+      {data ? (
+        <TraceList traces={data.traces} />
+      ) : isError ? (
         <ErrorState message="Failed to load executions" />
       ) : (
-        <TraceList traces={data.traces} />
+        <Loading label="Loading executions…" />
       )}
     </main>
   );
