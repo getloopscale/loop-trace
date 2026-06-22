@@ -83,11 +83,17 @@ export const traces = pgTable(
   ],
 );
 
-export const sessions = pgTable("sessions", {
-  sessionId: text("session_id").primaryKey(),
-  firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull(),
-  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull(),
-});
+export const sessions = pgTable(
+  "sessions",
+  {
+    sessionId: text("session_id").primaryKey(),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull(),
+  },
+  // Backs the M13 sessions list ORDER BY last_seen_at DESC (same time-ordered-list
+  // pattern as traces_updated_at_idx / replay_sessions_opened_at_idx).
+  (t) => [index("sessions_last_seen_at_idx").on(t.lastSeenAt)],
+);
 
 /**
  * M8 north-star: one row per replay opened in the UI. Replay is otherwise

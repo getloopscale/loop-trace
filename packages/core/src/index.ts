@@ -59,6 +59,17 @@ export {
   type ObservabilityResponse,
   type RawObservability,
 } from "./domain/observability.js";
+export {
+  sessionListItemSchema,
+  sessionListResponseSchema,
+  sessionDetailResponseSchema,
+  shapeSessionDetail,
+  isoTimestamp,
+  type SessionListItem,
+  type SessionListResponse,
+  type SessionDetailResponse,
+  type RawSessionDetail,
+} from "./domain/session.js";
 export { spans, traces, sessions, replaySessions } from "./infrastructure/db/schema.js";
 export {
   DrizzleSpanRepository,

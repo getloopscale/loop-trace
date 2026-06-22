@@ -73,6 +73,16 @@ export function TracePage() {
   return (
     <main className="trace-page">
       <Link to="/">← Executions</Link>
+      {/* Trace→session nav (M13): only when this trace carries a session id;
+          ungrouped traces show no link (honest fallback, D3). */}
+      {data.sessionId ? (
+        <Link
+          to={`/sessions/${encodeURIComponent(data.sessionId)}`}
+          className="trace-session-link"
+        >
+          View session →
+        </Link>
+      ) : null}
       {cost ? (
         <p className="trace-cost">
           Total cost: {formatUsd(cost.costUsd)} · {cost.totalTokens} tokens

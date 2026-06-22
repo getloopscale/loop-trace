@@ -367,3 +367,47 @@ a {
   padding: 0;
   margin: 0;
 }
+
+/* Sessions (M13) */
+.session-list {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.85rem;
+}
+.session-list caption {
+  text-align: left;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+.session-list th,
+.session-list td {
+  border: 1px solid #d0d7de;
+  padding: 0.3rem 0.6rem;
+  text-align: left;
+}
+.session-list th {
+  background: #f6f8fa;
+}
+.session-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 0.75rem 0;
+}
+.session-metrics div {
+  display: flex;
+  flex-direction: column;
+}
+.session-metrics dt {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #656d76;
+}
+.session-metrics dd {
+  margin: 0;
+  font-weight: 600;
+}
+.trace-session-link {
+  margin-left: 1rem;
+}

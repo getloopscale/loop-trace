@@ -9,6 +9,8 @@ import { ToolAnalyticsPage } from "./routes/ToolAnalyticsPage.js";
 import { ToolTracesPage } from "./routes/ToolTracesPage.js";
 import { NorthStarPage } from "./routes/NorthStarPage.js";
 import { ObservabilityPage } from "./routes/ObservabilityPage.js";
+import { SessionsListPage } from "./routes/SessionsListPage.js";
+import { SessionDetailPage } from "./routes/SessionDetailPage.js";
 import "./index.css";
 
 const queryClient = new QueryClient();
@@ -21,6 +23,8 @@ const router = createBrowserRouter([
   { path: "/tools/:toolName", element: <ToolTracesPage /> },
   { path: "/metrics", element: <NorthStarPage /> },
   { path: "/dashboards", element: <ObservabilityPage /> },
+  { path: "/sessions", element: <SessionsListPage /> },
+  { path: "/sessions/:sessionId", element: <SessionDetailPage /> },
 ]);
 
 const el = document.getElementById("root");

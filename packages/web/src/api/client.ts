@@ -4,6 +4,8 @@ import type {
   NorthStarResponse,
   ObservabilityRange,
   ObservabilityResponse,
+  SessionDetail,
+  SessionListResponse,
   ToolStatsResponse,
   TraceCost,
   TraceListResponse,
@@ -105,6 +107,16 @@ export function getObservability(
   return getJson<ObservabilityResponse>(
     `/v1/metrics/observability?range=${range}`,
   );
+}
+
+/** Fetch the sessions list, newest-first (M13). */
+export function getSessions(): Promise<SessionListResponse> {
+  return getJson<SessionListResponse>("/v1/sessions");
+}
+
+/** Fetch one session's detail: scoped aggregates + member traces (M13). */
+export function getSession(sessionId: string): Promise<SessionDetail> {
+  return getJson<SessionDetail>(`/v1/sessions/${encodeURIComponent(sessionId)}`);
 }
 
 /**
