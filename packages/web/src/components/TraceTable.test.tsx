@@ -62,10 +62,25 @@ describe("TraceTable", () => {
     expect(onSortChange).toHaveBeenCalled();
     const arg = onSortChange.mock.calls[0]?.[0];
     expect(arg?.key).toBe("latency");
+    // direction is forwarded (DataTable's standard first-click is ascending)
+    expect(arg?.direction).toBe("asc");
   });
 
   it("trace_table_empty_state", () => {
     renderTable({ traces: [] });
     expect(screen.getByText("No executions yet")).toBeInTheDocument();
+  });
+
+  it("trace_table_status_badge_a11y_ok_error_and_dash", () => {
+    renderTable({
+      traces: [
+        { traceId: "ok1", name: "a", statusCode: "ok" },
+        { traceId: "er1", name: "b", statusCode: "error" },
+        { traceId: "no1", name: "c" }, // no status → dash
+      ],
+    });
+    // status meaning carried by aria-label (M9 a11y contract), both branches
+    expect(screen.getByLabelText("status: ok")).toBeInTheDocument();
+    expect(screen.getByLabelText("status: error")).toBeInTheDocument();
   });
 });

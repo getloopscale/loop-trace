@@ -59,7 +59,10 @@ const columns: DataTableColumn<TraceListItem>[] = [
     key: "input",
     label: "Input",
     render: (t) => (
-      <span className="text-muted-foreground" title={t.inputPreview}>
+      <span
+        className="block max-w-[32ch] truncate text-muted-foreground"
+        title={t.inputPreview}
+      >
         {t.inputPreview ?? DASH}
       </span>
     ),
@@ -68,7 +71,10 @@ const columns: DataTableColumn<TraceListItem>[] = [
     key: "output",
     label: "Output",
     render: (t) => (
-      <span className="text-muted-foreground" title={t.outputPreview}>
+      <span
+        className="block max-w-[32ch] truncate text-muted-foreground"
+        title={t.outputPreview}
+      >
         {t.outputPreview ?? DASH}
       </span>
     ),

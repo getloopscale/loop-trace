@@ -105,9 +105,11 @@ describe("TraceListPage (integration)", () => {
     // to the same orderBy/dir query — clicking a header refetches with that orderBy.
     // (The asc→desc→none cycle itself is the DataTable's behavior, tested upstream.)
     await userEvent.click(screen.getByText("Latency"));
+    // the page maps the DataTable sort → M9 query, forwarding BOTH orderBy + dir
+    // (first click = asc, the design system's standard sort cycle).
     await waitFor(() =>
       expect(client.listTraces).toHaveBeenCalledWith(
-        expect.objectContaining({ orderBy: "latency" }),
+        expect.objectContaining({ orderBy: "latency", dir: "asc" }),
       ),
     );
   });
