@@ -8,7 +8,6 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Trace detail 3-pane: the trace view is now an Arize-style 3-pane layout — a waterfall span tree (left) selects a span that drives a tabbed info panel (Trace Info / Attributes / Events, center) and an always-visible Input/Output panel (right, XSS-safe markdown). Built by recomposing the existing M10 tree + M12 markdown/JSON primitives on `@theokit/ui` Tabs; replay/keyboard navigation, the session link, cost, and tags are preserved. Zero new dependency, no backend change (M19)
 
 ### Changed
 
@@ -19,6 +18,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 ### Security
+
+## [0.19.0] - 2026-06-23
+
+### Added
+- Trace detail 3-pane: the trace view is now an Arize-style 3-pane layout — a waterfall span tree (left) selects a span that drives a tabbed info panel (Trace Info / Attributes / Events, center) and an always-visible Input/Output panel (right, XSS-safe markdown). Built by recomposing the existing M10 tree + M12 markdown/JSON primitives on `@theokit/ui` Tabs; replay/keyboard navigation, the session link, cost, and tags are preserved. Zero new dependency, no backend change (M19)
 
 ## [0.18.0] - 2026-06-23
 
