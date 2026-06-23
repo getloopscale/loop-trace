@@ -186,3 +186,73 @@ suite("listTraces filter/sort (integration, M9)", () => {
     expect(traces).toEqual([]);
   });
 });
+
+suite("listTraces enrichment (integration, M18)", () => {
+  let pool: pg.Pool;
+  let db: NodePgDatabase;
+  let repo: DrizzleSpanRepository;
+
+  beforeAll(async () => {
+    pool = createPool(PG_URI as string);
+    db = drizzle(pool);
+    await migrate(db, { migrationsFolder: MIGRATIONS });
+    repo = new DrizzleSpanRepository(db);
+  });
+  beforeEach(async () => {
+    await pool.query("TRUNCATE spans, traces, sessions, replay_sessions");
+  });
+  afterAll(async () => {
+    await pool.end();
+  });
+
+  it("list_trace_item_carries_enriched_fields", async () => {
+    await repo.save([
+      span({
+        spanId: "root",
+        traceId: "t-rich",
+        kind: "agent",
+        model: "gpt-4o",
+        inputValue: "the user prompt",
+        outputValue: "the model answer",
+        inputTokens: 100,
+        outputTokens: 50,
+      }),
+    ]);
+    const { traces } = await repo.listTraces({});
+    const row = traces.find((t) => t.traceId === "t-rich");
+    expect(row).toBeDefined();
+    expect(row?.rootKind).toBe("agent");
+    expect(row?.model).toBe("gpt-4o");
+    expect(row?.inputPreview).toBe("the user prompt");
+    expect(row?.outputPreview).toBe("the model answer");
+    expect(typeof row?.costUsd).toBe("number");
+    expect(row?.endTimeUnixNano).toBe("1700000000100000000");
+  });
+
+  it("list_trace_item_omits_enriched_fields_when_absent", async () => {
+    // a trace whose only span has a parent → NO root span → root-derived fields omitted
+    await repo.save([
+      span({ spanId: "child", traceId: "t-noroot", parentSpanId: "ghost" }),
+    ]);
+    const { traces } = await repo.listTraces({});
+    const row = traces.find((t) => t.traceId === "t-noroot");
+    expect(row).toBeDefined();
+    expect(row?.rootKind).toBeUndefined();
+    expect(row?.model).toBeUndefined();
+    expect(row?.inputPreview).toBeUndefined();
+    expect(row?.outputPreview).toBeUndefined();
+    // traces-column fields still present (no LATERAL dependency)
+    expect(row?.endTimeUnixNano).toBe("1700000000100000000");
+  });
+
+  it("list_trace_item_truncates_long_input_preview", async () => {
+    await repo.save([
+      span({ spanId: "root", traceId: "t-long", inputValue: "x".repeat(200) }),
+    ]);
+    const { traces } = await repo.listTraces({});
+    const row = traces.find((t) => t.traceId === "t-long");
+    // 120 chars + the ellipsis
+    expect(row?.inputPreview).toHaveLength(121);
+    expect(row?.inputPreview?.endsWith("…")).toBe(true);
+  });
+});

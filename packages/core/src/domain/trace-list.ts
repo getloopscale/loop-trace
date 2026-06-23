@@ -14,6 +14,16 @@ export const traceListItemSchema = z
     durationMs: z.number().nonnegative().optional(),
     statusCode: z.string().optional(),
     totalTokens: z.number().int().optional(),
+    // M18 — enriched columns for the Arize-style dense table. costUsd +
+    // endTimeUnixNano come from existing `traces` columns; model/rootKind/
+    // input/output previews are derived from the trace's root span (no migration).
+    // All optional + omitted when absent so the `.strict()` contract stays additive.
+    model: z.string().optional(),
+    costUsd: z.number().optional(),
+    rootKind: z.string().optional(),
+    endTimeUnixNano: z.string().regex(/^\d+$/).optional(),
+    inputPreview: z.string().optional(),
+    outputPreview: z.string().optional(),
   })
   .strict();
 

@@ -46,6 +46,13 @@ export interface TraceListItem {
   durationMs?: number;
   statusCode?: string;
   totalTokens?: number;
+  // M18 — enriched columns for the dense table (mirrors the core DTO).
+  model?: string;
+  costUsd?: number;
+  rootKind?: string;
+  endTimeUnixNano?: string;
+  inputPreview?: string;
+  outputPreview?: string;
 }
 
 export interface TraceListResponse {

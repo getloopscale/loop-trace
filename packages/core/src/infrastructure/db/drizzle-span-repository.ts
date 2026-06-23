@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { and, asc, desc, eq, gte, inArray, isNull, lte, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, gte, inArray, isNull, lte, notInArray, or, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
@@ -109,7 +109,23 @@ function fromRow(row: typeof spans.$inferSelect): Span {
  * `durationMs` from the nano timestamps with BigInt math (no 2^53 precision
  * loss); omits keys that are null so the `.strict()` DTO never carries a column.
  */
-function traceRowToItem(row: typeof traces.$inferSelect): TraceListItem {
+/** Root-span fields the M18 LATERAL join adds to a traces row (all nullable). */
+interface EnrichedTraceRow {
+  rootKind: string | null;
+  rootModel: string | null;
+  rootInputValue: string | null;
+  rootOutputValue: string | null;
+}
+
+/** Truncate a span's input/output to a list-cell preview (≤120 chars), surrogate-safe (EC-3). */
+function preview(text: string): string {
+  const chars = Array.from(text);
+  return chars.length > 120 ? `${chars.slice(0, 120).join("")}…` : text;
+}
+
+function traceRowToItem(
+  row: typeof traces.$inferSelect & Partial<EnrichedTraceRow>,
+): TraceListItem {
   const item: TraceListItem = { traceId: row.traceId };
   if (row.sessionId != null) item.sessionId = row.sessionId;
   if (row.name != null) item.name = row.name;
@@ -125,6 +141,15 @@ function traceRowToItem(row: typeof traces.$inferSelect): TraceListItem {
   }
   if (row.statusCode != null) item.statusCode = row.statusCode;
   if (row.totalTokens != null) item.totalTokens = row.totalTokens;
+  // M18 — enriched columns (existing traces cols + root-span LATERAL).
+  if (row.endTimeUnixNano != null) item.endTimeUnixNano = row.endTimeUnixNano;
+  if (row.costUsd != null) item.costUsd = row.costUsd;
+  if (row.rootKind != null) item.rootKind = row.rootKind;
+  if (row.rootModel != null) item.model = row.rootModel;
+  if (row.rootInputValue != null) item.inputPreview = preview(row.rootInputValue);
+  if (row.rootOutputValue != null) {
+    item.outputPreview = preview(row.rootOutputValue);
+  }
   return item;
 }
 
@@ -345,9 +370,32 @@ export class DrizzleSpanRepository implements SpanRepository {
     const dir = opts.dir === "asc" ? sql`asc` : sql`desc`;
     const limit = opts.limit ?? 50;
 
+    // M18: derive the trace's representative model/kind/input/output from its
+    // ROOT span (parent_span_id IS NULL, earliest) via a single correlated LATERAL
+    // join — one indexed root-span lookup per row, no new column, no migration.
+    const root = this.db
+      .select({
+        kind: spans.kind,
+        model: spans.model,
+        inputValue: spans.inputValue,
+        outputValue: spans.outputValue,
+      })
+      .from(spans)
+      .where(and(eq(spans.traceId, traces.traceId), isNull(spans.parentSpanId)))
+      .orderBy(asc(sql`${spans.startTimeUnixNano}::numeric`))
+      .limit(1)
+      .as("root");
+
     const rows = await this.db
-      .select()
+      .select({
+        ...getTableColumns(traces),
+        rootKind: root.kind,
+        rootModel: root.model,
+        rootInputValue: root.inputValue,
+        rootOutputValue: root.outputValue,
+      })
       .from(traces)
+      .leftJoinLateral(root, sql`true`)
       .where(where)
       .orderBy(sql`${sortCol} ${dir} nulls last`, desc(traces.updatedAt))
       .limit(limit);

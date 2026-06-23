@@ -23,6 +23,27 @@ describe("trace-list DTO", () => {
     ).toBe(false);
   });
 
+  it("trace_list_schema_accepts_optional_enriched_fields", () => {
+    // M18 — enriched columns are all optional + additive; the strict contract holds.
+    const enriched = {
+      traceId: "t1",
+      name: "checkout",
+      model: "gpt-4o",
+      costUsd: 0.0123,
+      rootKind: "agent",
+      endTimeUnixNano: "1700000000100000000",
+      inputPreview: "the user prompt",
+      outputPreview: "the answer",
+    };
+    expect(traceListItemSchema.safeParse(enriched).success).toBe(true);
+    expect(traceListItemSchema.safeParse({ traceId: "t1" }).success).toBe(true);
+    // .strict() still rejects an unknown column even alongside enriched fields.
+    expect(
+      traceListItemSchema.safeParse({ traceId: "t1", model: "x", bogus: 1 })
+        .success,
+    ).toBe(false);
+  });
+
   it("trace_list_response_wraps_an_array", () => {
     expect(traceListResponseSchema.safeParse({ traces: [] }).success).toBe(true);
     expect(
