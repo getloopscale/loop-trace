@@ -1,21 +1,8 @@
 import type { AgentAdapter } from "./agent-adapter.js";
-import { stripContextWindowSuffix } from "./agent-adapter.js";
+import { serviceNameOf, stripContextWindowSuffix } from "./agent-adapter.js";
 import { defaultAdapter } from "./default-adapter.js";
 import type { GenAiFields } from "../genai-attributes.js";
-import { capText } from "./../span-events.js";
-
-/** Parse a token attribute that may arrive as a number or an OTLP intValue string. */
-function toInt(value: unknown): number | undefined {
-  if (value == null) return undefined;
-  const n = typeof value === "number" ? value : parseInt(String(value), 10);
-  return Number.isFinite(n) ? n : undefined;
-}
-
-/** A non-empty string attribute, size-capped (reuses the M12 cap), else undefined. */
-function capStringAttr(value: unknown): string | undefined {
-  if (typeof value !== "string" || value.length === 0) return undefined;
-  return capText(value);
-}
+import { toInt, capStringAttr } from "../attr-coerce.js";
 
 /**
  * Claude Code adapter (M15 D2). Composes OVER the default adapter — Claude uses the
@@ -32,7 +19,7 @@ function capStringAttr(value: unknown): string | undefined {
  */
 export const claudeCodeAdapter: AgentAdapter = {
   name: "claude-code",
-  matches: (resourceAttrs) => resourceAttrs["service.name"] === "claude-code",
+  matches: (resourceAttrs) => serviceNameOf(resourceAttrs) === "claude-code",
   extract: (attrs, spanName): GenAiFields => {
     const base = defaultAdapter.extract(attrs, spanName);
     const a = attrs ?? {};

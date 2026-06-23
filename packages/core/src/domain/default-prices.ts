@@ -28,7 +28,11 @@ export const DEFAULT_PRICES: PriceTable = {
   // Anthropic — Claude 4.x (base-version keys; longest-prefix resolves dated/
   // context-window variants like "claude-opus-4-8" / "claude-opus-4-8[1m]" — M15).
   // Public list prices per 1M tokens; update here when Anthropic changes them.
-  "claude-opus-4": perMillion(15, 75),
+  // Current Opus (4.6/4.7/4.8) is $5/$25; the legacy Opus 4.1 ($15/$75) gets a
+  // longer key so longest-prefix routes "claude-opus-4-1*" to the legacy rate
+  // while "claude-opus-4-8*" resolves to the current base key.
+  "claude-opus-4": perMillion(5, 25),
+  "claude-opus-4-1": perMillion(15, 75),
   "claude-sonnet-4": perMillion(3, 15),
   "claude-haiku-4": perMillion(1, 5),
 };

@@ -47,12 +47,15 @@ describe("claudeCodeAdapter (M15 D2/D3)", () => {
     expect(out.inputTokens).toBe(99);
   });
 
-  it("test_claude_model_prices_resolve_nonzero", () => {
+  it("test_claude_opus_4x_priced_at_current_rate", () => {
+    // EXACT value guard (F-test-8): current Opus 4.6-4.8 list price is $5/$25 per 1M.
+    // 1M in + 1M out → $5 + $25 = $30. Catches a future mis-priced typo (e.g. the
+    // legacy $15/$75 that this assertion was added to prevent regressing to).
     const cost = computeTraceCost(
-      [{ model: "claude-opus-4-8", inputTokens: 5380, outputTokens: 3 }],
+      [{ model: "claude-opus-4-8", inputTokens: 1_000_000, outputTokens: 1_000_000 }],
       DEFAULT_PRICES,
     );
-    expect(cost).toBeGreaterThan(0);
+    expect(cost).toBe(30);
   });
 
   it("test_claude_4x_prices_do_not_collide_with_claude_3", () => {
@@ -67,6 +70,12 @@ describe("claudeCodeAdapter (M15 D2/D3)", () => {
     expect(resolveModelPrice("claude-opus-4-8[1m]", DEFAULT_PRICES)).toEqual(
       DEFAULT_PRICES["claude-opus-4"],
     );
+    // legacy Opus 4.1 routes to its own (higher) rate via the longer key, NOT the
+    // current base rate (longest-prefix).
+    expect(resolveModelPrice("claude-opus-4-1-20250805", DEFAULT_PRICES)).toEqual(
+      DEFAULT_PRICES["claude-opus-4-1"],
+    );
+    expect(DEFAULT_PRICES["claude-opus-4-1"]).not.toEqual(DEFAULT_PRICES["claude-opus-4"]);
   });
 
   it("test_select_adapter_picks_claude_by_service_name", () => {

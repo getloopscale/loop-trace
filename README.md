@@ -67,6 +67,31 @@ npm install ./usetheo-lens-sdk-0.0.0.tgz
 
 (Within this monorepo, packages reference the SDK via the pnpm workspace.)
 
+## Observe Claude Code in Theo Lens
+
+Claude Code is itself an AI agent — point its OpenTelemetry trace export at a running
+Theo Lens and its sessions show up as first-class executions (model, tokens, cost, input,
+and session grouping). With the stack up (`docker compose up` → `http://localhost:4318`):
+
+```bash
+# set the traces-only recipe in your shell, then run Claude Code as usual
+eval "$(scripts/theo-instrument-claude.sh)"          # or: ... <your-theo-endpoint>
+claude -p "summarize this repo"
+```
+
+The helper enables Claude Code's telemetry + beta trace export, disables metrics/logs
+(Theo Lens ingests spans), and routes OTLP/HTTP to `<endpoint>/v1/traces`. Open the Trace
+Explorer to see the run as a waterfall with cost and tokens, grouped into a session.
+
+How it works: an extensible **agent adapter** (selected by the span's `service.name`)
+maps Claude Code's attribute convention onto Theo's typed fields — so other external
+agents integrate by adding one adapter, with no change to existing traces.
+
+**Caveats.** Claude Code's trace export is **beta** (`CLAUDE_CODE_ENHANCED_TELEMETRY_BETA`);
+the span schema may change. Claude Code spans carry `user.email` / `user.id` /
+`account_uuid` and — with `OTEL_LOG_USER_PROMPTS=1` — the prompt text, so send telemetry
+only to a Theo Lens you trust.
+
 ## How it works
 
 - **SDK** (`@usetheo/lens-sdk`) emits OTLP `gen_ai` spans over HTTP.

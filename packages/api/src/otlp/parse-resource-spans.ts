@@ -102,7 +102,13 @@ export function parseResourceSpans(envelope: unknown): Span[] {
         // from the persisted bag so the uncapped duplicate never lands on disk.
         // A non-string input.value is NOT extracted, so it stays in the bag.
         if (attrs) {
-          if (genai.inputValue !== undefined) delete attrs["input.value"];
+          // The capped typed field is the single home for the text — strip every
+          // source key (default `input.value`; Claude's `user_prompt`, M15) so the
+          // uncapped duplicate never persists in the bag (M12 invariant + PII bound).
+          if (genai.inputValue !== undefined) {
+            delete attrs["input.value"];
+            delete attrs["user_prompt"];
+          }
           if (genai.outputValue !== undefined) delete attrs["output.value"];
         }
         // M12 (D3): OTLP span events are parsed (capped) — previously dropped.

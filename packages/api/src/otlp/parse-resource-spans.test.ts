@@ -242,6 +242,22 @@ describe("parseResourceSpans", () => {
     expect(span?.outputTokens).toBe(3);
   });
 
+  it("test_parse_strips_user_prompt_from_bag_when_mapped", () => {
+    // F-domain-2/PII: Claude's user_prompt → input.value column; the uncapped
+    // duplicate must NOT remain in the persisted attributes bag.
+    const span = {
+      ...rawSpan,
+      attributes: [
+        { key: "user_prompt", value: { stringValue: "secret prompt text" } },
+        { key: "span.type", value: { stringValue: "interaction" } },
+      ],
+    };
+    const out = parseResourceSpans(envelopeWithService("claude-code", [span]))[0];
+    expect(out?.inputValue).toBe("secret prompt text");
+    expect(out?.attributes).not.toHaveProperty("user_prompt"); // stripped from the bag
+    expect(out?.attributes).toEqual({ "span.type": "interaction" });
+  });
+
   it("test_parse_uses_default_adapter_for_generic_service", () => {
     // a generic gen_ai producer: bare input_tokens must NOT be read (default only
     // reads gen_ai.usage.*) — proves the claude mapping does not leak to others.
