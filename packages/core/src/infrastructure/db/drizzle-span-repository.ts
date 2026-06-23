@@ -681,6 +681,10 @@ export class DrizzleSpanRepository implements SpanRepository {
     // M14 (D2): you can only tag a real trace. Returns false → route 404 when the
     // trace does not exist. The insert is idempotent (UNIQUE(trace_id,tag) +
     // ON CONFLICT DO NOTHING) so a duplicate add is a harmless no-op.
+    // NOTE: the existence check is advisory, not transactional — traces are
+    // recompute-owned aggregates and never hard-deleted in this codebase, so the
+    // SELECT→INSERT window is unreachable and an orphan tag row cannot occur. A
+    // future trace-deletion path MUST revisit this (add a FK or a transaction).
     const existing = await this.db
       .select({ traceId: traces.traceId })
       .from(traces)

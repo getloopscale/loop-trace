@@ -729,12 +729,14 @@ describe("createApp (contract, stub repo)", () => {
       method: "DELETE",
     });
     expect(res.status).toBe(200);
+    expect((await res.json()).tags).toEqual([]); // returns the (now-empty) tag set
   });
 
   it("test_get_traces_tag_filter_passes_through", async () => {
     await post(tracesEnvelope(rawSpan));
-    await app.request("/v1/traces?tag=prod");
-    expect(repo.lastListOpts?.tag).toBe("prod");
+    const res = await app.request("/v1/traces?tag=prod");
+    expect(res.status).toBe(200);
+    expect(repo.lastListOpts?.tag).toBe("prod"); // route param → opts mapping
   });
 });
 
