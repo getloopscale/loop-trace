@@ -13,6 +13,14 @@ export {
   type ListTracesOptions,
 } from "./domain/trace-list.js";
 export { extractGenAi, type GenAiFields } from "./domain/genai-attributes.js";
+export {
+  type AgentAdapter,
+  serviceNameOf,
+  stripContextWindowSuffix,
+} from "./domain/adapters/agent-adapter.js";
+export { defaultAdapter } from "./domain/adapters/default-adapter.js";
+export { claudeCodeAdapter } from "./domain/adapters/claude-code-adapter.js";
+export { selectAdapter } from "./domain/adapters/registry.js";
 // Only extractSpanEvents has a cross-package consumer (the OTLP ingest parser);
 // the caps + capText + SpanEvent type stay module-internal (YAGNI — no orphan
 // public exports). Tests import them via relative path.

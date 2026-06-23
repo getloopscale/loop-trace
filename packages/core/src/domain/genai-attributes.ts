@@ -1,4 +1,4 @@
-import { capText } from "./span-events.js";
+import { toInt, capStringAttr } from "./attr-coerce.js";
 
 /**
  * Extract GenAI semantic-convention attributes from a span's flattened attribute
@@ -45,12 +45,6 @@ function firstString(
   return undefined;
 }
 
-function toInt(value: unknown): number | undefined {
-  if (value == null) return undefined;
-  const n = typeof value === "number" ? value : parseInt(String(value), 10);
-  return Number.isFinite(n) ? n : undefined;
-}
-
 /** Map flattened OTLP attributes → typed GenAI fields (only defined keys set). */
 export function extractGenAi(attributes: unknown): GenAiFields {
   if (attributes == null || typeof attributes !== "object") return {};
@@ -85,10 +79,4 @@ export function extractGenAi(attributes: unknown): GenAiFields {
     ...(inputValue !== undefined ? { inputValue } : {}),
     ...(outputValue !== undefined ? { outputValue } : {}),
   };
-}
-
-/** A non-empty string attribute, size-capped (M12 D5); anything else → undefined (EC-1/EC-7). */
-function capStringAttr(value: unknown): string | undefined {
-  if (typeof value !== "string" || value.length === 0) return undefined;
-  return capText(value);
 }
