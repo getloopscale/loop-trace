@@ -61,7 +61,14 @@ export function AutoRefreshControl({
         </select>
       </label>
       {secondsAgo !== null && (
-        <span className="auto-refresh-updated"> updated {secondsAgo}s ago</span>
+        <span
+          className="auto-refresh-updated"
+          role="status"
+          aria-live="polite"
+        >
+          {" "}
+          updated {secondsAgo}s ago
+        </span>
       )}
     </span>
   );

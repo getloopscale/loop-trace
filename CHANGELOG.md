@@ -8,7 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Live auto-refresh: the executions list, dashboards, sessions, and metrics views refresh themselves on a configurable interval (Off / 5s / 10s / 30s / 1m, default Off) via a toolbar control with an "updated Xs ago" indicator, so an operator watching agents run live (e.g. a Claude Code session ingesting via M15) never reloads the page. Polling pauses while the browser tab is hidden and the open trace view is never auto-refreshed. Built on the existing react-query layer (`refetchInterval`) — zero new dependency, no backend change (M16)
+- Live auto-refresh: the executions list, dashboards, sessions, metrics, and tool/cost analytics views refresh themselves on a configurable interval (Off / 5s / 10s / 30s / 1m, default Off) via a toolbar control with an "updated Xs ago" freshness indicator (announced to assistive tech), so an operator watching agents run live (e.g. a Claude Code session ingesting via M15) never reloads the page. Polling pauses while the browser tab is hidden and the open trace view is never auto-refreshed. Built on the existing react-query layer (`refetchInterval`) — zero new dependency, no backend change (M16)
 
 ### Changed
 

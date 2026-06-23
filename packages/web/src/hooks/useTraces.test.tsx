@@ -60,6 +60,37 @@ describe("useTraces auto-refresh polling", () => {
     expect(vi.mocked(client.listTraces).mock.calls.length).toBe(offMount);
   });
 
+  it("list_keeps_previous_data_during_refetch_no_flash", async () => {
+    // Sub-goal 5: a poll (same-key refetch) must not flash the list to empty —
+    // the previous data stays mounted while the next fetch is in flight.
+    localStorage.setItem(KEY, "5000");
+    let resolveSecond!: (v: { traces: never[] }) => void;
+    vi.mocked(client.listTraces)
+      .mockResolvedValueOnce({
+        traces: [{ traceId: "t1", name: "a", durationMs: 1 }],
+      } as never)
+      .mockImplementationOnce(
+        () =>
+          new Promise((r) => {
+            resolveSecond = r as never;
+          }),
+      );
+    const { result } = renderHook(() => useTraceList(), {
+      wrapper: makeWrapper(),
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(result.current.data?.traces).toHaveLength(1);
+
+    // The interval fires the second fetch (left pending); the prior rows persist
+    // (no flash to empty/undefined while the refetch is in flight).
+    await vi.advanceTimersByTimeAsync(5100);
+    expect(vi.mocked(client.listTraces).mock.calls.length).toBeGreaterThanOrEqual(
+      2,
+    );
+    expect(result.current.data?.traces).toHaveLength(1);
+    resolveSecond({ traces: [] });
+  });
+
   it("trace_tree_does_not_poll", async () => {
     localStorage.setItem(KEY, "5000");
     vi.mocked(client.getTraceTree).mockResolvedValue({
