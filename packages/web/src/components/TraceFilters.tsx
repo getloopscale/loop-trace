@@ -2,15 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import type { ListTracesQuery } from "../api/types.js";
 import { tracesExportHref } from "../api/client.js";
 
-type OrderBy = NonNullable<ListTracesQuery["orderBy"]>;
-
-const SORT_COLUMNS: { key: OrderBy; label: string }[] = [
-  { key: "recent", label: "Recent" },
-  { key: "latency", label: "Latency" },
-  { key: "tokens", label: "Tokens" },
-  { key: "cost", label: "Cost" },
-];
-
 /** A `datetime-local` value → ISO-with-offset (the API's validated shape), or undefined. */
 function toIso(local: string): string | undefined {
   if (!local) return undefined;
@@ -19,11 +10,10 @@ function toIso(local: string): string | undefined {
 }
 
 /**
- * Executions-list toolbar (M9): status + model + time-range filters, a sort
- * control, and a CSV export of the current filtered set. The sort control is a
- * `role="group"` of toggle buttons (aria-pressed) — NOT a grid `columnheader`,
- * because the list renders as a `<ul>`, so `aria-sort` would be invalid ARIA
- * outside a grid (review F-fe-2). A fixed whitelist, never a query DSL (D1).
+ * Executions-list toolbar (M9; sort moved to the M18 DataTable headers): status +
+ * model + time-range + tag filters, and a CSV export of the current filtered set.
+ * A fixed whitelist, never a query DSL (D1). Sorting is now owned by the sortable
+ * DataTable column headers (M18) — both write the same `orderBy`/`dir` query state.
  */
 export function TraceFilters({
   query,
@@ -32,9 +22,6 @@ export function TraceFilters({
   query: ListTracesQuery;
   onChange: (next: ListTracesQuery) => void;
 }) {
-  const orderBy: OrderBy = query.orderBy ?? "recent";
-  const dir = query.dir ?? "desc";
-
   // Debounce the model input so typing does not fire a request per keystroke (F-fe-9).
   const [modelInput, setModelInput] = useState(query.model ?? "");
   const timer = useRef<ReturnType<typeof setTimeout>>();
@@ -74,14 +61,6 @@ export function TraceFilters({
     if (value) next[key] = value as never;
     else delete next[key];
     onChange(next);
-  };
-
-  const toggleSort = (key: OrderBy) => {
-    if (key === orderBy) {
-      onChange({ ...query, orderBy: key, dir: dir === "desc" ? "asc" : "desc" });
-    } else {
-      onChange({ ...query, orderBy: key, dir: "desc" });
-    }
   };
 
   return (
@@ -145,22 +124,6 @@ export function TraceFilters({
         <a className="trace-export" href={tracesExportHref(query)} download>
           Export CSV
         </a>
-      </div>
-      <div className="trace-sort" role="group" aria-label="sort by">
-        {SORT_COLUMNS.map(({ key, label }) => {
-          const active = key === orderBy;
-          return (
-            <button
-              key={key}
-              type="button"
-              aria-pressed={active}
-              onClick={() => toggleSort(key)}
-            >
-              {label}
-              {active ? (dir === "asc" ? " ▲" : " ▼") : ""}
-            </button>
-          );
-        })}
       </div>
     </div>
   );

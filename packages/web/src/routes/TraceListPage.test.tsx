@@ -8,7 +8,18 @@ import * as client from "../api/client.js";
 
 vi.mock("../api/client.js", async (orig) => {
   const actual = await orig<typeof import("../api/client.js")>();
-  return { ...actual, getTraceTree: vi.fn(), listTraces: vi.fn() };
+  return {
+    ...actual,
+    getTraceTree: vi.fn(),
+    listTraces: vi.fn(),
+    // M18: the page now renders the TraceSummaryStrip (useObservability).
+    getObservability: vi.fn().mockResolvedValue({
+      range: "24h",
+      traffic: [],
+      latency: [],
+      tokensByModel: [],
+    }),
+  };
 });
 
 function renderPage() {
@@ -84,25 +95,18 @@ describe("TraceListPage (integration)", () => {
     );
   });
 
-  it("test_trace_list_sort_button_sets_active_and_toggles_dir", async () => {
-    vi.mocked(client.listTraces).mockResolvedValue({ traces: [] });
+  it("test_trace_list_datatable_header_sort_forwards_orderby", async () => {
+    vi.mocked(client.listTraces).mockResolvedValue({
+      traces: [{ traceId: "t1", name: "checkout", durationMs: 5 }],
+    });
     renderPage();
-    await waitFor(() => expect(client.listTraces).toHaveBeenCalled());
-    // The sort control is a group of toggle buttons (aria-pressed), not a grid
-    // columnheader (the list is a <ul>) — review F-fe-2.
-    const latency = screen.getByRole("button", { name: /Latency/ });
-    await userEvent.click(latency);
-    await waitFor(() =>
-      expect(client.listTraces).toHaveBeenCalledWith(
-        expect.objectContaining({ orderBy: "latency", dir: "desc" }),
-      ),
-    );
-    expect(screen.getByRole("button", { name: /Latency/ })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    // Clicking the active column again toggles direction to asc.
-    await userEvent.click(screen.getByRole("button", { name: /Latency/ }));
+    await waitFor(() => expect(screen.getByText("checkout")).toBeInTheDocument());
+    // M18: sorting is owned by the DataTable column headers (Arize-style), bound
+    // to the same orderBy/dir query — clicking a header refetches with that orderBy.
+    // (The asc→desc→none cycle itself is the DataTable's behavior, tested upstream.)
+    await userEvent.click(screen.getByText("Latency"));
+    // the page maps the DataTable sort → M9 query, forwarding BOTH orderBy + dir
+    // (first click = asc, the design system's standard sort cycle).
     await waitFor(() =>
       expect(client.listTraces).toHaveBeenCalledWith(
         expect.objectContaining({ orderBy: "latency", dir: "asc" }),

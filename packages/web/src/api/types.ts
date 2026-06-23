@@ -46,6 +46,16 @@ export interface TraceListItem {
   durationMs?: number;
   statusCode?: string;
   totalTokens?: number;
+  // M18 — enriched columns for the dense table (mirrors the core DTO). The
+  // semantic span-kind is derived client-side from {model, rootOperationName,
+  // rootToolName} via the shared span-kind taxonomy.
+  model?: string;
+  costUsd?: number;
+  rootOperationName?: string;
+  rootToolName?: string;
+  endTimeUnixNano?: string;
+  inputPreview?: string;
+  outputPreview?: string;
 }
 
 export interface TraceListResponse {

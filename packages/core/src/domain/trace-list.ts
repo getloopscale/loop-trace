@@ -14,6 +14,20 @@ export const traceListItemSchema = z
     durationMs: z.number().nonnegative().optional(),
     statusCode: z.string().optional(),
     totalTokens: z.number().int().optional(),
+    // M18 — enriched columns for the Arize-style dense table. costUsd +
+    // endTimeUnixNano come from existing `traces` columns; model + the root span's
+    // gen_ai operation/tool signals are derived from the trace's ROOT span (no
+    // migration). The semantic span-kind (llm/tool/retriever/…) is derived CLIENT-SIDE
+    // from {model, operationName, toolName} via the shared web taxonomy — we expose
+    // the raw signals, NOT a pre-derived kind, to keep one source of truth (DRY).
+    // All optional + omitted when absent so the `.strict()` contract stays additive.
+    model: z.string().optional(),
+    costUsd: z.number().optional(),
+    rootOperationName: z.string().optional(),
+    rootToolName: z.string().optional(),
+    endTimeUnixNano: z.string().regex(/^\d+$/).optional(),
+    inputPreview: z.string().optional(),
+    outputPreview: z.string().optional(),
   })
   .strict();
 

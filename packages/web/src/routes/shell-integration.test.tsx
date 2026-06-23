@@ -12,7 +12,16 @@ import * as client from "../api/client.js";
 
 vi.mock("../api/client.js", async (orig) => {
   const actual = await orig<typeof import("../api/client.js")>();
-  return { ...actual, listTraces: vi.fn() };
+  return {
+    ...actual,
+    listTraces: vi.fn(),
+    getObservability: vi.fn().mockResolvedValue({
+      range: "24h",
+      traffic: [],
+      latency: [],
+      tokensByModel: [],
+    }),
+  };
 });
 
 const KEY = "theolens.autoRefreshMs";

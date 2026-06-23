@@ -29,11 +29,6 @@
 }
 
 /* Cost analytics */
-.list-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-}
 .trace-cost {
   margin: 0.5rem 0;
   font-variant-numeric: tabular-nums;

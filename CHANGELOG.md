@@ -19,6 +19,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [0.18.0] - 2026-06-23
+
+### Added
+- Traces list redesign: the executions list is now an Arize-style dense table (`@theokit/ui` DataTable) with kind badges, status, model, input/output previews, start/end, latency, tokens and cost — sortable via the column headers — topped by a 24h summary strip (traffic / latency p95 / tokens / cost sparklines). `GET /v1/traces` list items are enriched (model, cost, root operation/tool signals, end time, input/output preview) derived from the trace's root span + existing columns with no schema migration; the semantic kind badge is classified client-side. M9 filters/export and the M16 auto-refresh are preserved (M18)
+
 ## [0.17.0] - 2026-06-23
 
 ### Added

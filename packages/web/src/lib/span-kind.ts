@@ -1,4 +1,4 @@
-import type { SpanNodeData, TraceTreeNode } from "../api/types.js";
+import type { SpanNodeData, TraceTreeNode, TraceListItem } from "../api/types.js";
 
 /** Canonical span kinds (mirrors the Phoenix taxonomy we can derive from our signals). */
 export type SpanKind =
@@ -23,19 +23,62 @@ function attr(span: SpanNodeData, key: string): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
 
+/** The signals span-kind classification reads — shared by span + trace-list callers. */
+export interface KindSignals {
+  operationName?: string | undefined;
+  toolName?: string | undefined;
+  model?: string | undefined;
+  hasChildren: boolean;
+}
+
+/**
+ * Single source of truth for span-kind classification (M18 — extracted for DRY).
+ * tool > retriever > embedding > llm > chain (has children) > unknown.
+ */
+export function deriveKindFromSignals(s: KindSignals): SpanKind {
+  if (s.toolName != null || s.operationName === "execute_tool") return "tool";
+  if (s.operationName === "retrieve" || s.operationName === "search") {
+    return "retriever";
+  }
+  if (s.operationName === "embeddings" || s.operationName === "embedding") {
+    return "embedding";
+  }
+  if (
+    s.operationName === "chat" ||
+    s.operationName === "text_completion" ||
+    s.model != null
+  ) {
+    return "llm";
+  }
+  if (s.hasChildren) return "chain";
+  return "unknown";
+}
+
 /**
  * Derive a span's kind from signals already on the node (EC-4: tolerates missing
- * attributes). tool > retriever/embedding > llm > chain (has children) > unknown.
- * No schema change — purely client-side classification (D2).
+ * attributes). Purely client-side classification (D2).
  */
 export function deriveSpanKind(span: TraceTreeNode): SpanKind {
-  const op = attr(span, "gen_ai.operation.name");
-  if (attr(span, "gen_ai.tool.name") != null || op === "execute_tool") return "tool";
-  if (op === "retrieve" || op === "search") return "retriever";
-  if (op === "embeddings" || op === "embedding") return "embedding";
-  if (op === "chat" || op === "text_completion" || span.model != null) return "llm";
-  if (span.children.length > 0) return "chain";
-  return "unknown";
+  return deriveKindFromSignals({
+    operationName: attr(span, "gen_ai.operation.name"),
+    toolName: attr(span, "gen_ai.tool.name"),
+    model: span.model ?? undefined,
+    hasChildren: span.children.length > 0,
+  });
+}
+
+/**
+ * List-level kind from the M18-enriched `TraceListItem` root-span signals. The list
+ * carries no child info, so a would-be "chain" falls through to "unknown" (matching
+ * Arize, which shows UNKNOWN for the root graph span).
+ */
+export function deriveTraceListItemKind(item: TraceListItem): SpanKind {
+  return deriveKindFromSignals({
+    operationName: item.rootOperationName,
+    toolName: item.rootToolName,
+    model: item.model,
+    hasChildren: false,
+  });
 }
 
 /** True if the node OR any descendant has an error status (child→root propagation, D3). */
