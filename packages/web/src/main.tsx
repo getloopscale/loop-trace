@@ -11,6 +11,7 @@ import { NorthStarPage } from "./routes/NorthStarPage.js";
 import { ObservabilityPage } from "./routes/ObservabilityPage.js";
 import { SessionsListPage } from "./routes/SessionsListPage.js";
 import { SessionDetailPage } from "./routes/SessionDetailPage.js";
+import { AutoRefreshProvider } from "./hooks/useAutoRefresh.js";
 import "./index.css";
 
 const queryClient = new QueryClient();
@@ -32,7 +33,9 @@ if (el) {
   createRoot(el).render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
+        <AutoRefreshProvider>
+          <RouterProvider router={router} />
+        </AutoRefreshProvider>
       </QueryClientProvider>
     </StrictMode>,
   );

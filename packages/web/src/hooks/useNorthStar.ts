@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { ApiError, getNorthStar } from "../api/client.js";
+import { useAutoRefreshInterval } from "./useAutoRefresh.js";
 
 /** Don't retry deterministic 4xx; retry transient errors up to twice. */
 function retry(failureCount: number, err: unknown): boolean {
@@ -14,6 +15,9 @@ export function useNorthStar() {
   return useQuery({
     queryKey: ["north-star"],
     queryFn: getNorthStar,
+    placeholderData: keepPreviousData,
     retry,
+    refetchInterval: useAutoRefreshInterval(),
+    refetchIntervalInBackground: false,
   });
 }

@@ -2,17 +2,19 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useCostByPeriod } from "../hooks/useCost.js";
 import { CostByPeriod } from "../components/CostByPeriod.js";
+import { AutoRefreshControl } from "../components/AutoRefreshControl.js";
 import { Loading, ErrorState } from "../components/states.js";
 
 /** Cost analytics view: day/week period buckets with a toggle (M5 DoD #2). */
 export function AnalyticsPage() {
   const [period, setPeriod] = useState<"day" | "week">("day");
-  const { data, isLoading, isError } = useCostByPeriod(period);
+  const { data, isLoading, isError, dataUpdatedAt } = useCostByPeriod(period);
   return (
     <main className="analytics-page">
       <Link to="/">← Executions</Link>
       <h1>Cost analytics</h1>
       <Link to="/tools">Tool analytics →</Link>
+      <AutoRefreshControl dataUpdatedAt={dataUpdatedAt} />
       <div className="period-toggle" role="radiogroup" aria-label="period">
         <button
           type="button"

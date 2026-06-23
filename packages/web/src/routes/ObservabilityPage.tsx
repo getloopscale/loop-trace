@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useObservability } from "../hooks/useObservability.js";
+import { AutoRefreshControl } from "../components/AutoRefreshControl.js";
 import { Sparkbar } from "../components/Sparkbar.js";
 import { Loading, ErrorState, EmptyState } from "../components/states.js";
 import { formatDuration } from "../lib/duration.js";
@@ -45,11 +46,12 @@ function MetricSection({
  */
 export function ObservabilityPage() {
   const [range, setRange] = useState<ObservabilityRange>("24h");
-  const { data, isLoading, isError } = useObservability(range);
+  const { data, isLoading, isError, dataUpdatedAt } = useObservability(range);
   return (
     <main className="observability-page">
       <Link to="/">← Executions</Link>
       <h1>Observability</h1>
+      <AutoRefreshControl dataUpdatedAt={dataUpdatedAt} />
       <div className="range-toggle" role="radiogroup" aria-label="time range">
         {RANGES.map((r) => (
           <button

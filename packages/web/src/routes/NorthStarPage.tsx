@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useNorthStar } from "../hooks/useNorthStar.js";
+import { AutoRefreshControl } from "../components/AutoRefreshControl.js";
 import { Loading, ErrorState, EmptyState } from "../components/states.js";
 import type { NorthStarBucket } from "../api/types.js";
 
@@ -43,11 +44,12 @@ function MetricTable({
  * (active debugging engagement).
  */
 export function NorthStarPage() {
-  const { data, isLoading, isError } = useNorthStar();
+  const { data, isLoading, isError, dataUpdatedAt } = useNorthStar();
   return (
     <main className="north-star-page">
       <Link to="/">← Executions</Link>
       <h1>North-star metrics</h1>
+      <AutoRefreshControl dataUpdatedAt={dataUpdatedAt} />
       {isLoading ? (
         <Loading label="Loading metrics…" />
       ) : isError || !data ? (

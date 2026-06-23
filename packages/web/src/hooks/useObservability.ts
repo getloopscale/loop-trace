@@ -1,6 +1,7 @@
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { ApiError, getObservability } from "../api/client.js";
 import type { ObservabilityRange } from "../api/types.js";
+import { useAutoRefreshInterval } from "./useAutoRefresh.js";
 
 /** Don't retry deterministic 4xx; retry transient errors up to twice. */
 function retry(failureCount: number, err: unknown): boolean {
@@ -21,5 +22,7 @@ export function useObservability(range: ObservabilityRange) {
     queryFn: () => getObservability(range),
     placeholderData: keepPreviousData,
     retry,
+    refetchInterval: useAutoRefreshInterval(),
+    refetchIntervalInBackground: false,
   });
 }

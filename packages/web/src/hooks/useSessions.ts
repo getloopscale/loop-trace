@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { ApiError, getSession, getSessions } from "../api/client.js";
+import { useAutoRefreshInterval } from "./useAutoRefresh.js";
 
 /** Don't retry deterministic 4xx (e.g. 404); retry transient errors up to twice. */
 function retry(failureCount: number, err: unknown): boolean {
@@ -11,7 +12,14 @@ function retry(failureCount: number, err: unknown): boolean {
 
 /** Sessions list, newest-first (M13). */
 export function useSessions() {
-  return useQuery({ queryKey: ["sessions"], queryFn: getSessions, retry });
+  return useQuery({
+    queryKey: ["sessions"],
+    queryFn: getSessions,
+    placeholderData: keepPreviousData,
+    retry,
+    refetchInterval: useAutoRefreshInterval(),
+    refetchIntervalInBackground: false,
+  });
 }
 
 /** One session's detail, keyed by id (M13). */
