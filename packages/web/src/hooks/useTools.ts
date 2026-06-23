@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { ApiError, getToolStats, getTracesForTool } from "../api/client.js";
+import { useAutoRefreshInterval } from "./useAutoRefresh.js";
 
 function retry(failureCount: number, err: unknown): boolean {
   if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
@@ -10,7 +11,14 @@ function retry(failureCount: number, err: unknown): boolean {
 
 /** Per-tool operational stats ranking (M6). */
 export function useToolStats() {
-  return useQuery({ queryKey: ["tools"], queryFn: getToolStats, retry });
+  return useQuery({
+    queryKey: ["tools"],
+    queryFn: getToolStats,
+    placeholderData: keepPreviousData,
+    retry,
+    refetchInterval: useAutoRefreshInterval(),
+    refetchIntervalInBackground: false,
+  });
 }
 
 /** Executions that called a given tool (M6 drill-down). */

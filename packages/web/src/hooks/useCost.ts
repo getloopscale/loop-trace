@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { ApiError, getCostByPeriod, getTraceCost } from "../api/client.js";
+import { useAutoRefreshInterval } from "./useAutoRefresh.js";
 
 /** Don't retry deterministic 4xx (e.g. 404); retry transient errors up to twice. */
 function retry(failureCount: number, err: unknown): boolean {
@@ -24,6 +25,9 @@ export function useCostByPeriod(period: "day" | "week") {
   return useQuery({
     queryKey: ["cost", period],
     queryFn: () => getCostByPeriod(period),
+    placeholderData: keepPreviousData,
     retry,
+    refetchInterval: useAutoRefreshInterval(),
+    refetchIntervalInBackground: false,
   });
 }
