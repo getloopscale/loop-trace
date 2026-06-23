@@ -8,7 +8,6 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Design-system app shell: the Trace Explorer is rebuilt on the `@theokit/ui` design system (Violet Forge, dark) with a persistent left sidebar (Executions / Sessions / Dashboards / Metrics / Tools / Cost), a top bar, and an Arize-style project-view tab strip (Traces / Spans / Agent Graph / Agent Path), so every view now lives inside one consistent dark shell instead of ad-hoc per-page headers. All existing views and behavior (including the M16 auto-refresh control) are preserved; Spans / Agent Graph / Agent Path show a placeholder until their milestone. First milestone of the V3 UX track (M17)
 
 ### Changed
 
@@ -17,6 +16,14 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Removed
 
 ### Fixed
+
+### Security
+
+## [0.17.0] - 2026-06-23
+
+### Added
+- Design-system app shell: the Trace Explorer is rebuilt on the `@theokit/ui` design system (Violet Forge, dark) with a persistent left sidebar (Executions / Sessions / Dashboards / Metrics / Tools / Cost), a top bar, and an Arize-style project-view tab strip (Traces / Spans / Agent Graph / Agent Path), so every view now lives inside one consistent dark shell instead of ad-hoc per-page headers. All existing views and behavior (including the M16 auto-refresh control) are preserved; Spans / Agent Graph / Agent Path show a placeholder until their milestone. First milestone of the V3 UX track (M17)
+
 
 ### Security
 - Cleared GHSA-vqpr-j7v3-hqw9 (valibot `EMOJI_REGEX` ReDoS, HIGH) pulled transitively by `@theokit/ui`: forced the patched `valibot` (≥1.2.0) across the tree via a `pnpm-workspace.yaml` override (M17)
