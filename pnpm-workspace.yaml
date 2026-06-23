@@ -12,3 +12,7 @@ overrides:
   # Clears GHSA-8988-4f7v-96qf (W3C Baggage OOM, MEDIUM) pulled transitively by
   # @opentelemetry/otlp-transformer; fixed in @opentelemetry/core 2.8.0.
   "@opentelemetry/core": "^2.8.0"
+  # Clears GHSA-vqpr-j7v3-hqw9 (valibot EMOJI_REGEX ReDoS, HIGH) pulled transitively
+  # by @theokit/ui (theme-schema validation); fixed in valibot 1.2.0. Validated that
+  # @theokit/ui's ThemeProvider + barrel survive the 0.42->1.x bump via build + smoke (M17).
+  "valibot": "^1.4.1"

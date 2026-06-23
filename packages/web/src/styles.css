@@ -1,0 +1,10 @@
+/* Theo Lens web — design-system entry (M17).
+ *
+ * `@theokit/ui/styles.css` is the design system's prebuilt Tailwind v4 entry: it
+ * pulls Tailwind core, the Geist fonts, the runtime token vars `<ThemeProvider>`
+ * mutates, and the `@theme` token namespace Tailwind reads to emit utilities.
+ * `@source "./"` adds THIS project's source so our own markup's utility classes
+ * (`bg-card`, `text-display-md`, …) are generated alongside the design system's.
+ */
+@import "@theokit/ui/styles.css";
+@source "./";

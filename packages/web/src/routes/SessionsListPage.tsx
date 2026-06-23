@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import { useSessions } from "../hooks/useSessions.js";
 import { SessionList } from "../components/SessionList.js";
 import { AutoRefreshControl } from "../components/AutoRefreshControl.js";
@@ -8,9 +7,8 @@ import { Loading, ErrorState } from "../components/states.js";
 export function SessionsListPage() {
   const { data, isLoading, isError, dataUpdatedAt } = useSessions();
   return (
-    <main className="sessions-list-page">
-      <Link to="/">← Executions</Link>
-      <h1>Sessions</h1>
+    <div className="sessions-list-page">
+      <h1 className="text-display-md font-display">Sessions</h1>
       <AutoRefreshControl dataUpdatedAt={dataUpdatedAt} />
       {isLoading ? (
         <Loading label="Loading sessions…" />
@@ -19,6 +17,6 @@ export function SessionsListPage() {
       ) : (
         <SessionList sessions={data.sessions} />
       )}
-    </main>
+    </div>
   );
 }

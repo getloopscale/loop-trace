@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useObservability } from "../hooks/useObservability.js";
 import { AutoRefreshControl } from "../components/AutoRefreshControl.js";
 import { Sparkbar } from "../components/Sparkbar.js";
@@ -48,9 +47,8 @@ export function ObservabilityPage() {
   const [range, setRange] = useState<ObservabilityRange>("24h");
   const { data, isLoading, isError, dataUpdatedAt } = useObservability(range);
   return (
-    <main className="observability-page">
-      <Link to="/">← Executions</Link>
-      <h1>Observability</h1>
+    <div className="observability-page">
+      <h1 className="text-display-md font-display">Observability</h1>
       <AutoRefreshControl dataUpdatedAt={dataUpdatedAt} />
       <div className="range-toggle" role="radiogroup" aria-label="time range">
         {RANGES.map((r) => (
@@ -76,7 +74,7 @@ export function ObservabilityPage() {
           <TokensByModelTable buckets={data.tokensByModel} />
         </>
       )}
-    </main>
+    </div>
   );
 }
 

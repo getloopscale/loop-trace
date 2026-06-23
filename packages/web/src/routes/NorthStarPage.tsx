@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import { useNorthStar } from "../hooks/useNorthStar.js";
 import { AutoRefreshControl } from "../components/AutoRefreshControl.js";
 import { Loading, ErrorState, EmptyState } from "../components/states.js";
@@ -46,9 +45,8 @@ function MetricTable({
 export function NorthStarPage() {
   const { data, isLoading, isError, dataUpdatedAt } = useNorthStar();
   return (
-    <main className="north-star-page">
-      <Link to="/">← Executions</Link>
-      <h1>North-star metrics</h1>
+    <div className="north-star-page">
+      <h1 className="text-display-md font-display">North-star metrics</h1>
       <AutoRefreshControl dataUpdatedAt={dataUpdatedAt} />
       {isLoading ? (
         <Loading label="Loading metrics…" />
@@ -68,6 +66,6 @@ export function NorthStarPage() {
           />
         </>
       )}
-    </main>
+    </div>
   );
 }

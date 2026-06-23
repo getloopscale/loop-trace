@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useSessionDetail } from "../hooks/useSessions.js";
 import { TraceList } from "../components/TraceList.js";
 import { Loading, ErrorState } from "../components/states.js";
@@ -20,9 +20,8 @@ export function SessionDetailPage() {
   if (isError || !data) return <ErrorState message="Session not found" />;
 
   return (
-    <main className="session-detail-page">
-      <Link to="/sessions">← Sessions</Link>
-      <h1>Session {data.sessionId}</h1>
+    <div className="session-detail-page">
+      <h1 className="text-title-lg font-display">Session {data.sessionId}</h1>
       <dl className="session-metrics">
         <div><dt>Traces</dt><dd>{data.traceCount}</dd></div>
         <div><dt>Cost</dt><dd>{formatUsd(data.costUsd)}</dd></div>
@@ -34,6 +33,6 @@ export function SessionDetailPage() {
       </dl>
       <h2>Traces in this session</h2>
       <TraceList traces={data.traces} />
-    </main>
+    </div>
   );
 }

@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useCostByPeriod } from "../hooks/useCost.js";
 import { CostByPeriod } from "../components/CostByPeriod.js";
 import { AutoRefreshControl } from "../components/AutoRefreshControl.js";
@@ -10,10 +9,8 @@ export function AnalyticsPage() {
   const [period, setPeriod] = useState<"day" | "week">("day");
   const { data, isLoading, isError, dataUpdatedAt } = useCostByPeriod(period);
   return (
-    <main className="analytics-page">
-      <Link to="/">← Executions</Link>
-      <h1>Cost analytics</h1>
-      <Link to="/tools">Tool analytics →</Link>
+    <div className="analytics-page">
+      <h1 className="text-display-md font-display">Cost analytics</h1>
       <AutoRefreshControl dataUpdatedAt={dataUpdatedAt} />
       <div className="period-toggle" role="radiogroup" aria-label="period">
         <button
@@ -40,6 +37,6 @@ export function AnalyticsPage() {
       ) : (
         <CostByPeriod buckets={data.buckets} />
       )}
-    </main>
+    </div>
   );
 }

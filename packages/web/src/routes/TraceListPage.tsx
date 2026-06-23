@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useTraceList } from "../hooks/useTraces.js";
 import { TraceList } from "../components/TraceList.js";
 import { TraceFilters } from "../components/TraceFilters.js";
@@ -16,13 +15,9 @@ export function TraceListPage() {
   const [query, setQuery] = useState<ListTracesQuery>({});
   const { data, isError, dataUpdatedAt } = useTraceList(query);
   return (
-    <main className="trace-list-page">
+    <div className="trace-list-page">
       <header className="list-header">
-        <h1>Executions</h1>
-        <Link to="/analytics">Cost analytics →</Link>
-        <Link to="/dashboards">Observability →</Link>
-        <Link to="/sessions">Sessions →</Link>
-        <Link to="/metrics">North-star metrics →</Link>
+        <h1 className="text-display-md font-display">Executions</h1>
         <AutoRefreshControl dataUpdatedAt={dataUpdatedAt} />
       </header>
       <TraceFilters query={query} onChange={setQuery} />
@@ -35,6 +30,6 @@ export function TraceListPage() {
       ) : (
         <Loading label="Loading executions…" />
       )}
-    </main>
+    </div>
   );
 }

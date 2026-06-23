@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import { useToolStats } from "../hooks/useTools.js";
 import { ToolRanking } from "../components/ToolRanking.js";
 import { AutoRefreshControl } from "../components/AutoRefreshControl.js";
@@ -8,9 +7,8 @@ import { Loading, ErrorState } from "../components/states.js";
 export function ToolAnalyticsPage() {
   const { data, isLoading, isError, dataUpdatedAt } = useToolStats();
   return (
-    <main className="tool-analytics-page">
-      <Link to="/">← Executions</Link>
-      <h1>Tool analytics</h1>
+    <div className="tool-analytics-page">
+      <h1 className="text-display-md font-display">Tool analytics</h1>
       <AutoRefreshControl dataUpdatedAt={dataUpdatedAt} />
       {isLoading ? (
         <Loading label="Loading tools…" />
@@ -19,6 +17,6 @@ export function ToolAnalyticsPage() {
       ) : (
         <ToolRanking tools={data.tools} />
       )}
-    </main>
+    </div>
   );
 }
