@@ -349,26 +349,7 @@
   margin: 0;
 }
 
-/* Sessions (M13) */
-.session-list {
-  border-collapse: collapse;
-  width: 100%;
-  font-size: 0.85rem;
-}
-.session-list caption {
-  text-align: left;
-  font-weight: 600;
-  margin-bottom: 0.35rem;
-}
-.session-list th,
-.session-list td {
-  border: 1px solid #d0d7de;
-  padding: 0.3rem 0.6rem;
-  text-align: left;
-}
-.session-list th {
-  background: #f6f8fa;
-}
+/* Sessions (M13) — .session-list retired in M20 (now the theo-ui SessionTable DataTable) */
 .session-metrics {
   display: flex;
   flex-wrap: wrap;
