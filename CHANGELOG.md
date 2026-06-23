@@ -8,7 +8,6 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Agent Graph + Agent Path (Arize): two span-derived flow visualizations of an agent run — Agent Graph (a node per agent/operation, edges per parent→child handoff, kind-colored, with Start/End terminals) and Agent Path (a Sankey of span flow by semantic kind with a kind legend) — rendered per-trace client-side (a trace picker defaults to the most-recent) from the existing `GET /v1/traces[/:id]` span tree, using `d3-sankey` (chosen via deps-audit, 0 CVE) for a crossing-minimized layout. Wired into the project Tabs; no backend change (M21)
 
 ### Changed
 
@@ -19,6 +18,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 ### Security
+
+## [0.21.0] - 2026-06-23
+
+### Added
+- Agent Graph + Agent Path (Arize): two span-derived flow visualizations of an agent run — Agent Graph (a node per agent/operation, edges per parent→child handoff, kind-colored, with Start/End terminals) and Agent Path (a Sankey of span flow by semantic kind with a kind legend) — rendered per-trace client-side (a trace picker defaults to the most-recent) from the existing `GET /v1/traces[/:id]` span tree, using `d3-sankey` (chosen via deps-audit, 0 CVE) for a crossing-minimized layout. Wired into the project Tabs; no backend change (M21)
 
 ## [0.20.0] - 2026-06-23
 
