@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Tabs } from "@theokit/ui";
 import { Activity, Clock, Coins, DollarSign, TrendingUp } from "lucide-react";
 import { useObservability } from "../hooks/useObservability.js";
 import { useNorthStar } from "../hooks/useNorthStar.js";
@@ -20,6 +21,36 @@ const CHART_MODES: { value: ChartMode; label: string }[] = [
   { value: "line", label: "Line" },
   { value: "distribution", label: "Distribution" },
 ];
+
+/**
+ * A themed segmented control built on the design-system Tabs (Radix — arrow-key
+ * roving + roving tabindex for free, themed tokens, no raw hex). Used for both
+ * the chart-type and the time-range toggles (DRY). Triggers expose role="tab"
+ * with the label as the accessible name; the selected one carries aria-selected.
+ */
+function SegmentedToggle<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <Tabs value={value} onValueChange={(v) => onChange(v as T)}>
+      <Tabs.List aria-label={label}>
+        {options.map((o) => (
+          <Tabs.Trigger key={o.value} value={o.value}>
+            {o.label}
+          </Tabs.Trigger>
+        ))}
+      </Tabs.List>
+    </Tabs>
+  );
+}
 
 /** Sum tokens + cost per period across models (the per-period chart series). */
 function aggregateByPeriod(
@@ -148,45 +179,22 @@ export function DashboardPage() {
     <div className="dashboard-page flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-display-md font-display">Pinned Charts</h1>
-        <div
-          className="chart-type-toggle flex gap-1"
-          role="radiogroup"
-          aria-label="chart type"
-        >
-          {CHART_MODES.map((m) => (
-            <button
-              key={m.value}
-              type="button"
-              role="radio"
-              aria-checked={chartMode === m.value}
-              className={
-                chartMode === m.value
-                  ? "rounded-md bg-primary px-2 py-1 text-body-sm text-primary-foreground"
-                  : "rounded-md px-2 py-1 text-body-sm text-muted-foreground"
-              }
-              onClick={() => setChartMode(m.value)}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedToggle
+          label="chart type"
+          value={chartMode}
+          options={CHART_MODES}
+          onChange={setChartMode}
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <AutoRefreshControl dataUpdatedAt={obs.dataUpdatedAt} />
-        <div className="range-toggle flex gap-1" role="radiogroup" aria-label="time range">
-          {RANGES.map((r) => (
-            <button
-              key={r}
-              type="button"
-              role="radio"
-              aria-checked={range === r}
-              onClick={() => setRange(r)}
-            >
-              {r}
-            </button>
-          ))}
-        </div>
+        <SegmentedToggle
+          label="time range"
+          value={range}
+          options={RANGES.map((r) => ({ value: r, label: r }))}
+          onChange={setRange}
+        />
       </div>
 
       {obs.isLoading && !obs.data ? (

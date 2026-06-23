@@ -57,10 +57,10 @@ describe("DashboardPage (M20 Pinned Charts)", () => {
     await waitFor(() => expect(container.querySelector("polyline")).not.toBeNull());
     expect(container.querySelector("rect")).toBeNull();
     // Stacked bar → rects appear
-    await userEvent.click(screen.getByRole("radio", { name: "Stacked bar" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Stacked bar" }));
     await waitFor(() => expect(container.querySelector("rect")).not.toBeNull());
     // Distribution → latency 4 percentile bands (≥4 polylines)
-    await userEvent.click(screen.getByRole("radio", { name: "Distribution" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Distribution" }));
     await waitFor(() =>
       expect(container.querySelectorAll("polyline").length).toBeGreaterThanOrEqual(4),
     );
@@ -84,7 +84,7 @@ describe("DashboardPage (M20 Pinned Charts)", () => {
     vi.mocked(client.getObservability).mockResolvedValue(obs);
     renderPage();
     await waitFor(() => expect(client.getObservability).toHaveBeenCalledWith("24h"));
-    await userEvent.click(screen.getByRole("radio", { name: "7d" }));
+    await userEvent.click(screen.getByRole("tab", { name: "7d" }));
     await waitFor(() => expect(client.getObservability).toHaveBeenCalledWith("7d"));
   });
 
@@ -113,6 +113,37 @@ describe("DashboardPage (M20 Pinned Charts)", () => {
     // a card shows the empty/fail-soft message; north-star still renders
     expect(screen.getAllByText("No data in range").length).toBeGreaterThan(0);
     expect(screen.getByRole("region", { name: "Traces ingested / day" })).toBeInTheDocument();
+  });
+
+  it("metrics_dashboard_north_star_empty_is_fail_soft", async () => {
+    // north-star empty (migrated from the deleted NorthStarPage empty-state test):
+    // empty arrays → the north-star cards show the empty message, rest renders.
+    vi.mocked(client.getObservability).mockResolvedValue(obs);
+    vi.mocked(client.getNorthStar).mockResolvedValue({
+      tracesPerDay: [],
+      replaySessionsPerWeek: [],
+    });
+    renderPage();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("region", { name: "Traces ingested / day" }),
+      ).toBeInTheDocument(),
+    );
+    // both north-star cards show the empty message
+    expect(screen.getAllByText("No data in range").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("metrics_dashboard_north_star_error_is_fail_soft", async () => {
+    // north-star fetch rejects → its cards empty, observability cards still render.
+    vi.mocked(client.getObservability).mockResolvedValue(obs);
+    vi.mocked(client.getNorthStar).mockRejectedValue(new client.ApiError(500));
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByRole("region", { name: "Traffic" })).toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole("region", { name: "Traces ingested / day" }),
+    ).toBeInTheDocument();
   });
 
   it("metrics_route_redirects_to_dashboards", async () => {

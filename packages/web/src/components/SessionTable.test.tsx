@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { SessionTable, sessionDuration } from "./SessionTable.js";
 import type { SessionListItem } from "../api/types.js";
@@ -18,6 +18,13 @@ function row(over: Partial<SessionListItem> = {}): SessionListItem {
   };
 }
 
+/** A row WITHOUT firstMessagePreview (omits the optional key — exactOptionalPropertyTypes-safe). */
+function rowWithoutFirstMessage(over: Partial<SessionListItem> = {}): SessionListItem {
+  const r = row(over);
+  delete (r as { firstMessagePreview?: string }).firstMessagePreview;
+  return r;
+}
+
 function renderTable(sessions: SessionListItem[]) {
   return render(
     <MemoryRouter>
@@ -29,23 +36,45 @@ function renderTable(sessions: SessionListItem[]) {
 describe("SessionTable (M20)", () => {
   it("sessions_table_renders_first_message_and_duration", () => {
     renderTable([row()]);
+    // all 7 columns render (headers prove the column set)
+    for (const h of ["First message", "Messages", "Duration", "Tokens", "Cost", "Start", "End"]) {
+      expect(screen.getByRole("columnheader", { name: h })).toBeInTheDocument();
+    }
     // first message is the lead column + links to the session
     const link = screen.getByRole("link", { name: /Plan a 3-day trip to Lisbon/ });
     expect(link).toHaveAttribute("href", "/sessions/S1");
-    // messages (=traceCount), duration (1h), cost present
-    expect(screen.getByText("3")).toBeInTheDocument();
-    expect(screen.getByText("1h 0m")).toBeInTheDocument();
-    expect(screen.getByText("$0.0125")).toBeInTheDocument();
-    expect(screen.getByText("1500")).toBeInTheDocument();
+    // cell values scoped to the data row (row[0] is the header)
+    const dataRow = screen.getAllByRole("row")[1]!;
+    expect(within(dataRow).getByText("3")).toBeInTheDocument(); // messages
+    expect(within(dataRow).getByText("1h 0m")).toBeInTheDocument(); // duration
+    expect(within(dataRow).getByText("1500")).toBeInTheDocument(); // tokens
+    expect(within(dataRow).getByText("$0.0125")).toBeInTheDocument(); // cost
   });
 
-  it("sessions_table_first_message_dash_when_absent", () => {
-    // no firstMessagePreview → the link falls back to the sessionId (no crash, no "—" link gap)
-    renderTable([row({ firstMessagePreview: undefined })]);
+  it("sessions_table_first_message_falls_back_to_session_id_when_absent", () => {
+    // No firstMessagePreview → the lead column links by the sessionId (a clickable
+    // identifier, not a dead "—" link). Documented divergence from the literal plan AC.
+    renderTable([rowWithoutFirstMessage()]);
     expect(screen.getByRole("link", { name: "S1" })).toHaveAttribute(
       "href",
       "/sessions/S1",
     );
+  });
+
+  it("sessions_table_zero_trace_session_renders_zero_and_short_duration", () => {
+    // EC-3: a session with no member traces (traceCount 0) and equal start/end →
+    // Messages "0", Duration "0s" (computed, never NaN); still a valid row.
+    renderTable([
+      rowWithoutFirstMessage({
+        traceCount: 0,
+        totalTokens: 0,
+        firstSeenAt: "2026-06-22T00:00:00.000Z",
+        lastSeenAt: "2026-06-22T00:00:00.000Z",
+      }),
+    ]);
+    const dataRow = screen.getAllByRole("row")[1]!;
+    expect(within(dataRow).getByText("0s")).toBeInTheDocument(); // duration, not NaN
+    expect(within(dataRow).getAllByText("0").length).toBeGreaterThan(0); // messages/tokens
   });
 
   it("sessions_table_empty_state", () => {

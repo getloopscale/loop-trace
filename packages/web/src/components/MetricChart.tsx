@@ -136,10 +136,13 @@ export function MetricChart({
   const effectiveMode: ChartMode =
     mode === "distribution" && nonEmpty.length < 2 ? "bar" : mode;
 
+  // Screen-reader summary: last + peak per series (the tables this replaced
+  // exposed every bucket; last+peak is the meaningful floor for a trend chart).
   const summary = nonEmpty
     .map((s) => {
       const last = s.values[s.values.length - 1] ?? 0;
-      return `${s.label}: ${last}`;
+      const peak = s.values.reduce((m, v) => (v > m ? v : m), 0);
+      return `${s.label}: ${last} (peak ${peak})`;
     })
     .join("; ");
 

@@ -239,31 +239,9 @@
   font-style: italic;
 }
 
-/* Observability dashboard (M11) — reuses the period-toggle look for the range picker. */
-.range-toggle {
-  display: flex;
-  gap: 0.5rem;
-  margin: 0.75rem 0;
-}
-.range-toggle button {
-  border: 1px solid #d0d7de;
-  background: #f6f8fa;
-  border-radius: 6px;
-  padding: 0.25rem 0.75rem;
-  cursor: pointer;
-}
-.range-toggle button[aria-checked="true"] {
-  background: #0969da;
-  color: #fff;
-  border-color: #0969da;
-  font-weight: 700; /* non-color cue (WCAG 1.4.1) */
-}
-.range-toggle button:focus-visible {
-  outline: 2px solid #0969da;
-  outline-offset: 2px;
-}
-/* M11 metric tables retired in M20 (now the Pinned-Charts dashboard: MetricChart cards).
-   .range-toggle is kept — reused by DashboardPage. .sparkbar is kept — TraceSummaryStrip. */
+/* M11 observability dashboard retired in M20 — now the Pinned-Charts DashboardPage:
+   themed @theokit/ui RadioGroup toggles + MetricChart cards (no raw-hex legacy CSS).
+   .sparkbar is kept — still used by the M18 TraceSummaryStrip. */
 .sparkbar {
   display: block;
   margin-bottom: 0.5rem;
