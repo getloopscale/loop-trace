@@ -11,22 +11,42 @@ import { NorthStarPage } from "./routes/NorthStarPage.js";
 import { ObservabilityPage } from "./routes/ObservabilityPage.js";
 import { SessionsListPage } from "./routes/SessionsListPage.js";
 import { SessionDetailPage } from "./routes/SessionDetailPage.js";
+import { PlaceholderPage } from "./routes/PlaceholderPage.js";
+import { AppShell } from "./components/AppShell.js";
 import { ThemeProvider, violetForge } from "@theokit/ui";
 import { AutoRefreshProvider } from "./hooks/useAutoRefresh.js";
 import "./styles.css";
+import "./legacy.css";
 
 const queryClient = new QueryClient();
 
 const router = createBrowserRouter([
-  { path: "/", element: <TraceListPage /> },
-  { path: "/traces/:traceId", element: <TracePage /> },
-  { path: "/analytics", element: <AnalyticsPage /> },
-  { path: "/tools", element: <ToolAnalyticsPage /> },
-  { path: "/tools/:toolName", element: <ToolTracesPage /> },
-  { path: "/metrics", element: <NorthStarPage /> },
-  { path: "/dashboards", element: <ObservabilityPage /> },
-  { path: "/sessions", element: <SessionsListPage /> },
-  { path: "/sessions/:sessionId", element: <SessionDetailPage /> },
+  {
+    element: <AppShell />,
+    children: [
+      { path: "/", element: <TraceListPage /> },
+      { path: "/traces/:traceId", element: <TracePage /> },
+      { path: "/analytics", element: <AnalyticsPage /> },
+      { path: "/tools", element: <ToolAnalyticsPage /> },
+      { path: "/tools/:toolName", element: <ToolTracesPage /> },
+      { path: "/metrics", element: <NorthStarPage /> },
+      { path: "/dashboards", element: <ObservabilityPage /> },
+      { path: "/sessions", element: <SessionsListPage /> },
+      { path: "/sessions/:sessionId", element: <SessionDetailPage /> },
+      {
+        path: "/spans",
+        element: <PlaceholderPage title="Spans" milestone="M18" />,
+      },
+      {
+        path: "/agent-graph",
+        element: <PlaceholderPage title="Agent Graph" milestone="M21" />,
+      },
+      {
+        path: "/agent-path",
+        element: <PlaceholderPage title="Agent Path" milestone="M21" />,
+      },
+    ],
+  },
 ]);
 
 const el = document.getElementById("root");

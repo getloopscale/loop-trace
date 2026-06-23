@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useTracesForTool } from "../hooks/useTools.js";
 import { TraceList } from "../components/TraceList.js";
 import { Loading, ErrorState } from "../components/states.js";
@@ -9,8 +9,9 @@ export function ToolTracesPage() {
   const { data, isLoading, isError } = useTracesForTool(toolName);
   return (
     <main className="tool-traces-page">
-      <Link to="/tools">← Tools</Link>
-      <h1>Executions calling “{toolName}”</h1>
+      <h1 className="text-title-lg font-display">
+        Executions calling “{toolName}”
+      </h1>
       {isLoading ? (
         <Loading label="Loading executions…" />
       ) : isError || !data ? (

@@ -73,7 +73,6 @@ export function TracePage() {
 
   return (
     <main className="trace-page">
-      <Link to="/">← Executions</Link>
       {/* Trace→session nav (M13): only when this trace carries a session id;
           ungrouped traces show no link (honest fallback, D3). */}
       {data.sessionId ? (

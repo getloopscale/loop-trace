@@ -1,18 +1,11 @@
-:root {
-  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
-  color: #1f2328;
-  background: #fff;
-}
-body {
-  margin: 0;
-  padding: 1.5rem;
-}
-h1 {
-  font-size: 1.25rem;
-}
-a {
-  color: #0969da;
-}
+/* Legacy view-body styles (M17 transition).
+ *
+ * The global light-theme rules (`:root`/`body`/`h1`/`a`) that fought the Violet
+ * Forge dark theme were removed — the shell + ThemeProvider own globals now.
+ * The per-view component classes below are KEPT so the not-yet-redesigned bodies
+ * (M18–M21 redesign each one) stay functional inside the dark shell. Each block
+ * is retired when its view is rebuilt on @theokit/ui.
+ */
 
 /* Executions list */
 .trace-list {
@@ -101,7 +94,7 @@ a {
   font-weight: 600;
   cursor: pointer;
   padding: 0;
-  color: #1f2328;
+  color: inherit;
 }
 .tool-sort[aria-pressed="true"] {
   color: #0969da;
@@ -454,4 +447,16 @@ a {
 .tag-add {
   display: flex;
   gap: 0.4rem;
+}
+
+/* Auto-refresh control (M16) — keep visible inside the dark shell until M18 restyles toolbars. */
+.auto-refresh-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+.auto-refresh-updated {
+  color: #999;
+  font-variant-numeric: tabular-nums;
 }
