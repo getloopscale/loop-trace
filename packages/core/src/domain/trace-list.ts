@@ -45,6 +45,8 @@ export const listTracesOptionsSchema = z
     dir: z.enum(["asc", "desc"]).optional(),
     limit: z.coerce.number().int().min(1).max(LIST_TRACES_LIMIT_CAP).optional(),
     format: z.enum(["json", "csv"]).optional(),
+    // M14: filter the list to executions carrying this tag (free-form string).
+    tag: z.string().min(1).optional(),
   })
   .strict();
 

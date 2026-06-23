@@ -19,6 +19,7 @@ vi.mock("../api/client.js", async (orig) => {
     listTraces: vi.fn(),
     getTraceCost: vi.fn(),
     recordReplaySession: vi.fn(),
+    getTraceTags: vi.fn(),
   };
 });
 
@@ -60,7 +61,12 @@ function renderAt(path: string) {
   );
 }
 
-beforeEach(() => vi.resetAllMocks());
+beforeEach(() => {
+  vi.resetAllMocks();
+  // TracePage renders <TraceTags> which fetches its own tags; default to empty
+  // so the trace tests aren't perturbed by a tags fetch (M14).
+  vi.mocked(client.getTraceTags).mockResolvedValue({ tags: [] });
+});
 
 describe("TracePage (integration)", () => {
   it("trace_page_fetches_and_renders_tree_then_shows_detail_on_select", async () => {

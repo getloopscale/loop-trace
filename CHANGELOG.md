@@ -19,6 +19,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [0.14.0] - 2026-06-22
+
+### Added
+- Tags: attach free-form tags to a trace (`POST`/`DELETE`/`GET /v1/traces/:id/tags`) and filter the executions list by tag (`GET /v1/traces?tag=`). The trace view gains an add/remove-tags panel and the list toolbar a tag filter. Tags are a lightweight grouping orthogonal to sessions (a trace can have both), stored in a side table with no change to spans/traces; adding a tag is idempotent and tagging a non-existent trace returns 404 (M14)
+
 ## [0.13.0] - 2026-06-22
 
 ### Added

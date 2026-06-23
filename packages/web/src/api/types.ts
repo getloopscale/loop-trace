@@ -61,6 +61,13 @@ export interface ListTracesQuery {
   to?: string;
   orderBy?: "recent" | "latency" | "tokens" | "cost";
   dir?: "asc" | "desc";
+  /** M14: filter to executions carrying this free-form tag. */
+  tag?: string;
+}
+
+/** A trace's tags (M14). */
+export interface TraceTagsResponse {
+  tags: string[];
 }
 
 export interface TraceCost {

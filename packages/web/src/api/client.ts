@@ -9,6 +9,7 @@ import type {
   ToolStatsResponse,
   TraceCost,
   TraceListResponse,
+  TraceTagsResponse,
   TraceTreeNode,
 } from "./types.js";
 
@@ -27,6 +28,7 @@ function listQueryString(
   if (q.to) p.set("to", q.to);
   if (q.orderBy) p.set("order_by", q.orderBy);
   if (q.dir) p.set("dir", q.dir);
+  if (q.tag) p.set("tag", q.tag);
   for (const [k, v] of Object.entries(extra ?? {})) p.set(k, v);
   const s = p.toString();
   return s ? `?${s}` : "";
@@ -117,6 +119,35 @@ export function getSessions(): Promise<SessionListResponse> {
 /** Fetch one session's detail: scoped aggregates + member traces (M13). */
 export function getSession(sessionId: string): Promise<SessionDetail> {
   return getJson<SessionDetail>(`/v1/sessions/${encodeURIComponent(sessionId)}`);
+}
+
+/** Fetch a trace's tags (M14). */
+export function getTraceTags(traceId: string): Promise<TraceTagsResponse> {
+  return getJson<TraceTagsResponse>(`/v1/traces/${encodeURIComponent(traceId)}/tags`);
+}
+
+/** Add a tag to a trace (M14); returns the updated tag set. Throws ApiError on non-2xx. */
+async function mutateTags(path: string, method: "POST" | "DELETE", body?: unknown): Promise<TraceTagsResponse> {
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    ...(body !== undefined
+      ? { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }
+      : {}),
+  });
+  if (!res.ok) throw new ApiError(res.status);
+  return (await res.json()) as TraceTagsResponse;
+}
+
+export function addTraceTag(traceId: string, tag: string): Promise<TraceTagsResponse> {
+  return mutateTags(`/v1/traces/${encodeURIComponent(traceId)}/tags`, "POST", { tag });
+}
+
+/** Remove a tag — the tag travels in an encoded query param (slash-safe, EC-1). */
+export function removeTraceTag(traceId: string, tag: string): Promise<TraceTagsResponse> {
+  return mutateTags(
+    `/v1/traces/${encodeURIComponent(traceId)}/tags?tag=${encodeURIComponent(tag)}`,
+    "DELETE",
+  );
 }
 
 /**

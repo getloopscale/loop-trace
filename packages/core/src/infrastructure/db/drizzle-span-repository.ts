@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { and, desc, eq, gte, inArray, isNull, lte, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, notInArray, or, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
@@ -42,7 +42,7 @@ import {
   type SessionDetailResponse,
   type RawSessionDetail,
 } from "../../domain/session.js";
-import { spans, traces, sessions, replaySessions } from "./schema.js";
+import { spans, traces, sessions, replaySessions, traceTags } from "./schema.js";
 
 /** Build a pg connection pool for the given Postgres URI. */
 export function createPool(connectionString: string): pg.Pool {
@@ -316,6 +316,15 @@ export class DrizzleSpanRepository implements SpanRepository {
         .from(spans)
         .where(eq(spans.model, opts.model));
       conds.push(inArray(traces.traceId, modelTraceIds));
+    }
+    if (opts.tag) {
+      // M14: same selectDistinct + inArray subquery as the model filter — composes
+      // with the other conds without changing the row shape traceRowToItem expects.
+      const taggedTraceIds = this.db
+        .selectDistinct({ traceId: traceTags.traceId })
+        .from(traceTags)
+        .where(eq(traceTags.tag, opts.tag));
+      conds.push(inArray(traces.traceId, taggedTraceIds));
     }
     const where = conds.length > 0 ? and(...conds) : undefined;
 
@@ -666,6 +675,46 @@ export class DrizzleSpanRepository implements SpanRepository {
       traces: memberRows.map(traceRowToItem),
     };
     return shapeSessionDetail(raw);
+  }
+
+  async addTag(traceId: string, tag: string): Promise<boolean> {
+    // M14 (D2): you can only tag a real trace. Returns false → route 404 when the
+    // trace does not exist. The insert is idempotent (UNIQUE(trace_id,tag) +
+    // ON CONFLICT DO NOTHING) so a duplicate add is a harmless no-op.
+    // NOTE: the existence check is advisory, not transactional — traces are
+    // recompute-owned aggregates and never hard-deleted in this codebase, so the
+    // SELECT→INSERT window is unreachable and an orphan tag row cannot occur. A
+    // future trace-deletion path MUST revisit this (add a FK or a transaction).
+    const existing = await this.db
+      .select({ traceId: traces.traceId })
+      .from(traces)
+      .where(eq(traces.traceId, traceId))
+      .limit(1);
+    if (existing.length === 0) return false;
+    await this.db
+      .insert(traceTags)
+      .values({ traceId, tag })
+      .onConflictDoNothing({
+        target: [traceTags.traceId, traceTags.tag],
+      });
+    return true;
+  }
+
+  async removeTag(traceId: string, tag: string): Promise<void> {
+    // Idempotent (D2): a no-op when the tag/trace is absent.
+    await this.db
+      .delete(traceTags)
+      .where(and(eq(traceTags.traceId, traceId), eq(traceTags.tag, tag)));
+  }
+
+  async listTags(traceId: string): Promise<string[]> {
+    // Ordered for a stable UI / deterministic test (EC-6); empty when none.
+    const rows = await this.db
+      .select({ tag: traceTags.tag })
+      .from(traceTags)
+      .where(eq(traceTags.traceId, traceId))
+      .orderBy(asc(traceTags.tag));
+    return rows.map((r) => r.tag);
   }
 }
 

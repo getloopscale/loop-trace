@@ -11,6 +11,8 @@ import {
   observabilityResponseSchema,
   sessionListResponseSchema,
   sessionDetailResponseSchema,
+  traceTagsResponseSchema,
+  normalizeTag,
 } from "@usetheo/lens-core";
 
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
@@ -37,6 +39,7 @@ import { tracesToCsv } from "./csv.js";
  *  - GET  /v1/metrics/observability: time-series traffic/error-rate, latency percentiles, tokens/cost by model (M11)
  *  - GET  /v1/sessions          : sessions list newest-first + scoped aggregates (M13)
  *  - GET  /v1/sessions/:id       : session detail (scoped aggregates + member traces; 404 when absent) (M13)
+ *  - GET/POST/DELETE /v1/traces/:id/tags : list / add (404 absent) / remove (idempotent) tags; GET /v1/traces?tag= filters (M14)
  *
  * When `webDistDir` (CWD-relative) is provided AND exists, the built web bundle
  * is served same-origin at `/` with an SPA fallback, mounted AFTER all /v1/*
@@ -114,6 +117,7 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
       dir: c.req.query("dir"),
       limit: c.req.query("limit"),
       format: c.req.query("format"),
+      tag: c.req.query("tag"),
     });
     if (!parsed.success) {
       return c.json({ error: "invalid query parameters" }, 400);
@@ -213,6 +217,44 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
     return detail
       ? c.json(sessionDetailResponseSchema.parse(detail), 200)
       : c.json({ error: "not found" }, 404);
+  });
+
+  app.get("/v1/traces/:traceId/tags", async (c) => {
+    const tags = await repo.listTags(c.req.param("traceId"));
+    return c.json(traceTagsResponseSchema.parse({ tags }), 200);
+  });
+
+  app.post("/v1/traces/:traceId/tags", async (c) => {
+    // Add a tag (M14). 400 on an invalid tag (Rule 8), 404 when the trace is
+    // absent (D2 — you cannot tag what is not there); idempotent otherwise.
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "invalid json body" }, 400);
+    }
+    const tag = normalizeTag((body as { tag?: unknown })?.tag);
+    if (tag === null) {
+      return c.json({ error: "tag is required (1-64 chars after trim)" }, 400);
+    }
+    const traceId = c.req.param("traceId");
+    const ok = await repo.addTag(traceId, tag);
+    if (!ok) return c.json({ error: "not found" }, 404);
+    const tags = await repo.listTags(traceId);
+    return c.json(traceTagsResponseSchema.parse({ tags }), 200);
+  });
+
+  app.delete("/v1/traces/:traceId/tags", async (c) => {
+    // Remove a tag (M14). The tag travels in a QUERY param (NOT a path segment)
+    // so a slash-bearing free-form tag routes safely (EC-1). Idempotent (D2).
+    const tag = normalizeTag(c.req.query("tag"));
+    if (tag === null) {
+      return c.json({ error: "tag query param is required (1-64 chars)" }, 400);
+    }
+    const traceId = c.req.param("traceId");
+    await repo.removeTag(traceId, tag);
+    const tags = await repo.listTags(traceId);
+    return c.json(traceTagsResponseSchema.parse({ tags }), 200);
   });
 
   // Mount static UI serving LAST so the catch-all never shadows /v1/* (M7, D1).
