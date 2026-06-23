@@ -8,6 +8,8 @@ import { AnalyticsPage } from "./routes/AnalyticsPage.js";
 import { ToolAnalyticsPage } from "./routes/ToolAnalyticsPage.js";
 import { ToolTracesPage } from "./routes/ToolTracesPage.js";
 import { DashboardPage } from "./routes/DashboardPage.js";
+import { AgentGraphView } from "./routes/AgentGraphView.js";
+import { AgentPathView } from "./routes/AgentPathView.js";
 import { SessionsListPage } from "./routes/SessionsListPage.js";
 import { SessionDetailPage } from "./routes/SessionDetailPage.js";
 import { PlaceholderPage } from "./routes/PlaceholderPage.js";
@@ -37,14 +39,8 @@ const router = createBrowserRouter([
         path: "/spans",
         element: <PlaceholderPage title="Spans" milestone="M18" />,
       },
-      {
-        path: "/agent-graph",
-        element: <PlaceholderPage title="Agent Graph" milestone="M21" />,
-      },
-      {
-        path: "/agent-path",
-        element: <PlaceholderPage title="Agent Path" milestone="M21" />,
-      },
+      { path: "/agent-graph", element: <AgentGraphView /> },
+      { path: "/agent-path", element: <AgentPathView /> },
     ],
   },
 ]);
