@@ -18,6 +18,12 @@ export const sessionListItemSchema = z
     costUsd: z.number().nonnegative(),
     totalTokens: z.number().int().nonnegative(),
     errorRate: z.number().min(0).max(1),
+    /**
+     * M20: the session's first user message — root-span input of the earliest
+     * member trace, truncated (≤120 chars). Optional + omitted when the earliest
+     * root has null/empty/whitespace input (EC-1). Additive; `.strict()` preserved.
+     */
+    firstMessagePreview: z.string().optional(),
   })
   .strict();
 

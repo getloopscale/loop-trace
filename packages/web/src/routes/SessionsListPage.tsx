@@ -1,9 +1,9 @@
 import { useSessions } from "../hooks/useSessions.js";
-import { SessionList } from "../components/SessionList.js";
+import { SessionTable } from "../components/SessionTable.js";
 import { AutoRefreshControl } from "../components/AutoRefreshControl.js";
 import { Loading, ErrorState } from "../components/states.js";
 
-/** Sessions list view (M13): grouped traces with per-session scoped metrics. */
+/** Sessions list view (M13; M20 Arize DataTable led by the first message). */
 export function SessionsListPage() {
   const { data, isLoading, isError, dataUpdatedAt } = useSessions();
   return (
@@ -15,7 +15,7 @@ export function SessionsListPage() {
       ) : isError || !data ? (
         <ErrorState message="Failed to load sessions" />
       ) : (
-        <SessionList sessions={data.sessions} />
+        <SessionTable sessions={data.sessions} />
       )}
     </div>
   );

@@ -23,7 +23,7 @@ function renderAt(el: React.ReactNode, path = "/") {
 
 const list: SessionListResponse = {
   sessions: [
-    { sessionId: "S1", firstSeenAt: "2026-06-22T00:00:00.000Z", lastSeenAt: "2026-06-22T01:00:00.000Z", traceCount: 3, costUsd: 0.0125, totalTokens: 1500, errorRate: 0.25 },
+    { sessionId: "S1", firstSeenAt: "2026-06-22T00:00:00.000Z", lastSeenAt: "2026-06-22T01:00:00.000Z", traceCount: 3, costUsd: 0.0125, totalTokens: 1500, errorRate: 0.25, firstMessagePreview: "Plan a trip to Lisbon" },
   ],
 };
 const detail: SessionDetail = {
@@ -45,9 +45,12 @@ describe("SessionsListPage (integration)", () => {
   it("test_sessions_list_page_renders_sessions", async () => {
     vi.mocked(client.getSessions).mockResolvedValue(list);
     renderAt(<SessionsListPage />);
-    await waitFor(() => expect(screen.getByText("S1")).toBeInTheDocument());
+    // M20 DataTable: led by the first message; cost + duration columns present.
+    await waitFor(() =>
+      expect(screen.getByText("Plan a trip to Lisbon")).toBeInTheDocument(),
+    );
     expect(screen.getByText("$0.0125")).toBeInTheDocument();
-    expect(screen.getByText("25%")).toBeInTheDocument();
+    expect(screen.getByText("1h 0m")).toBeInTheDocument();
   });
 
   it("test_sessions_page_empty_and_error_states", async () => {

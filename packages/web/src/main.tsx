@@ -1,14 +1,13 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
 import { TraceListPage } from "./routes/TraceListPage.js";
 import { TracePage } from "./routes/TracePage.js";
 import { AnalyticsPage } from "./routes/AnalyticsPage.js";
 import { ToolAnalyticsPage } from "./routes/ToolAnalyticsPage.js";
 import { ToolTracesPage } from "./routes/ToolTracesPage.js";
-import { NorthStarPage } from "./routes/NorthStarPage.js";
-import { ObservabilityPage } from "./routes/ObservabilityPage.js";
+import { DashboardPage } from "./routes/DashboardPage.js";
 import { SessionsListPage } from "./routes/SessionsListPage.js";
 import { SessionDetailPage } from "./routes/SessionDetailPage.js";
 import { PlaceholderPage } from "./routes/PlaceholderPage.js";
@@ -29,8 +28,9 @@ const router = createBrowserRouter([
       { path: "/analytics", element: <AnalyticsPage /> },
       { path: "/tools", element: <ToolAnalyticsPage /> },
       { path: "/tools/:toolName", element: <ToolTracesPage /> },
-      { path: "/metrics", element: <NorthStarPage /> },
-      { path: "/dashboards", element: <ObservabilityPage /> },
+      // M20: north-star re-homed into the Pinned-Charts dashboard; /metrics redirects.
+      { path: "/metrics", element: <Navigate to="/dashboards" replace /> },
+      { path: "/dashboards", element: <DashboardPage /> },
       { path: "/sessions", element: <SessionsListPage /> },
       { path: "/sessions/:sessionId", element: <SessionDetailPage /> },
       {
