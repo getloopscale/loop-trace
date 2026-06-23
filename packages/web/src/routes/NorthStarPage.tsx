@@ -45,7 +45,7 @@ function MetricTable({
 export function NorthStarPage() {
   const { data, isLoading, isError, dataUpdatedAt } = useNorthStar();
   return (
-    <main className="north-star-page">
+    <div className="north-star-page">
       <h1 className="text-display-md font-display">North-star metrics</h1>
       <AutoRefreshControl dataUpdatedAt={dataUpdatedAt} />
       {isLoading ? (
@@ -66,6 +66,6 @@ export function NorthStarPage() {
           />
         </>
       )}
-    </main>
+    </div>
   );
 }

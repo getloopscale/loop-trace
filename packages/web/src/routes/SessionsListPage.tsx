@@ -7,7 +7,7 @@ import { Loading, ErrorState } from "../components/states.js";
 export function SessionsListPage() {
   const { data, isLoading, isError, dataUpdatedAt } = useSessions();
   return (
-    <main className="sessions-list-page">
+    <div className="sessions-list-page">
       <h1 className="text-display-md font-display">Sessions</h1>
       <AutoRefreshControl dataUpdatedAt={dataUpdatedAt} />
       {isLoading ? (
@@ -17,6 +17,6 @@ export function SessionsListPage() {
       ) : (
         <SessionList sessions={data.sessions} />
       )}
-    </main>
+    </div>
   );
 }

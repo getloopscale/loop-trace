@@ -18,6 +18,7 @@ function renderShell(initialPath = "/") {
           <Route element={<AppShell />}>
             <Route path="/" element={<div>EXEC BODY</div>} />
             <Route path="/sessions" element={<div>SESSIONS BODY</div>} />
+            <Route path="/spans" element={<div>SPANS BODY</div>} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -29,25 +30,36 @@ describe("AppShell", () => {
   it("app_shell_renders_nav_and_routes_under_theme", async () => {
     const user = userEvent.setup();
     renderShell("/");
-    // sidebar nav present
+    // primary navigation landmark present (a11y)
+    expect(
+      screen.getByRole("navigation", { name: /primary/i }),
+    ).toBeInTheDocument();
+    // sidebar nav items + Arize project-view tabs
     expect(screen.getByText("Executions")).toBeInTheDocument();
     expect(screen.getByText("Sessions")).toBeInTheDocument();
-    // Arize project-view tabs present
     expect(screen.getByText("Traces")).toBeInTheDocument();
     expect(screen.getByText("Agent Graph")).toBeInTheDocument();
     // routed content renders in the Outlet
     expect(screen.getByText("EXEC BODY")).toBeInTheDocument();
-    // clicking a sidebar item navigates
+    // sidebar navigation switches routes
     await user.click(screen.getByText("Sessions"));
     expect(screen.getByText("SESSIONS BODY")).toBeInTheDocument();
   });
 
+  it("app_shell_tab_navigates_to_route", async () => {
+    const user = userEvent.setup();
+    renderShell("/");
+    // selecting the Spans project-view tab navigates to /spans
+    await user.click(screen.getByRole("tab", { name: "Spans" }));
+    expect(screen.getByText("SPANS BODY")).toBeInTheDocument();
+  });
+
   it("app_shell_marks_active_nav_from_path", () => {
     renderShell("/sessions");
-    // the Sessions sidebar item is active (aria-current or active styling) at /sessions
-    const sessions = screen.getByText("Sessions").closest("button, a");
-    expect(sessions).toBeTruthy();
-    // active item carries the primary text token (bg-primary/10 text-primary per theo-ui)
-    expect(sessions?.className ?? "").toMatch(/primary|active/i);
+    // active item carries aria-current="page"; a sibling does NOT (negative case)
+    const sessions = screen.getByText("Sessions").closest("button");
+    const executions = screen.getByText("Executions").closest("button");
+    expect(sessions).toHaveAttribute("aria-current", "page");
+    expect(executions).not.toHaveAttribute("aria-current", "page");
   });
 });

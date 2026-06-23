@@ -47,7 +47,7 @@ export function ObservabilityPage() {
   const [range, setRange] = useState<ObservabilityRange>("24h");
   const { data, isLoading, isError, dataUpdatedAt } = useObservability(range);
   return (
-    <main className="observability-page">
+    <div className="observability-page">
       <h1 className="text-display-md font-display">Observability</h1>
       <AutoRefreshControl dataUpdatedAt={dataUpdatedAt} />
       <div className="range-toggle" role="radiogroup" aria-label="time range">
@@ -74,7 +74,7 @@ export function ObservabilityPage() {
           <TokensByModelTable buckets={data.tokensByModel} />
         </>
       )}
-    </main>
+    </div>
   );
 }
 

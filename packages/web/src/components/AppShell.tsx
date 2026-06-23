@@ -60,7 +60,7 @@ export function AppShell() {
 
   return (
     <div className="flex h-screen bg-background text-foreground">
-      <Sidebar>
+      <Sidebar role="navigation" aria-label="Primary">
         <Sidebar.Header>
           <span className="text-title-md font-display">Theo Lens</span>
         </Sidebar.Header>
@@ -70,6 +70,7 @@ export function AppShell() {
               key={item.path}
               icon={item.icon}
               active={navIsActive(loc.pathname, item.path)}
+              aria-current={navIsActive(loc.pathname, item.path) ? "page" : undefined}
               onClick={() => navigate(item.path)}
             >
               {item.label}
@@ -83,9 +84,6 @@ export function AppShell() {
           <TopNav.Left>
             <span className="text-label font-display">Theo Lens</span>
           </TopNav.Left>
-          <TopNav.Right>
-            <div id="shell-actions" data-testid="shell-actions" />
-          </TopNav.Right>
         </TopNav>
 
         <Tabs

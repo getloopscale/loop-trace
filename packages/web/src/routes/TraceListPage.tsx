@@ -15,7 +15,7 @@ export function TraceListPage() {
   const [query, setQuery] = useState<ListTracesQuery>({});
   const { data, isError, dataUpdatedAt } = useTraceList(query);
   return (
-    <main className="trace-list-page">
+    <div className="trace-list-page">
       <header className="list-header">
         <h1 className="text-display-md font-display">Executions</h1>
         <AutoRefreshControl dataUpdatedAt={dataUpdatedAt} />
@@ -30,6 +30,6 @@ export function TraceListPage() {
       ) : (
         <Loading label="Loading executions…" />
       )}
-    </main>
+    </div>
   );
 }

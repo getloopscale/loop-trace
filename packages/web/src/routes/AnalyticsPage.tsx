@@ -9,7 +9,7 @@ export function AnalyticsPage() {
   const [period, setPeriod] = useState<"day" | "week">("day");
   const { data, isLoading, isError, dataUpdatedAt } = useCostByPeriod(period);
   return (
-    <main className="analytics-page">
+    <div className="analytics-page">
       <h1 className="text-display-md font-display">Cost analytics</h1>
       <AutoRefreshControl dataUpdatedAt={dataUpdatedAt} />
       <div className="period-toggle" role="radiogroup" aria-label="period">
@@ -37,6 +37,6 @@ export function AnalyticsPage() {
       ) : (
         <CostByPeriod buckets={data.buckets} />
       )}
-    </main>
+    </div>
   );
 }

@@ -7,7 +7,7 @@ import { Loading, ErrorState } from "../components/states.js";
 export function ToolAnalyticsPage() {
   const { data, isLoading, isError, dataUpdatedAt } = useToolStats();
   return (
-    <main className="tool-analytics-page">
+    <div className="tool-analytics-page">
       <h1 className="text-display-md font-display">Tool analytics</h1>
       <AutoRefreshControl dataUpdatedAt={dataUpdatedAt} />
       {isLoading ? (
@@ -17,6 +17,6 @@ export function ToolAnalyticsPage() {
       ) : (
         <ToolRanking tools={data.tools} />
       )}
-    </main>
+    </div>
   );
 }

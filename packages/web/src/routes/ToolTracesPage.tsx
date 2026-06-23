@@ -8,7 +8,7 @@ export function ToolTracesPage() {
   const { toolName = "" } = useParams();
   const { data, isLoading, isError } = useTracesForTool(toolName);
   return (
-    <main className="tool-traces-page">
+    <div className="tool-traces-page">
       <h1 className="text-title-lg font-display">
         Executions calling “{toolName}”
       </h1>
@@ -19,6 +19,6 @@ export function ToolTracesPage() {
       ) : (
         <TraceList traces={data.traces} />
       )}
-    </main>
+    </div>
   );
 }
