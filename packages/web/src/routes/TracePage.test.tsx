@@ -68,7 +68,55 @@ beforeEach(() => {
   vi.mocked(client.getTraceTags).mockResolvedValue({ tags: [] });
 });
 
+const ioTree: TraceTreeNode = {
+  spanId: "root",
+  traceId: "t1",
+  name: "checkout",
+  startTimeUnixNano: "0",
+  endTimeUnixNano: "5000000",
+  model: "gpt-4o",
+  statusCode: "1",
+  inputValue: "ROOT INPUT",
+  children: [
+    {
+      spanId: "c1",
+      traceId: "t1",
+      name: "search-products",
+      startTimeUnixNano: "1000000",
+      endTimeUnixNano: "2000000",
+      statusCode: "1",
+      inputValue: "CHILD INPUT",
+      children: [],
+    },
+  ],
+};
+
 describe("TracePage (integration)", () => {
+  it("trace_detail_3pane_selection_drives_center_and_right", async () => {
+    vi.mocked(client.getTraceTree).mockResolvedValue(ioTree);
+    vi.mocked(client.getTraceCost).mockRejectedValue(new ApiError(404));
+    renderAt("/traces/t1");
+    // 3-pane present: tree + center info + right Input/Output
+    await waitFor(() =>
+      expect(screen.getByRole("list", { name: "span tree" })).toBeInTheDocument(),
+    );
+    // default = root: center shows root name, right shows root input
+    expect(screen.getByLabelText("span info")).toHaveTextContent("checkout");
+    expect(screen.getByLabelText("span input/output")).toHaveTextContent(
+      "ROOT INPUT",
+    );
+    // selecting the child span drives BOTH center + right
+    await userEvent.click(screen.getByText("search-products"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("span info")).toHaveTextContent(
+        "search-products",
+      ),
+    );
+    expect(screen.getByLabelText("span input/output")).toHaveTextContent(
+      "CHILD INPUT",
+    );
+  });
+
   it("trace_page_fetches_and_renders_tree_then_shows_detail_on_select", async () => {
     vi.mocked(client.getTraceTree).mockResolvedValue(tree);
     renderAt("/traces/t1");
@@ -79,12 +127,12 @@ describe("TracePage (integration)", () => {
     );
     expect(screen.getAllByText("search-products").length).toBeGreaterThan(0);
     // default detail = root span
-    expect(screen.getByLabelText("span detail")).toHaveTextContent("checkout");
+    expect(screen.getByLabelText("span info")).toHaveTextContent("checkout");
 
     // selecting a span updates the detail panel
     await userEvent.click(screen.getByText("search-products"));
     await waitFor(() =>
-      expect(screen.getByLabelText("span detail")).toHaveTextContent(
+      expect(screen.getByLabelText("span info")).toHaveTextContent(
         "search-products",
       ),
     );
@@ -96,17 +144,17 @@ describe("TracePage (integration)", () => {
 
     // replay starts at step 1 (root) of 2; detail = root
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Step 1 of 2"));
-    expect(screen.getByLabelText("span detail")).toHaveTextContent("checkout");
+    expect(screen.getByLabelText("span info")).toHaveTextContent("checkout");
 
     // next advances through the deterministic order → search-products
     await userEvent.click(screen.getByLabelText("next step"));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Step 2 of 2"));
-    expect(screen.getByLabelText("span detail")).toHaveTextContent("search-products");
+    expect(screen.getByLabelText("span info")).toHaveTextContent("search-products");
 
     // keyboard ArrowLeft steps back to the root
     await userEvent.keyboard("{ArrowLeft}");
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Step 1 of 2"));
-    expect(screen.getByLabelText("span detail")).toHaveTextContent("checkout");
+    expect(screen.getByLabelText("span info")).toHaveTextContent("checkout");
   });
 
   it("replay_click_span_jumps_step", async () => {
@@ -116,7 +164,7 @@ describe("TracePage (integration)", () => {
     // clicking a span jumps the replay to that step
     await userEvent.click(screen.getByText("search-products"));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Step 2 of 2"));
-    expect(screen.getByLabelText("span detail")).toHaveTextContent("search-products");
+    expect(screen.getByLabelText("span info")).toHaveTextContent("search-products");
   });
 
   it("replay_keyboard_listener_is_removed_on_unmount", async () => {

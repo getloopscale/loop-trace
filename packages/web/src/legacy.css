@@ -125,13 +125,6 @@
   font-size: 0.85rem;
 }
 
-/* Trace view: tree + detail side by side */
-.trace-layout {
-  display: grid;
-  grid-template-columns: minmax(280px, 1fr) 2fr;
-  gap: 1.5rem;
-  margin-top: 1rem;
-}
 
 /* Span tree */
 .span-tree,

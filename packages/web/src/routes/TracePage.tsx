@@ -7,7 +7,8 @@ import { buildReplaySteps } from "../lib/replay.js";
 import { formatUsd } from "../lib/money.js";
 import { ApiError, recordReplaySession } from "../api/client.js";
 import { SpanTree } from "../components/SpanTree.js";
-import { SpanDetail } from "../components/SpanDetail.js";
+import { SpanInfoPanel } from "../components/SpanInfoPanel.js";
+import { SpanIOPanel } from "../components/SpanIOPanel.js";
 import { TraceTags } from "../components/TraceTags.js";
 import { ReplayControls } from "../components/ReplayControls.js";
 import { Loading, ErrorState } from "../components/states.js";
@@ -96,13 +97,16 @@ export function TracePage() {
         activeName={active?.name}
       />
       <TraceTags traceId={traceId} />
-      <div className="trace-layout">
+      {/* Arize 3-pane (M19): waterfall tree | info tabs | Input/Output. The
+          active span (replay selection, root fallback) drives the center + right. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(260px,1fr)_1.4fr_1.4fr]">
         <SpanTree
           root={data}
           selectedId={active?.spanId}
           onSelect={(span) => jumpTo(span.spanId)}
         />
-        <SpanDetail span={active ?? data} />
+        <SpanInfoPanel span={active ?? data} />
+        <SpanIOPanel span={active ?? data} />
       </div>
     </div>
   );
