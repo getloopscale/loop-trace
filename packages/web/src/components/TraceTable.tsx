@@ -32,7 +32,11 @@ const columns: DataTableColumn<TraceListItem>[] = [
       t.statusCode == null ? (
         <span className="text-muted-foreground">{DASH}</span>
       ) : (
-        <Badge variant={t.statusCode === "error" ? "destructive" : "success"} size="sm">
+        <Badge
+          variant={t.statusCode === "error" ? "destructive" : "success"}
+          size="sm"
+          aria-label={t.statusCode === "error" ? "status: error" : "status: ok"}
+        >
           {t.statusCode === "error" ? "error" : "ok"}
         </Badge>
       ),
