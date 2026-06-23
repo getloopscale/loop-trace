@@ -1,0 +1,15 @@
+/* Theo Lens web — design-system entry (M17).
+ *
+ * Tailwind v4 core scans THIS project's src and emits the utility classes our
+ * own markup uses. `@theokit/ui/preset.css` registers the Violet Forge `@theme`
+ * tokens (--color-*, --text-*, --radius-*, …) so utilities like `bg-card` /
+ * `text-display-md` resolve to the design-system values. `@theokit/ui/styles.css`
+ * pulls the precompiled component CSS + Geist fonts + the runtime token vars that
+ * `<ThemeProvider>` mutates per theme/mode.
+ */
+@import "tailwindcss";
+@import "@theokit/ui/preset.css";
+@import "@theokit/ui/styles.css";
+
+/* Tailwind v4 scans the consumer source for utility usage. */
+@source "./";

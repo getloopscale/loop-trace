@@ -11,8 +11,9 @@ import { NorthStarPage } from "./routes/NorthStarPage.js";
 import { ObservabilityPage } from "./routes/ObservabilityPage.js";
 import { SessionsListPage } from "./routes/SessionsListPage.js";
 import { SessionDetailPage } from "./routes/SessionDetailPage.js";
+import { ThemeProvider, violetForge } from "@theokit/ui";
 import { AutoRefreshProvider } from "./hooks/useAutoRefresh.js";
-import "./index.css";
+import "./styles.css";
 
 const queryClient = new QueryClient();
 
@@ -32,11 +33,19 @@ const el = document.getElementById("root");
 if (el) {
   createRoot(el).render(
     <StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <AutoRefreshProvider>
-          <RouterProvider router={router} />
-        </AutoRefreshProvider>
-      </QueryClientProvider>
+      <ThemeProvider
+        defaultTheme="violet-forge"
+        defaultMode="dark"
+        themes={[violetForge]}
+        defaultDensity="compact"
+        storageKey="theo-lens:theme"
+      >
+        <QueryClientProvider client={queryClient}>
+          <AutoRefreshProvider>
+            <RouterProvider router={router} />
+          </AutoRefreshProvider>
+        </QueryClientProvider>
+      </ThemeProvider>
     </StrictMode>,
   );
 }
