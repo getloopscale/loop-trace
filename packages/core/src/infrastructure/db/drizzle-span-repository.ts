@@ -646,6 +646,11 @@ export class DrizzleSpanRepository implements SpanRepository {
     // scoped aggregates summed over the spans-derived traces table (D2). LEFT JOIN
     // so a session with zero member traces still lists (traceCount 0). Deterministic
     // tiebreaker on session_id (EC-7). Backed by sessions_last_seen_at_idx (D4).
+    // M20: the first user message is the input of the earliest root span across
+    // the session (a correlated scalar subquery, NOT a join — it returns one value
+    // per session and must not perturb the GROUP BY). The `~ '^\d+$'` guard keeps
+    // the numeric ORDER BY cast from erroring on legacy/garbage nanos (mirrors the
+    // M11 latency guard). Mapped through preview() with the EC-1 guard below.
     const res = await this.db.execute(sql`
       SELECT s.session_id AS "sessionId",
              s.first_seen_at AS "firstSeenAt",
@@ -653,7 +658,15 @@ export class DrizzleSpanRepository implements SpanRepository {
              count(t.trace_id)::int AS "traceCount",
              coalesce(sum(t.cost_usd), 0)::double precision AS "costUsd",
              coalesce(sum(t.total_tokens), 0)::int AS "totalTokens",
-             count(t.trace_id) FILTER (WHERE t.status_code = 'error')::int AS "errorCount"
+             count(t.trace_id) FILTER (WHERE t.status_code = 'error')::int AS "errorCount",
+             (SELECT sp.input_value
+                FROM spans sp
+                JOIN traces tt ON tt.trace_id = sp.trace_id
+               WHERE tt.session_id = s.session_id
+                 AND sp.parent_span_id IS NULL
+                 AND sp.start_time_unix_nano ~ '^\\d+$'
+               ORDER BY sp.start_time_unix_nano::numeric ASC
+               LIMIT 1) AS "firstMessageRaw"
       FROM sessions s
       LEFT JOIN traces t ON t.session_id = s.session_id
       GROUP BY s.session_id, s.first_seen_at, s.last_seen_at
@@ -667,16 +680,24 @@ export class DrizzleSpanRepository implements SpanRepository {
       costUsd: number;
       totalTokens: number;
       errorCount: number;
+      firstMessageRaw: string | null;
     }[];
-    const sessionsOut: SessionListItem[] = rows.map((r) => ({
-      sessionId: r.sessionId,
-      firstSeenAt: isoTimestamp(r.firstSeenAt),
-      lastSeenAt: isoTimestamp(r.lastSeenAt),
-      traceCount: r.traceCount,
-      costUsd: round3(r.costUsd ?? 0),
-      totalTokens: r.totalTokens ?? 0,
-      errorRate: r.traceCount === 0 ? 0 : round3(r.errorCount / r.traceCount),
-    }));
+    const sessionsOut: SessionListItem[] = rows.map((r) => {
+      const item: SessionListItem = {
+        sessionId: r.sessionId,
+        firstSeenAt: isoTimestamp(r.firstSeenAt),
+        lastSeenAt: isoTimestamp(r.lastSeenAt),
+        traceCount: r.traceCount,
+        costUsd: round3(r.costUsd ?? 0),
+        totalTokens: r.totalTokens ?? 0,
+        errorRate: r.traceCount === 0 ? 0 : round3(r.errorCount / r.traceCount),
+      };
+      // EC-1: only surface a non-empty, non-whitespace first message.
+      if (r.firstMessageRaw != null && r.firstMessageRaw.trim() !== "") {
+        item.firstMessagePreview = preview(r.firstMessageRaw);
+      }
+      return item;
+    });
     return { sessions: sessionsOut };
   }
 

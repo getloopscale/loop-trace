@@ -123,7 +123,7 @@ export interface NorthStarResponse {
   replaySessionsPerWeek: NorthStarBucket[];
 }
 
-/** A session in the sessions list (M13). */
+/** A session in the sessions list (M13; M20 adds firstMessagePreview). */
 export interface SessionListItem {
   sessionId: string;
   firstSeenAt: string;
@@ -132,6 +132,8 @@ export interface SessionListItem {
   costUsd: number;
   totalTokens: number;
   errorRate: number;
+  /** M20: first user message (root input of the earliest trace, ≤120 chars); omitted when absent. */
+  firstMessagePreview?: string;
 }
 
 export interface SessionListResponse {

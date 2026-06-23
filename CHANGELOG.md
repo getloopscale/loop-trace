@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Sessions list + metrics dashboard redesign (Arize): the sessions list becomes a dense `@theokit/ui` DataTable led by the session's first user message (first message · messages · duration · tokens · cost · start · end), and the metrics view becomes the "Pinned Charts" dashboard — Traffic / Span Latency / Tokens / Cost stat-cards with a global Line / Stacked-bar / Distribution chart-type toggle, north-star metrics re-homed into it. The first message is derived from the earliest trace's root span via a query-only enrichment of `GET /v1/sessions` (no schema migration); charts reuse the existing M11 series with zero new dependency (M20)
 
 ### Changed
 
