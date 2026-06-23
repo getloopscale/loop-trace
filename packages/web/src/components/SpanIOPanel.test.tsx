@@ -22,10 +22,10 @@ describe("SpanIOPanel", () => {
         }}
       />,
     );
-    // markdown is parsed (heading element), not shown raw
-    expect(
-      screen.getByRole("heading", { name: "Prompt" }),
-    ).toBeInTheDocument();
+    // markdown is parsed (bold emphasis), not shown raw; the `# Prompt` heading is
+    // demoted to a styled paragraph (FE-01 a11y) — present as text, NOT a page heading
+    expect(screen.getByText("Prompt")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Prompt" })).toBeNull();
     expect(screen.getByText("bold")).toBeInTheDocument();
     expect(screen.getByText("the answer")).toBeInTheDocument();
   });

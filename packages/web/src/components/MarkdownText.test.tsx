@@ -5,7 +5,10 @@ import { MarkdownText } from "./MarkdownText.js";
 describe("MarkdownText (M12 D4 / risk #2)", () => {
   it("test_markdown_text_renders_markdown_not_raw", () => {
     const { container } = render(<MarkdownText text={"# Title\n\nsome **bold** text"} />);
-    expect(container.querySelector("h1")?.textContent).toBe("Title");
+    // M19/FE-01: markdown headings are demoted to non-heading paragraphs so embedded
+    // content never hijacks the page outline — no <h1>, but the text + emphasis render.
+    expect(container.querySelector("h1")).toBeNull();
+    expect(container.querySelector("p.md-heading")?.textContent).toBe("Title");
     expect(container.querySelector("strong")?.textContent).toBe("bold");
     // not the literal markdown source
     expect(screen.queryByText("# Title")).toBeNull();

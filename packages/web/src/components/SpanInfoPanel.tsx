@@ -29,6 +29,10 @@ export function SpanInfoPanel({ span }: { span: SpanNodeData }) {
   const hasEvents = span.events != null && span.events.length > 0;
   const hasAttrs =
     span.attributes != null && Object.keys(span.attributes).length > 0;
+  // FE-02: derive from the span's own signals with hasChildren:false (a SpanNodeData
+  // carries no subtree here), so this badge never resolves "chain" — matching the M18
+  // list's deriveTraceListItemKind simplification. The left SpanTree glyph IS the
+  // authoritative kind view (it has the full node with children); this badge is a hint.
   const kind = deriveKindFromSignals({
     operationName: strAttr(span.attributes, "gen_ai.operation.name"),
     toolName: strAttr(span.attributes, "gen_ai.tool.name"),

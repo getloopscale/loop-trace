@@ -92,6 +92,24 @@ const ioTree: TraceTreeNode = {
 };
 
 describe("TracePage (integration)", () => {
+  it("trace_page_preserves_topbar", async () => {
+    vi.mocked(client.getTraceTree).mockResolvedValue(ioTree);
+    vi.mocked(client.getTraceCost).mockResolvedValue({
+      traceId: "t1",
+      costUsd: 0.0125,
+      inputTokens: 1000,
+      outputTokens: 500,
+      totalTokens: 1500,
+    });
+    renderAt("/traces/t1");
+    // top bar survives the 3-pane recompose: cost line + replay controls present
+    await waitFor(() =>
+      expect(screen.getByText(/Total cost: \$0\.0125/)).toBeInTheDocument(),
+    );
+    // replay controls remain mounted in the top bar (next-step control present)
+    expect(screen.getByLabelText("next step")).toBeInTheDocument();
+  });
+
   it("trace_detail_3pane_selection_drives_center_and_right", async () => {
     vi.mocked(client.getTraceTree).mockResolvedValue(ioTree);
     vi.mocked(client.getTraceCost).mockRejectedValue(new ApiError(404));
