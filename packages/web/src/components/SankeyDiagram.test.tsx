@@ -32,6 +32,27 @@ describe("SankeyDiagram (M21)", () => {
     expect(container.innerHTML).not.toMatch(/NaN/);
   });
 
+  it("sankey_diagram_single_flow_no_nan", () => {
+    // MEDIUM-1: the degenerate Start→node→End shape (a single-span trace's model)
+    // must render without NaN geometry.
+    const single = {
+      nodes: [
+        { id: "Start", kind: "terminal" as const, count: 1 },
+        { id: "unknown", kind: "unknown" as const, count: 1 },
+        { id: "End", kind: "terminal" as const, count: 1 },
+      ],
+      links: [
+        { source: "Start", target: "unknown", value: 1 },
+        { source: "unknown", target: "End", value: 1 },
+      ],
+    };
+    const { container } = render(
+      <SankeyDiagram model={single} ariaLabel="single" />,
+    );
+    expect(container.querySelectorAll("rect").length).toBeGreaterThanOrEqual(3);
+    expect(container.innerHTML).not.toMatch(/NaN/);
+  });
+
   it("sankey_diagram_empty_model_no_nan", () => {
     const { container } = render(
       <SankeyDiagram model={{ nodes: [], links: [] }} ariaLabel="empty" />,

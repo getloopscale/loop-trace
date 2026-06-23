@@ -58,18 +58,32 @@ export function SankeyDiagram({
         [PAD_X, PAD_X],
         [W - PAD_X, height - PAD_X],
       ]);
-    // d3-sankey mutates copies; links reference node ids via the nodeId accessor.
-    return gen({
-      nodes: model.nodes.map((n) => ({ ...n })),
-      links: model.links.map((l) => ({ ...l })) as never,
-    });
+    try {
+      // d3-sankey mutates copies; links reference node ids via the nodeId accessor.
+      return gen({
+        nodes: model.nodes.map((n) => ({ ...n })),
+        links: model.links.map((l) => ({ ...l })) as never,
+      });
+    } catch {
+      // Defense in depth: the derivation already produces a DAG, but d3-sankey
+      // throws on any unforeseen cycle — degrade to empty rather than crash the app.
+      return null;
+    }
   }, [model, height]);
 
-  const summary =
-    model.nodes
-      .filter((n) => n.kind !== "terminal")
-      .map((n) => `${n.id} (${n.count})`)
-      .join(", ") || "no spans";
+  // SR summary: nodes with counts + the dominant handoffs (a Sankey's value IS the
+  // flow, so the summary names the edges too — F-1).
+  const nodeSummary = model.nodes
+    .filter((n) => n.kind !== "terminal")
+    .map((n) => `${n.id} (${n.count})`)
+    .join(", ");
+  const flowSummary = model.links
+    .filter((l) => l.source !== "Start" && l.target !== "End")
+    .map((l) => `${l.source} to ${l.target}`)
+    .join(", ");
+  const summary = nodeSummary
+    ? `Nodes: ${nodeSummary}.${flowSummary ? ` Flow: ${flowSummary}.` : ""}`
+    : "no spans";
 
   return (
     <div className="sankey-diagram">

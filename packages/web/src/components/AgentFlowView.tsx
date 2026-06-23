@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTraceList, useTraceTree } from "../hooks/useTraces.js";
 import type { TraceTreeNode } from "../api/types.js";
 import type { SankeyModel } from "../lib/agent-graph.js";
@@ -43,7 +43,10 @@ export function AgentFlowView({
   const [picked, setPicked] = useState("");
   const selectedId = picked || traces[0]?.traceId || "";
   const tree = useTraceTree(selectedId);
-  const model = tree.data ? build(tree.data) : null;
+  const model = useMemo(
+    () => (tree.data ? build(tree.data) : null),
+    [tree.data, build],
+  );
 
   return (
     <div className="agent-flow-view flex flex-col gap-4">

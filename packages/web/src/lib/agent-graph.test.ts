@@ -8,7 +8,6 @@ function node(over: Partial<TraceTreeNode> & { name: string }): TraceTreeNode {
   return {
     spanId: `s${sid}`,
     traceId: "t1",
-    name: over.name,
     startTimeUnixNano: "1700000000000000000",
     endTimeUnixNano: "1700000000100000000",
     children: [],
@@ -95,6 +94,37 @@ describe("agent-graph derivation (M21)", () => {
     expect(linkValue(m.links, "unknown", "End")).toBe(1);
     // no NaN / empty
     expect(m.nodes.every((n) => Number.isFinite(n.count))).toBe(true);
+  });
+
+  it("build_agent_path_breaks_cycles_into_a_dag", () => {
+    // BLOCKER regression: grouping collapses chain→llm→chain→llm into a chain↔llm
+    // cycle. d3-sankey throws "circular link" on cycles — the derivation must drop
+    // the back-edge so the model is a DAG.
+    const tree = node({
+      name: "rootChain",
+      children: [
+        node({
+          name: "llmA",
+          model: "gpt-4o",
+          children: [
+            node({
+              name: "innerChain",
+              children: [node({ name: "llmB", model: "gpt-4o" })],
+            }),
+          ],
+        }),
+      ],
+    });
+    const m = buildAgentPath(tree);
+    // chain→llm is forward (kept); the llm→chain back-edge is dropped (DAG)
+    expect(linkValue(m.links, "chain", "llm")).toBeGreaterThanOrEqual(1);
+    expect(linkValue(m.links, "llm", "chain")).toBe(0);
+    // every endpoint resolves to a node (EC-2) and there is no back-edge cycle
+    const ids = new Set(m.nodes.map((n) => n.id));
+    for (const l of m.links) {
+      expect(ids.has(l.source)).toBe(true);
+      expect(ids.has(l.target)).toBe(true);
+    }
   });
 
   it("build_agent_graph_includes_error_spans", () => {

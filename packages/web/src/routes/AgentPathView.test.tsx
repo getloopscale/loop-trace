@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { AgentPathView } from "./AgentPathView.js";
@@ -69,5 +70,58 @@ describe("AgentPathView (M21)", () => {
     await waitFor(() =>
       expect(screen.getByText(/No traces yet/i)).toBeInTheDocument(),
     );
+  });
+
+  it("agent_view_shows_error_when_tree_fetch_fails", async () => {
+    // Failure scenario (plan): the trace list loads but the selected tree fetch
+    // rejects → fail-soft ErrorState, no crash.
+    vi.mocked(client.listTraces).mockResolvedValue({
+      traces: [{ traceId: "t1", name: "TripAgent" }],
+    });
+    vi.mocked(client.getTraceTree).mockRejectedValue(new client.ApiError(500));
+    renderPage();
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Failed to load the selected trace/i),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it("agent_path_rerenders_on_trace_change", async () => {
+    // EC-6: selecting a different trace re-derives + re-renders (not pinned to the first).
+    vi.mocked(client.listTraces).mockResolvedValue({
+      traces: [
+        { traceId: "t1", name: "first" },
+        { traceId: "t2", name: "second" },
+      ],
+    });
+    const toolTree: TraceTreeNode = {
+      ...tree,
+      traceId: "t2",
+      name: "SecondRoot",
+      children: [
+        {
+          spanId: "x",
+          traceId: "t2",
+          name: "Searcher",
+          startTimeUnixNano: "1700000000100000000",
+          endTimeUnixNano: "1700000000200000000",
+          attributes: { "gen_ai.tool.name": "web" },
+          children: [],
+        },
+      ],
+    };
+    vi.mocked(client.getTraceTree).mockImplementation((id: string) =>
+      Promise.resolve(id === "t2" ? toolTree : tree),
+    );
+    renderPage();
+    // default = first trace (t1) → its kinds (chain + llm)
+    await waitFor(() => expect(screen.getByText(/llm \(1\)/)).toBeInTheDocument());
+    // switch to t2 → its kinds change (a tool appears)
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: "select trace" }),
+      "t2",
+    );
+    await waitFor(() => expect(screen.getByText(/tool \(1\)/)).toBeInTheDocument());
   });
 });
