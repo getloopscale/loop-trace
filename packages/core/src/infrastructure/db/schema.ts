@@ -6,6 +6,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -111,4 +112,24 @@ export const replaySessions = pgTable(
       .notNull(),
   },
   (t) => [index("replay_sessions_opened_at_idx").on(t.openedAt)],
+);
+
+/**
+ * M14: free-form tags on a trace — a lightweight grouping orthogonal to sessions.
+ * A side table keyed by trace_id (like replay_sessions); NO change to spans/traces.
+ * UNIQUE(trace_id, tag) makes add idempotent (ON CONFLICT DO NOTHING); the tag
+ * index backs the list `?tag=` filter; the trace_id index backs reading a trace's tags.
+ */
+export const traceTags = pgTable(
+  "trace_tags",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    traceId: text("trace_id").notNull(),
+    tag: text("tag").notNull(),
+  },
+  (t) => [
+    unique("trace_tags_trace_id_tag_uq").on(t.traceId, t.tag),
+    index("trace_tags_tag_idx").on(t.tag),
+    index("trace_tags_trace_id_idx").on(t.traceId),
+  ],
 );

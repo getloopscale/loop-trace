@@ -18,11 +18,14 @@ suite("composition root migrate-on-boot (integration)", () => {
 
   beforeAll(async () => {
     pool = createPool(PG_URI as string);
-    // Make the database pristine: drop the drizzle journal + the domain tables
-    // so `bootstrap` must recreate them from the committed migrations.
+    // Make the database pristine: drop the drizzle journal + ALL domain tables
+    // so `bootstrap` must recreate them from the committed migrations. The list
+    // MUST include every table any migration creates — a missing one (e.g. M14's
+    // trace_tags) survives the reset and makes migrate-from-scratch fail with
+    // "relation already exists".
     await pool.query("DROP SCHEMA IF EXISTS drizzle CASCADE");
     await pool.query(
-      "DROP TABLE IF EXISTS spans, traces, sessions, replay_sessions CASCADE",
+      "DROP TABLE IF EXISTS spans, traces, sessions, replay_sessions, trace_tags CASCADE",
     );
   });
 

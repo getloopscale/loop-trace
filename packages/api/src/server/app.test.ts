@@ -146,6 +146,26 @@ class StubSpanRepository implements SpanRepository {
     if (!this.sessionDetail) return null;
     return { ...this.sessionDetail, sessionId };
   }
+
+  // M14 tags: in-memory map traceId → Set<tag>; tagTraceExists gates the 404.
+  readonly tags = new Map<string, Set<string>>();
+  tagTraceExists = true;
+
+  async addTag(traceId: string, tag: string): Promise<boolean> {
+    if (!this.tagTraceExists) return false;
+    const set = this.tags.get(traceId) ?? new Set<string>();
+    set.add(tag);
+    this.tags.set(traceId, set);
+    return true;
+  }
+
+  async removeTag(traceId: string, tag: string): Promise<void> {
+    this.tags.get(traceId)?.delete(tag);
+  }
+
+  async listTags(traceId: string): Promise<string[]> {
+    return [...(this.tags.get(traceId) ?? [])].sort();
+  }
 }
 
 function tracesEnvelope(span: Record<string, unknown>): string {
@@ -662,6 +682,59 @@ describe("createApp (contract, stub repo)", () => {
         ({ sessions: [{ sessionId: "S1", firstSeenAt: "x", lastSeenAt: "y", traceCount: 1, costUsd: 0, totalTokens: 0, errorRate: 0, leak: 9 }] }) as never,
     };
     expect((await createApp(leaky).request("/v1/sessions")).status).toBeGreaterThanOrEqual(500);
+  });
+
+  it("test_post_tag_adds_and_returns_tags", async () => {
+    repo.tagTraceExists = true;
+    const res = await app.request("/v1/traces/t1/tags", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tag: "prod" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { tags: string[] };
+    expect(body.tags).toContain("prod");
+  });
+
+  it("test_post_tag_invalid_returns_400", async () => {
+    repo.tagTraceExists = true;
+    const empty = await app.request("/v1/traces/t1/tags", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tag: "   " }),
+    });
+    expect(empty.status).toBe(400);
+    const big = await app.request("/v1/traces/t1/tags", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tag: "a".repeat(65) }),
+    });
+    expect(big.status).toBe(400);
+  });
+
+  it("test_post_tag_absent_trace_returns_404", async () => {
+    repo.tagTraceExists = false; // addTag returns false → 404
+    const res = await app.request("/v1/traces/nope/tags", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tag: "x" }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("test_delete_tag_is_idempotent_200", async () => {
+    repo.tagTraceExists = true;
+    // a slash-bearing tag via query param (EC-1) — removing an absent tag is 200.
+    const res = await app.request("/v1/traces/t1/tags?tag=" + encodeURIComponent("area/auth"), {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("test_get_traces_tag_filter_passes_through", async () => {
+    await post(tracesEnvelope(rawSpan));
+    await app.request("/v1/traces?tag=prod");
+    expect(repo.lastListOpts?.tag).toBe("prod");
   });
 });
 

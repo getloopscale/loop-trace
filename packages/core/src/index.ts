@@ -70,6 +70,12 @@ export {
   type SessionDetailResponse,
   type RawSessionDetail,
 } from "./domain/session.js";
+export {
+  traceTagsResponseSchema,
+  normalizeTag,
+  TAG_MAX_LENGTH,
+  type TraceTagsResponse,
+} from "./domain/tags.js";
 export { spans, traces, sessions, replaySessions } from "./infrastructure/db/schema.js";
 export {
   DrizzleSpanRepository,

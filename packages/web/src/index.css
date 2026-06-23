@@ -411,3 +411,47 @@ a {
 .trace-session-link {
   margin-left: 1rem;
 }
+
+/* Tags (M14) */
+.trace-tags {
+  margin: 0.75rem 0;
+}
+.tag-chips {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0;
+  margin: 0.35rem 0;
+}
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #ddf4ff;
+  border: 1px solid #54aeff;
+  border-radius: 12px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.8rem;
+}
+.tag-chip button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: #0969da;
+}
+.tag-chip button:focus-visible {
+  outline: 2px solid #0969da;
+  outline-offset: 1px;
+}
+.tag-empty {
+  color: #656d76;
+  font-style: italic;
+  font-size: 0.8rem;
+}
+.tag-add {
+  display: flex;
+  gap: 0.4rem;
+}

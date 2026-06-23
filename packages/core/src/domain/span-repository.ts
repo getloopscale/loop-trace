@@ -46,4 +46,10 @@ export interface SpanRepository {
   listSessions(): Promise<SessionListResponse>;
   /** One session's scoped aggregates + member traces (M13), or null if absent. */
   getSessionDetail(sessionId: string): Promise<SessionDetailResponse | null>;
+  /** Add a tag to a trace (M14, idempotent). Returns false if the trace is absent. */
+  addTag(traceId: string, tag: string): Promise<boolean>;
+  /** Remove a tag from a trace (M14, idempotent — no-op if absent). */
+  removeTag(traceId: string, tag: string): Promise<void>;
+  /** A trace's tags, ordered (M14); empty when the trace has none. */
+  listTags(traceId: string): Promise<string[]>;
 }

@@ -8,6 +8,7 @@ import { formatUsd } from "../lib/money.js";
 import { ApiError, recordReplaySession } from "../api/client.js";
 import { SpanTree } from "../components/SpanTree.js";
 import { SpanDetail } from "../components/SpanDetail.js";
+import { TraceTags } from "../components/TraceTags.js";
 import { ReplayControls } from "../components/ReplayControls.js";
 import { Loading, ErrorState } from "../components/states.js";
 
@@ -95,6 +96,7 @@ export function TracePage() {
         onNext={next}
         activeName={active?.name}
       />
+      <TraceTags traceId={traceId} />
       <div className="trace-layout">
         <SpanTree
           root={data}

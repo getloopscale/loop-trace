@@ -50,6 +50,22 @@ export function TraceFilters({
     }, 300);
   };
 
+  // M14: a tag filter, debounced like the model input (own timer so the two
+  // debounces don't clobber each other).
+  const [tagInput, setTagInput] = useState(query.tag ?? "");
+  const tagTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => setTagInput(query.tag ?? ""), [query.tag]);
+  const onTagInput = (value: string) => {
+    setTagInput(value);
+    if (tagTimer.current) clearTimeout(tagTimer.current);
+    tagTimer.current = setTimeout(() => {
+      const next: ListTracesQuery = { ...query };
+      if (value) next.tag = value;
+      else delete next.tag;
+      onChange(next);
+    }, 300);
+  };
+
   const setField = (
     key: "status" | "from" | "to",
     value: string | undefined,
@@ -114,6 +130,16 @@ export function TraceFilters({
             type="datetime-local"
             aria-label="to time"
             onChange={(e) => setField("to", toIso(e.target.value))}
+          />
+        </label>
+        <label>
+          Tag
+          <input
+            type="text"
+            aria-label="tag filter"
+            placeholder="e.g. prod"
+            value={tagInput}
+            onChange={(e) => onTagInput(e.target.value)}
           />
         </label>
         <a className="trace-export" href={tracesExportHref(query)} download>
