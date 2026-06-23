@@ -210,8 +210,8 @@ suite("listTraces enrichment (integration, M18)", () => {
       span({
         spanId: "root",
         traceId: "t-rich",
-        kind: "agent",
         model: "gpt-4o",
+        attributes: { "gen_ai.operation.name": "chat" },
         inputValue: "the user prompt",
         outputValue: "the model answer",
         inputTokens: 100,
@@ -221,8 +221,8 @@ suite("listTraces enrichment (integration, M18)", () => {
     const { traces } = await repo.listTraces({});
     const row = traces.find((t) => t.traceId === "t-rich");
     expect(row).toBeDefined();
-    expect(row?.rootKind).toBe("agent");
     expect(row?.model).toBe("gpt-4o");
+    expect(row?.rootOperationName).toBe("chat");
     expect(row?.inputPreview).toBe("the user prompt");
     expect(row?.outputPreview).toBe("the model answer");
     expect(typeof row?.costUsd).toBe("number");
@@ -237,8 +237,9 @@ suite("listTraces enrichment (integration, M18)", () => {
     const { traces } = await repo.listTraces({});
     const row = traces.find((t) => t.traceId === "t-noroot");
     expect(row).toBeDefined();
-    expect(row?.rootKind).toBeUndefined();
     expect(row?.model).toBeUndefined();
+    expect(row?.rootOperationName).toBeUndefined();
+    expect(row?.rootToolName).toBeUndefined();
     expect(row?.inputPreview).toBeUndefined();
     expect(row?.outputPreview).toBeUndefined();
     // traces-column fields still present (no LATERAL dependency)

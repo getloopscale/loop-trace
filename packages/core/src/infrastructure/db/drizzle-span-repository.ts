@@ -111,8 +111,9 @@ function fromRow(row: typeof spans.$inferSelect): Span {
  */
 /** Root-span fields the M18 LATERAL join adds to a traces row (all nullable). */
 interface EnrichedTraceRow {
-  rootKind: string | null;
   rootModel: string | null;
+  rootOperationName: string | null;
+  rootToolName: string | null;
   rootInputValue: string | null;
   rootOutputValue: string | null;
 }
@@ -144,8 +145,11 @@ function traceRowToItem(
   // M18 — enriched columns (existing traces cols + root-span LATERAL).
   if (row.endTimeUnixNano != null) item.endTimeUnixNano = row.endTimeUnixNano;
   if (row.costUsd != null) item.costUsd = row.costUsd;
-  if (row.rootKind != null) item.rootKind = row.rootKind;
   if (row.rootModel != null) item.model = row.rootModel;
+  if (row.rootOperationName != null) {
+    item.rootOperationName = row.rootOperationName;
+  }
+  if (row.rootToolName != null) item.rootToolName = row.rootToolName;
   if (row.rootInputValue != null) item.inputPreview = preview(row.rootInputValue);
   if (row.rootOutputValue != null) {
     item.outputPreview = preview(row.rootOutputValue);
@@ -375,8 +379,15 @@ export class DrizzleSpanRepository implements SpanRepository {
     // join — one indexed root-span lookup per row, no new column, no migration.
     const root = this.db
       .select({
-        kind: spans.kind,
         model: spans.model,
+        // gen_ai operation/tool signals live in the attributes bag (not typed
+        // columns); ->> extracts them as text. The web derives the semantic kind.
+        operationName: sql<
+          string | null
+        >`${spans.attributes}->>'gen_ai.operation.name'`.as("op_name"),
+        toolName: sql<
+          string | null
+        >`${spans.attributes}->>'gen_ai.tool.name'`.as("tool_name"),
         inputValue: spans.inputValue,
         outputValue: spans.outputValue,
       })
@@ -389,8 +400,9 @@ export class DrizzleSpanRepository implements SpanRepository {
     const rows = await this.db
       .select({
         ...getTableColumns(traces),
-        rootKind: root.kind,
         rootModel: root.model,
+        rootOperationName: root.operationName,
+        rootToolName: root.toolName,
         rootInputValue: root.inputValue,
         rootOutputValue: root.outputValue,
       })
