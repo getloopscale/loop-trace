@@ -1,7 +1,7 @@
 import {
   spanSchema,
-  extractGenAi,
   extractSpanEvents,
+  selectAdapter,
   type Span,
 } from "@usetheo/lens-core";
 
@@ -81,6 +81,13 @@ export function parseResourceSpans(envelope: unknown): Span[] {
     (envelope as { resourceSpans?: unknown } | null)?.resourceSpans,
   );
   for (const rs of resourceSpans) {
+    // M15: pick the agent adapter once per resource (service.name is resource-level)
+    // — Claude Code / future external agents map their own attribute convention;
+    // an unknown producer falls back to the default (gen_ai/OpenInference) adapter.
+    const resourceAttrs = flattenAttrs(
+      (rs as { resource?: { attributes?: unknown } })?.resource?.attributes,
+    );
+    const adapter = selectAdapter(resourceAttrs);
     for (const ss of asArray((rs as { scopeSpans?: unknown })?.scopeSpans)) {
       for (const raw of asArray((ss as { spans?: unknown })?.spans)) {
         const r = raw as Record<string, unknown>;
@@ -89,7 +96,7 @@ export function parseResourceSpans(envelope: unknown): Span[] {
           | undefined;
         const attrs =
           r["attributes"] != null ? flattenAttrs(r["attributes"]) : undefined;
-        const genai = extractGenAi(attrs);
+        const genai = adapter.extract(attrs, String(r["name"] ?? ""));
         // M12 (D2/EC-8): move-not-copy — when input/output text was actually
         // extracted (string path) into the capped typed field, delete the key
         // from the persisted bag so the uncapped duplicate never lands on disk.

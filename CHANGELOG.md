@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Claude Code integration: point Claude Code's OpenTelemetry trace export at Theo Lens (helper `scripts/theo-instrument-claude.sh`) and its agent sessions appear as first-class executions — model, tokens, cost, input, and session grouping all populate. Built on an extensible **agent-adapter** seam (selected by `service.name`) so other external agents (Codex, …) integrate by adding one adapter, with zero change to existing traces. Verified by dogfooding a real Claude Code session into Theo Lens (M15)
 
 ### Changed
 

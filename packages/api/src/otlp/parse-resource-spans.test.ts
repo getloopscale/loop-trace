@@ -212,4 +212,55 @@ describe("parseResourceSpans", () => {
     expect(span?.inputValue).toBeUndefined();
     expect(span?.outputValue).toBeUndefined();
   });
+
+  // M15: adapter selection by service.name (resource-level).
+  function envelopeWithService(service: string, spans: unknown[]): unknown {
+    return {
+      resourceSpans: [
+        {
+          resource: { attributes: [{ key: "service.name", value: { stringValue: service } }] },
+          scopeSpans: [{ spans }],
+        },
+      ],
+    };
+  }
+
+  it("test_parse_selects_claude_adapter_by_service_name", () => {
+    const claudeSpan = {
+      ...rawSpan,
+      attributes: [
+        { key: "gen_ai.request.model", value: { stringValue: "claude-opus-4-8[1m]" } },
+        { key: "gen_ai.system", value: { stringValue: "anthropic" } },
+        { key: "input_tokens", value: { intValue: "5380" } },
+        { key: "output_tokens", value: { intValue: "3" } },
+      ],
+    };
+    const span = parseResourceSpans(envelopeWithService("claude-code", [claudeSpan]))[0];
+    expect(span?.model).toBe("claude-opus-4-8"); // suffix stripped by the claude adapter
+    expect(span?.provider).toBe("anthropic");
+    expect(span?.inputTokens).toBe(5380); // bare keys mapped
+    expect(span?.outputTokens).toBe(3);
+  });
+
+  it("test_parse_uses_default_adapter_for_generic_service", () => {
+    // a generic gen_ai producer: bare input_tokens must NOT be read (default only
+    // reads gen_ai.usage.*) — proves the claude mapping does not leak to others.
+    const genericSpan = {
+      ...rawSpan,
+      attributes: [
+        { key: "gen_ai.request.model", value: { stringValue: "gpt-4o" } },
+        { key: "gen_ai.usage.input_tokens", value: { intValue: "100" } },
+        { key: "input_tokens", value: { intValue: "999" } },
+      ],
+    };
+    const span = parseResourceSpans(envelopeWithService("my-app", [genericSpan]))[0];
+    expect(span?.model).toBe("gpt-4o");
+    expect(span?.inputTokens).toBe(100); // gen_ai.usage, NOT the bare 999
+  });
+
+  it("test_parse_no_resource_attributes_uses_default", () => {
+    // no resource attrs at all → default adapter, no throw (backward compat).
+    const span = parseResourceSpans(envelope([rawSpan]))[0];
+    expect(span?.spanId).toBe("a1");
+  });
 });
