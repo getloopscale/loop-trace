@@ -256,4 +256,74 @@ suite("listTraces enrichment (integration, M18)", () => {
     expect(row?.inputPreview).toHaveLength(121);
     expect(row?.inputPreview?.endsWith("…")).toBe(true);
   });
+
+  it("list_traces_full_text_matches_child_span_content", async () => {
+    // D1: the ROOT span has NO text; a CHILD span carries the prompt. q must match
+    // the child (all-spans search), not just the root.
+    await repo.save([
+      span({ spanId: "root", traceId: "t-fts", name: "agent" }),
+      span({
+        spanId: "child",
+        traceId: "t-fts",
+        parentSpanId: "root",
+        inputValue: "please reschedule my flight to Lisbon next week",
+      }),
+    ]);
+    await repo.save([span({ spanId: "o", traceId: "t-other", inputValue: "weather in Paris" })]);
+    const { traces } = await repo.listTraces({ q: "lisbon flight" });
+    expect(traces.map((t) => t.traceId)).toContain("t-fts");
+    expect(traces.map((t) => t.traceId)).not.toContain("t-other");
+  });
+
+  it("list_traces_search_is_case_and_stem_insensitive", async () => {
+    // EC-4: english stemming + lowercasing — "FLIGHTS" matches q="flight".
+    await repo.save([
+      span({ spanId: "a", traceId: "t-stem", inputValue: "Reschedule my FLIGHTS now" }),
+    ]);
+    const { traces } = await repo.listTraces({ q: "flight" });
+    expect(traces.map((t) => t.traceId)).toContain("t-stem");
+  });
+
+  it("list_traces_search_no_match_returns_empty", async () => {
+    await repo.save([span({ spanId: "a", traceId: "t1", inputValue: "hello world" })]);
+    const { traces } = await repo.listTraces({ q: "zzzznomatchzzzz" });
+    expect(traces).toHaveLength(0);
+  });
+
+  it("list_traces_search_malformed_query_does_not_throw", async () => {
+    // D3: websearch_to_tsquery is total — garbage never 500s.
+    await repo.save([span({ spanId: "a", traceId: "t1", inputValue: "hello world" })]);
+    await expect(repo.listTraces({ q: 'a & & -" )(' })).resolves.toBeDefined();
+  });
+
+  it("list_traces_search_skips_textless_spans", async () => {
+    // EC-3: a trace with only textless spans never matches (empty tsvector, no crash).
+    await repo.save([span({ spanId: "a", traceId: "t-empty" })]);
+    const { traces } = await repo.listTraces({ q: "anything" });
+    expect(traces.map((t) => t.traceId)).not.toContain("t-empty");
+  });
+
+  it("list_traces_search_relevance_orders_best_match_first", async () => {
+    // D4: with q set and no explicit sort, the denser match ranks first.
+    await repo.save([
+      span({ spanId: "d", traceId: "t-dense", inputValue: "lisbon lisbon lisbon trip to lisbon" }),
+    ]);
+    await repo.save([
+      span({ spanId: "s", traceId: "t-sparse", inputValue: "a quick note mentioning lisbon once" }),
+    ]);
+    const { traces } = await repo.listTraces({ q: "lisbon" });
+    expect(traces[0]?.traceId).toBe("t-dense");
+  });
+
+  it("list_traces_search_composes_with_status_filter", async () => {
+    // q ANDs with the M9 status filter.
+    await repo.save([
+      span({ spanId: "e", traceId: "t-err", statusCode: "2", inputValue: "lisbon error path" }),
+    ]);
+    await repo.save([
+      span({ spanId: "k", traceId: "t-ok", statusCode: "1", inputValue: "lisbon ok path" }),
+    ]);
+    const { traces } = await repo.listTraces({ q: "lisbon", status: "error" });
+    expect(traces.map((t) => t.traceId)).toEqual(["t-err"]);
+  });
 });

@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import {
+  customType,
   doublePrecision,
   index,
   integer,
@@ -9,6 +11,13 @@ import {
   unique,
   uuid,
 } from "drizzle-orm/pg-core";
+
+/** Postgres `tsvector` (M24 full-text search) — no built-in drizzle type. */
+const tsvector = customType<{ data: string }>({
+  dataType() {
+    return "tsvector";
+  },
+});
 
 /**
  * M1 trace data model. `spans` is the source of truth; `traces` and `sessions`
@@ -45,6 +54,11 @@ export const spans = pgTable(
     ingestedAt: timestamp("ingested_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
+    // M24: full-text search vector over input+output, maintained by Postgres
+    // (GENERATED STORED) — no write-path change. NULL-safe via coalesce.
+    searchTsv: tsvector("search_tsv").generatedAlwaysAs(
+      sql`to_tsvector('english', coalesce(input_value, '') || ' ' || coalesce(output_value, ''))`,
+    ),
   },
   (t) => [
     index("spans_trace_id_idx").on(t.traceId),
@@ -55,6 +69,8 @@ export const spans = pgTable(
     index("spans_model_idx").on(t.model),
     // Backs the M11 time-windowed span scans (tokens-by-model over a range).
     index("spans_ingested_at_idx").on(t.ingestedAt),
+    // M24: backs the full-text `search_tsv @@ websearch_to_tsquery(...)` filter.
+    index("spans_search_tsv_gin_idx").using("gin", t.searchTsv),
   ],
 );
 

@@ -61,6 +61,8 @@ export const listTracesOptionsSchema = z
     format: z.enum(["json", "csv"]).optional(),
     // M14: filter the list to executions carrying this tag (free-form string).
     tag: z.string().min(1).optional(),
+    // M24: full-text search over span input/output content (websearch_to_tsquery).
+    q: z.string().min(1).optional(),
   })
   .strict();
 
