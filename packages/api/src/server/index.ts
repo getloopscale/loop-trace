@@ -2,10 +2,14 @@ import { pathToFileURL } from "node:url";
 
 import { serve } from "@hono/node-server";
 import type { Hono } from "hono";
-import { createSpanRepository, migrateLatest } from "@usetheo/lens-core";
+import { createSpanRepository, migrateLatest, parseRetentionConfig } from "@usetheo/lens-core";
 import type pg from "pg";
 
 import { createApp } from "./app.js";
+import { runPrune } from "../bin/prune.js";
+import { startRetentionScheduler } from "./retention-scheduler.js";
+
+const HOUR_MS = 3_600_000;
 
 /**
  * Default CWD-relative location of the built web bundle. The server is launched
@@ -20,15 +24,43 @@ const DEFAULT_WEB_DIST = "packages/web/dist";
  * app accepts traffic, then build the app serving the UI same-origin. Returns
  * the app + pool so the caller serves and (in tests) closes the pool. Rejects
  * loud on migration failure — a stack that cannot ingest must not come up.
+ *
+ * M23: when `THEOLENS_RETENTION_DAYS` is set, an opt-in retention sweep starts
+ * (default OFF otherwise). `stop()` clears the sweep (a no-op when disabled) for
+ * graceful shutdown + tests. The sweep timer is `unref()`'d so it never blocks exit.
  */
 export async function bootstrap(
   uri: string,
   webDistDir: string = DEFAULT_WEB_DIST,
-): Promise<{ app: Hono; pool: pg.Pool }> {
+): Promise<{ app: Hono; pool: pg.Pool; stop: () => void }> {
   const { repo, pool } = createSpanRepository(uri);
   await migrateLatest(pool);
   const app = createApp(repo, webDistDir);
-  return { app, pool };
+
+  const retention = parseRetentionConfig(process.env);
+  if (retention.warning) {
+    console.error(JSON.stringify({ level: "warn", msg: retention.warning }));
+  }
+  let stop = (): void => {};
+  if (retention.retentionDays != null) {
+    console.error(
+      JSON.stringify({
+        level: "info",
+        msg: "retention enabled",
+        retentionDays: retention.retentionDays,
+        sweepHours: retention.sweepHours,
+      }),
+    );
+    const handle = startRetentionScheduler({
+      intervalMs: retention.sweepHours * HOUR_MS,
+      runOnce: async () => {
+        const stats = await runPrune(repo, retention, new Date());
+        if (stats) console.error(JSON.stringify({ level: "info", msg: "pruned", ...stats }));
+      },
+    });
+    stop = handle.stop;
+  }
+  return { app, pool, stop };
 }
 
 /**
