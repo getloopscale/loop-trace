@@ -84,6 +84,11 @@ export {
   TAG_MAX_LENGTH,
   type TraceTagsResponse,
 } from "./domain/tags.js";
+export {
+  type PruneStats,
+  type RetentionConfig,
+  parseRetentionConfig,
+} from "./domain/retention.js";
 export { spans, traces, sessions, replaySessions } from "./infrastructure/db/schema.js";
 export {
   DrizzleSpanRepository,

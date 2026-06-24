@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Data retention: an opt-in policy hard-prunes trace data older than `THEOLENS_RETENTION_DAYS` so the database stops growing forever — trace-granular (a whole trace with its spans, tags, replay rows, and any now-orphaned session), atomic, keyed on the trace's last activity. Runs via the `pnpm db:prune` command and an opt-in in-process sweep (`THEOLENS_RETENTION_SWEEP_HOURS`, default 6h). Default OFF — nothing is ever deleted unless an operator sets a retention window; an invalid/zero window stays disabled (never a delete-all). No schema migration; no new dependency (M23)
 
 ### Changed
 

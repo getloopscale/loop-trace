@@ -42,6 +42,7 @@ import {
   type SessionDetailResponse,
   type RawSessionDetail,
 } from "../../domain/session.js";
+import type { PruneStats } from "../../domain/retention.js";
 import { spans, traces, sessions, replaySessions, traceTags } from "./schema.js";
 
 /** Build a pg connection pool for the given Postgres URI. */
@@ -796,6 +797,44 @@ export class DrizzleSpanRepository implements SpanRepository {
       .where(eq(traceTags.traceId, traceId))
       .orderBy(asc(traceTags.tag));
     return rows.map((r) => r.tag);
+  }
+
+  async prune(olderThan: Date): Promise<PruneStats> {
+    // M23 trace-granular hard-delete cascade, atomic in one transaction (the
+    // tables have NO DB foreign keys — see the orphan-risk note on listTags — so
+    // each dependent table is cleaned explicitly). Order: delete spans/tags/replay
+    // of stale traces FIRST (the `stale` subquery reads `traces` while it still
+    // holds those rows), THEN the stale traces, THEN now-orphaned sessions.
+    const cutoff = olderThan.toISOString();
+    const rowCount = (r: { rowCount: number | null }): number => r.rowCount ?? 0;
+    return this.db.transaction(async (tx) => {
+      const stale = sql`(SELECT trace_id FROM traces WHERE updated_at < ${cutoff})`;
+      const spansRes = await tx.execute(
+        sql`DELETE FROM spans WHERE trace_id IN ${stale}`,
+      );
+      const tagsRes = await tx.execute(
+        sql`DELETE FROM trace_tags WHERE trace_id IN ${stale}`,
+      );
+      const replayRes = await tx.execute(
+        sql`DELETE FROM replay_sessions WHERE trace_id IN ${stale}`,
+      );
+      const tracesRes = await tx.execute(
+        sql`DELETE FROM traces WHERE updated_at < ${cutoff}`,
+      );
+      // EC-1: the `IS NOT NULL` guard is mandatory — a NULL in a NOT IN set makes
+      // the whole predicate UNKNOWN and would silently delete ZERO orphans.
+      const sessionsRes = await tx.execute(
+        sql`DELETE FROM sessions WHERE session_id NOT IN (SELECT session_id FROM traces WHERE session_id IS NOT NULL)`,
+      );
+      return {
+        cutoff,
+        spansDeleted: rowCount(spansRes),
+        tagsDeleted: rowCount(tagsRes),
+        replaySessionsDeleted: rowCount(replayRes),
+        tracesDeleted: rowCount(tracesRes),
+        sessionsDeleted: rowCount(sessionsRes),
+      };
+    });
   }
 }
 
