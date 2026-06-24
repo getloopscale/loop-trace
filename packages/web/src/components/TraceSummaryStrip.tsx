@@ -47,10 +47,10 @@ export function TraceSummaryStrip() {
   return (
     <div
       className="grid grid-cols-2 gap-3 md:grid-cols-4"
-      aria-label="24h summary"
+      aria-label={`${range} summary`}
     >
       <div className="flex flex-col gap-1">
-        <StatTile value={totalTraces} label="Traces (24h)" icon={Activity} />
+        <StatTile value={totalTraces} label={`Traces (${range})`} icon={Activity} />
         <Sparkbar values={trafficSeries} label="Traffic trend" />
       </div>
       <div className="flex flex-col gap-1">
@@ -58,11 +58,11 @@ export function TraceSummaryStrip() {
         <Sparkbar values={latencySeries} label="Latency p95 trend" />
       </div>
       <div className="flex flex-col gap-1">
-        <StatTile value={totalTokens} label="Tokens (24h)" icon={Coins} />
+        <StatTile value={totalTokens} label={`Tokens (${range})`} icon={Coins} />
         <Sparkbar values={tokenSeries} label="Tokens trend" />
       </div>
       <div className="flex flex-col gap-1">
-        <StatTile value={formatUsd(totalCost)} label="Cost (24h)" icon={DollarSign} />
+        <StatTile value={formatUsd(totalCost)} label={`Cost (${range})`} icon={DollarSign} />
         <Sparkbar values={costSeries} label="Cost trend" />
       </div>
     </div>
