@@ -2,22 +2,15 @@ import { useMemo } from "react";
 import { sankey, sankeyLinkHorizontal } from "d3-sankey";
 import type { SankeyModel, SankeyNode } from "../lib/agent-graph.js";
 import type { SpanKind } from "../lib/span-kind.js";
+import { kindColor } from "../lib/kind-color.js";
 
-/** Kind → token color class (currentColor drives the SVG fill/stroke; no raw hex). */
+/**
+ * Kind → token color class (currentColor drives the SVG fill/stroke; no raw hex).
+ * Delegates to the canonical `kindColor` (M29) so the Sankey nodes read the SAME
+ * colour as the KindBadge dot and the SpanTree glyph — one source of truth.
+ */
 export function kindColorClass(kind: SpanKind | "terminal"): string {
-  switch (kind) {
-    case "llm":
-      return "text-accent";
-    case "tool":
-      return "text-warning";
-    case "retriever":
-    case "embedding":
-      return "text-primary";
-    case "chain":
-      return "text-foreground";
-    default:
-      return "text-muted-foreground";
-  }
+  return kindColor(kind).textClass;
 }
 
 const W = 640;

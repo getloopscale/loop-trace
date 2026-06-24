@@ -46,6 +46,11 @@ describe("TraceTable", () => {
     );
     // kind badge derived from root signals (chat → llm)
     expect(screen.getByText("llm")).toBeInTheDocument();
+    // M29: model pill renders the model id
+    expect(screen.getByText("gpt-4o")).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "Model" }),
+    ).toBeInTheDocument();
     // cost + input preview cells
     expect(screen.getByText("$0.0123")).toBeInTheDocument();
     expect(screen.getByText("the user prompt")).toBeInTheDocument();

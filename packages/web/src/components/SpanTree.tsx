@@ -8,6 +8,7 @@ import {
   isErrorStatus,
   type SpanKind,
 } from "../lib/span-kind.js";
+import { kindColor } from "../lib/kind-color.js";
 
 /** Short glyph per span kind (meaning conveyed by the aria-label, not color alone). */
 const KIND_GLYPH: Record<SpanKind, string> = {
@@ -17,17 +18,6 @@ const KIND_GLYPH: Record<SpanKind, string> = {
   embedding: "⋮",
   chain: "⛓",
   unknown: "•",
-};
-
-/** Per-kind glyph tint — design tokens only (no raw hex). Differentiation is a
- *  hint; the aria-label carries the meaning (color is never the sole cue). */
-const KIND_TINT: Record<SpanKind, string> = {
-  llm: "text-primary",
-  tool: "text-foreground",
-  retriever: "text-foreground",
-  embedding: "text-muted-foreground",
-  chain: "text-muted-foreground",
-  unknown: "text-muted-foreground",
 };
 
 interface SpanNodeProps {
@@ -64,7 +54,7 @@ function SpanNode({ node, depth, selectedId, onSelect, timeline }: SpanNodeProps
         {/* role=img + aria-label so the kind is announced reliably (the emoji's
             own Unicode name is overridden by the label) — review F-fe-1/F-fe-2. */}
         <span
-          className={`w-5 text-center ${KIND_TINT[kind]}`}
+          className={`w-5 text-center ${kindColor(kind).textClass}`}
           role="img"
           aria-label={`kind: ${kind}`}
           title={kind}

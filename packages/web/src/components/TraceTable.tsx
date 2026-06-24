@@ -9,6 +9,7 @@ import {
 import type { TraceListItem } from "../api/types.js";
 import { deriveTraceListItemKind } from "../lib/span-kind.js";
 import { KindBadge } from "./kind-badge.js";
+import { ModelPill } from "./ModelPill.js";
 import { formatDuration } from "../lib/duration.js";
 import { formatUsd } from "../lib/money.js";
 
@@ -45,6 +46,11 @@ const columns: DataTableColumn<TraceListItem>[] = [
     key: "kind",
     label: "Kind",
     render: (t) => <KindBadge kind={deriveTraceListItemKind(t)} />,
+  },
+  {
+    key: "model",
+    label: "Model",
+    render: (t) => <ModelPill model={t.model} />,
   },
   {
     key: "name",
