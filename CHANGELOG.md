@@ -16,6 +16,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Removed
 
 ### Fixed
+- The web production bundle (`vite build`) failed to compile under strict TypeScript (`exactOptionalPropertyTypes`): `TraceTable` forwarded a `boolean | undefined` `loading` prop to the design-system `DataTable` (which accepts `boolean` or omitted). Coerced to `loading ?? false` so the UI bundle builds again (M18 regression)
 
 ### Security
 

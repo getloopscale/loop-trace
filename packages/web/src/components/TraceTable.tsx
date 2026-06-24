@@ -142,7 +142,7 @@ export function TraceTable({
       rowKey={(t) => t.traceId}
       sort={sort}
       onSortChange={onSortChange}
-      loading={loading}
+      loading={loading ?? false}
       emptyState={<span className="text-muted-foreground">No executions yet</span>}
       expandable={(t) =>
         t.inputPreview || t.outputPreview ? (
