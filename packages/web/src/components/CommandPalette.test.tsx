@@ -40,6 +40,20 @@ describe("CommandPalette", () => {
     expect(navigate).toHaveBeenCalledWith("/sessions");
   });
 
+  it("test_palette_arrow_keys_move_highlight_then_enter", async () => {
+    renderPalette();
+    await userEvent.keyboard("{Control>}k{/Control}");
+    const input = await screen.findByLabelText("command search");
+    // "agent" → two matches: Agent Graph (0), Agent Path (1)
+    await userEvent.type(input, "agent");
+    // combobox wiring: activedescendant points at the highlighted option
+    expect(input).toHaveAttribute("aria-activedescendant", "cmdk-opt-agent-graph");
+    await userEvent.keyboard("{ArrowDown}");
+    expect(input).toHaveAttribute("aria-activedescendant", "cmdk-opt-agent-path");
+    await userEvent.keyboard("{Enter}");
+    expect(navigate).toHaveBeenCalledWith("/agent-path");
+  });
+
   it("test_palette_escape_closes", async () => {
     renderPalette();
     await userEvent.keyboard("{Control>}k{/Control}");

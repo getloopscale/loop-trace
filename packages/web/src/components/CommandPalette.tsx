@@ -67,6 +67,20 @@ export function CommandPalette() {
       : COMMANDS.filter((c) => c.label.toLowerCase().includes(q));
   }, [query]);
 
+  // The id of the active option — wires the combobox input to the highlighted
+  // option (APG combobox+listbox: aria-activedescendant) so screen readers
+  // announce the active command during arrow navigation (review F-fe-1).
+  const activeOption = filtered[highlight];
+  const activeOptionId = activeOption ? `cmdk-opt-${activeOption.id}` : undefined;
+
+  // Keep the highlighted option scrolled into the (max-h, scrollable) list
+  // as arrow keys move past the fold (review F-fe-2).
+  useEffect(() => {
+    if (mode !== "commands" || activeOptionId == null) return;
+    // optional-call the method: jsdom elements lack scrollIntoView (mirrors SpanTree).
+    document.getElementById(activeOptionId)?.scrollIntoView?.({ block: "nearest" });
+  }, [activeOptionId, mode]);
+
   function runCommand(cmd: Command | undefined): void {
     if (cmd == null) return;
     if (cmd.action === "trace-by-id") {
@@ -115,7 +129,11 @@ export function CommandPalette() {
           <div className="flex flex-col gap-2">
             <input
               type="text"
+              role="combobox"
               aria-label="command search"
+              aria-expanded="true"
+              aria-controls="cmdk-listbox"
+              aria-activedescendant={activeOptionId}
               placeholder="Type a command…"
               value={query}
               autoFocus
@@ -126,16 +144,27 @@ export function CommandPalette() {
               onKeyDown={onListKeyDown}
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
             />
-            <ul className="m-0 flex max-h-72 list-none flex-col gap-0.5 overflow-auto p-0" role="listbox" aria-label="commands">
+            <ul
+              id="cmdk-listbox"
+              className="m-0 flex max-h-72 list-none flex-col gap-0.5 overflow-auto p-0"
+              role="listbox"
+              aria-label="commands"
+            >
               {filtered.length === 0 ? (
                 <li className="px-3 py-2 text-sm text-muted-foreground">
                   No matching command
                 </li>
               ) : (
                 filtered.map((c, i) => (
-                  <li key={c.id} role="option" aria-selected={i === highlight}>
+                  <li
+                    key={c.id}
+                    id={`cmdk-opt-${c.id}`}
+                    role="option"
+                    aria-selected={i === highlight}
+                  >
                     <button
                       type="button"
+                      tabIndex={-1}
                       className={`w-full rounded px-3 py-2 text-left text-sm transition-colors hover:bg-muted ${
                         i === highlight ? "bg-muted" : ""
                       }`}
