@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Span-kind colour identity: every span kind now reads one consistent colour everywhere — the executions kind badge, the trace span-tree glyph, and the Agent Graph/Path nodes all draw from a single canonical map (AGENT violet · LLM orange · TOOL amber · RETRIEVER blue · EMBEDDING green), and the executions list gains a colored model pill per model. Token-based (no raw hex); the colour is always paired with its text label (M29)
 
 ### Changed
 
