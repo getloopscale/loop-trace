@@ -73,6 +73,8 @@ export interface ListTracesQuery {
   dir?: "asc" | "desc";
   /** M14: filter to executions carrying this free-form tag. */
   tag?: string;
+  /** M24: full-text search over span input/output content. */
+  q?: string;
 }
 
 /** A trace's tags (M14). */

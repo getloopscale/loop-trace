@@ -356,13 +356,33 @@ export class DrizzleSpanRepository implements SpanRepository {
         .where(eq(traceTags.tag, opts.tag));
       conds.push(inArray(traces.traceId, taggedTraceIds));
     }
+    // M24: one parsed tsquery, reused by the filter AND the relevance rank so both
+    // interpret `q` identically (`websearch_to_tsquery` is total — never throws on
+    // malformed `q`, D3; `${opts.q}` is a bound param — no injection).
+    const tsq =
+      opts.q != null
+        ? sql`websearch_to_tsquery('english', ${opts.q})`
+        : undefined;
+    if (tsq) {
+      // Full-text search over ANY span's input/output (D1 — not root-only; EXISTS
+      // lists the trace once, no row multiplication).
+      conds.push(
+        sql`EXISTS (SELECT 1 FROM spans s WHERE s.trace_id = ${traces.traceId} AND s.search_tsv @@ ${tsq})`,
+      );
+    }
     const where = conds.length > 0 ? and(...conds) : undefined;
 
     // EC-2: latency sorts on the nullable TEXT nanos via a numeric cast, clamping
     // clock-skew negatives to 0 (M6 consistency); NULLS LAST so missing values
     // never lead; secondary updated_at DESC makes ties deterministic (Q1).
-    const sortCol =
-      opts.orderBy === "latency"
+    // M24 (D4): when searching with no explicit sort, order by relevance — the
+    // trace's best matching span's ts_rank. An explicit orderBy still wins (search
+    // is a filter; the user can still sort matches by latency/tokens/cost).
+    const relevanceSort =
+      tsq != null && (opts.orderBy == null || opts.orderBy === "recent");
+    const sortCol = relevanceSort
+      ? sql`(SELECT max(ts_rank(s.search_tsv, ${tsq})) FROM spans s WHERE s.trace_id = ${traces.traceId} AND s.search_tsv @@ ${tsq})`
+      : opts.orderBy === "latency"
         ? // A one-sided NULL (only start OR only end) must sort NULLS LAST, not as
           // 0 — `greatest(0, end - NULL)` returns 0, so guard with an explicit CASE
           // that yields NULL unless BOTH bounds are present (F-data-1).

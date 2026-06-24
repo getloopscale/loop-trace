@@ -53,6 +53,32 @@ export function TraceFilters({
     }, 300);
   };
 
+  // M24: full-text search over span input/output, debounced like model/tag (own timer).
+  const [searchInput, setSearchInput] = useState(query.q ?? "");
+  const searchTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => setSearchInput(query.q ?? ""), [query.q]);
+  const onSearchInput = (value: string) => {
+    setSearchInput(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      const next: ListTracesQuery = { ...query };
+      if (value) next.q = value;
+      else delete next.q;
+      onChange(next);
+    }, 300);
+  };
+
+  // Clear any pending debounce on unmount so a late timer never setStates an
+  // unmounted component (covers the model/tag/search inputs).
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+      if (tagTimer.current) clearTimeout(tagTimer.current);
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    },
+    [],
+  );
+
   const setField = (
     key: "status" | "from" | "to",
     value: string | undefined,
@@ -66,6 +92,16 @@ export function TraceFilters({
   return (
     <div className="trace-filters">
       <div className="trace-filter-controls">
+        <label>
+          Search
+          <input
+            type="search"
+            aria-label="search content"
+            placeholder="Search prompt / response…"
+            value={searchInput}
+            onChange={(e) => onSearchInput(e.target.value)}
+          />
+        </label>
         <label>
           Status
           <select

@@ -512,6 +512,27 @@ describe("createApp (contract, stub repo)", () => {
     });
   });
 
+  it("get_traces_forwards_q_param", async () => {
+    const res = await app.request("/v1/traces?q=lisbon");
+    expect(res.status).toBe(200);
+    expect(repo.lastListOpts?.q).toBe("lisbon");
+  });
+
+  it("get_traces_empty_q_is_omitted", async () => {
+    // EC: a cleared search box (`?q=`) is "no filter", NOT a 400 on min(1).
+    const res = await app.request("/v1/traces?q=");
+    expect(res.status).toBe(200);
+    expect(repo.lastListOpts?.q).toBeUndefined();
+  });
+
+  it("get_traces_csv_export_honors_q", async () => {
+    // EC-1: the CSV export reuses the SAME filtered query — q must reach the repo.
+    const res = await app.request("/v1/traces?q=lisbon&format=csv");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/csv");
+    expect(repo.lastListOpts).toMatchObject({ q: "lisbon", format: "csv" });
+  });
+
   it("test_get_traces_csv_export_has_header_and_rows", async () => {
     await repo.save([{ spanId: "csv1", traceId: "csv-t1", name: "checkout", startTimeUnixNano: "1700000000000000000", endTimeUnixNano: "1700000000100000000" }]);
     const res = await app.request("/v1/traces?format=csv");

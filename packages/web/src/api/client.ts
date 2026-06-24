@@ -29,6 +29,7 @@ function listQueryString(
   if (q.orderBy) p.set("order_by", q.orderBy);
   if (q.dir) p.set("dir", q.dir);
   if (q.tag) p.set("tag", q.tag);
+  if (q.q) p.set("q", q.q);
   for (const [k, v] of Object.entries(extra ?? {})) p.set(k, v);
   const s = p.toString();
   return s ? `?${s}` : "";
