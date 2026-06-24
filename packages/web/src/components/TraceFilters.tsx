@@ -68,6 +68,17 @@ export function TraceFilters({
     }, 300);
   };
 
+  // Clear any pending debounce on unmount so a late timer never setStates an
+  // unmounted component (covers the model/tag/search inputs).
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+      if (tagTimer.current) clearTimeout(tagTimer.current);
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    },
+    [],
+  );
+
   const setField = (
     key: "status" | "from" | "to",
     value: string | undefined,
