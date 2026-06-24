@@ -20,6 +20,7 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:prune": "tsx packages/api/src/bin/prune.ts",
+    "db:seed:demo": "tsx packages/api/src/bin/seed-demo.ts",
     "compose:up": "docker compose up -d",
     "compose:down": "docker compose down"
   },

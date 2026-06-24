@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Demo dataset: `pnpm db:seed:demo` seeds an idempotent multi-agent travel-agent trace set (a `TripAgentGraph` orchestrating `local_agent`/`research_agent`/`budget_agent`/`itinerary_agent`, each with ChatOpenAI LLM, tool, and retriever spans) so every screen — Executions, the trace 3-pane, Agent Graph, Agent Path, Sessions — shows rich, realistic content out of the box. Goes through the real OTLP ingestion path; re-running never duplicates (M28)
 - Command palette: press Cmd/Ctrl+K anywhere to jump to any view or open a trace by ID (M-UX)
 - Roadmap amended: added the AI-observability peer-parity track to ROADMAP-v3.md — M28 (travel-agent demo dataset seeder), M29 (parity UI deltas + analytics polish), M30 (span query filter language), M31 (Live mode); M26 (online evals) referenced as the track's evals milestone (`/roadmap-feature arize-feature-parity`)
 - Roadmap: absorbed learnings from a 2nd studied peer (Grafana Sigil) — extended M29 (KPI delta %, model pills, Time-to-First-Token, Breakdown-by dimension), enriched M26's design (eval-as-rule + Guards + inline span verdicts + human feedback), and added net-new M32 (versioned agents catalog) and M33 ("Ask about this step" trace copilot)
