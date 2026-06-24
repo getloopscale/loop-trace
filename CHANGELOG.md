@@ -8,7 +8,6 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Full-text search: the executions list gains a search box (`GET /v1/traces?q=`) that finds traces by the text of *any* span's input or output (prompt/response) — not just the root — backed by a Postgres GIN-indexed `tsvector` over span content. Queries are user-friendly (`websearch_to_tsquery`: bare words AND, "quoted phrases", `or`, `-exclude`) and never error on odd input; results are relevance-ranked by default and compose with the existing status/model/time/tag filters and the CSV export. One index-only migration; no new dependency (M24)
 
 ### Changed
 
@@ -19,6 +18,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 ### Security
+
+## [0.23.0] - 2026-06-24
+
+### Added
+- Full-text search: the executions list gains a search box (`GET /v1/traces?q=`) that finds traces by the text of *any* span's input or output (prompt/response) — not just the root — backed by a Postgres GIN-indexed `tsvector` over span content. Queries are user-friendly (`websearch_to_tsquery`: bare words AND, "quoted phrases", `or`, `-exclude`) and never error on odd input; results are relevance-ranked by default and compose with the existing status/model/time/tag filters and the CSV export. One index-only migration; no new dependency (M24)
 
 ## [0.22.0] - 2026-06-24
 
