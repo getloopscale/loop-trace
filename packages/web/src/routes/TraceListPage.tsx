@@ -66,7 +66,7 @@ export function TraceListPage() {
         <AutoRefreshControl dataUpdatedAt={dataUpdatedAt} />
       </header>
       <TraceSummaryStrip />
-      <TraceFilters query={query} onChange={setQuery} />
+      <TraceFilters query={query} onChange={setQuery} exportQuery={effectiveQuery} />
       <SavedViewSelector query={query} onApply={setQuery} />
       {/* Prefer showing data (even stale, via keepPreviousData) over an error, so a
           transient refetch failure does not wipe a populated list (review F-fe-6). */}

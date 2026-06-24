@@ -11,9 +11,16 @@ import { tracesExportHref } from "../api/client.js";
 export function TraceFilters({
   query,
   onChange,
+  exportQuery,
 }: {
   query: ListTracesQuery;
   onChange: (next: ListTracesQuery) => void;
+  /**
+   * Query used for the CSV export href. Defaults to `query`; callers pass the
+   * time-bounded effective query so the export honours the global date range
+   * (M29b — the toolbar no longer owns From/To). Review F-arch-1.
+   */
+  exportQuery?: ListTracesQuery;
 }) {
   // Debounce the model input so typing does not fire a request per keystroke (F-fe-9).
   const [modelInput, setModelInput] = useState(query.model ?? "");
@@ -144,7 +151,7 @@ export function TraceFilters({
       </label>
       <a
         className="inline-flex items-center rounded-md border border-border bg-background px-3 py-1 text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
-        href={tracesExportHref(query)}
+        href={tracesExportHref(exportQuery ?? query)}
         download
       >
         Export CSV

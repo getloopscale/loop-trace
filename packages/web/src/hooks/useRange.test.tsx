@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
@@ -79,5 +79,21 @@ describe("RangeProvider", () => {
   it("test_range_provider_corrupt_value_falls_back", () => {
     localStorage.setItem("theolens.range", "not-a-range");
     expect(readStoredRange()).toBe("7d");
+  });
+
+  it("test_range_provider_disabled_storage_falls_back", () => {
+    // Negative case (testing.md §4.1): private-mode / disabled storage makes
+    // getItem THROW — readStoredRange must swallow it and return the default,
+    // never crash boot. Distinct from the corrupt-VALUE case above.
+    const spy = vi
+      .spyOn(Storage.prototype, "getItem")
+      .mockImplementation(() => {
+        throw new DOMException("storage disabled", "SecurityError");
+      });
+    try {
+      expect(readStoredRange()).toBe("7d");
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
