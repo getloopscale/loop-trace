@@ -19,6 +19,7 @@
     "coverage": "vitest run -c vitest.contract.config.ts --coverage",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
+    "db:prune": "tsx packages/api/src/bin/prune.ts",
     "compose:up": "docker compose up -d",
     "compose:down": "docker compose down"
   },

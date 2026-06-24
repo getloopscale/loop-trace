@@ -71,6 +71,13 @@
       "when": 1782169793292,
       "tag": "0009_mean_nitro",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1782293668515,
+      "tag": "0010_glorious_doomsday",
+      "breakpoints": true
     }
   ]
 }

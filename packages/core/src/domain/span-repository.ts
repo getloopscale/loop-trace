@@ -5,6 +5,7 @@ import type { ToolStatsResponse } from "./tool-stats.js";
 import type { NorthStarResponse } from "./north-star.js";
 import type { ObservabilityRange, ObservabilityResponse } from "./observability.js";
 import type { SessionListResponse, SessionDetailResponse } from "./session.js";
+import type { PruneStats } from "./retention.js";
 
 /** A span plus its reconstructed children — the trace tree node. */
 export interface TraceTreeNode extends Span {
@@ -52,4 +53,10 @@ export interface SpanRepository {
   removeTag(traceId: string, tag: string): Promise<void>;
   /** A trace's tags, ordered (M14); empty when the trace has none. */
   listTags(traceId: string): Promise<string[]>;
+  /**
+   * Hard-delete trace data older than `olderThan` (M23 retention) — trace-granular:
+   * every trace with `updated_at < olderThan` and all its spans/tags/replay rows,
+   * plus sessions left with no remaining trace. Atomic (single transaction).
+   */
+  prune(olderThan: Date): Promise<PruneStats>;
 }
