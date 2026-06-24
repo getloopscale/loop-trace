@@ -18,6 +18,48 @@ describe("TraceFilters tag filter (M14)", () => {
   });
 });
 
+describe("TraceFilters themed toolbar (M-UX)", () => {
+  it("trace_filters_themed_controls_keep_all_aria_labels", () => {
+    const { container } = render(
+      <TraceFilters query={{}} onChange={() => {}} />,
+    );
+    // every migrated control keeps its accessible name (a11y preserved)
+    for (const label of [
+      "search content",
+      "status filter",
+      "model filter",
+      "from time",
+      "to time",
+      "tag filter",
+    ]) {
+      expect(screen.getByLabelText(label)).toBeInTheDocument();
+    }
+    // no legacy wrapper class survives
+    expect(container.querySelector(".trace-filters")).toBeNull();
+    expect(container.querySelector(".trace-export")).toBeNull();
+  });
+
+  it("trace_filters_status_select_updates_query", async () => {
+    let query: ListTracesQuery = {};
+    const onChange = vi.fn((next: ListTracesQuery) => {
+      query = next;
+    });
+    render(<TraceFilters query={query} onChange={onChange} />);
+    await userEvent.selectOptions(
+      screen.getByLabelText("status filter"),
+      "error",
+    );
+    expect(query.status).toBe("error");
+  });
+
+  it("trace_filters_export_link_keeps_href_and_download", () => {
+    render(<TraceFilters query={{ status: "error" }} onChange={() => {}} />);
+    const link = screen.getByRole("link", { name: "Export CSV" });
+    expect(link).toHaveAttribute("download");
+    expect(link.getAttribute("href") ?? "").toContain("status=error");
+  });
+});
+
 describe("TraceFilters search box (M24)", () => {
   it("list_traces_search_box_filters", async () => {
     let query: ListTracesQuery = {};

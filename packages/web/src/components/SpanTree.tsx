@@ -19,6 +19,17 @@ const KIND_GLYPH: Record<SpanKind, string> = {
   unknown: "•",
 };
 
+/** Per-kind glyph tint — design tokens only (no raw hex). Differentiation is a
+ *  hint; the aria-label carries the meaning (color is never the sole cue). */
+const KIND_TINT: Record<SpanKind, string> = {
+  llm: "text-primary",
+  tool: "text-foreground",
+  retriever: "text-foreground",
+  embedding: "text-muted-foreground",
+  chain: "text-muted-foreground",
+  unknown: "text-muted-foreground",
+};
+
 interface SpanNodeProps {
   node: TraceTreeNode;
   depth: number;
@@ -44,29 +55,44 @@ function SpanNode({ node, depth, selectedId, onSelect, timeline }: SpanNodeProps
         type="button"
         data-depth={depth}
         data-kind={kind}
+        data-status={errored ? "error" : "ok"}
         aria-current={selectedId === node.spanId ? "true" : undefined}
-        className={errored ? "span-row span-status-error" : "span-row span-status-ok"}
+        className="flex w-full items-center gap-3 rounded px-2 py-1.5 text-left transition-colors hover:bg-muted aria-[current=true]:bg-muted"
         style={{ paddingLeft: `${depth * 16}px` }}
         onClick={() => onSelect(node)}
       >
         {/* role=img + aria-label so the kind is announced reliably (the emoji's
             own Unicode name is overridden by the label) — review F-fe-1/F-fe-2. */}
-        <span className="span-kind" role="img" aria-label={`kind: ${kind}`} title={kind}>
+        <span
+          className={`w-5 text-center ${KIND_TINT[kind]}`}
+          role="img"
+          aria-label={`kind: ${kind}`}
+          title={kind}
+        >
           {KIND_GLYPH[kind]}
         </span>
-        <span className="span-name">{node.name}</span>
+        <span
+          className={`min-w-0 flex-1 truncate ${errored ? "text-destructive" : ""}`}
+        >
+          {node.name}
+        </span>
         {/* Status is conveyed by text, not color alone (review F-fe-3). */}
-        {errored && <span className="span-status-badge">⚠ error</span>}
+        {errored && (
+          <span className="text-[0.7rem] font-semibold uppercase tracking-wide text-destructive">
+            ⚠ error
+          </span>
+        )}
         {/* Proportional waterfall bar (M10) — decorative; the duration text is the a11y value. */}
         {bar && (
-          <span className="span-waterfall" aria-hidden="true">
+          <span className="relative h-[0.8em] min-w-20 flex-[2] self-center overflow-hidden rounded bg-muted" aria-hidden="true">
             <span
-              className="span-waterfall-bar"
+              data-waterfall-bar
+              className={`absolute inset-y-0 rounded ${errored ? "bg-destructive" : "bg-muted-foreground"}`}
               style={{ left: `${bar.leftPct}%`, width: `${bar.widthPct}%` }}
             />
           </span>
         )}
-        <span className="span-duration">{formatDuration(dur)}</span>
+        <span className="tabular-nums text-muted-foreground">{formatDuration(dur)}</span>
       </button>
       {node.children.length > 0 && (
         <ul>
@@ -104,14 +130,17 @@ export function SpanTree({ root, selectedId, onSelect }: SpanTreeProps) {
     (el as HTMLElement | null)?.scrollIntoView?.({ block: "nearest" });
   }, [selectedId]);
   return (
-    <div className="span-tree-wrap">
+    <div className="flex flex-col gap-2">
       {/* Error propagated from any descendant to the trace root (M10, D3). */}
       {traceErrored && (
-        <p className="trace-error-summary" role="status">
+        <p
+          className="m-0 flex items-center gap-1 rounded-md bg-destructive/10 px-2 py-1.5 text-sm font-semibold text-destructive"
+          role="status"
+        >
           <span aria-hidden="true">⚠ </span>This trace contains an error
         </p>
       )}
-      <ul ref={ref} className="span-tree" aria-label="span tree">
+      <ul ref={ref} className="m-0 list-none p-0 [&_ul]:list-none [&_ul]:p-0" aria-label="span tree">
         <SpanNode
           node={root}
           depth={0}

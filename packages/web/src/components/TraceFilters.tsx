@@ -89,78 +89,91 @@ export function TraceFilters({
     onChange(next);
   };
 
+  // Shared design-token field styling (DRY — presentation only, one source).
+  const fieldCls =
+    "rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring";
+  const labelCls = "flex flex-col gap-1 text-xs text-muted-foreground";
+
   return (
-    <div className="trace-filters">
-      <div className="trace-filter-controls">
-        <label>
-          Search
-          <input
-            type="search"
-            aria-label="search content"
-            placeholder="Search prompt / response…"
-            value={searchInput}
-            onChange={(e) => onSearchInput(e.target.value)}
-          />
-        </label>
-        <label>
-          Status
-          <select
-            aria-label="status filter"
-            value={query.status ?? ""}
-            onChange={(e) =>
-              setField(
-                "status",
-                e.target.value === "ok" || e.target.value === "error"
-                  ? e.target.value
-                  : undefined,
-              )
-            }
-          >
-            <option value="">All</option>
-            <option value="ok">OK</option>
-            <option value="error">Error</option>
-          </select>
-        </label>
-        <label>
-          Model
-          <input
-            type="text"
-            aria-label="model filter"
-            placeholder="e.g. gpt-4o"
-            value={modelInput}
-            onChange={(e) => onModelInput(e.target.value)}
-          />
-        </label>
-        <label>
-          From
-          <input
-            type="datetime-local"
-            aria-label="from time"
-            onChange={(e) => setField("from", toIso(e.target.value))}
-          />
-        </label>
-        <label>
-          To
-          <input
-            type="datetime-local"
-            aria-label="to time"
-            onChange={(e) => setField("to", toIso(e.target.value))}
-          />
-        </label>
-        <label>
-          Tag
-          <input
-            type="text"
-            aria-label="tag filter"
-            placeholder="e.g. prod"
-            value={tagInput}
-            onChange={(e) => onTagInput(e.target.value)}
-          />
-        </label>
-        <a className="trace-export" href={tracesExportHref(query)} download>
-          Export CSV
-        </a>
-      </div>
+    <div className="flex flex-wrap items-end gap-3">
+      <label className={labelCls}>
+        <span>Search</span>
+        <input
+          type="search"
+          aria-label="search content"
+          placeholder="Search prompt / response…"
+          value={searchInput}
+          onChange={(e) => onSearchInput(e.target.value)}
+          className={`${fieldCls} min-w-56`}
+        />
+      </label>
+      <label className={labelCls}>
+        <span>Status</span>
+        <select
+          aria-label="status filter"
+          value={query.status ?? ""}
+          onChange={(e) =>
+            setField(
+              "status",
+              e.target.value === "ok" || e.target.value === "error"
+                ? e.target.value
+                : undefined,
+            )
+          }
+          className={fieldCls}
+        >
+          <option value="">All</option>
+          <option value="ok">OK</option>
+          <option value="error">Error</option>
+        </select>
+      </label>
+      <label className={labelCls}>
+        <span>Model</span>
+        <input
+          type="text"
+          aria-label="model filter"
+          placeholder="e.g. gpt-4o"
+          value={modelInput}
+          onChange={(e) => onModelInput(e.target.value)}
+          className={fieldCls}
+        />
+      </label>
+      <label className={labelCls}>
+        <span>From</span>
+        <input
+          type="datetime-local"
+          aria-label="from time"
+          onChange={(e) => setField("from", toIso(e.target.value))}
+          className={fieldCls}
+        />
+      </label>
+      <label className={labelCls}>
+        <span>To</span>
+        <input
+          type="datetime-local"
+          aria-label="to time"
+          onChange={(e) => setField("to", toIso(e.target.value))}
+          className={fieldCls}
+        />
+      </label>
+      <label className={labelCls}>
+        <span>Tag</span>
+        <input
+          type="text"
+          aria-label="tag filter"
+          placeholder="e.g. prod"
+          value={tagInput}
+          onChange={(e) => onTagInput(e.target.value)}
+          className={fieldCls}
+        />
+      </label>
+      <a
+        className="inline-flex items-center rounded-md border border-border bg-background px-3 py-1 text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+        href={tracesExportHref(query)}
+        download
+      >
+        Export CSV
+      </a>
     </div>
   );
 }

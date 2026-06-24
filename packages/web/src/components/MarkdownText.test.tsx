@@ -8,7 +8,9 @@ describe("MarkdownText (M12 D4 / risk #2)", () => {
     // M19/FE-01: markdown headings are demoted to non-heading paragraphs so embedded
     // content never hijacks the page outline — no <h1>, but the text + emphasis render.
     expect(container.querySelector("h1")).toBeNull();
-    expect(container.querySelector("p.md-heading")?.textContent).toBe("Title");
+    expect(container.querySelector("p[data-md-heading]")?.textContent).toBe(
+      "Title",
+    );
     expect(container.querySelector("strong")?.textContent).toBe("bold");
     // not the literal markdown source
     expect(screen.queryByText("# Title")).toBeNull();

@@ -10,7 +10,11 @@ import type { ReactNode } from "react";
  * non-heading paragraph — the visual emphasis stays, the document outline does not.
  */
 function MdHeading({ children }: { children?: ReactNode }) {
-  return <p className="md-heading">{children}</p>;
+  return (
+    <p data-md-heading className="font-semibold text-foreground">
+      {children}
+    </p>
+  );
 }
 
 const COMPONENTS: Components = {
@@ -32,7 +36,7 @@ const COMPONENTS: Components = {
  */
 export function MarkdownText({ text }: { text: string }) {
   return (
-    <div className="markdown-text">
+    <div className="[overflow-wrap:anywhere] text-sm leading-relaxed [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_pre]:overflow-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-3">
       <Markdown rehypePlugins={[rehypeSanitize]} components={COMPONENTS}>
         {text}
       </Markdown>

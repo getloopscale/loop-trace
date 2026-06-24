@@ -14,15 +14,19 @@ export function SpanIOPanel({ span }: { span: SpanNodeData }) {
   const hasOutput = span.outputValue != null && span.outputValue.length > 0;
 
   return (
-    <section aria-label="span input/output" className="span-detail flex flex-col gap-2">
-      <h3>Input</h3>
+    <section aria-label="span input/output" className="flex flex-col gap-2">
+      <h3 className="mb-1 mt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Input
+      </h3>
       {hasInput ? (
         <MarkdownText text={span.inputValue!} />
       ) : (
         <EmptyState message="No input recorded" />
       )}
 
-      <h3>Output</h3>
+      <h3 className="mb-1 mt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Output
+      </h3>
       {hasOutput ? (
         <MarkdownText text={span.outputValue!} />
       ) : (
@@ -30,8 +34,13 @@ export function SpanIOPanel({ span }: { span: SpanNodeData }) {
       )}
 
       {isErrorStatus(span.statusCode) && (
-        <div role="alert" className="detail-error">
-          <h3>Error</h3>
+        <div
+          role="alert"
+          className="mt-4 rounded-md bg-destructive/10 p-3 text-destructive"
+        >
+          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide">
+            Error
+          </h3>
           <p>{span.statusMessage ?? "Span ended with ERROR status"}</p>
         </div>
       )}

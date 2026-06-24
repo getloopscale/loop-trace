@@ -79,13 +79,13 @@ export function TracePage() {
       {data.sessionId ? (
         <Link
           to={`/sessions/${encodeURIComponent(data.sessionId)}`}
-          className="trace-session-link"
+          className="text-sm text-primary"
         >
           View session →
         </Link>
       ) : null}
       {cost ? (
-        <p className="trace-cost">
+        <p className="font-semibold tabular-nums text-foreground">
           Total cost: {formatUsd(cost.costUsd)} · {cost.totalTokens} tokens
         </p>
       ) : null}

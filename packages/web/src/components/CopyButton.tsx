@@ -22,7 +22,7 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
   return (
     <button
       type="button"
-      className="copy-button"
+      className="inline-flex items-center rounded-md border border-border bg-background px-2 py-0.5 text-xs text-foreground transition-colors hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
       onClick={onCopy}
       disabled={!available}
       aria-label={label}

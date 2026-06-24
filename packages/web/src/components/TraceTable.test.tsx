@@ -14,7 +14,7 @@ function renderTable(props: Partial<React.ComponentProps<typeof TraceTable>> = {
           traces={props.traces ?? []}
           sort={props.sort ?? null}
           onSortChange={props.onSortChange ?? (() => {})}
-          loading={props.loading}
+          loading={props.loading ?? false}
         />
       </MemoryRouter>
     </ThemeProvider>,

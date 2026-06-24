@@ -46,10 +46,11 @@ export function AutoRefreshControl({
       : null;
 
   return (
-    <span className="auto-refresh-control">
-      <label>
+    <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+      <label className="inline-flex items-center gap-1.5">
         Auto-refresh{" "}
         <select
+          className="rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
           value={encode(intervalMs)}
           onChange={(e) => setIntervalMs(decode(e.target.value))}
         >
@@ -62,7 +63,7 @@ export function AutoRefreshControl({
       </label>
       {secondsAgo !== null && (
         <span
-          className="auto-refresh-updated"
+          className="tabular-nums text-muted-foreground"
           role="status"
           aria-live="polite"
         >

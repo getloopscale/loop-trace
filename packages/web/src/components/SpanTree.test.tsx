@@ -48,8 +48,10 @@ describe("SpanTree", () => {
     );
     // duration shown (5_000_000 ns = 5 ms)
     expect(screen.getByText("5 ms")).toBeInTheDocument();
-    // status: the failed span carries the error class AND a non-color text badge
-    expect(screen.getByText("charge").closest("button")!.className).toContain("error");
+    // status: the failed span carries a stable data-status hook AND a non-color text badge
+    expect(
+      screen.getByText("charge").closest("button")!.getAttribute("data-status"),
+    ).toBe("error");
     expect(screen.getByText("⚠ error")).toBeInTheDocument();
   });
 
@@ -64,13 +66,13 @@ describe("SpanTree", () => {
 
   it("test_span_tree_renders_proportional_waterfall_bars", () => {
     const { container } = render(<SpanTree root={tree} onSelect={() => {}} />);
-    const bars = container.querySelectorAll(".span-waterfall-bar");
+    const bars = container.querySelectorAll("[data-waterfall-bar]");
     expect(bars.length).toBeGreaterThanOrEqual(3); // one per span
     // child c1 [1ms,3ms] of root [0,5ms] → left≈20%
     const childBar = screen
       .getByText("search-products")
       .closest("button")!
-      .querySelector(".span-waterfall-bar") as HTMLElement;
+      .querySelector("[data-waterfall-bar]") as HTMLElement;
     expect(childBar.style.width).toMatch(/%$/);
     expect(parseFloat(childBar.style.left)).toBeCloseTo(20, 0);
   });

@@ -21,7 +21,7 @@ export function Sparkbar({
   const barWidth = slot > 1 ? slot - 1 : slot;
   return (
     <svg
-      className="sparkbar"
+      className="block text-primary"
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
@@ -39,6 +39,7 @@ export function Sparkbar({
             y={height - h}
             width={barWidth}
             height={h}
+            fill="currentColor"
           />
         );
       })}

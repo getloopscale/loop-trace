@@ -19,22 +19,28 @@ export function TraceTags({ traceId }: { traceId: string }) {
   };
 
   return (
-    <section aria-label="tags" className="trace-tags">
-      <h3>Tags</h3>
+    <section aria-label="tags" className="flex flex-col gap-2">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Tags
+      </h3>
       {query.isLoading ? (
-        <Loading label="Loading tags…" />
+        <Loading label="Loading tags…" rows={1} />
       ) : query.isError || !query.data ? (
         <ErrorState message="Failed to load tags" />
       ) : (
-        <ul className="tag-chips">
+        <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
           {query.data.tags.length === 0 ? (
-            <li className="tag-empty">No tags yet</li>
+            <li className="text-xs italic text-muted-foreground">No tags yet</li>
           ) : (
             query.data.tags.map((tag) => (
-              <li key={tag} className="tag-chip">
+              <li
+                key={tag}
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-xs text-foreground"
+              >
                 <span>{tag}</span>
                 <button
                   type="button"
+                  className="leading-none text-muted-foreground transition-colors hover:text-foreground"
                   aria-label={`remove tag ${tag}`}
                   onClick={() => remove.mutate(tag)}
                 >
@@ -45,7 +51,7 @@ export function TraceTags({ traceId }: { traceId: string }) {
           )}
         </ul>
       )}
-      <form onSubmit={onAdd} className="tag-add">
+      <form onSubmit={onAdd} className="flex gap-2">
         <input
           type="text"
           aria-label="add tag"
@@ -53,8 +59,14 @@ export function TraceTags({ traceId }: { traceId: string }) {
           value={input}
           maxLength={64}
           onChange={(e) => setInput(e.target.value)}
+          className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
         />
-        <button type="submit">Add</button>
+        <button
+          type="submit"
+          className="rounded-md border border-border bg-background px-3 py-1 text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          Add
+        </button>
       </form>
     </section>
   );
