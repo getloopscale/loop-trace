@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SpanTree } from "./SpanTree.js";
+import { kindColor } from "../lib/kind-color.js";
 import type { TraceTreeNode } from "../api/types.js";
 
 const tree: TraceTreeNode = {
@@ -86,8 +87,13 @@ describe("SpanTree", () => {
       ],
     };
     render(<SpanTree root={withKinds} onSelect={() => {}} />);
-    expect(screen.getByLabelText("kind: tool")).toBeInTheDocument();
-    expect(screen.getByLabelText("kind: chain")).toBeInTheDocument(); // root has children, no signal
+    const toolGlyph = screen.getByLabelText("kind: tool");
+    const chainGlyph = screen.getByLabelText("kind: chain"); // root has children, no signal
+    expect(toolGlyph).toBeInTheDocument();
+    expect(chainGlyph).toBeInTheDocument();
+    // M29: the glyph carries the canonical kind colour (single source — same as the badge/graph)
+    expect(toolGlyph.className).toContain(kindColor("tool").textClass);
+    expect(chainGlyph.className).toContain(kindColor("chain").textClass);
   });
 
   it("test_span_tree_shows_propagated_error_at_root", () => {

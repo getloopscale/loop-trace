@@ -6,6 +6,7 @@ import {
   deriveTraceListItemKind,
   type SpanKind,
 } from "../lib/span-kind.js";
+import { kindColor } from "../lib/kind-color.js";
 import type { TraceListItem } from "../api/types.js";
 
 function withTheme(ui: React.ReactNode) {
@@ -17,7 +18,7 @@ function withTheme(ui: React.ReactNode) {
 }
 
 describe("KindBadge + deriveTraceListItemKind", () => {
-  it("kind_badge_maps_kind_to_variant", () => {
+  it("kind_badge_renders_label_and_canonical_colour_dot", () => {
     // the kind label is always rendered as text (a11y: meaning not in color alone)
     const kinds: SpanKind[] = [
       "llm",
@@ -28,8 +29,11 @@ describe("KindBadge + deriveTraceListItemKind", () => {
       "unknown",
     ];
     for (const k of kinds) {
-      const { unmount } = render(withTheme(<KindBadge kind={k} />));
+      const { container, unmount } = render(withTheme(<KindBadge kind={k} />));
       expect(screen.getByText(k)).toBeInTheDocument();
+      // the dot carries the canonical kind colour (single source — M29)
+      const dot = container.querySelector('[aria-hidden="true"]');
+      expect(dot?.className).toContain(kindColor(k).textClass);
       unmount();
     }
   });
