@@ -41,7 +41,7 @@ export function SpanInfoPanel({ span }: { span: SpanNodeData }) {
   });
 
   return (
-    <section aria-label="span info" className="span-detail flex flex-col gap-2">
+    <section aria-label="span info" className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <KindBadge kind={kind} />
         <h2 className="text-title-md font-display">{span.name}</h2>
@@ -54,7 +54,7 @@ export function SpanInfoPanel({ span }: { span: SpanNodeData }) {
         </Tabs.List>
 
         <Tabs.Content value="info">
-          <div className="detail-overview flex flex-col gap-1">
+          <div className="flex flex-col gap-1 text-sm">
             <span>
               Status:{" "}
               <span aria-label={`status: ${span.statusCode ?? "unknown"}`}>
@@ -63,18 +63,22 @@ export function SpanInfoPanel({ span }: { span: SpanNodeData }) {
             </span>
             <span>Duration: {formatDuration(dur)}</span>
           </div>
-          <h3>Model</h3>
+          <h3 className="mb-1 mt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Model
+          </h3>
           {hasModel ? (
-            <p className="detail-model">
+            <p className="text-sm">
               {span.model ?? "—"}
               {span.provider ? ` (${span.provider})` : ""}
             </p>
           ) : (
             <EmptyState message="No model recorded" />
           )}
-          <h3>Tokens</h3>
+          <h3 className="mb-1 mt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Tokens
+          </h3>
           {hasTokens ? (
-            <p className="detail-tokens">
+            <p className="text-sm">
               in {span.inputTokens ?? 0} / out {span.outputTokens ?? 0}
             </p>
           ) : (
@@ -92,7 +96,7 @@ export function SpanInfoPanel({ span }: { span: SpanNodeData }) {
 
         <Tabs.Content value="events">
           {hasEvents ? (
-            <ul className="detail-events">
+            <ul className="m-0 flex list-none flex-col gap-2 p-0">
               {span.events!.map((e, i) => (
                 <li key={`${e.name}-${i}`}>
                   <JsonBlock value={e} summary={e.name} />

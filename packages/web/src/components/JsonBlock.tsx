@@ -26,11 +26,17 @@ export function JsonBlock({
 }) {
   const json = pretty(value);
   return (
-    <details className="json-block" open={open}>
-      <summary>{summary}</summary>
-      <div className="json-block-body">
-        <CopyButton text={json} label="Copy JSON" />
-        <pre className="json-block-pre">{json}</pre>
+    <details className="my-1" open={open}>
+      <summary className="cursor-pointer text-xs text-muted-foreground">
+        {summary}
+      </summary>
+      <div className="relative mt-1">
+        <span className="absolute right-1 top-1 z-10">
+          <CopyButton text={json} label="Copy JSON" />
+        </span>
+        <pre className="overflow-auto rounded-md bg-muted p-3 text-xs text-foreground">
+          {json}
+        </pre>
       </div>
     </details>
   );
