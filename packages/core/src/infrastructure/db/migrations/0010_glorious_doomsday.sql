@@ -1,0 +1,1 @@
+CREATE INDEX "replay_sessions_trace_id_idx" ON "replay_sessions" USING btree ("trace_id");

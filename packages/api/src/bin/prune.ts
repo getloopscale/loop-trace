@@ -1,37 +1,16 @@
 import { pathToFileURL } from "node:url";
 
-import {
-  createSpanRepository,
-  parseRetentionConfig,
-  type PruneStats,
-  type RetentionConfig,
-  type SpanRepository,
-} from "@usetheo/lens-core";
+import { createSpanRepository, parseRetentionConfig } from "@usetheo/lens-core";
 
-const DAY_MS = 86_400_000;
-
-/**
- * Pure: run one prune when retention is enabled; return its stats, or `null` when
- * disabled. No env/DB/process access — the cutoff is `now - retentionDays`. Unit-
- * testable with a fake repo (the entry wrapper supplies the real repo + clock).
- */
-export async function runPrune(
-  repo: Pick<SpanRepository, "prune">,
-  config: RetentionConfig,
-  now: Date,
-): Promise<PruneStats | null> {
-  if (config.retentionDays == null) return null;
-  const cutoff = new Date(now.getTime() - config.retentionDays * DAY_MS);
-  return repo.prune(cutoff);
-}
+import { runPrune } from "../server/retention-run.js";
 
 /**
  * CLI entry (`pnpm db:prune`): read config, run ONE prune, log structured stats
  * (Rule 8 — a destructive op is visible). Fails loud (exit 1) on a missing
  * connection string or when retention is not explicitly enabled — a manual prune
- * never guesses a window.
+ * never guesses a window. Exported for testing the fail-loud paths.
  */
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   const uri = process.env["THEOLENS_PG_URI"];
   if (!uri) {
     console.error(JSON.stringify({ level: "error", msg: "THEOLENS_PG_URI is required" }));
@@ -55,7 +34,7 @@ async function main(): Promise<void> {
   const { repo, pool } = createSpanRepository(uri);
   try {
     const stats = await runPrune(repo, config, new Date());
-    console.error(JSON.stringify({ level: "info", msg: "pruned", ...stats }));
+    if (stats) console.error(JSON.stringify({ level: "info", msg: "pruned", ...stats }));
   } finally {
     await pool.end();
   }

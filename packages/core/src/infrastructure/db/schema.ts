@@ -111,7 +111,12 @@ export const replaySessions = pgTable(
       .defaultNow()
       .notNull(),
   },
-  (t) => [index("replay_sessions_opened_at_idx").on(t.openedAt)],
+  (t) => [
+    index("replay_sessions_opened_at_idx").on(t.openedAt),
+    // M23: backs the retention cascade `DELETE … WHERE trace_id IN (stale)` so a
+    // sweep does not sequential-scan replay_sessions.
+    index("replay_sessions_trace_id_idx").on(t.traceId),
+  ],
 );
 
 /**

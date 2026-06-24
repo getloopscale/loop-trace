@@ -6,7 +6,7 @@ import { createSpanRepository, migrateLatest, parseRetentionConfig } from "@uset
 import type pg from "pg";
 
 import { createApp } from "./app.js";
-import { runPrune } from "../bin/prune.js";
+import { runPrune } from "./retention-run.js";
 import { startRetentionScheduler } from "./retention-scheduler.js";
 
 const HOUR_MS = 3_600_000;

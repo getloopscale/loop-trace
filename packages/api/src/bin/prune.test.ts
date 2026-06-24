@@ -1,34 +1,43 @@
-import { describe, it, expect, vi } from "vitest";
-import { runPrune } from "./prune.js";
-import type { PruneStats } from "@usetheo/lens-core";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { main } from "./prune.js";
 
-const STATS: PruneStats = {
-  cutoff: "2026-03-26T00:00:00.000Z",
-  tracesDeleted: 2,
-  spansDeleted: 5,
-  tagsDeleted: 1,
-  replaySessionsDeleted: 0,
-  sessionsDeleted: 1,
-};
+/**
+ * CLI fail-loud paths (EC-6, Rule 8). The pure use-case (`runPrune`) is tested in
+ * `server/retention-run.test.ts`; here we prove the entry exits non-zero (never a
+ * silent no-op) on misconfig, WITHOUT touching a real DB (it must exit before
+ * `createSpanRepository`).
+ */
+describe("db:prune CLI fail-loud (M23 T2.1)", () => {
+  const saved = { ...process.env };
+  let exit: ReturnType<typeof vi.spyOn>;
+  let err: ReturnType<typeof vi.spyOn>;
 
-describe("runPrune (M23 CLI core)", () => {
-  it("run_prune_calls_repo_with_cutoff_and_returns_stats", async () => {
-    const prune = vi.fn().mockResolvedValue(STATS);
-    const now = new Date("2026-06-24T00:00:00.000Z");
-    const stats = await runPrune({ prune }, { retentionDays: 90, sweepHours: 6 }, now);
-    expect(stats).toBe(STATS);
-    // cutoff = now - 90 days
-    expect(prune).toHaveBeenCalledWith(new Date(now.getTime() - 90 * 86_400_000));
+  beforeEach(() => {
+    exit = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    err = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    process.env = { ...saved };
+    vi.restoreAllMocks();
   });
 
-  it("run_prune_noop_when_disabled", async () => {
-    const prune = vi.fn();
-    const stats = await runPrune(
-      { prune },
-      { retentionDays: null, sweepHours: 6 },
-      new Date(),
+  it("prune_cli_exits_when_pg_uri_missing", async () => {
+    delete process.env["THEOLENS_PG_URI"];
+    await main();
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(err).toHaveBeenCalledWith(
+      expect.stringContaining("THEOLENS_PG_URI is required"),
     );
-    expect(stats).toBeNull();
-    expect(prune).not.toHaveBeenCalled();
+  });
+
+  it("prune_cli_exits_when_retention_disabled", async () => {
+    // a connection string but no retention window → refuse (never guess a window)
+    process.env["THEOLENS_PG_URI"] = "postgresql://x:y@localhost:5/z";
+    delete process.env["THEOLENS_RETENTION_DAYS"];
+    await main();
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(err).toHaveBeenCalledWith(
+      expect.stringContaining("THEOLENS_RETENTION_DAYS"),
+    );
   });
 });
