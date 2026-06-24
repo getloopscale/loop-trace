@@ -75,6 +75,17 @@ describe("travel-agent demo fixture", () => {
     expect(sessionIds.size).toBe(2);
   });
 
+  it("test_builder_surfaces_error_rows", () => {
+    // The fixture periodically emits an errored trace (matching the reference's
+    // failed rows). At traces≥4 at least one span carries an ERROR status.
+    const { spans } = indexSpans(4);
+    const errored = spans.filter((s) => s.statusCode === "2");
+    expect(errored.length).toBeGreaterThan(0);
+    // the errored agent's name is budget_agent (deterministic) and it has a message
+    expect(errored.some((s) => s.name === "budget_agent")).toBe(true);
+    expect(errored.find((s) => s.name === "budget_agent")!.statusMessage).toBeTruthy();
+  });
+
   it("test_builder_is_deterministic", () => {
     expect(JSON.stringify(buildTravelAgentEnvelope({ traces: 3 }))).toBe(
       JSON.stringify(buildTravelAgentEnvelope({ traces: 3 })),

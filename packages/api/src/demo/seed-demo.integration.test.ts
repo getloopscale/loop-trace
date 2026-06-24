@@ -9,6 +9,7 @@ import type pg from "pg";
 
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
 import { buildTravelAgentEnvelope } from "./travel-agent-fixture.js";
+import { main as seedMain } from "../bin/seed-demo.js";
 
 const PG_URI = process.env["THEOLENS_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
@@ -75,6 +76,14 @@ suite("travel-agent demo seed (integration)", () => {
     const sessions = new Set(demoRoots.map((t) => t.sessionId).filter(Boolean));
     expect(sessions.size).toBeGreaterThanOrEqual(1);
     expect(sessions.size).toBeLessThanOrEqual(2);
+  });
+
+  it("test_main_seeds_end_to_end", async () => {
+    // Exercise the real CLI happy-path (env → build → parse → save → log), not
+    // just the inline seed(): proves the bin wiring works end-to-end.
+    await seedMain(); // THEOLENS_PG_URI is set for the integration run
+    const { traces } = await repo.listTraces({ limit: 100 });
+    expect(traces.some((t) => t.name === "TripAgentGraph")).toBe(true);
   });
 
   it("test_seed_is_idempotent", async () => {
