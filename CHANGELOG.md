@@ -8,7 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Global date-range picker: a single time control in the top bar (Last 1 hour / 24 hours / 7 days / 30 days, default 7 days) drives the dashboard, the summary strip, and the executions list — replacing the per-list From/To inputs so there is one clear, sticky time window. Plus a saved-view selector that names and stores executions filter sets (status / model / tag / search / sort) for one-click reuse. Both persist in the browser and degrade safely if storage is unavailable (M29b)
+- Global date-range picker: a single time control in the top bar (Last 1 hour / 24 hours / 7 days / 30 days, default 7 days) drives the dashboard, the summary strip, the executions list, and the CSV export — replacing the per-list From/To inputs so there is one clear, sticky time window. The summary KPI labels reflect the selected range. Plus a saved-view selector that names and stores executions filter sets (status / model / tag / search / sort) for one-click reuse. Both persist in the browser and degrade safely if storage is unavailable (M29b)
 
 ### Changed
 
