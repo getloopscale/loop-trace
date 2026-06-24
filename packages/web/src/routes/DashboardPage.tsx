@@ -3,6 +3,7 @@ import { Tabs } from "@theokit/ui";
 import { Activity, Clock, Coins, DollarSign, TrendingUp } from "lucide-react";
 import { useObservability } from "../hooks/useObservability.js";
 import { useNorthStar } from "../hooks/useNorthStar.js";
+import { useRange } from "../hooks/useRange.js";
 import { AutoRefreshControl } from "../components/AutoRefreshControl.js";
 import { PinnedChartCard } from "../components/PinnedChartCard.js";
 import { MetricChart, type ChartMode } from "../components/MetricChart.js";
@@ -11,11 +12,9 @@ import { formatDuration } from "../lib/duration.js";
 import { formatUsd } from "../lib/money.js";
 import type {
   ModelTokenBucket,
-  ObservabilityRange,
   ObservabilityResponse,
 } from "../api/types.js";
 
-const RANGES: ObservabilityRange[] = ["1h", "24h", "7d", "30d"];
 const CHART_MODES: { value: ChartMode; label: string }[] = [
   { value: "bar", label: "Stacked bar" },
   { value: "line", label: "Line" },
@@ -165,7 +164,7 @@ function ObservabilityCards({
  * never crashes — M11 behavior).
  */
 export function DashboardPage() {
-  const [range, setRange] = useState<ObservabilityRange>("24h");
+  const { range } = useRange();
   const [chartMode, setChartMode] = useState<ChartMode>("line");
   const obs = useObservability(range);
   const ns = useNorthStar();
@@ -187,14 +186,9 @@ export function DashboardPage() {
         />
       </div>
 
+      {/* Time range is the global top-bar DateRangePicker (M29b) — one control. */}
       <div className="flex flex-wrap items-center gap-3">
         <AutoRefreshControl dataUpdatedAt={obs.dataUpdatedAt} />
-        <SegmentedToggle
-          label="time range"
-          value={range}
-          options={RANGES.map((r) => ({ value: r, label: r }))}
-          onChange={setRange}
-        />
       </div>
 
       {obs.isLoading && !obs.data ? (

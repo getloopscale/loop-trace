@@ -23,17 +23,18 @@ describe("TraceFilters themed toolbar (M-UX)", () => {
     const { container } = render(
       <TraceFilters query={{}} onChange={() => {}} />,
     );
-    // every migrated control keeps its accessible name (a11y preserved)
+    // every remaining control keeps its accessible name (a11y preserved)
     for (const label of [
       "search content",
       "status filter",
       "model filter",
-      "from time",
-      "to time",
       "tag filter",
     ]) {
       expect(screen.getByLabelText(label)).toBeInTheDocument();
     }
+    // M29b: time is the global date-range picker — the toolbar no longer has From/To
+    expect(screen.queryByLabelText("from time")).toBeNull();
+    expect(screen.queryByLabelText("to time")).toBeNull();
     // no legacy wrapper class survives
     expect(container.querySelector(".trace-filters")).toBeNull();
     expect(container.querySelector(".trace-export")).toBeNull();

@@ -1,18 +1,20 @@
 import { StatTile } from "@theokit/ui";
 import { Activity, Clock, Coins, DollarSign } from "lucide-react";
 import { useObservability } from "../hooks/useObservability.js";
+import { useRange } from "../hooks/useRange.js";
 import { Sparkbar } from "./Sparkbar.js";
 import { formatDuration } from "../lib/duration.js";
 import { formatUsd } from "../lib/money.js";
 
 /**
  * Arize-style "Pinned Charts" summary strip (M18): Traffic / Latency / Tokens /
- * Cost stat tiles over a 24h window, each with an inline sparkbar trend. Reuses
- * the M11 observability series + the M11 Sparkbar (zero new dependency). The
- * configurable range + chart-type toggle land in M20.
+ * Cost stat tiles, each with an inline sparkbar trend. Reuses the M11 observability
+ * series + the M11 Sparkbar (zero new dependency). The window follows the global
+ * date-range picker (M29b) — one time control across the app.
  */
 export function TraceSummaryStrip() {
-  const { data } = useObservability("24h");
+  const { range } = useRange();
+  const { data } = useObservability(range);
 
   const traffic = data?.traffic ?? [];
   const latency = data?.latency ?? [];

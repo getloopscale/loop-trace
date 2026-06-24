@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { TraceListPage } from "./TraceListPage.js";
+import { RangeProvider } from "../hooks/useRange.js";
 import * as client from "../api/client.js";
 
 vi.mock("../api/client.js", async (orig) => {
@@ -28,14 +29,23 @@ function renderPage() {
   });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
-        <TraceListPage />
-      </MemoryRouter>
+      <RangeProvider>
+        <MemoryRouter>
+          <TraceListPage />
+        </MemoryRouter>
+      </RangeProvider>
     </QueryClientProvider>,
   );
 }
 
-beforeEach(() => vi.resetAllMocks());
+beforeEach(() => {
+  vi.resetAllMocks();
+  try {
+    localStorage.clear();
+  } catch {
+    /* ignore */
+  }
+});
 
 describe("TraceListPage (integration)", () => {
   it("trace_list_page_renders_executions_from_api", async () => {
@@ -114,17 +124,21 @@ describe("TraceListPage (integration)", () => {
     );
   });
 
-  it("test_trace_filters_time_range_passes_iso", async () => {
+  it("test_global_range_drives_list_from_to_iso", async () => {
+    // M29b: time is the global date-range (default 7d) — the list query carries an
+    // ISO from/to window derived from the preset (no toolbar From/To inputs).
     vi.mocked(client.listTraces).mockResolvedValue({ traces: [] });
     renderPage();
-    await waitFor(() => expect(client.listTraces).toHaveBeenCalled());
-    const from = screen.getByLabelText("from time");
-    await userEvent.type(from, "2026-06-01T00:00");
     await waitFor(() =>
       expect(client.listTraces).toHaveBeenCalledWith(
-        expect.objectContaining({ from: expect.stringMatching(/^2026-0/) }),
+        expect.objectContaining({
+          from: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+          to: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+        }),
       ),
     );
+    // the toolbar From/To inputs are gone (one global time control)
+    expect(screen.queryByLabelText("from time")).toBeNull();
   });
 
   it("test_trace_list_renders_ok_error_status_indicator", async () => {

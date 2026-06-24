@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Navigate, Route, Routes } from "react-router-dom";
 import { DashboardPage } from "./DashboardPage.js";
+import { RangeProvider } from "../hooks/useRange.js";
 import * as client from "../api/client.js";
 import type { ObservabilityResponse } from "../api/types.js";
 
@@ -37,9 +38,11 @@ function renderPage() {
   });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
-        <DashboardPage />
-      </MemoryRouter>
+      <RangeProvider>
+        <MemoryRouter>
+          <DashboardPage />
+        </MemoryRouter>
+      </RangeProvider>
     </QueryClientProvider>,
   );
 }
@@ -47,6 +50,11 @@ function renderPage() {
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(client.getNorthStar).mockResolvedValue(northStar);
+  try {
+    localStorage.clear();
+  } catch {
+    /* ignore */
+  }
 });
 
 describe("DashboardPage (M20 Pinned Charts)", () => {
@@ -80,12 +88,20 @@ describe("DashboardPage (M20 Pinned Charts)", () => {
     ).toBeInTheDocument();
   });
 
-  it("metrics_dashboard_range_toggle_preserved", async () => {
+  it("metrics_dashboard_uses_global_range_default_7d", async () => {
+    // M29b: the dashboard reads the global date-range (no local range tab); default 7d.
     vi.mocked(client.getObservability).mockResolvedValue(obs);
     renderPage();
-    await waitFor(() => expect(client.getObservability).toHaveBeenCalledWith("24h"));
-    await userEvent.click(screen.getByRole("tab", { name: "7d" }));
     await waitFor(() => expect(client.getObservability).toHaveBeenCalledWith("7d"));
+    // the local time-range tab is gone (one global control)
+    expect(screen.queryByRole("tab", { name: "7d" })).toBeNull();
+  });
+
+  it("metrics_dashboard_honours_persisted_global_range", async () => {
+    localStorage.setItem("theolens.range", "30d");
+    vi.mocked(client.getObservability).mockResolvedValue(obs);
+    renderPage();
+    await waitFor(() => expect(client.getObservability).toHaveBeenCalledWith("30d"));
   });
 
   it("metrics_dashboard_renders_pinned_cards", async () => {
