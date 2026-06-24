@@ -118,6 +118,10 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
       limit: c.req.query("limit"),
       format: c.req.query("format"),
       tag: c.req.query("tag"),
+      // M24: full-text search. Empty `?q=` → undefined (a cleared box is "no
+      // filter", not a 400 on min(1)). Flows to BOTH the JSON list AND the CSV
+      // export below (same filtered query, EC-1).
+      q: c.req.query("q") || undefined,
     });
     if (!parsed.success) {
       return c.json({ error: "invalid query parameters" }, 400);
