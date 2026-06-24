@@ -8,8 +8,10 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Command palette: press Cmd/Ctrl+K anywhere to jump to any view or open a trace by ID (M-UX)
 
 ### Changed
+- The whole UI is now uniformly dark (Violet Forge): the executions filter toolbar, the trace span tree/waterfall, the cost & tool analytics tables, the session-detail metrics, the input/output code blocks, the tag chips, the replay controls, and every loading/empty/error state were migrated off the last light-theme stylesheet onto the design system. Loading states now show shimmer skeletons instead of "Loading…" text, and empty states can offer a next-step action. No behavior, route, or data change — presentation only (M-UX)
 
 ### Deprecated
 
