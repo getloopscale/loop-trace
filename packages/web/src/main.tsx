@@ -17,7 +17,6 @@ import { AppShell } from "./components/AppShell.js";
 import { ThemeProvider, violetForge } from "@theokit/ui";
 import { AutoRefreshProvider } from "./hooks/useAutoRefresh.js";
 import "./styles.css";
-import "./legacy.css";
 
 const queryClient = new QueryClient();
 
