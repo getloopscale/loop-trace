@@ -1,5 +1,6 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Sidebar, TopNav, Tabs } from "@theokit/ui";
+import { CommandPalette } from "./CommandPalette.js";
 import {
   ListTree,
   Layers,
@@ -59,6 +60,8 @@ export function AppShell() {
 
   return (
     <div className="flex h-screen bg-background text-foreground">
+      {/* Global Cmd/Ctrl+K command palette (portal — mount once at the shell root). */}
+      <CommandPalette />
       <Sidebar role="navigation" aria-label="Primary">
         <Sidebar.Header>
           <span className="text-title-md font-display">Theo Lens</span>
