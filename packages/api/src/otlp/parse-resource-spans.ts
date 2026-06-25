@@ -1,6 +1,7 @@
 import {
   spanSchema,
   extractSpanEvents,
+  extractEvaluations,
   selectAdapter,
   type Span,
 } from "@usetheo/lens-core";
@@ -111,6 +112,11 @@ export function parseResourceSpans(envelope: unknown): Span[] {
           }
           if (genai.outputValue !== undefined) delete attrs["output.value"];
         }
+        // M26: extract online-eval attributes (`eval.<name>.score/label/explanation`)
+        // into typed evaluations + strip the matched keys (same move-not-copy seam as
+        // GenAI). Total — a malformed eval attr is ignored, never fatal.
+        const { evaluations, strippedKeys } = extractEvaluations(attrs);
+        if (attrs) for (const k of strippedKeys) delete attrs[k];
         // M12 (D3): OTLP span events are parsed (capped) — previously dropped.
         const events = extractSpanEvents(r["events"], flattenAttrs);
         const candidate = {
@@ -139,6 +145,7 @@ export function parseResourceSpans(envelope: unknown): Span[] {
             ? { sessionId: sessionIdOf(attrs) }
             : {}),
           ...(events.length > 0 ? { events } : {}),
+          ...(evaluations.length > 0 ? { evaluations } : {}),
           ...(attrs !== undefined ? { attributes: attrs } : {}),
         };
         const parsed = spanSchema.safeParse(candidate);

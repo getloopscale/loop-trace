@@ -44,7 +44,8 @@ import {
 } from "../../domain/session.js";
 import type { PruneStats } from "../../domain/retention.js";
 import { parseSpanQuery, type SpanClause } from "../../domain/span-query.js";
-import { spans, traces, sessions, replaySessions, traceTags } from "./schema.js";
+import type { EvaluatorSummary } from "../../domain/evaluation.js";
+import { spans, traces, sessions, replaySessions, traceTags, spanEvaluations } from "./schema.js";
 
 /** Build a pg connection pool for the given Postgres URI. */
 export function createPool(connectionString: string): pg.Pool {
@@ -223,6 +224,27 @@ export class DrizzleSpanRepository implements SpanRepository {
         .values(unique.map(toRow))
         .onConflictDoNothing({ target: spans.spanId });
 
+      // M26: persist extracted online-evals to the side-table. Idempotent on
+      // (span_id, name) so re-ingest of the same span never duplicates rows.
+      const evalRows = unique.flatMap((s) =>
+        (s.evaluations ?? []).map((e) => ({
+          spanId: s.spanId,
+          traceId: s.traceId,
+          name: e.name,
+          score: e.score ?? null,
+          label: e.label ?? null,
+          explanation: e.explanation ?? null,
+        })),
+      );
+      if (evalRows.length > 0) {
+        await tx
+          .insert(spanEvaluations)
+          .values(evalRows)
+          .onConflictDoNothing({
+            target: [spanEvaluations.spanId, spanEvaluations.name],
+          });
+      }
+
       // Recompute each affected trace's aggregate FROM the spans table (idempotent
       // under retry + race-safe — ADR D3 / EC-1). Never an incremental sum.
       for (const traceId of traceIds) {
@@ -322,6 +344,23 @@ export class DrizzleSpanRepository implements SpanRepository {
     const nodes = new Map<string, TraceTreeNode>();
     for (const r of rows) nodes.set(r.spanId, { ...fromRow(r), children: [] });
     const all = [...nodes.values()];
+
+    // M26: attach each span's online-evaluations (side-table) to its tree node so
+    // the trace-detail Evaluations tab can read them without a second round-trip.
+    const evalRows = await this.db
+      .select()
+      .from(spanEvaluations)
+      .where(eq(spanEvaluations.traceId, traceId));
+    for (const e of evalRows) {
+      const node = nodes.get(e.spanId);
+      if (node == null) continue;
+      (node.evaluations ??= []).push({
+        name: e.name,
+        ...(e.score != null ? { score: e.score } : {}),
+        ...(e.label != null ? { label: e.label } : {}),
+        ...(e.explanation != null ? { explanation: e.explanation } : {}),
+      });
+    }
 
     // Effective parent: null when the parent is absent, self-referential, or
     // would form a cycle (walk up bounded by node count). Severing cyclic edges
@@ -711,6 +750,49 @@ export class DrizzleSpanRepository implements SpanRepository {
       tokensByModel: modelRes.rows as unknown as RawObservability["tokensByModel"],
     };
     return shapeObservability(raw, range, this.priceTable);
+  }
+
+  async aggregateEvaluators(
+    range: ObservabilityRange,
+  ): Promise<EvaluatorSummary[]> {
+    // M26: per-evaluator aggregate over the side-table, range-windowed by the
+    // trace's updated_at (same RANGE_BUCKETS interval whitelist the M11 observability
+    // uses — sql.raw of a hardcoded constant, never the request string).
+    const { interval } = RANGE_BUCKETS[range];
+    const window = sql.raw(`interval '${interval}'`);
+    // count + avg score per evaluator (avg ignores NULL scores).
+    const summaryRes = await this.db.execute(sql`
+      SELECT se.name AS name,
+             count(*)::int AS count,
+             avg(se.score) AS "avgScore"
+      FROM span_evaluations se
+      JOIN traces t ON t.trace_id = se.trace_id
+      WHERE t.updated_at >= now() - ${window}
+      GROUP BY se.name
+      ORDER BY se.name ASC
+    `);
+    // label distribution per evaluator (NULL labels excluded).
+    const labelRes = await this.db.execute(sql`
+      SELECT se.name AS name, se.label AS label, count(*)::int AS count
+      FROM span_evaluations se
+      JOIN traces t ON t.trace_id = se.trace_id
+      WHERE t.updated_at >= now() - ${window} AND se.label IS NOT NULL
+      GROUP BY se.name, se.label
+    `);
+    const labelsByName = new Map<string, Record<string, number>>();
+    for (const r of labelRes.rows as { name: string; label: string; count: number }[]) {
+      const m = labelsByName.get(r.name) ?? {};
+      m[r.label] = Number(r.count);
+      labelsByName.set(r.name, m);
+    }
+    return (summaryRes.rows as { name: string; count: number; avgScore: number | null }[]).map(
+      (r) => ({
+        name: r.name,
+        count: Number(r.count),
+        ...(r.avgScore != null ? { avgScore: Number(r.avgScore) } : {}),
+        labels: labelsByName.get(r.name) ?? {},
+      }),
+    );
   }
 
   async listSessions(): Promise<SessionListResponse> {

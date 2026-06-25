@@ -25,6 +25,12 @@ export { selectAdapter } from "./domain/adapters/registry.js";
 // the caps + capText + SpanEvent type stay module-internal (YAGNI — no orphan
 // public exports). Tests import them via relative path.
 export { extractSpanEvents } from "./domain/span-events.js";
+// M26: online-eval extraction (ingest) + types (consumed by the OTLP parser + API).
+export {
+  extractEvaluations,
+  type SpanEvaluation,
+  type EvaluatorSummary,
+} from "./domain/evaluation.js";
 export {
   percentile,
   computeToolStats,
