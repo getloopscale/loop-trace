@@ -215,6 +215,16 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
     return c.json(observabilityResponseSchema.parse(obs), 200);
   });
 
+  app.get("/v1/metrics/evaluators", async (c) => {
+    // M26: per-evaluator aggregate (Online Evaluators cards). Range validated at the
+    // boundary (Rule 8), same whitelist as observability; default 24h.
+    const parsed = observabilityRangeSchema.safeParse(c.req.query("range") ?? "24h");
+    if (!parsed.success) {
+      return c.json({ error: "invalid range (use 1h|24h|7d|30d)" }, 400);
+    }
+    return c.json({ evaluators: await repo.aggregateEvaluators(parsed.data) }, 200);
+  });
+
   app.get("/v1/sessions", async (c) => {
     const list = await repo.listSessions();
     return c.json(sessionListResponseSchema.parse(list), 200);

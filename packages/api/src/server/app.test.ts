@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type {
   CostByPeriodResponse,
   CostPeriod,
+  EvaluatorSummary,
   ListTracesOptions,
   NorthStarResponse,
   ObservabilityResponse,
@@ -130,6 +131,18 @@ class StubSpanRepository implements SpanRepository {
     if (this.failOnObservability) throw new Error("simulated postgres unavailable");
     this.lastObservabilityRange = range;
     return { ...this.observability, range };
+  }
+
+  // M26: per-evaluator aggregate stub.
+  lastEvaluatorsRange: ObservabilityResponse["range"] | null = null;
+  evaluators: EvaluatorSummary[] = [
+    { name: "hallucination", count: 3, avgScore: 0.3, labels: { factual: 3 } },
+  ];
+  async aggregateEvaluators(
+    range: ObservabilityResponse["range"],
+  ): Promise<EvaluatorSummary[]> {
+    this.lastEvaluatorsRange = range;
+    return this.evaluators;
   }
 
   sessionList: SessionListResponse = { sessions: [] };
@@ -672,6 +685,49 @@ describe("createApp (contract, stub repo)", () => {
         ({ range: "24h", traffic: [{ periodStart: "x", traceCount: 1, errorCount: 0, errorRate: 0, leak: 9 }], latency: [], tokensByModel: [] }) as never,
     };
     expect((await createApp(leaky).request("/v1/metrics/observability")).status).toBeGreaterThanOrEqual(500);
+  });
+
+  it("test_get_evaluators_returns_summary", async () => {
+    repo.evaluators = [
+      { name: "hallucination", count: 3, avgScore: 0.3, labels: { factual: 2, hallucinated: 1 } },
+      { name: "relevance", count: 1, labels: { relevant: 1 } },
+    ];
+    const res = await app.request("/v1/metrics/evaluators?range=7d");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { evaluators: EvaluatorSummary[] };
+    expect(body.evaluators).toHaveLength(2);
+    expect(body.evaluators[0]?.name).toBe("hallucination");
+    expect(body.evaluators[0]?.avgScore).toBe(0.3);
+    expect(repo.lastEvaluatorsRange).toBe("7d"); // validated range passed through
+  });
+
+  it("test_get_evaluators_rejects_bad_range_with_400", async () => {
+    expect((await app.request("/v1/metrics/evaluators?range=banana")).status).toBe(400);
+  });
+
+  it("test_get_evaluators_defaults_range_to_24h", async () => {
+    await app.request("/v1/metrics/evaluators");
+    expect(repo.lastEvaluatorsRange).toBe("24h");
+  });
+
+  it("test_get_trace_tree_carries_span_evaluations", async () => {
+    // Round-trip: eval.* span attributes ingested via OTLP surface as typed
+    // evaluations on the trace tree node (the route returns the tree verbatim).
+    await post(
+      tracesEnvelope({
+        spanId: "ev",
+        traceId: "t-eval",
+        name: "agent",
+        startTimeUnixNano: "1700000000000000000",
+        endTimeUnixNano: "1700000000100000000",
+        attributes: [
+          { key: "eval.relevance.score", value: { doubleValue: 0.9 } },
+          { key: "eval.relevance.label", value: { stringValue: "relevant" } },
+        ],
+      }),
+    );
+    const tree = (await (await app.request("/v1/traces/t-eval")).json()) as TraceTreeNode;
+    expect(tree.evaluations).toEqual([{ name: "relevance", score: 0.9, label: "relevant" }]);
   });
 
   it("test_get_sessions_returns_list_dto", async () => {
