@@ -279,4 +279,25 @@ describe("parseResourceSpans", () => {
     const span = parseResourceSpans(envelope([rawSpan]))[0];
     expect(span?.spanId).toBe("a1");
   });
+
+  it("test_parse_extracts_eval_attributes_and_strips_them", () => {
+    // M26: `eval.<name>.*` attributes → typed span.evaluations; matched keys removed
+    // from the persisted attributes bag (move-not-copy).
+    const span = parseResourceSpans(
+      envelope([
+        {
+          ...rawSpan,
+          attributes: [
+            { key: "eval.hallucination.score", value: { doubleValue: 0.2 } },
+            { key: "eval.hallucination.label", value: { stringValue: "factual" } },
+            { key: "other.attr", value: { stringValue: "keep" } },
+          ],
+        },
+      ]),
+    )[0];
+    expect(span?.evaluations).toEqual([
+      { name: "hallucination", score: 0.2, label: "factual" },
+    ]);
+    expect(span?.attributes).toEqual({ "other.attr": "keep" });
+  });
 });

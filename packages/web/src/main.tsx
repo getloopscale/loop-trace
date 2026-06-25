@@ -8,6 +8,7 @@ import { AnalyticsPage } from "./routes/AnalyticsPage.js";
 import { ToolAnalyticsPage } from "./routes/ToolAnalyticsPage.js";
 import { ToolTracesPage } from "./routes/ToolTracesPage.js";
 import { DashboardPage } from "./routes/DashboardPage.js";
+import { EvalsPage } from "./routes/EvalsPage.js";
 import { AgentGraphView } from "./routes/AgentGraphView.js";
 import { AgentPathView } from "./routes/AgentPathView.js";
 import { SessionsListPage } from "./routes/SessionsListPage.js";
@@ -34,6 +35,7 @@ const router = createBrowserRouter([
       // M20: north-star re-homed into the Pinned-Charts dashboard; /metrics redirects.
       { path: "/metrics", element: <Navigate to="/dashboards" replace /> },
       { path: "/dashboards", element: <DashboardPage /> },
+      { path: "/evals", element: <EvalsPage /> },
       { path: "/sessions", element: <SessionsListPage /> },
       { path: "/sessions/:sessionId", element: <SessionDetailPage /> },
       {

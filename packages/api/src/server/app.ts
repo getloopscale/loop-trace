@@ -9,6 +9,7 @@ import {
   northStarResponseSchema,
   observabilityRangeSchema,
   observabilityResponseSchema,
+  evaluatorsResponseSchema,
   sessionListResponseSchema,
   sessionDetailResponseSchema,
   traceTagsResponseSchema,
@@ -18,7 +19,12 @@ import {
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
 import { OtlpParseError } from "../otlp/otlp-error.js";
 import { decodeOtlpBody } from "../otlp/decode-protobuf.js";
-import { spansIngested, tracesIngested, logIngest } from "./metrics.js";
+import {
+  spansIngested,
+  tracesIngested,
+  evaluationsExtracted,
+  logIngest,
+} from "./metrics.js";
 import { mountStatic } from "./static.js";
 import { tracesToCsv } from "./csv.js";
 
@@ -101,7 +107,9 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
     await repo.save(toSave);
     spansIngested.add(toSave.length);
     tracesIngested.add(new Set(toSave.map((s) => s.traceId)).size);
-    logIngest(toSave.length);
+    const evals = toSave.reduce((n, s) => n + (s.evaluations?.length ?? 0), 0);
+    evaluationsExtracted.add(evals);
+    logIngest(toSave.length, evals);
     return c.json({ partialSuccess: {} }, 200);
   });
 
@@ -213,6 +221,21 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
     }
     const obs = await repo.aggregateObservability(parsed.data);
     return c.json(observabilityResponseSchema.parse(obs), 200);
+  });
+
+  app.get("/v1/metrics/evaluators", async (c) => {
+    // M26: per-evaluator aggregate (Online Evaluators cards). Range validated at the
+    // boundary (Rule 8), same whitelist as observability; default 24h.
+    const parsed = observabilityRangeSchema.safeParse(c.req.query("range") ?? "24h");
+    if (!parsed.success) {
+      return c.json({ error: "invalid range (use 1h|24h|7d|30d)" }, 400);
+    }
+    // Parse through the strict DTO at the boundary so the no-column-leak invariant
+    // is enforced at runtime, uniform with every other read route (F-api-1).
+    const summary = evaluatorsResponseSchema.parse({
+      evaluators: await repo.aggregateEvaluators(parsed.data),
+    });
+    return c.json(summary, 200);
   });
 
   app.get("/v1/sessions", async (c) => {

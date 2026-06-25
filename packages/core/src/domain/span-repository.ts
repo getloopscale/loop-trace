@@ -6,6 +6,7 @@ import type { NorthStarResponse } from "./north-star.js";
 import type { ObservabilityRange, ObservabilityResponse } from "./observability.js";
 import type { SessionListResponse, SessionDetailResponse } from "./session.js";
 import type { PruneStats } from "./retention.js";
+import type { EvaluatorSummary } from "./evaluation.js";
 
 /** A span plus its reconstructed children — the trace tree node. */
 export interface TraceTreeNode extends Span {
@@ -43,6 +44,8 @@ export interface SpanRepository {
   aggregateNorthStar(): Promise<NorthStarResponse>;
   /** Time-series observability over a range: traffic+error-rate, latency percentiles, tokens/cost by model (M11). */
   aggregateObservability(range: ObservabilityRange): Promise<ObservabilityResponse>;
+  /** M26: per-evaluator aggregate (count, avg score, label distribution) within the range window. */
+  aggregateEvaluators(range: ObservabilityRange): Promise<EvaluatorSummary[]>;
   /** Sessions newest-first with per-session scoped aggregates (M13). */
   listSessions(): Promise<SessionListResponse>;
   /** One session's scoped aggregates + member traces (M13), or null if absent. */

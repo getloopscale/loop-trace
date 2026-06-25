@@ -10,6 +10,14 @@ export interface SpanEvent {
   attributes?: Record<string, unknown>;
 }
 
+/** One online-eval result attached to a span (`eval.<name>.*`, M26). */
+export interface SpanEvaluation {
+  name: string;
+  score?: number;
+  label?: string;
+  explanation?: string;
+}
+
 export interface SpanNodeData {
   spanId: string;
   traceId: string;
@@ -31,6 +39,8 @@ export interface SpanNodeData {
   outputValue?: string;
   /** OTLP span events, capped at ingest (M12). */
   events?: SpanEvent[];
+  /** Online-eval results extracted at ingest (`eval.<name>.*`, M26). */
+  evaluations?: SpanEvaluation[];
   attributes?: Record<string, unknown>;
 }
 
@@ -188,4 +198,16 @@ export interface ObservabilityResponse {
   traffic: TrafficBucket[];
   latency: LatencyBucket[];
   tokensByModel: ModelTokenBucket[];
+}
+
+/** Per-evaluator aggregate over the range: avg score + label distribution (M26). */
+export interface EvaluatorSummary {
+  name: string;
+  count: number;
+  avgScore?: number;
+  labels: Record<string, number>;
+}
+
+export interface EvaluatorsResponse {
+  evaluators: EvaluatorSummary[];
 }

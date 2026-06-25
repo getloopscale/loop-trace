@@ -154,3 +154,27 @@ export const traceTags = pgTable(
     index("trace_tags_trace_id_idx").on(t.traceId),
   ],
 );
+
+/**
+ * M26: online evaluations attached to a span (read-path). Populated only at ingest
+ * from `eval.<name>.*` span attributes (no human write-path — that is M26b). One row
+ * per (span, evaluator); idempotent on re-ingest via the unique key. Mirrors the
+ * `trace_tags` side-table so per-evaluator aggregates are trivial indexed SQL.
+ */
+export const spanEvaluations = pgTable(
+  "span_evaluations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    spanId: text("span_id").notNull(),
+    traceId: text("trace_id").notNull(),
+    name: text("name").notNull(),
+    score: doublePrecision("score"),
+    label: text("label"),
+    explanation: text("explanation"),
+  },
+  (t) => [
+    unique("span_evaluations_span_id_name_uq").on(t.spanId, t.name),
+    index("span_evaluations_name_idx").on(t.name),
+    index("span_evaluations_trace_id_idx").on(t.traceId),
+  ],
+);

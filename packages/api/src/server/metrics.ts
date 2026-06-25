@@ -21,10 +21,14 @@ function counter() {
 
 export const spansIngested = counter();
 export const tracesIngested = counter();
+// M26: online-eval results extracted from `eval.*` span attributes at ingest. A
+// distinct counter so "no evals on the Evals page" is distinguishable at runtime
+// from "evals arrived but extraction dropped them" (wiring-triad pillar c).
+export const evaluationsExtracted = counter();
 
 /** Structured ingest log line on stderr (stdout stays clean for piping). */
-export function logIngest(spans: number): void {
+export function logIngest(spans: number, evals = 0): void {
   console.error(
-    JSON.stringify({ level: "info", msg: "spans_ingested", spans }),
+    JSON.stringify({ level: "info", msg: "spans_ingested", spans, evals }),
   );
 }

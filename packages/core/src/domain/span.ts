@@ -35,6 +35,18 @@ export const spanSchema = z.object({
     )
     .optional(),
   attributes: z.record(z.string(), z.unknown()).optional(),
+  // M26: online evaluations extracted from `eval.<name>.*` attributes at ingest
+  // (optional → backward-compatible). The text is the evaluator's, not a human's.
+  evaluations: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        score: z.number().optional(),
+        label: z.string().optional(),
+        explanation: z.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export type Span = z.infer<typeof spanSchema>;
