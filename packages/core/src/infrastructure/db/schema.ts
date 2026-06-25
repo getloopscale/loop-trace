@@ -49,6 +49,11 @@ export const spans = pgTable(
     // existing rows read graceful (backward-compatible).
     inputValue: text("input_value"),
     outputValue: text("output_value"),
+    // M34: Claude Code perf/cost signals from `claude_code.llm_request`. Nullable →
+    // absent for non-Claude spans + existing rows (backward-compatible).
+    ttftMs: integer("ttft_ms"),
+    cacheReadTokens: integer("cache_read_tokens"),
+    cacheCreationTokens: integer("cache_creation_tokens"),
     events: jsonb("events"),
     attributes: jsonb("attributes"),
     ingestedAt: timestamp("ingested_at", { withTimezone: true })

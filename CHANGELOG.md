@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Claude Code traces now surface their real content: each `claude_code.tool` span shows the **tool's input** (the Bash command or the file path) and the **tool's result** (Bash output / file content / edit diff), and is named + classified as a **tool** so it appears in Tools analytics and the Agents catalog. LLM request spans also surface **time-to-first-token (TTFT)** and **prompt-cache token counts** (cache read / cache creation) in the trace detail (M34)
 
 ### Changed
 

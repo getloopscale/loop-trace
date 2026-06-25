@@ -25,6 +25,10 @@ export const spanSchema = z.object({
   // M12: span input/output text + events (all optional → backward-compatible).
   inputValue: z.string().optional(),
   outputValue: z.string().optional(),
+  // M34: Claude Code perf/cost signals (all optional → backward-compatible).
+  ttftMs: z.number().int().optional(),
+  cacheReadTokens: z.number().int().optional(),
+  cacheCreationTokens: z.number().int().optional(),
   events: z
     .array(
       z.object({
