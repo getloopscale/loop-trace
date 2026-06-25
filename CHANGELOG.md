@@ -19,6 +19,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [0.32.0] - 2026-06-25
+
+### Added
+- Datasets: curate named sets of example traces. A new **Datasets** page lists your datasets; **"Add to Dataset"** on any executions row snapshots that trace's input/output into a dataset (creating it on the fly) — the snapshot is durable, so a curated example survives even after the source trace is pruned. The sessions list also gains a **Session Evaluations** count column (M26d)
+
 ## [0.31.0] - 2026-06-25
 
 ### Added

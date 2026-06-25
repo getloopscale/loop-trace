@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { DataTable, Timestamp, type DataTableColumn } from "@theokit/ui";
+import { Badge, DataTable, Timestamp, type DataTableColumn } from "@theokit/ui";
 import type { SessionListItem } from "../api/types.js";
 import { formatUsd } from "../lib/money.js";
 import { EmptyState } from "./states.js";
@@ -68,6 +68,20 @@ const columns: DataTableColumn<SessionListItem>[] = [
     label: "Cost",
     align: "right",
     render: (s) => formatUsd(s.costUsd),
+  },
+  {
+    // M26d: per-session online-eval count (session-level twin of the trace Evals column).
+    key: "evals",
+    label: "Evals",
+    align: "right",
+    render: (s) =>
+      s.evaluationsCount == null ? (
+        <span className="text-muted-foreground">{DASH}</span>
+      ) : (
+        <Badge variant="outline" size="sm" aria-label={`${s.evaluationsCount} evaluations`}>
+          {s.evaluationsCount}
+        </Badge>
+      ),
   },
   {
     key: "start",

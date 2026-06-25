@@ -45,12 +45,13 @@ import {
 import type { PruneStats } from "../../domain/retention.js";
 import { parseSpanQuery, type SpanClause } from "../../domain/span-query.js";
 import type { EvaluatorSummary } from "../../domain/evaluation.js";
-import { spans, traces, sessions, replaySessions, traceTags, spanEvaluations, annotations } from "./schema.js";
+import { spans, traces, sessions, replaySessions, traceTags, spanEvaluations, annotations, datasets, datasetItems } from "./schema.js";
 import {
   DEFAULT_ANNOTATOR_KIND,
   type Annotation,
   type NormalizedAnnotation,
 } from "../../domain/annotation.js";
+import type { Dataset, DatasetDetail } from "../../domain/dataset.js";
 
 /** Build a pg connection pool for the given Postgres URI. */
 export function createPool(connectionString: string): pg.Pool {
@@ -164,6 +165,18 @@ interface EnrichedTraceRow {
   rootOutputValue: string | null;
   // M26b: per-trace online-eval row count (the executions-list "Evals" column).
   evaluationsCount: number | null;
+}
+
+/**
+ * Is `s` a syntactically valid UUID? Dataset ids are uuid columns (M26d); querying a
+ * uuid column with a non-uuid string makes Postgres throw `invalid input syntax`. The
+ * routes pass path params verbatim, so an unknown/garbage id must read as "absent"
+ * (null / false → 404), never a 500. Guard before any `eq(datasets.id, …)`.
+ */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUuid(s: string): boolean {
+  return UUID_RE.test(s);
 }
 
 /** Truncate a span's input/output to a list-cell preview (≤120 chars), surrogate-safe (EC-3). */
@@ -830,6 +843,10 @@ export class DrizzleSpanRepository implements SpanRepository {
              coalesce(sum(t.cost_usd), 0)::double precision AS "costUsd",
              coalesce(sum(t.total_tokens), 0)::int AS "totalTokens",
              count(t.trace_id) FILTER (WHERE t.status_code = 'error')::int AS "errorCount",
+             (SELECT count(*)::int
+                FROM span_evaluations se
+                JOIN traces te ON te.trace_id = se.trace_id
+               WHERE te.session_id = s.session_id) AS "evaluationsCount",
              (SELECT sp.input_value
                 FROM spans sp
                 JOIN traces tt ON tt.trace_id = sp.trace_id
@@ -851,6 +868,7 @@ export class DrizzleSpanRepository implements SpanRepository {
       costUsd: number;
       totalTokens: number;
       errorCount: number;
+      evaluationsCount: number;
       firstMessageRaw: string | null;
     }[];
     const sessionsOut: SessionListItem[] = rows.map((r) => {
@@ -867,6 +885,8 @@ export class DrizzleSpanRepository implements SpanRepository {
       if (r.firstMessageRaw != null && r.firstMessageRaw.trim() !== "") {
         item.firstMessagePreview = preview(r.firstMessageRaw);
       }
+      // M26d: per-session eval count (>0 → shown; 0 → omitted, no "0" column).
+      if (r.evaluationsCount > 0) item.evaluationsCount = r.evaluationsCount;
       return item;
     });
     return { sessions: sessionsOut };
@@ -1041,6 +1061,135 @@ export class DrizzleSpanRepository implements SpanRepository {
           eq(annotations.spanId, key.spanId ?? ""),
           eq(annotations.name, key.name),
           eq(annotations.annotatorKind, key.annotatorKind ?? DEFAULT_ANNOTATOR_KIND),
+        ),
+      );
+  }
+
+  // ── M26d datasets ──────────────────────────────────────────────────────────
+
+  /** Map a datasets row (+ item count) to the DTO. */
+  private datasetRow(r: { id: string; name: string; createdAt: Date; itemCount: number }): Dataset {
+    return {
+      id: r.id,
+      name: r.name,
+      createdAt: isoTimestamp(r.createdAt),
+      itemCount: r.itemCount,
+    };
+  }
+
+  async createDataset(name: string): Promise<Dataset> {
+    // D1: create-or-get on the UNIQUE name (idempotent). Insert-or-nothing, then read
+    // the row back (covers both the just-created and the pre-existing case) + item count.
+    await this.db
+      .insert(datasets)
+      .values({ name })
+      .onConflictDoNothing({ target: datasets.name });
+    const rows = await this.db
+      .select({
+        id: datasets.id,
+        name: datasets.name,
+        createdAt: datasets.createdAt,
+        itemCount: sql<number>`count(${datasetItems.id})::int`.as("item_count"),
+      })
+      .from(datasets)
+      .leftJoin(datasetItems, eq(datasetItems.datasetId, datasets.id))
+      .where(eq(datasets.name, name))
+      .groupBy(datasets.id, datasets.name, datasets.createdAt)
+      .limit(1);
+    return this.datasetRow(rows[0]!);
+  }
+
+  async listDatasets(): Promise<Dataset[]> {
+    // LEFT JOIN + GROUP BY for the per-dataset item count (a correlated subquery in
+    // the projection did not correlate reliably here; the grouped join is idiomatic).
+    const rows = await this.db
+      .select({
+        id: datasets.id,
+        name: datasets.name,
+        createdAt: datasets.createdAt,
+        itemCount: sql<number>`count(${datasetItems.id})::int`.as("item_count"),
+      })
+      .from(datasets)
+      .leftJoin(datasetItems, eq(datasetItems.datasetId, datasets.id))
+      .groupBy(datasets.id, datasets.name, datasets.createdAt)
+      .orderBy(desc(datasets.createdAt));
+    return rows.map((r) => this.datasetRow(r));
+  }
+
+  async getDataset(datasetId: string): Promise<DatasetDetail | null> {
+    if (!isUuid(datasetId)) return null; // non-uuid path param → absent, not a 500
+    const dsRows = await this.db
+      .select()
+      .from(datasets)
+      .where(eq(datasets.id, datasetId))
+      .limit(1);
+    const ds = dsRows[0];
+    if (!ds) return null;
+    const items = await this.db
+      .select()
+      .from(datasetItems)
+      .where(eq(datasetItems.datasetId, datasetId))
+      .orderBy(desc(datasetItems.createdAt));
+    return {
+      id: ds.id,
+      name: ds.name,
+      createdAt: isoTimestamp(ds.createdAt),
+      items: items.map((i) => ({
+        traceId: i.traceId,
+        ...(i.inputSnapshot != null ? { inputSnapshot: i.inputSnapshot } : {}),
+        ...(i.outputSnapshot != null ? { outputSnapshot: i.outputSnapshot } : {}),
+        createdAt: isoTimestamp(i.createdAt),
+      })),
+    };
+  }
+
+  async addDatasetItem(datasetId: string, traceId: string): Promise<boolean> {
+    // D2/D3: snapshot the trace's root input/output AT ADD-TIME (durable past prune),
+    // idempotent on (dataset, trace). Returns false if the dataset OR the trace is
+    // absent (→ 404) — advisory checks, like addTag/upsertAnnotation.
+    if (!isUuid(datasetId)) return false;
+    const ds = await this.db
+      .select({ id: datasets.id })
+      .from(datasets)
+      .where(eq(datasets.id, datasetId))
+      .limit(1);
+    if (ds.length === 0) return false;
+    const tr = await this.db
+      .select({ traceId: traces.traceId })
+      .from(traces)
+      .where(eq(traces.traceId, traceId))
+      .limit(1);
+    if (tr.length === 0) return false;
+    // The root span (earliest, parent_span_id IS NULL) carries the trace's I/O.
+    const root = await this.db
+      .select({ input: spans.inputValue, output: spans.outputValue })
+      .from(spans)
+      .where(and(eq(spans.traceId, traceId), isNull(spans.parentSpanId)))
+      .orderBy(asc(sql`${spans.startTimeUnixNano}::numeric`))
+      .limit(1);
+    const snap = root[0];
+    await this.db
+      .insert(datasetItems)
+      .values({
+        datasetId,
+        traceId,
+        inputSnapshot: snap?.input ?? null,
+        outputSnapshot: snap?.output ?? null,
+      })
+      .onConflictDoNothing({
+        target: [datasetItems.datasetId, datasetItems.traceId],
+      });
+    return true;
+  }
+
+  async removeDatasetItem(datasetId: string, traceId: string): Promise<void> {
+    if (!isUuid(datasetId)) return; // idempotent: a non-uuid id removes nothing
+    await this.db
+      .delete(datasetItems)
+      .where(
+        and(
+          eq(datasetItems.datasetId, datasetId),
+          eq(datasetItems.traceId, traceId),
         ),
       );
   }

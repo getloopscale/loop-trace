@@ -8,6 +8,7 @@ import type { SessionListResponse, SessionDetailResponse } from "./session.js";
 import type { PruneStats } from "./retention.js";
 import type { EvaluatorSummary } from "./evaluation.js";
 import type { Annotation, NormalizedAnnotation } from "./annotation.js";
+import type { Dataset, DatasetDetail } from "./dataset.js";
 
 /** A span plus its reconstructed children — the trace tree node. */
 export interface TraceTreeNode extends Span {
@@ -70,6 +71,20 @@ export interface SpanRepository {
     traceId: string,
     key: { spanId?: string; name: string; annotatorKind?: string },
   ): Promise<void>;
+  /** Create a dataset, or return the existing one with the same name (M26d, idempotent). */
+  createDataset(name: string): Promise<Dataset>;
+  /** All datasets with their item counts, newest-first (M26d); empty when none. */
+  listDatasets(): Promise<Dataset[]>;
+  /** A dataset + its items (newest-first), or null if absent (M26d). */
+  getDataset(datasetId: string): Promise<DatasetDetail | null>;
+  /**
+   * Add a trace to a dataset (M26d), snapshotting its root input/output at add-time.
+   * Idempotent on (dataset, trace) — keeps the first snapshot. Returns false if the
+   * dataset OR the trace is absent (→ 404).
+   */
+  addDatasetItem(datasetId: string, traceId: string): Promise<boolean>;
+  /** Remove a dataset item by (dataset, trace) (M26d, idempotent — no-op if absent). */
+  removeDatasetItem(datasetId: string, traceId: string): Promise<void>;
   /**
    * Hard-delete trace data older than `olderThan` (M23 retention) — trace-granular:
    * every trace with `updated_at < olderThan` and all its spans/tags/replay rows,

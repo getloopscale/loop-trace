@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type {
   Annotation,
   NormalizedAnnotation,
+  Dataset,
+  DatasetDetail,
   CostByPeriodResponse,
   CostPeriod,
   EvaluatorSummary,
@@ -19,7 +21,7 @@ import type {
 } from "@usetheo/lens-core";
 
 import { createApp } from "./app.js";
-import { spansIngested, tracesIngested, evaluationsExtracted, annotationsWritten } from "./metrics.js";
+import { spansIngested, tracesIngested, evaluationsExtracted, annotationsWritten, datasetItemsAdded } from "./metrics.js";
 import { encodeOtlpProtobuf } from "../otlp/__fixtures__/otlp-protobuf.js";
 
 /**
@@ -230,6 +232,52 @@ class StubSpanRepository implements SpanRepository {
       ),
     );
   }
+
+  // M26d datasets: in-memory by id; name→id for create-or-get; items per dataset.
+  readonly dsByName = new Map<string, string>();
+  readonly dsDetail = new Map<string, DatasetDetail>();
+  dsItemTraceExists = true;
+  dsItemAddCount = 0;
+  private dsSeq = 0;
+
+  async createDataset(name: string): Promise<Dataset> {
+    let id = this.dsByName.get(name);
+    if (id === undefined) {
+      id = `ds-${++this.dsSeq}`;
+      this.dsByName.set(name, id);
+      this.dsDetail.set(id, { id, name, createdAt: "2026-06-25T00:00:00.000Z", items: [] });
+    }
+    const d = this.dsDetail.get(id)!;
+    return { id, name: d.name, createdAt: d.createdAt, itemCount: d.items.length };
+  }
+
+  async listDatasets(): Promise<Dataset[]> {
+    return [...this.dsDetail.values()].map((d) => ({
+      id: d.id,
+      name: d.name,
+      createdAt: d.createdAt,
+      itemCount: d.items.length,
+    }));
+  }
+
+  async getDataset(datasetId: string): Promise<DatasetDetail | null> {
+    return this.dsDetail.get(datasetId) ?? null;
+  }
+
+  async addDatasetItem(datasetId: string, traceId: string): Promise<boolean> {
+    const d = this.dsDetail.get(datasetId);
+    if (d === undefined || !this.dsItemTraceExists) return false;
+    if (!d.items.some((i) => i.traceId === traceId)) {
+      d.items.unshift({ traceId, inputSnapshot: "snap-in", createdAt: "2026-06-25T00:00:00.000Z" });
+    }
+    this.dsItemAddCount += 1;
+    return true;
+  }
+
+  async removeDatasetItem(datasetId: string, traceId: string): Promise<void> {
+    const d = this.dsDetail.get(datasetId);
+    if (d) d.items = d.items.filter((i) => i.traceId !== traceId);
+  }
 }
 
 function tracesEnvelope(span: Record<string, unknown>): string {
@@ -255,6 +303,7 @@ describe("createApp (contract, stub repo)", () => {
     tracesIngested.reset();
     evaluationsExtracted.reset();
     annotationsWritten.reset();
+    datasetItemsAdded.reset();
   });
 
   function post(body: BodyInit, contentType = "application/json"): Promise<Response> {
@@ -894,6 +943,93 @@ describe("createApp (contract, stub repo)", () => {
     expect(
       (await createApp(leaky).request("/v1/traces/t1/annotations")).status,
     ).toBeGreaterThanOrEqual(500);
+  });
+
+  function postJson(path: string, body: unknown): Promise<Response> {
+    return app.request(path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("test_post_dataset_creates_and_is_idempotent", async () => {
+    const a = (await (await postJson("/v1/datasets", { name: "travel" })).json()) as Dataset;
+    expect(a.name).toBe("travel");
+    const b = (await (await postJson("/v1/datasets", { name: "travel" })).json()) as Dataset;
+    expect(b.id).toBe(a.id); // create-or-get
+  });
+
+  it("test_post_dataset_blank_400", async () => {
+    expect((await postJson("/v1/datasets", { name: "   " })).status).toBe(400);
+  });
+
+  it("test_get_datasets_lists_with_counts", async () => {
+    const ds = (await (await postJson("/v1/datasets", { name: "travel" })).json()) as Dataset;
+    await postJson(`/v1/datasets/${ds.id}/items`, { traceId: "t1" });
+    const body = (await (await app.request("/v1/datasets")).json()) as { datasets: Dataset[] };
+    const travel = body.datasets.find((d) => d.name === "travel");
+    expect(travel?.itemCount).toBe(1);
+  });
+
+  it("test_post_dataset_item_adds_and_returns_detail", async () => {
+    const ds = (await (await postJson("/v1/datasets", { name: "travel" })).json()) as Dataset;
+    const res = await postJson(`/v1/datasets/${ds.id}/items`, { traceId: "t1" });
+    expect(res.status).toBe(200);
+    const detail = (await res.json()) as DatasetDetail;
+    expect(detail.items.map((i) => i.traceId)).toContain("t1");
+    expect(datasetItemsAdded.value).toBe(1);
+  });
+
+  it("test_post_dataset_item_missing_traceId_400", async () => {
+    const ds = (await (await postJson("/v1/datasets", { name: "travel" })).json()) as Dataset;
+    expect((await postJson(`/v1/datasets/${ds.id}/items`, {})).status).toBe(400);
+    expect(datasetItemsAdded.value).toBe(0); // no write on a 400
+  });
+
+  it("test_post_dataset_item_absent_dataset_404", async () => {
+    expect((await postJson("/v1/datasets/ds-ghost/items", { traceId: "t1" })).status).toBe(404);
+    expect(datasetItemsAdded.value).toBe(0); // no write on a 404
+  });
+
+  it("test_post_dataset_item_absent_trace_404", async () => {
+    repo.dsItemTraceExists = false;
+    const ds = (await (await postJson("/v1/datasets", { name: "travel" })).json()) as Dataset;
+    expect((await postJson(`/v1/datasets/${ds.id}/items`, { traceId: "ghost" })).status).toBe(404);
+    expect(datasetItemsAdded.value).toBe(0); // no write on a 404
+  });
+
+  it("test_get_dataset_detail_404_when_absent", async () => {
+    expect((await app.request("/v1/datasets/ds-ghost")).status).toBe(404);
+  });
+
+  it("test_delete_dataset_item_removes_and_idempotent", async () => {
+    const ds = (await (await postJson("/v1/datasets", { name: "travel" })).json()) as Dataset;
+    await postJson(`/v1/datasets/${ds.id}/items`, { traceId: "t1" });
+    const res = await app.request(`/v1/datasets/${ds.id}/items/t1`, { method: "DELETE" });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as DatasetDetail).items).toHaveLength(0);
+    // deleting again → still 200 (idempotent)
+    expect((await app.request(`/v1/datasets/${ds.id}/items/t1`, { method: "DELETE" })).status).toBe(200);
+  });
+
+  it("test_delete_dataset_item_absent_dataset_404", async () => {
+    expect(
+      (await app.request("/v1/datasets/ds-ghost/items/t1", { method: "DELETE" })).status,
+    ).toBe(404);
+  });
+
+  it("test_datasets_route_rejects_leaked_column_at_boundary_with_5xx", async () => {
+    const leaky: SpanRepository = {
+      ...repo,
+      save: repo.save.bind(repo),
+      getBySpanId: repo.getBySpanId.bind(repo),
+      getTraceTree: repo.getTraceTree.bind(repo),
+      listTraces: repo.listTraces.bind(repo),
+      listDatasets: async () =>
+        [{ id: "d1", name: "x", createdAt: "x", itemCount: 0, secret: "leak" }] as never,
+    };
+    expect((await createApp(leaky).request("/v1/datasets")).status).toBeGreaterThanOrEqual(500);
   });
 
   it("test_get_sessions_returns_list_dto", async () => {

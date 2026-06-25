@@ -24,6 +24,12 @@ export const sessionListItemSchema = z
      * root has null/empty/whitespace input (EC-1). Additive; `.strict()` preserved.
      */
     firstMessagePreview: z.string().optional(),
+    /**
+     * M26d: per-session count of online-eval rows across the session's traces (the
+     * sessions-list "Evals" column — session-level twin of the per-trace count).
+     * Optional + omitted when 0 so `.strict()` stays additive.
+     */
+    evaluationsCount: z.number().int().nonnegative().optional(),
   })
   .strict();
 

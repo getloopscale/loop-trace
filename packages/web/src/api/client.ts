@@ -1,5 +1,8 @@
 import type {
   AnnotationsResponse,
+  Dataset,
+  DatasetsResponse,
+  DatasetDetail,
   CostByPeriodResponse,
   EvaluatorsResponse,
   ListTracesQuery,
@@ -120,6 +123,55 @@ export function getEvaluators(
   range: ObservabilityRange,
 ): Promise<EvaluatorsResponse> {
   return getJson<EvaluatorsResponse>(`/v1/metrics/evaluators?range=${range}`);
+}
+
+/** Fetch all datasets with item counts, newest-first (M26d). */
+export function getDatasets(): Promise<DatasetsResponse> {
+  return getJson<DatasetsResponse>("/v1/datasets");
+}
+
+/** Fetch a dataset + its items (M26d). */
+export function getDataset(datasetId: string): Promise<DatasetDetail> {
+  return getJson<DatasetDetail>(`/v1/datasets/${encodeURIComponent(datasetId)}`);
+}
+
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new ApiError(res.status);
+  return (await res.json()) as T;
+}
+
+/** Create-or-get a dataset by name (M26d, idempotent). */
+export function createDataset(name: string): Promise<Dataset> {
+  return postJson<Dataset>("/v1/datasets", { name });
+}
+
+/** Add a trace to a dataset (M26d); returns the updated dataset detail. */
+export function addDatasetItem(
+  datasetId: string,
+  traceId: string,
+): Promise<DatasetDetail> {
+  return postJson<DatasetDetail>(
+    `/v1/datasets/${encodeURIComponent(datasetId)}/items`,
+    { traceId },
+  );
+}
+
+/** Remove a trace from a dataset (M26d, idempotent); returns the updated detail. */
+export async function removeDatasetItem(
+  datasetId: string,
+  traceId: string,
+): Promise<DatasetDetail> {
+  const res = await fetch(
+    `${BASE}/v1/datasets/${encodeURIComponent(datasetId)}/items/${encodeURIComponent(traceId)}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok) throw new ApiError(res.status);
+  return (await res.json()) as DatasetDetail;
 }
 
 /** Fetch the sessions list, newest-first (M13). */

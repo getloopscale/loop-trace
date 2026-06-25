@@ -51,6 +51,13 @@ describe("SessionTable (M20)", () => {
     expect(within(dataRow).getByText("$0.0125")).toBeInTheDocument(); // cost
   });
 
+  it("test_session_table_renders_evals_column", () => {
+    // M26d: per-session online-eval count column; DASH when omitted (0).
+    renderTable([row({ evaluationsCount: 4 })]);
+    expect(screen.getByRole("columnheader", { name: "Evals" })).toBeInTheDocument();
+    expect(screen.getByLabelText("4 evaluations")).toHaveTextContent("4");
+  });
+
   it("sessions_table_first_message_falls_back_to_session_id_when_absent", () => {
     // No firstMessagePreview → the lead column links by the sessionId (a clickable
     // identifier, not a dead "—" link). Documented divergence from the literal plan AC.

@@ -18,6 +18,10 @@ import {
   normalizeAnnotation,
   DEFAULT_ANNOTATION_NAME,
   DEFAULT_ANNOTATOR_KIND,
+  datasetsResponseSchema,
+  datasetSchema,
+  datasetDetailSchema,
+  normalizeDatasetName,
 } from "@usetheo/lens-core";
 
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
@@ -28,6 +32,7 @@ import {
   tracesIngested,
   evaluationsExtracted,
   annotationsWritten,
+  datasetItemsAdded,
   logIngest,
 } from "./metrics.js";
 import { mountStatic } from "./static.js";
@@ -338,6 +343,69 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
     });
     const annotations = await repo.listAnnotations(traceId);
     return c.json(annotationsResponseSchema.parse({ annotations }), 200);
+  });
+
+  app.get("/v1/datasets", async (c) => {
+    // M26d: all datasets with their item counts, newest-first.
+    const datasets = await repo.listDatasets();
+    return c.json(datasetsResponseSchema.parse({ datasets }), 200);
+  });
+
+  app.post("/v1/datasets", async (c) => {
+    // M26d: create-or-get a dataset by name (D1, idempotent). 400 on a blank name.
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "invalid json body" }, 400);
+    }
+    const name = normalizeDatasetName((body as { name?: unknown })?.name);
+    if (name === null) {
+      return c.json({ error: "dataset name is required (1-120 chars after trim)" }, 400);
+    }
+    const dataset = await repo.createDataset(name);
+    return c.json(datasetSchema.parse(dataset), 200);
+  });
+
+  app.get("/v1/datasets/:datasetId", async (c) => {
+    // M26d: a dataset + its items (snapshot input/output), or 404 if absent.
+    const detail = await repo.getDataset(c.req.param("datasetId"));
+    return detail
+      ? c.json(datasetDetailSchema.parse(detail), 200)
+      : c.json({ error: "not found" }, 404);
+  });
+
+  app.post("/v1/datasets/:datasetId/items", async (c) => {
+    // M26d: add a trace to a dataset (snapshot at add-time, D2). 400 on a missing
+    // traceId, 404 when the dataset OR the trace is absent (D3); idempotent otherwise.
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "invalid json body" }, 400);
+    }
+    const traceId = (body as { traceId?: unknown })?.traceId;
+    if (typeof traceId !== "string" || traceId.length === 0) {
+      return c.json({ error: "traceId is required" }, 400);
+    }
+    const datasetId = c.req.param("datasetId");
+    const ok = await repo.addDatasetItem(datasetId, traceId);
+    if (!ok) return c.json({ error: "not found" }, 404);
+    datasetItemsAdded.add(1);
+    const detail = await repo.getDataset(datasetId);
+    // detail is non-null here (the dataset existed for the add to succeed).
+    return c.json(datasetDetailSchema.parse(detail), 200);
+  });
+
+  app.delete("/v1/datasets/:datasetId/items/:traceId", async (c) => {
+    // M26d: remove an item by (dataset, trace). Idempotent. Returns the dataset (404
+    // only if the dataset itself is absent — a missing item is a no-op).
+    const datasetId = c.req.param("datasetId");
+    await repo.removeDatasetItem(datasetId, c.req.param("traceId"));
+    const detail = await repo.getDataset(datasetId);
+    return detail
+      ? c.json(datasetDetailSchema.parse(detail), 200)
+      : c.json({ error: "not found" }, 404);
   });
 
   // Mount static UI serving LAST so the catch-all never shadows /v1/* (M7, D1).

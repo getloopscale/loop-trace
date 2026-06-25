@@ -14,6 +14,7 @@ import { addAnnotation } from "../api/client.js";
 import { deriveTraceListItemKind } from "../lib/span-kind.js";
 import { KindBadge } from "./kind-badge.js";
 import { TraceRowSpanTree } from "./TraceRowSpanTree.js";
+import { AddToDataset } from "./AddToDataset.js";
 import { ModelPill } from "./ModelPill.js";
 import { formatDuration } from "../lib/duration.js";
 import { formatUsd } from "../lib/money.js";
@@ -192,6 +193,12 @@ const columns: DataTableColumn<TraceListItem>[] = [
     key: "feedback",
     label: "Feedback",
     render: (t) => <QuickAnnotate traceId={t.traceId} />,
+  },
+  {
+    // M26d: per-row "Add to Dataset" — curate the trace as a dataset example.
+    key: "dataset",
+    label: "Dataset",
+    render: (t) => <AddToDataset traceId={t.traceId} />,
   },
 ];
 
