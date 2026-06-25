@@ -1,15 +1,32 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider, violetForge } from "@theokit/ui";
 import { SpanInfoPanel } from "./SpanInfoPanel.js";
 import type { SpanNodeData } from "../api/types.js";
+import * as client from "../api/client.js";
+
+vi.mock("../api/client.js", async (orig) => {
+  const actual = await orig<typeof import("../api/client.js")>();
+  return { ...actual, getAnnotations: vi.fn() };
+});
+
+beforeEach(() => {
+  vi.mocked(client.getAnnotations).mockResolvedValue({ annotations: [] });
+});
 
 function withTheme(ui: React.ReactNode) {
+  // The Annotations tab uses react-query (useAnnotations) → needs a QueryClient.
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false, retryDelay: 0 } },
+  });
   return (
-    <ThemeProvider defaultTheme="violet-forge" defaultMode="dark" themes={[violetForge]}>
-      {ui}
-    </ThemeProvider>
+    <QueryClientProvider client={qc}>
+      <ThemeProvider defaultTheme="violet-forge" defaultMode="dark" themes={[violetForge]}>
+        {ui}
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }
 
@@ -120,6 +137,15 @@ describe("SpanInfoPanel", () => {
     render(withTheme(<SpanInfoPanel span={bare} />));
     await user.click(screen.getByRole("tab", { name: "Evaluations" }));
     expect(screen.getByText("No evaluations")).toBeInTheDocument();
+  });
+
+  it("span_info_panel_has_annotations_tab", async () => {
+    const user = userEvent.setup();
+    render(withTheme(<SpanInfoPanel span={rich} />));
+    await user.click(screen.getByRole("tab", { name: "Annotations" }));
+    // the writable AnnotationsPanel renders (empty state + the feedback controls)
+    await waitFor(() => expect(screen.getByText("No annotations yet")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "give thumbs up" })).toBeInTheDocument();
   });
 
   it("span_info_panel_keeps_active_tab_across_span_change", async () => {

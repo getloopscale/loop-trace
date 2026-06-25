@@ -11,7 +11,7 @@ import * as client from "../api/client.js";
 // The expandable row lazily loads the span tree via useTraceTree → getTraceTree (M29d).
 vi.mock("../api/client.js", async (orig) => {
   const actual = await orig<typeof import("../api/client.js")>();
-  return { ...actual, getTraceTree: vi.fn() };
+  return { ...actual, getTraceTree: vi.fn(), addAnnotation: vi.fn() };
 });
 
 function renderTable(props: Partial<React.ComponentProps<typeof TraceTable>> = {}) {
@@ -25,6 +25,7 @@ function renderTable(props: Partial<React.ComponentProps<typeof TraceTable>> = {
             sort={props.sort ?? null}
             onSortChange={props.onSortChange ?? (() => {})}
             loading={props.loading ?? false}
+            {...(props.hiddenColumns ? { hiddenColumns: props.hiddenColumns } : {})}
           />
         </MemoryRouter>
       </QueryClientProvider>
@@ -32,7 +33,10 @@ function renderTable(props: Partial<React.ComponentProps<typeof TraceTable>> = {
   );
 }
 
-beforeEach(() => vi.mocked(client.getTraceTree).mockReset());
+beforeEach(() => {
+  vi.mocked(client.getTraceTree).mockReset();
+  vi.mocked(client.addAnnotation).mockResolvedValue({ annotations: [] });
+});
 
 const rich: TraceListItem = {
   traceId: "t1",
@@ -100,6 +104,36 @@ describe("TraceTable", () => {
     // status meaning carried by aria-label (M9 a11y contract), both branches
     expect(screen.getByLabelText("status: ok")).toBeInTheDocument();
     expect(screen.getByLabelText("status: error")).toBeInTheDocument();
+  });
+
+  it("test_trace_table_renders_evals_column", () => {
+    renderTable({ traces: [{ ...rich, evaluationsCount: 3 }] });
+    expect(screen.getByRole("columnheader", { name: "Evals" })).toBeInTheDocument();
+    expect(screen.getByLabelText("3 evaluations")).toHaveTextContent("3");
+  });
+
+  it("test_trace_table_evals_column_toggleable", () => {
+    renderTable({
+      traces: [{ ...rich, evaluationsCount: 3 }],
+      hiddenColumns: new Set(["evals"]),
+    });
+    expect(screen.queryByRole("columnheader", { name: "Evals" })).not.toBeInTheDocument();
+  });
+
+  it("test_trace_table_quick_annotate_writes_without_navigating", async () => {
+    const user = userEvent.setup();
+    renderTable({ traces: [rich] });
+    const thumbUp = screen.getByLabelText("annotate trace t1 thumbs up");
+    await user.click(thumbUp);
+    await waitFor(() =>
+      expect(client.addAnnotation).toHaveBeenCalledWith("t1", {
+        name: "feedback",
+        label: "thumbs_up",
+      }),
+    );
+    // the click did NOT expand the row (stopPropagation): the span tree was never fetched
+    expect(client.getTraceTree).not.toHaveBeenCalled();
+    expect(thumbUp).toHaveAttribute("aria-pressed", "true");
   });
 
   it("test_trace_row_lazy_fetch_only_on_expand", async () => {
