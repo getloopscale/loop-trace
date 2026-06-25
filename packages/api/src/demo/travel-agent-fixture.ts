@@ -81,6 +81,12 @@ interface AgentSpec {
   tools: Array<{ name: string; input: string; output: string }>;
   retriever?: { query: string; documents: string };
   llm: { system: string; input: string; output: string; inTok: number; outTok: number };
+  /**
+   * M32: the agent's declared version. A function of the trace index so one agent can
+   * emit several versions across the seeded traces (research_agent → churn). The
+   * agent's system prompt is its `llm.input` instruction (no separate field needed).
+   */
+  version: (traceIndex: number) => string;
 }
 
 const AGENTS: AgentSpec[] = [
@@ -118,6 +124,7 @@ const AGENTS: AgentSpec[] = [
       inTok: 220,
       outTok: 180,
     },
+    version: () => "2.1.0",
   },
   {
     name: "research_agent",
@@ -142,6 +149,8 @@ const AGENTS: AgentSpec[] = [
       inTok: 180,
       outTok: 150,
     },
+    // M32: research_agent ships frequently → 3 versions across the 8 traces (high churn).
+    version: (t) => `1.${t % 3}.0`,
   },
   {
     name: "budget_agent",
@@ -166,6 +175,7 @@ const AGENTS: AgentSpec[] = [
       inTok: 160,
       outTok: 140,
     },
+    version: () => "1.0.0",
   },
   {
     name: "itinerary_agent",
@@ -183,6 +193,7 @@ const AGENTS: AgentSpec[] = [
       inTok: 320,
       outTok: 280,
     },
+    version: () => "1.3.0",
   },
 ];
 
@@ -259,6 +270,12 @@ export function buildTravelAgentEnvelope(
           "session.id": sv(sessionId),
           "input.value": sv(agent.task),
           "output.value": sv(agent.result),
+          // M32: the explicit agent.* convention the catalog derives from. The system
+          // prompt is the agent's LLM instruction; the version varies per trace for
+          // research_agent (→ multiple versions / high churn in the catalog).
+          "agent.name": sv(agent.name),
+          "agent.version": sv(agent.version(t)),
+          "agent.system_prompt": sv(agent.llm.input),
         }),
       });
 

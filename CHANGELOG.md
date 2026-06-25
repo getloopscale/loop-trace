@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Agents catalog: a new **Agents** page lists your agents as first-class entities — derived from the `agent.name` / `agent.version` / `agent.system_prompt` span attributes — with each agent's run count, versions, tools used, latest system prompt, and health badges (stale > 30 days · high churn = many versions · anonymous). The demo seeds multi-version agents so the catalog shows real version history out of the box (M32)
 
 ### Changed
 

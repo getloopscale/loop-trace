@@ -62,6 +62,27 @@ describe("travel-agent demo fixture", () => {
     expect(toolSpans.map((t) => t.toolName).sort()).toContain("hidden_gems");
   });
 
+  it("test_agent_spans_carry_agent_attributes_with_multi_version", () => {
+    // M32: agent spans emit the explicit agent.* convention the catalog derives from;
+    // research_agent emits ≥3 distinct versions across the 8 traces (→ high churn).
+    const { spans } = indexSpans(8);
+    const agentSpans = spans.filter((s) => s.attributes?.["agent.name"] != null);
+    expect(agentSpans.length).toBeGreaterThan(0);
+    // every agent span carries name + version + system prompt
+    for (const s of agentSpans) {
+      expect(typeof s.attributes?.["agent.name"]).toBe("string");
+      expect(typeof s.attributes?.["agent.version"]).toBe("string");
+      expect(typeof s.attributes?.["agent.system_prompt"]).toBe("string");
+    }
+    // research_agent → 3 distinct versions across traces (1.0.0 / 1.1.0 / 1.2.0)
+    const researchVersions = new Set(
+      agentSpans
+        .filter((s) => s.attributes?.["agent.name"] === "research_agent")
+        .map((s) => s.attributes?.["agent.version"]),
+    );
+    expect(researchVersions.size).toBe(3);
+  });
+
   it("test_builder_groups_traces_into_sessions", () => {
     const { spans } = indexSpans(6, 3);
     const sessionIds = new Set(spans.map((s) => s.sessionId).filter(Boolean));

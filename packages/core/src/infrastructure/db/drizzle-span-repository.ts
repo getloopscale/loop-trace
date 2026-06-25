@@ -52,6 +52,7 @@ import {
   type NormalizedAnnotation,
 } from "../../domain/annotation.js";
 import type { Dataset, DatasetDetail } from "../../domain/dataset.js";
+import { shapeAgent, type Agent, type RawAgent } from "../../domain/agent-catalog.js";
 
 /** Build a pg connection pool for the given Postgres URI. */
 export function createPool(connectionString: string): pg.Pool {
@@ -1192,6 +1193,70 @@ export class DrizzleSpanRepository implements SpanRepository {
           eq(datasetItems.traceId, traceId),
         ),
       );
+  }
+
+  async aggregateAgents(): Promise<Agent[]> {
+    // M32 (D1/D2): derive the catalog by GROUP BY `agent.name`. Only spans carrying
+    // that attribute are cataloged (a plain span is excluded). Correlated subqueries
+    // give the latest non-empty system prompt + the distinct tools across the agent's
+    // traces. Health is applied by the PURE classifier (D3) with the real clock here;
+    // the unit test owns the deterministic clock.
+    // Project agent_name as a plain column in a derived table FIRST, so the outer
+    // GROUP BY is on a column (not a jsonb expression) and the correlated subqueries
+    // can reference the grouped `base.agent_name` (Postgres rejects a jsonb expression
+    // referenced from a correlated subquery as "ungrouped", error 42803).
+    const res = await this.db.execute(sql`
+      SELECT
+        base.agent_name AS name,
+        min(base.ingested_at) AS first_seen,
+        max(base.ingested_at) AS last_seen,
+        count(DISTINCT base.trace_id)::int AS run_count,
+        array_remove(array_agg(DISTINCT base.agent_version), NULL) AS versions,
+        (SELECT s3.attributes->>'agent.system_prompt'
+           FROM spans s3
+          WHERE s3.attributes->>'agent.name' = base.agent_name
+            AND nullif(btrim(s3.attributes->>'agent.system_prompt'), '') IS NOT NULL
+          ORDER BY s3.ingested_at DESC
+          LIMIT 1) AS system_prompt,
+        COALESCE((SELECT array_agg(DISTINCT tl.tool_name)
+           FROM spans tl
+          WHERE tl.tool_name IS NOT NULL
+            AND tl.trace_id IN (SELECT s2.trace_id FROM spans s2
+                                 WHERE s2.attributes->>'agent.name' = base.agent_name)
+        ), ARRAY[]::text[]) AS tools
+      FROM (
+        SELECT attributes->>'agent.name' AS agent_name,
+               attributes->>'agent.version' AS agent_version,
+               trace_id,
+               ingested_at
+          FROM spans
+         WHERE attributes->>'agent.name' IS NOT NULL
+      ) base
+      GROUP BY base.agent_name
+      ORDER BY max(base.ingested_at) DESC
+    `);
+    const rows = res.rows as unknown as {
+      name: string;
+      first_seen: Date;
+      last_seen: Date;
+      run_count: number;
+      versions: string[] | null;
+      system_prompt: string | null;
+      tools: string[] | null;
+    }[];
+    const now = new Date();
+    return rows.map((r): Agent => {
+      const raw: RawAgent = {
+        name: r.name,
+        firstSeenAt: isoTimestamp(r.first_seen),
+        latestSeenAt: isoTimestamp(r.last_seen),
+        runCount: r.run_count,
+        versions: r.versions ?? [],
+        tools: r.tools ?? [],
+        systemPrompt: r.system_prompt,
+      };
+      return shapeAgent(raw, { now });
+    });
   }
 
   async prune(olderThan: Date): Promise<PruneStats> {

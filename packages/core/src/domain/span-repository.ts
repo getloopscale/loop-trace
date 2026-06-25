@@ -9,6 +9,7 @@ import type { PruneStats } from "./retention.js";
 import type { EvaluatorSummary } from "./evaluation.js";
 import type { Annotation, NormalizedAnnotation } from "./annotation.js";
 import type { Dataset, DatasetDetail } from "./dataset.js";
+import type { Agent } from "./agent-catalog.js";
 
 /** A span plus its reconstructed children — the trace tree node. */
 export interface TraceTreeNode extends Span {
@@ -85,6 +86,12 @@ export interface SpanRepository {
   addDatasetItem(datasetId: string, traceId: string): Promise<boolean>;
   /** Remove a dataset item by (dataset, trace) (M26d, idempotent — no-op if absent). */
   removeDatasetItem(datasetId: string, traceId: string): Promise<void>;
+  /**
+   * Agents catalog (M32): spans grouped by the `agent.name` attribute into per-agent
+   * rows (latest-seen, run count, versions, tools, system prompt) with health flags.
+   * Derived (no table); only `agent.name`-bearing spans are cataloged. Empty when none.
+   */
+  aggregateAgents(): Promise<Agent[]>;
   /**
    * Hard-delete trace data older than `olderThan` (M23 retention) — trace-granular:
    * every trace with `updated_at < olderThan` and all its spans/tags/replay rows,
