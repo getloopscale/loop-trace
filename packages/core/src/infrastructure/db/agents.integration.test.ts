@@ -69,14 +69,18 @@ suite("agents catalog (integration, M32)", () => {
     expect(byName["budget_agent"]?.runCount).toBe(1);
   });
 
-  it("test_aggregate_tools_across_agents_traces", async () => {
-    // a tool span in the same trace as the agent → surfaced under the agent's tools
+  it("test_aggregate_tools_are_the_agents_direct_children", async () => {
+    // tools = tool spans whose PARENT is one of the agent's spans (the tools this
+    // agent calls) — NOT every tool in the trace (a sibling agent's tool is excluded).
     await repo.save([
       agentSpan("a1", "t1", "local_agent", "1.0.0"),
-      span({ spanId: "tool1", traceId: "t1", name: "hidden_gems", toolName: "hidden_gems", attributes: { "gen_ai.tool.name": "hidden_gems" } }),
+      agentSpan("b1", "t1", "budget_agent", "1.0.0"),
+      span({ spanId: "tool1", traceId: "t1", parentSpanId: "a1", name: "hidden_gems", toolName: "hidden_gems", attributes: { "gen_ai.tool.name": "hidden_gems" } }),
+      span({ spanId: "tool2", traceId: "t1", parentSpanId: "b1", name: "budget_basics", toolName: "budget_basics", attributes: { "gen_ai.tool.name": "budget_basics" } }),
     ]);
     const agents = await repo.aggregateAgents();
     expect(agents.find((a) => a.name === "local_agent")?.tools).toEqual(["hidden_gems"]);
+    expect(agents.find((a) => a.name === "budget_agent")?.tools).toEqual(["budget_basics"]);
   });
 
   it("test_aggregate_excludes_spans_without_agent_name", async () => {

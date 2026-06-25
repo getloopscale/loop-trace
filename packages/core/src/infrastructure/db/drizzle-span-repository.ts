@@ -1221,8 +1221,8 @@ export class DrizzleSpanRepository implements SpanRepository {
         COALESCE((SELECT array_agg(DISTINCT tl.tool_name)
            FROM spans tl
           WHERE tl.tool_name IS NOT NULL
-            AND tl.trace_id IN (SELECT s2.trace_id FROM spans s2
-                                 WHERE s2.attributes->>'agent.name' = base.agent_name)
+            AND tl.parent_span_id IN (SELECT s2.span_id FROM spans s2
+                                       WHERE s2.attributes->>'agent.name' = base.agent_name)
         ), ARRAY[]::text[]) AS tools
       FROM (
         SELECT attributes->>'agent.name' AS agent_name,
