@@ -17,6 +17,7 @@ import { AppShell } from "./components/AppShell.js";
 import { ThemeProvider, violetForge } from "@theokit/ui";
 import { AutoRefreshProvider } from "./hooks/useAutoRefresh.js";
 import { RangeProvider } from "./hooks/useRange.js";
+import { SpanQueryProvider } from "./hooks/useSpanQuery.js";
 import "./styles.css";
 
 const queryClient = new QueryClient();
@@ -59,7 +60,9 @@ if (el) {
         <QueryClientProvider client={queryClient}>
           <AutoRefreshProvider>
             <RangeProvider>
-              <RouterProvider router={router} />
+              <SpanQueryProvider>
+                <RouterProvider router={router} />
+              </SpanQueryProvider>
             </RangeProvider>
           </AutoRefreshProvider>
         </QueryClientProvider>
