@@ -25,6 +25,10 @@ knowledge-base/references/*/
 .claude/**/__pycache__/
 .claude/**/*.pyc
 
+# Cycle (.claude/) — ephemeral local artifacts (never tracked; per-machine)
+.claude/.compaction-snapshots/
+.claude/.mcp.json
+
 # Logs / OS
 *.log
 .DS_Store

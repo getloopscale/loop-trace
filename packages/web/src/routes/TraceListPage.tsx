@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { DataTableSort } from "@theokit/ui";
 import { useTraceList } from "../hooks/useTraces.js";
+import { useRange, rangeToWindow } from "../hooks/useRange.js";
 import { TraceTable } from "../components/TraceTable.js";
 import { TraceFilters } from "../components/TraceFilters.js";
+import { SavedViewSelector } from "../components/SavedViewSelector.js";
 import { TraceSummaryStrip } from "../components/TraceSummaryStrip.js";
 import { AutoRefreshControl } from "../components/AutoRefreshControl.js";
 import { ErrorState } from "../components/states.js";
@@ -47,7 +49,16 @@ function tableSortToQuery(
  */
 export function TraceListPage() {
   const [query, setQuery] = useState<ListTracesQuery>({});
-  const { data, isError, dataUpdatedAt } = useTraceList(query);
+  // Time is the global date-range (M29b): map the preset → from/to, recomputed only
+  // when the range changes (a stable window per selection — auto-refresh handles freshness;
+  // recomputing every render would churn the react-query key).
+  const { range } = useRange();
+  const window = useMemo(() => rangeToWindow(range, Date.now()), [range]);
+  const effectiveQuery = useMemo(
+    () => ({ ...query, from: window.from, to: window.to }),
+    [query, window],
+  );
+  const { data, isError, dataUpdatedAt } = useTraceList(effectiveQuery);
   return (
     <div className="trace-list-page flex flex-col gap-4">
       <header className="flex items-center justify-between">
@@ -55,7 +66,8 @@ export function TraceListPage() {
         <AutoRefreshControl dataUpdatedAt={dataUpdatedAt} />
       </header>
       <TraceSummaryStrip />
-      <TraceFilters query={query} onChange={setQuery} />
+      <TraceFilters query={query} onChange={setQuery} exportQuery={effectiveQuery} />
+      <SavedViewSelector query={query} onApply={setQuery} />
       {/* Prefer showing data (even stale, via keepPreviousData) over an error, so a
           transient refetch failure does not wipe a populated list (review F-fe-6). */}
       {isError && !data ? (

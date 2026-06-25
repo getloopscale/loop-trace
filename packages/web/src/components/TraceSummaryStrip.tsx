@@ -1,18 +1,20 @@
 import { StatTile } from "@theokit/ui";
 import { Activity, Clock, Coins, DollarSign } from "lucide-react";
 import { useObservability } from "../hooks/useObservability.js";
+import { useRange } from "../hooks/useRange.js";
 import { Sparkbar } from "./Sparkbar.js";
 import { formatDuration } from "../lib/duration.js";
 import { formatUsd } from "../lib/money.js";
 
 /**
  * Arize-style "Pinned Charts" summary strip (M18): Traffic / Latency / Tokens /
- * Cost stat tiles over a 24h window, each with an inline sparkbar trend. Reuses
- * the M11 observability series + the M11 Sparkbar (zero new dependency). The
- * configurable range + chart-type toggle land in M20.
+ * Cost stat tiles, each with an inline sparkbar trend. Reuses the M11 observability
+ * series + the M11 Sparkbar (zero new dependency). The window follows the global
+ * date-range picker (M29b) — one time control across the app.
  */
 export function TraceSummaryStrip() {
-  const { data } = useObservability("24h");
+  const { range } = useRange();
+  const { data } = useObservability(range);
 
   const traffic = data?.traffic ?? [];
   const latency = data?.latency ?? [];
@@ -45,10 +47,10 @@ export function TraceSummaryStrip() {
   return (
     <div
       className="grid grid-cols-2 gap-3 md:grid-cols-4"
-      aria-label="24h summary"
+      aria-label={`${range} summary`}
     >
       <div className="flex flex-col gap-1">
-        <StatTile value={totalTraces} label="Traces (24h)" icon={Activity} />
+        <StatTile value={totalTraces} label={`Traces (${range})`} icon={Activity} />
         <Sparkbar values={trafficSeries} label="Traffic trend" />
       </div>
       <div className="flex flex-col gap-1">
@@ -56,11 +58,11 @@ export function TraceSummaryStrip() {
         <Sparkbar values={latencySeries} label="Latency p95 trend" />
       </div>
       <div className="flex flex-col gap-1">
-        <StatTile value={totalTokens} label="Tokens (24h)" icon={Coins} />
+        <StatTile value={totalTokens} label={`Tokens (${range})`} icon={Coins} />
         <Sparkbar values={tokenSeries} label="Tokens trend" />
       </div>
       <div className="flex flex-col gap-1">
-        <StatTile value={formatUsd(totalCost)} label="Cost (24h)" icon={DollarSign} />
+        <StatTile value={formatUsd(totalCost)} label={`Cost (${range})`} icon={DollarSign} />
         <Sparkbar values={costSeries} label="Cost trend" />
       </div>
     </div>

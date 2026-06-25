@@ -16,6 +16,7 @@ import { PlaceholderPage } from "./routes/PlaceholderPage.js";
 import { AppShell } from "./components/AppShell.js";
 import { ThemeProvider, violetForge } from "@theokit/ui";
 import { AutoRefreshProvider } from "./hooks/useAutoRefresh.js";
+import { RangeProvider } from "./hooks/useRange.js";
 import "./styles.css";
 
 const queryClient = new QueryClient();
@@ -57,7 +58,9 @@ if (el) {
       >
         <QueryClientProvider client={queryClient}>
           <AutoRefreshProvider>
-            <RouterProvider router={router} />
+            <RangeProvider>
+              <RouterProvider router={router} />
+            </RangeProvider>
           </AutoRefreshProvider>
         </QueryClientProvider>
       </ThemeProvider>

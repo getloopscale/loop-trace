@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { TraceListPage } from "./TraceListPage.js";
+import { RangeProvider } from "../hooks/useRange.js";
 import * as client from "../api/client.js";
 
 vi.mock("../api/client.js", async (orig) => {
@@ -28,14 +29,23 @@ function renderPage() {
   });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
-        <TraceListPage />
-      </MemoryRouter>
+      <RangeProvider>
+        <MemoryRouter>
+          <TraceListPage />
+        </MemoryRouter>
+      </RangeProvider>
     </QueryClientProvider>,
   );
 }
 
-beforeEach(() => vi.resetAllMocks());
+beforeEach(() => {
+  vi.resetAllMocks();
+  try {
+    localStorage.clear();
+  } catch {
+    /* ignore */
+  }
+});
 
 describe("TraceListPage (integration)", () => {
   it("trace_list_page_renders_executions_from_api", async () => {
@@ -114,17 +124,21 @@ describe("TraceListPage (integration)", () => {
     );
   });
 
-  it("test_trace_filters_time_range_passes_iso", async () => {
+  it("test_global_range_drives_list_from_to_iso", async () => {
+    // M29b: time is the global date-range (default 7d) — the list query carries an
+    // ISO from/to window derived from the preset (no toolbar From/To inputs).
     vi.mocked(client.listTraces).mockResolvedValue({ traces: [] });
     renderPage();
-    await waitFor(() => expect(client.listTraces).toHaveBeenCalled());
-    const from = screen.getByLabelText("from time");
-    await userEvent.type(from, "2026-06-01T00:00");
     await waitFor(() =>
       expect(client.listTraces).toHaveBeenCalledWith(
-        expect.objectContaining({ from: expect.stringMatching(/^2026-0/) }),
+        expect.objectContaining({
+          from: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+          to: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+        }),
       ),
     );
+    // the toolbar From/To inputs are gone (one global time control)
+    expect(screen.queryByLabelText("from time")).toBeNull();
   });
 
   it("test_trace_list_renders_ok_error_status_indicator", async () => {
@@ -159,5 +173,46 @@ describe("TraceListPage (integration)", () => {
     expect(href).toContain("status=error");
     expect(href).toContain("format=csv");
     expect(href).toContain("limit=500");
+  });
+
+  it("test_trace_export_href_carries_global_time_window", async () => {
+    // M29b review F-arch-1: the CSV export must honour the global date range, not
+    // just the toolbar filters. The href carries the effective from/to ISO window.
+    vi.mocked(client.listTraces).mockResolvedValue({ traces: [] });
+    renderPage();
+    await waitFor(() => expect(client.listTraces).toHaveBeenCalled());
+    const href = screen.getByText("Export CSV").getAttribute("href") ?? "";
+    expect(href).toMatch(/from=\d{4}-\d{2}-\d{2}T/);
+    expect(href).toMatch(/to=\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("test_saved_view_apply_refetches_list_with_view_filters", async () => {
+    // M29b review F-test-2 / T2.2 DoD: applying a saved view through the real page
+    // mutates the query and refetches listTraces with the view's filters, while the
+    // global time window (from/to ISO) is preserved (time is never part of a view).
+    vi.mocked(client.listTraces).mockResolvedValue({ traces: [] });
+    renderPage();
+    await waitFor(() => expect(client.listTraces).toHaveBeenCalled());
+
+    // 1. set a filter, 2. save it as a named view
+    await userEvent.selectOptions(screen.getByLabelText("status filter"), "error");
+    await userEvent.type(screen.getByLabelText("view name"), "prod errors");
+    await userEvent.click(screen.getByRole("button", { name: "Save view" }));
+
+    // 3. clear the filter, 4. apply the saved view → status returns + time stays global
+    await userEvent.selectOptions(screen.getByLabelText("status filter"), "");
+    await userEvent.selectOptions(
+      screen.getByLabelText("saved views"),
+      "prod errors",
+    );
+    await waitFor(() =>
+      expect(client.listTraces).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "error",
+          from: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+          to: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+        }),
+      ),
+    );
   });
 });

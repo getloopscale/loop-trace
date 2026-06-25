@@ -43,7 +43,8 @@ describe("TraceSummaryStrip", () => {
     renderStrip();
     // tiles render the aggregates: 12 traces, 300 tokens, $0.03 cost
     await waitFor(() => expect(screen.getByText("12")).toBeInTheDocument());
-    expect(screen.getByText("Traces (24h)")).toBeInTheDocument();
+    // Label reflects the global range (default "7d" when no RangeProvider — M29b).
+    expect(screen.getByText("Traces (7d)")).toBeInTheDocument();
     expect(screen.getByText("300")).toBeInTheDocument();
     expect(screen.getByText("$0.03")).toBeInTheDocument();
     expect(screen.getByText("Latency p95")).toBeInTheDocument();
@@ -59,7 +60,7 @@ describe("TraceSummaryStrip", () => {
     renderStrip();
     // no crash; the labels render even with empty series
     await waitFor(() =>
-      expect(screen.getByText("Traces (24h)")).toBeInTheDocument(),
+      expect(screen.getByText("Traces (7d)")).toBeInTheDocument(),
     );
   });
 });

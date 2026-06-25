@@ -2,13 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import type { ListTracesQuery } from "../api/types.js";
 import { tracesExportHref } from "../api/client.js";
 
-/** A `datetime-local` value → ISO-with-offset (the API's validated shape), or undefined. */
-function toIso(local: string): string | undefined {
-  if (!local) return undefined;
-  const d = new Date(local);
-  return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
-}
-
 /**
  * Executions-list toolbar (M9; sort moved to the M18 DataTable headers): status +
  * model + time-range + tag filters, and a CSV export of the current filtered set.
@@ -18,9 +11,16 @@ function toIso(local: string): string | undefined {
 export function TraceFilters({
   query,
   onChange,
+  exportQuery,
 }: {
   query: ListTracesQuery;
   onChange: (next: ListTracesQuery) => void;
+  /**
+   * Query used for the CSV export href. Defaults to `query`; callers pass the
+   * time-bounded effective query so the export honours the global date range
+   * (M29b — the toolbar no longer owns From/To). Review F-arch-1.
+   */
+  exportQuery?: ListTracesQuery;
 }) {
   // Debounce the model input so typing does not fire a request per keystroke (F-fe-9).
   const [modelInput, setModelInput] = useState(query.model ?? "");
@@ -80,7 +80,7 @@ export function TraceFilters({
   );
 
   const setField = (
-    key: "status" | "from" | "to",
+    key: "status",
     value: string | undefined,
   ) => {
     const next: ListTracesQuery = { ...query };
@@ -139,24 +139,6 @@ export function TraceFilters({
         />
       </label>
       <label className={labelCls}>
-        <span>From</span>
-        <input
-          type="datetime-local"
-          aria-label="from time"
-          onChange={(e) => setField("from", toIso(e.target.value))}
-          className={fieldCls}
-        />
-      </label>
-      <label className={labelCls}>
-        <span>To</span>
-        <input
-          type="datetime-local"
-          aria-label="to time"
-          onChange={(e) => setField("to", toIso(e.target.value))}
-          className={fieldCls}
-        />
-      </label>
-      <label className={labelCls}>
         <span>Tag</span>
         <input
           type="text"
@@ -169,7 +151,7 @@ export function TraceFilters({
       </label>
       <a
         className="inline-flex items-center rounded-md border border-border bg-background px-3 py-1 text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
-        href={tracesExportHref(query)}
+        href={tracesExportHref(exportQuery ?? query)}
         download
       >
         Export CSV
