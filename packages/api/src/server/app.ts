@@ -122,6 +122,10 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
       // filter", not a 400 on min(1)). Flows to BOTH the JSON list AND the CSV
       // export below (same filtered query, EC-1).
       q: c.req.query("q") || undefined,
+      // M30: span-query DSL. Empty `?span_query=` → undefined (a cleared bar is "no
+      // filter", not a 400). Parsed server-side by `parseSpanQuery` in the repo; flows
+      // to BOTH the JSON list AND the CSV export (same filtered query).
+      spanQuery: c.req.query("span_query") || undefined,
     });
     if (!parsed.success) {
       return c.json({ error: "invalid query parameters" }, 400);
