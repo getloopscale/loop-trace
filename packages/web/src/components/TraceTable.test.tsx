@@ -1,25 +1,38 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider, violetForge } from "@theokit/ui";
 import { TraceTable } from "./TraceTable.js";
 import type { TraceListItem } from "../api/types.js";
+import * as client from "../api/client.js";
+
+// The expandable row lazily loads the span tree via useTraceTree → getTraceTree (M29d).
+vi.mock("../api/client.js", async (orig) => {
+  const actual = await orig<typeof import("../api/client.js")>();
+  return { ...actual, getTraceTree: vi.fn() };
+});
 
 function renderTable(props: Partial<React.ComponentProps<typeof TraceTable>> = {}) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <ThemeProvider defaultTheme="violet-forge" defaultMode="dark" themes={[violetForge]}>
-      <MemoryRouter>
-        <TraceTable
-          traces={props.traces ?? []}
-          sort={props.sort ?? null}
-          onSortChange={props.onSortChange ?? (() => {})}
-          loading={props.loading ?? false}
-        />
-      </MemoryRouter>
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>
+          <TraceTable
+            traces={props.traces ?? []}
+            sort={props.sort ?? null}
+            onSortChange={props.onSortChange ?? (() => {})}
+            loading={props.loading ?? false}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>
     </ThemeProvider>,
   );
 }
+
+beforeEach(() => vi.mocked(client.getTraceTree).mockReset());
 
 const rich: TraceListItem = {
   traceId: "t1",
@@ -87,5 +100,36 @@ describe("TraceTable", () => {
     // status meaning carried by aria-label (M9 a11y contract), both branches
     expect(screen.getByLabelText("status: ok")).toBeInTheDocument();
     expect(screen.getByLabelText("status: error")).toBeInTheDocument();
+  });
+
+  it("test_trace_row_lazy_fetch_only_on_expand", async () => {
+    // M29d ADR D1 / anti-N+1 guard: the span tree is NOT fetched until the row is
+    // expanded — then exactly once for that trace.
+    vi.mocked(client.getTraceTree).mockResolvedValue({
+      spanId: "root",
+      traceId: "t1",
+      name: "TripAgentGraph",
+      startTimeUnixNano: "1700000000000000000",
+      endTimeUnixNano: "1700000000800000000",
+      children: [
+        {
+          spanId: "c",
+          traceId: "t1",
+          name: "child_span",
+          startTimeUnixNano: "1700000000000000000",
+          endTimeUnixNano: "1700000000300000000",
+          children: [],
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderTable({ traces: [rich] });
+    // collapsed: no fetch
+    expect(client.getTraceTree).not.toHaveBeenCalled();
+    // expand the row (theokit DataTable exposes an "Expand row" control)
+    await user.click(screen.getByRole("button", { name: /expand row/i }));
+    await waitFor(() => expect(screen.getByText("child_span")).toBeInTheDocument());
+    expect(client.getTraceTree).toHaveBeenCalledTimes(1);
+    expect(client.getTraceTree).toHaveBeenCalledWith("t1");
   });
 });
