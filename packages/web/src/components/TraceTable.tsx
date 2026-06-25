@@ -127,25 +127,40 @@ const columns: DataTableColumn<TraceListItem>[] = [
 ];
 
 /**
+ * Columns the operator may hide/show via `ColumnToggle` (M29d). `name` is excluded
+ * (always-on) so the table can never be fully blanked. Labels are the column labels.
+ */
+export const TOGGLEABLE_COLUMNS: { key: string; label: string }[] = columns
+  .filter((c) => c.key !== "name")
+  .map((c) => ({ key: c.key, label: c.label as string }));
+
+/**
  * Arize-style dense executions table (M18). Built on theo-ui DataTable: sortable
- * (server-controlled), sticky header, expandable row showing the fuller input/
- * output preview. Sort is controlled by the page (mapped to the M9 ListTracesQuery).
+ * (server-controlled), sticky header; the expandable row shows the span tree inline
+ * (M29d). Sort is controlled by the page (mapped to the M9 ListTracesQuery). Column
+ * visibility (M29d) is controlled by the page via `hiddenColumns` (default: none).
  */
 export function TraceTable({
   traces,
   sort,
   onSortChange,
   loading,
+  hiddenColumns,
 }: {
   traces: TraceListItem[];
   sort: DataTableSort | null;
   onSortChange: (sort: DataTableSort | null) => void;
   loading?: boolean;
+  hiddenColumns?: ReadonlySet<string>;
 }) {
+  const visibleColumns =
+    hiddenColumns == null
+      ? columns
+      : columns.filter((c) => !hiddenColumns.has(c.key));
   return (
     <DataTable
       data={traces}
-      columns={columns}
+      columns={visibleColumns}
       rowKey={(t) => t.traceId}
       sort={sort}
       onSortChange={onSortChange}
