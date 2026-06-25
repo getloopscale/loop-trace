@@ -28,8 +28,11 @@ export { extractSpanEvents } from "./domain/span-events.js";
 // M26: online-eval extraction (ingest) + types (consumed by the OTLP parser + API).
 export {
   extractEvaluations,
+  evaluatorSummarySchema,
+  evaluatorsResponseSchema,
   type SpanEvaluation,
   type EvaluatorSummary,
+  type EvaluatorsResponse,
 } from "./domain/evaluation.js";
 export {
   percentile,

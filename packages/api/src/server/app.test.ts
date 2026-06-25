@@ -17,7 +17,7 @@ import type {
 } from "@usetheo/lens-core";
 
 import { createApp } from "./app.js";
-import { spansIngested, tracesIngested } from "./metrics.js";
+import { spansIngested, tracesIngested, evaluationsExtracted } from "./metrics.js";
 import { encodeOtlpProtobuf } from "../otlp/__fixtures__/otlp-protobuf.js";
 
 /**
@@ -202,6 +202,7 @@ describe("createApp (contract, stub repo)", () => {
     app = createApp(repo);
     spansIngested.reset();
     tracesIngested.reset();
+    evaluationsExtracted.reset();
   });
 
   function post(body: BodyInit, contentType = "application/json"): Promise<Response> {
@@ -217,6 +218,26 @@ describe("createApp (contract, stub repo)", () => {
     expect(res.status).toBe(200);
     expect(repo.saveCalls).toHaveLength(1);
     expect(spansIngested.value).toBe(1);
+  });
+
+  it("post_traces_increments_evaluations_extracted_metric", async () => {
+    // M26 wiring-triad pillar (c): eval attributes ingested → evaluationsExtracted bumps.
+    await post(
+      tracesEnvelope({
+        ...rawSpan,
+        attributes: [
+          { key: "eval.hallucination.score", value: { doubleValue: 0.2 } },
+          { key: "eval.relevance.label", value: { stringValue: "relevant" } },
+        ],
+      }),
+    );
+    expect(evaluationsExtracted.value).toBe(2);
+  });
+
+  it("post_traces_no_evals_leaves_evaluations_metric_at_zero", async () => {
+    await post(tracesEnvelope(rawSpan));
+    expect(spansIngested.value).toBe(1);
+    expect(evaluationsExtracted.value).toBe(0);
   });
 
   it("post_traces_unsupported_content_type_415_no_save_no_metric", async () => {
@@ -708,6 +729,21 @@ describe("createApp (contract, stub repo)", () => {
   it("test_get_evaluators_defaults_range_to_24h", async () => {
     await app.request("/v1/metrics/evaluators");
     expect(repo.lastEvaluatorsRange).toBe("24h");
+  });
+
+  it("test_evaluators_route_rejects_leaked_column_at_boundary_with_5xx", async () => {
+    const leaky: SpanRepository = {
+      ...repo,
+      save: repo.save.bind(repo),
+      getBySpanId: repo.getBySpanId.bind(repo),
+      getTraceTree: repo.getTraceTree.bind(repo),
+      listTraces: repo.listTraces.bind(repo),
+      aggregateEvaluators: async () =>
+        [{ name: "x", count: 1, labels: {}, span_id: "leak" }] as never,
+    };
+    expect(
+      (await createApp(leaky).request("/v1/metrics/evaluators")).status,
+    ).toBeGreaterThanOrEqual(500);
   });
 
   it("test_get_trace_tree_carries_span_evaluations", async () => {

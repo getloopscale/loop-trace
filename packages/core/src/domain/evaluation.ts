@@ -9,6 +9,8 @@
  * empty/missing evaluator name, or a non-`eval.` key is ignored — so a malformed
  * attribute never crashes ingest (mirrors the M24 `websearch_to_tsquery` totality).
  */
+import { z } from "zod";
+
 export interface SpanEvaluation {
   name: string;
   score?: number;
@@ -16,15 +18,31 @@ export interface SpanEvaluation {
   explanation?: string;
 }
 
-/** Per-evaluator aggregate across a window of spans (the Online Evaluators card). */
-export interface EvaluatorSummary {
-  name: string;
-  count: number;
-  /** Mean of the non-null numeric scores (undefined when none had a score). */
-  avgScore?: number;
-  /** Label → occurrence count. */
-  labels: Record<string, number>;
-}
+/**
+ * Per-evaluator aggregate across a window of spans (the Online Evaluators card).
+ * Schema-first + `.strict()` so the API can parse the repo result at the boundary
+ * and reject any leaked persistence column (the no-column-leak invariant every
+ * other read route enforces — F-api-1).
+ */
+export const evaluatorSummarySchema = z
+  .object({
+    name: z.string(),
+    count: z.number().int().nonnegative(),
+    /** Mean of the non-null numeric scores (omitted when none had a score). */
+    avgScore: z.number().optional(),
+    /** Label → occurrence count. */
+    labels: z.record(z.string(), z.number().int().nonnegative()),
+  })
+  .strict();
+
+export type EvaluatorSummary = z.infer<typeof evaluatorSummarySchema>;
+
+/** Response DTO for `GET /v1/metrics/evaluators` (M26). */
+export const evaluatorsResponseSchema = z
+  .object({ evaluators: z.array(evaluatorSummarySchema) })
+  .strict();
+
+export type EvaluatorsResponse = z.infer<typeof evaluatorsResponseSchema>;
 
 // `eval.<name>.<field>` — name is a non-empty run of non-dot chars; field is whitelisted.
 const EVAL_KEY_RE = /^eval\.([^.]+)\.(score|label|explanation)$/;
