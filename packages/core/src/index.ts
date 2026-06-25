@@ -45,6 +45,19 @@ export {
   type AnnotationsResponse,
   type NormalizedAnnotation,
 } from "./domain/annotation.js";
+// M26d: curated datasets.
+export {
+  normalizeDatasetName,
+  datasetSchema,
+  datasetItemSchema,
+  datasetsResponseSchema,
+  datasetDetailSchema,
+  DATASET_NAME_MAX,
+  type Dataset,
+  type DatasetItem,
+  type DatasetsResponse,
+  type DatasetDetail,
+} from "./domain/dataset.js";
 export {
   percentile,
   computeToolStats,

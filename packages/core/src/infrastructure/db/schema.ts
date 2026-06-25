@@ -212,3 +212,43 @@ export const annotations = pgTable(
     index("annotations_trace_id_idx").on(t.traceId),
   ],
 );
+
+/**
+ * M26d: curated datasets. A named set of example traces. `name` is UNIQUE so create
+ * is idempotent "create-or-get" (D1). Distinct from the trace lifecycle — datasets +
+ * their items are NEVER pruned (a curated example outlives its source trace, D2).
+ */
+export const datasets = pgTable(
+  "datasets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: text("name").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [unique("datasets_name_uq").on(t.name)],
+);
+
+/**
+ * M26d: a dataset item — one curated example. Snapshots the source trace's root
+ * input/output AT ADD-TIME (D2) so the example survives the trace being pruned.
+ * UNIQUE(dataset_id, trace_id) makes add idempotent (ON CONFLICT DO NOTHING, D3).
+ */
+export const datasetItems = pgTable(
+  "dataset_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    datasetId: uuid("dataset_id").notNull(),
+    traceId: text("trace_id").notNull(),
+    inputSnapshot: text("input_snapshot"),
+    outputSnapshot: text("output_snapshot"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    unique("dataset_items_dataset_id_trace_id_uq").on(t.datasetId, t.traceId),
+    index("dataset_items_dataset_id_idx").on(t.datasetId),
+  ],
+);
