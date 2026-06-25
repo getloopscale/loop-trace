@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
 import {
   Badge,
@@ -26,13 +26,20 @@ import { formatUsd } from "../lib/money.js";
  */
 function QuickAnnotate({ traceId }: { traceId: string }) {
   const [label, setLabel] = useState<"thumbs_up" | "thumbs_down" | null>(null);
+  const qc = useQueryClient();
   const mutate = useMutation({
     mutationFn: (value: "thumbs_up" | "thumbs_down") =>
       addAnnotation(traceId, { name: "feedback", label: value }),
+    // Reflect pressed state only AFTER the server accepts (honest — never show a
+    // 👍 the write rejected) + refresh the trace-detail Annotations cache so the
+    // quick-annotation appears there without a manual refetch.
+    onSuccess: (_data, value) => {
+      setLabel(value);
+      void qc.invalidateQueries({ queryKey: ["annotations", traceId] });
+    },
   });
   const click = (value: "thumbs_up" | "thumbs_down") => (e: React.MouseEvent) => {
     e.stopPropagation();
-    setLabel(value);
     mutate.mutate(value);
   };
   const btn = (value: "thumbs_up" | "thumbs_down", Icon: typeof ThumbsUp, aria: string) => (

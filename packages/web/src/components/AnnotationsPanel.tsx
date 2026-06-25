@@ -138,6 +138,12 @@ export function AnnotationsPanel({
           Save feedback
         </button>
       </form>
+
+      {/* Fail-clear (Rule 8): a write that the server rejected MUST surface — never
+          a silently swallowed mutation that leaves the UI lying about its state. */}
+      {add.isError || remove.isError ? (
+        <ErrorState message="Failed to save feedback — try again" />
+      ) : null}
     </section>
   );
 }

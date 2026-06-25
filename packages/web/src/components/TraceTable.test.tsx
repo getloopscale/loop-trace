@@ -133,7 +133,8 @@ describe("TraceTable", () => {
     );
     // the click did NOT expand the row (stopPropagation): the span tree was never fetched
     expect(client.getTraceTree).not.toHaveBeenCalled();
-    expect(thumbUp).toHaveAttribute("aria-pressed", "true");
+    // pressed state reflects only AFTER the server accepts (onSuccess) — honest UI
+    await waitFor(() => expect(thumbUp).toHaveAttribute("aria-pressed", "true"));
   });
 
   it("test_trace_row_lazy_fetch_only_on_expand", async () => {

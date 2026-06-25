@@ -85,6 +85,23 @@ describe("AnnotationsPanel (M26b)", () => {
     );
   });
 
+  it("test_annotations_panel_surfaces_clear_failure", async () => {
+    // F-test-1: a rejected DELETE must surface, not be silently swallowed (Rule 8).
+    vi.mocked(client.getAnnotations).mockResolvedValue({
+      annotations: [
+        { spanId: "s1", name: "feedback", label: "thumbs_up", annotatorKind: "HUMAN", updatedAt: "x" },
+      ],
+    });
+    vi.mocked(client.removeAnnotation).mockRejectedValue(new client.ApiError(500));
+    const user = userEvent.setup();
+    renderPanel("s1");
+    await waitFor(() => expect(screen.getByLabelText("clear annotation")).toBeInTheDocument());
+    await user.click(screen.getByLabelText("clear annotation"));
+    await waitFor(() =>
+      expect(screen.getByText(/Failed to save feedback/)).toBeInTheDocument(),
+    );
+  });
+
   it("test_annotations_panel_empty_state", async () => {
     vi.mocked(client.getAnnotations).mockResolvedValue(empty);
     renderPanel("s1");
