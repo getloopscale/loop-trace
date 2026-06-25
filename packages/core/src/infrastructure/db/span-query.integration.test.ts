@@ -23,6 +23,7 @@ function span(overrides: Partial<Span> & Pick<Span, "spanId" | "traceId">): Span
 const TOOL_ATTR = { "gen_ai.tool.name": "hidden_gems" };
 const RETRIEVE_ATTR = { "gen_ai.operation.name": "retrieve" };
 const CHAT_ATTR = { "gen_ai.operation.name": "chat" };
+const EMBED_ATTR = { "gen_ai.operation.name": "embedding" };
 
 suite("listTraces span-query DSL (integration, M30)", () => {
   let pool: pg.Pool;
@@ -66,6 +67,14 @@ suite("listTraces span-query DSL (integration, M30)", () => {
       span({ spanId: "root1", traceId: "t-chain", name: "TripAgentGraph" }),
       span({ spanId: "child1", traceId: "t-chain", parentSpanId: "root1", name: "ChatOpenAI", model: "gpt-4o", attributes: CHAT_ATTR }),
     ]);
+    // embedding span (gen_ai.operation.name = 'embedding')
+    await repo.save([
+      span({ spanId: "emb1", traceId: "t-emb", name: "Embed", attributes: EMBED_ATTR }),
+    ]);
+    // unknown span: no signals, no model, no children → derives to 'unknown'
+    await repo.save([
+      span({ spanId: "unk1", traceId: "t-unknown", name: "noisy" }),
+    ]);
   }
 
   it("test_span_query_kind_matches_derived_kind", async () => {
@@ -76,6 +85,18 @@ suite("listTraces span-query DSL (integration, M30)", () => {
     expect(await ids("kind:retriever")).toEqual(["t-ret"]);
     // chain: only the trace whose span has children
     expect(await ids("kind:chain")).toEqual(["t-chain"]);
+    // embedding + unknown: the two remaining CASE branches (F-test-1)
+    expect(await ids("kind:embedding")).toEqual(["t-emb"]);
+    expect(await ids("kind:unknown")).toEqual(["t-unknown"]);
+  });
+
+  it("test_span_query_status_ok_includes_null_status_span", async () => {
+    // F-test-2: the span-scoped status:ok branch is `IS NULL OR NOT IN (errors)` — a
+    // NULL-status span must count as ok (the M9 EC-1 NULL-drop bug class, span-scoped).
+    await repo.save([span({ spanId: "ok-null", traceId: "t-okspan" })]); // status_code NULL
+    await repo.save([span({ spanId: "err1", traceId: "t-errspan", statusCode: "2" })]);
+    expect(await ids("status:ok")).toEqual(["t-okspan"]);
+    expect(await ids("status:error")).toEqual(["t-errspan"]);
   });
 
   it("test_span_query_clause_and_is_span_scoped", async () => {
