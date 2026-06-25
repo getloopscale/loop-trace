@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   Gauge,
   Library,
+  Bot,
   Wrench,
   DollarSign,
   type LucideIcon,
@@ -25,6 +26,8 @@ const NAV: { label: string; path: string; icon: LucideIcon }[] = [
   { label: "Evals & Metrics", path: "/evals", icon: Gauge },
   // M26d: Datasets — curated example sets.
   { label: "Datasets", path: "/datasets", icon: Library },
+  // M32: Agents — the versioned-lifecycle agents catalog.
+  { label: "Agents", path: "/agents", icon: Bot },
   { label: "Tools", path: "/tools", icon: Wrench },
   { label: "Cost", path: "/analytics", icon: DollarSign },
 ];

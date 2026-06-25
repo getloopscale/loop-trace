@@ -58,6 +58,18 @@ export {
   type DatasetsResponse,
   type DatasetDetail,
 } from "./domain/dataset.js";
+// M32: agents catalog (derived).
+export {
+  classifyAgentHealth,
+  shapeAgent,
+  agentSchema,
+  agentCatalogResponseSchema,
+  AGENT_STALE_DAYS,
+  AGENT_CHURN_THRESHOLD,
+  type Agent,
+  type AgentCatalogResponse,
+  type RawAgent,
+} from "./domain/agent-catalog.js";
 export {
   percentile,
   computeToolStats,

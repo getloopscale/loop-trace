@@ -22,6 +22,7 @@ import {
   datasetSchema,
   datasetDetailSchema,
   normalizeDatasetName,
+  agentCatalogResponseSchema,
 } from "@usetheo/lens-core";
 
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
@@ -177,6 +178,12 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
   app.get("/v1/traces/:traceId", async (c) => {
     const tree = await repo.getTraceTree(c.req.param("traceId"));
     return tree ? c.json(tree, 200) : c.json({ error: "not found" }, 404);
+  });
+
+  app.get("/v1/agents", async (c) => {
+    // M32: the agents catalog (derived from `agent.*` span attributes), with health.
+    const agents = await repo.aggregateAgents();
+    return c.json(agentCatalogResponseSchema.parse({ agents }), 200);
   });
 
   app.get("/v1/analytics/tools", async (c) => {

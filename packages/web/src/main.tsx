@@ -11,6 +11,7 @@ import { DashboardPage } from "./routes/DashboardPage.js";
 import { EvalsPage } from "./routes/EvalsPage.js";
 import { DatasetsListPage } from "./routes/DatasetsListPage.js";
 import { DatasetDetailPage } from "./routes/DatasetDetailPage.js";
+import { AgentsListPage } from "./routes/AgentsListPage.js";
 import { AgentGraphView } from "./routes/AgentGraphView.js";
 import { AgentPathView } from "./routes/AgentPathView.js";
 import { SessionsListPage } from "./routes/SessionsListPage.js";
@@ -40,6 +41,7 @@ const router = createBrowserRouter([
       { path: "/evals", element: <EvalsPage /> },
       { path: "/datasets", element: <DatasetsListPage /> },
       { path: "/datasets/:datasetId", element: <DatasetDetailPage /> },
+      { path: "/agents", element: <AgentsListPage /> },
       { path: "/sessions", element: <SessionsListPage /> },
       { path: "/sessions/:sessionId", element: <SessionDetailPage /> },
       {
