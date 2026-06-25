@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { TraceListPage } from "./TraceListPage.js";
 import { RangeProvider } from "../hooks/useRange.js";
+import { SpanQueryProvider } from "../hooks/useSpanQuery.js";
+import { AutoRefreshProvider } from "../hooks/useAutoRefresh.js";
 import * as client from "../api/client.js";
 
 vi.mock("../api/client.js", async (orig) => {
@@ -29,11 +31,15 @@ function renderPage() {
   });
   return render(
     <QueryClientProvider client={qc}>
-      <RangeProvider>
-        <MemoryRouter>
-          <TraceListPage />
-        </MemoryRouter>
-      </RangeProvider>
+      <AutoRefreshProvider>
+        <RangeProvider>
+          <SpanQueryProvider>
+            <MemoryRouter>
+              <TraceListPage />
+            </MemoryRouter>
+          </SpanQueryProvider>
+        </RangeProvider>
+      </AutoRefreshProvider>
     </QueryClientProvider>,
   );
 }
@@ -188,17 +194,32 @@ describe("TraceListPage (integration)", () => {
     expect(href).toMatch(/to=\d{4}-\d{2}-\d{2}T/);
   });
 
-  it("test_span_filter_bar_drives_listtraces", async () => {
-    // M30: typing a span-query in the Filter spans bar refetches listTraces with spanQuery.
+  it("test_live_mode_opens_upper_time_bound", async () => {
+    // M31: in Live mode the list must use an OPEN upper bound (no `to`) so traces
+    // ingested after page-load appear on the next poll — the frozen window's `to`
+    // (M29b) would otherwise hide them. The `from` lower bound stays.
+    localStorage.setItem("theolens.live", "true");
     vi.mocked(client.listTraces).mockResolvedValue({ traces: [] });
     renderPage();
     await waitFor(() => expect(client.listTraces).toHaveBeenCalled());
-    await userEvent.type(screen.getByLabelText("filter spans"), "kind:tool");
+    const lastArg = vi.mocked(client.listTraces).mock.calls.at(-1)?.[0];
+    expect(lastArg?.from).toMatch(/^\d{4}-\d{2}-\d{2}T/); // lower bound present
+    expect(lastArg?.to).toBeUndefined(); // upper bound OPEN while live
+  });
+
+  it("test_trace_list_reads_span_query_from_provider", async () => {
+    // M30b: the span-query is now the GLOBAL shared spine (the bar lives in the AppShell
+    // toolbar, not this page). A seeded provider value drives the list query.
+    localStorage.setItem("theolens.spanQuery", "kind:tool");
+    vi.mocked(client.listTraces).mockResolvedValue({ traces: [] });
+    renderPage();
     await waitFor(() =>
       expect(client.listTraces).toHaveBeenCalledWith(
         expect.objectContaining({ spanQuery: "kind:tool" }),
       ),
     );
+    // the per-page filter-spans bar is gone (it moved to the shared shell toolbar)
+    expect(screen.queryByLabelText("filter spans")).toBeNull();
   });
 
   it("test_column_toggle_hides_a_column", async () => {

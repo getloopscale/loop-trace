@@ -19,6 +19,12 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [0.29.0] - 2026-06-25
+
+### Added
+- Live mode: a "Live" toggle in the top bar puts every view into continuous fast refresh (a pulsing badge shows it's on), so new traces appear without touching the auto-refresh dropdown; toggling off restores your chosen interval. Built on the existing visibility-aware polling — no new connection (M31)
+- Span query, everywhere: the "Filter spans" bar moved into the shared top toolbar so one query now drives every project view — the executions list AND the Agent Graph / Agent Path trace pickers all narrow to the same span-query. A structured "Add Filter" builder (pick a field + value) appends a clause without typing the DSL by hand. The query is remembered across reloads (M30b)
+
 ## [0.28.0] - 2026-06-25
 
 ### Added

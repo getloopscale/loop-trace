@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useTraceList, useTraceTree } from "../hooks/useTraces.js";
+import { useSpanQuery } from "../hooks/useSpanQuery.js";
 import type { TraceTreeNode } from "../api/types.js";
 import type { SankeyModel } from "../lib/agent-graph.js";
 import type { SpanKind } from "../lib/span-kind.js";
@@ -38,7 +39,9 @@ export function AgentFlowView({
   showLegend?: boolean;
   emptyHint: string;
 }) {
-  const list = useTraceList();
+  // M30b: the shared span-query filters which traces the picker offers (cross-tab spine).
+  const { spanQuery } = useSpanQuery();
+  const list = useTraceList(spanQuery ? { spanQuery } : {});
   const traces = list.data?.traces ?? [];
   const [picked, setPicked] = useState("");
   const selectedId = picked || traces[0]?.traceId || "";
