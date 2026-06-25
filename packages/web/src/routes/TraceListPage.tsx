@@ -8,6 +8,7 @@ import { ColumnToggle } from "../components/ColumnToggle.js";
 import { SavedViewSelector } from "../components/SavedViewSelector.js";
 import { useColumnVisibility } from "../hooks/useColumnVisibility.js";
 import { useSpanQuery } from "../hooks/useSpanQuery.js";
+import { useAutoRefresh } from "../hooks/useAutoRefresh.js";
 import { TraceSummaryStrip } from "../components/TraceSummaryStrip.js";
 import { AutoRefreshControl } from "../components/AutoRefreshControl.js";
 import { ErrorState } from "../components/states.js";
@@ -59,15 +60,20 @@ export function TraceListPage() {
   // M30b: the span-query is now the global shared spine (the bar lives in the AppShell
   // toolbar, driving every project-view tab) — read it here and merge into the query.
   const { spanQuery } = useSpanQuery();
+  // M31: in Live mode the upper time bound is OPEN (omit `to`) so traces ingested
+  // after page-load — the whole point of "Live" — appear on the next poll. The frozen
+  // window's `to` (M29b, memoized on [range]) would otherwise hide anything newer than
+  // load time. Off → keep the stable [from,to] window (M29b behaviour intact).
+  const { live } = useAutoRefresh();
   const window = useMemo(() => rangeToWindow(range, Date.now()), [range]);
   const effectiveQuery = useMemo(
     () => ({
       ...query,
       from: window.from,
-      to: window.to,
+      ...(live ? {} : { to: window.to }),
       ...(spanQuery ? { spanQuery } : {}),
     }),
-    [query, window, spanQuery],
+    [query, window, spanQuery, live],
   );
   const { data, isError, dataUpdatedAt } = useTraceList(effectiveQuery);
   const { hidden, toggle } = useColumnVisibility();

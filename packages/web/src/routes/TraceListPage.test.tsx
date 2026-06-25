@@ -6,6 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 import { TraceListPage } from "./TraceListPage.js";
 import { RangeProvider } from "../hooks/useRange.js";
 import { SpanQueryProvider } from "../hooks/useSpanQuery.js";
+import { AutoRefreshProvider } from "../hooks/useAutoRefresh.js";
 import * as client from "../api/client.js";
 
 vi.mock("../api/client.js", async (orig) => {
@@ -30,13 +31,15 @@ function renderPage() {
   });
   return render(
     <QueryClientProvider client={qc}>
-      <RangeProvider>
-        <SpanQueryProvider>
-          <MemoryRouter>
-            <TraceListPage />
-          </MemoryRouter>
-        </SpanQueryProvider>
-      </RangeProvider>
+      <AutoRefreshProvider>
+        <RangeProvider>
+          <SpanQueryProvider>
+            <MemoryRouter>
+              <TraceListPage />
+            </MemoryRouter>
+          </SpanQueryProvider>
+        </RangeProvider>
+      </AutoRefreshProvider>
     </QueryClientProvider>,
   );
 }
@@ -189,6 +192,19 @@ describe("TraceListPage (integration)", () => {
     const href = screen.getByText("Export CSV").getAttribute("href") ?? "";
     expect(href).toMatch(/from=\d{4}-\d{2}-\d{2}T/);
     expect(href).toMatch(/to=\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("test_live_mode_opens_upper_time_bound", async () => {
+    // M31: in Live mode the list must use an OPEN upper bound (no `to`) so traces
+    // ingested after page-load appear on the next poll — the frozen window's `to`
+    // (M29b) would otherwise hide them. The `from` lower bound stays.
+    localStorage.setItem("theolens.live", "true");
+    vi.mocked(client.listTraces).mockResolvedValue({ traces: [] });
+    renderPage();
+    await waitFor(() => expect(client.listTraces).toHaveBeenCalled());
+    const lastArg = vi.mocked(client.listTraces).mock.calls.at(-1)?.[0];
+    expect(lastArg?.from).toMatch(/^\d{4}-\d{2}-\d{2}T/); // lower bound present
+    expect(lastArg?.to).toBeUndefined(); // upper bound OPEN while live
   });
 
   it("test_trace_list_reads_span_query_from_provider", async () => {
