@@ -54,6 +54,20 @@ describe("AppShell", () => {
     expect(screen.getByText("SPANS BODY")).toBeInTheDocument();
   });
 
+  it("app_shell_shows_span_query_toolbar_on_project_tab", () => {
+    // M30b: the shared span-query toolbar drives the project-view tabs — it renders on
+    // Traces (/), with both the free-text bar and the structured builder.
+    renderShell("/");
+    expect(screen.getByLabelText("filter spans")).toBeInTheDocument();
+    expect(screen.getByLabelText("filter field")).toBeInTheDocument(); // the builder
+  });
+
+  it("app_shell_hides_span_query_toolbar_on_sessions", () => {
+    // Negative case: a non-project route (activeTab === "") has no toolbar.
+    renderShell("/sessions");
+    expect(screen.queryByLabelText("filter spans")).toBeNull();
+  });
+
   it("app_shell_marks_active_nav_from_path", () => {
     renderShell("/sessions");
     // active item carries aria-current="page"; a sibling does NOT (negative case)

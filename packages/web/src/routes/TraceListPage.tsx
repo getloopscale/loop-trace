@@ -4,10 +4,10 @@ import { useTraceList } from "../hooks/useTraces.js";
 import { useRange, rangeToWindow } from "../hooks/useRange.js";
 import { TraceTable, TOGGLEABLE_COLUMNS } from "../components/TraceTable.js";
 import { TraceFilters } from "../components/TraceFilters.js";
-import { SpanFilterBar } from "../components/SpanFilterBar.js";
 import { ColumnToggle } from "../components/ColumnToggle.js";
 import { SavedViewSelector } from "../components/SavedViewSelector.js";
 import { useColumnVisibility } from "../hooks/useColumnVisibility.js";
+import { useSpanQuery } from "../hooks/useSpanQuery.js";
 import { TraceSummaryStrip } from "../components/TraceSummaryStrip.js";
 import { AutoRefreshControl } from "../components/AutoRefreshControl.js";
 import { ErrorState } from "../components/states.js";
@@ -56,10 +56,18 @@ export function TraceListPage() {
   // when the range changes (a stable window per selection — auto-refresh handles freshness;
   // recomputing every render would churn the react-query key).
   const { range } = useRange();
+  // M30b: the span-query is now the global shared spine (the bar lives in the AppShell
+  // toolbar, driving every project-view tab) — read it here and merge into the query.
+  const { spanQuery } = useSpanQuery();
   const window = useMemo(() => rangeToWindow(range, Date.now()), [range]);
   const effectiveQuery = useMemo(
-    () => ({ ...query, from: window.from, to: window.to }),
-    [query, window],
+    () => ({
+      ...query,
+      from: window.from,
+      to: window.to,
+      ...(spanQuery ? { spanQuery } : {}),
+    }),
+    [query, window, spanQuery],
   );
   const { data, isError, dataUpdatedAt } = useTraceList(effectiveQuery);
   const { hidden, toggle } = useColumnVisibility();
@@ -73,17 +81,6 @@ export function TraceListPage() {
         </div>
       </header>
       <TraceSummaryStrip />
-      <SpanFilterBar
-        value={query.spanQuery}
-        onChange={(spanQuery) =>
-          setQuery((q) => {
-            const next = { ...q };
-            if (spanQuery) next.spanQuery = spanQuery;
-            else delete next.spanQuery;
-            return next;
-          })
-        }
-      />
       <TraceFilters query={query} onChange={setQuery} exportQuery={effectiveQuery} />
       <SavedViewSelector query={query} onApply={setQuery} />
       {/* Prefer showing data (even stale, via keepPreviousData) over an error, so a

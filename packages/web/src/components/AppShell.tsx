@@ -2,6 +2,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Sidebar, TopNav, Tabs } from "@theokit/ui";
 import { CommandPalette } from "./CommandPalette.js";
 import { DateRangePicker } from "./DateRangePicker.js";
+import { SpanQueryToolbar } from "./SpanQueryToolbar.js";
 import {
   ListTree,
   Layers,
@@ -107,6 +108,10 @@ export function AppShell() {
             ))}
           </Tabs.List>
         </Tabs>
+
+        {/* M30b: the shared span-query spine — one bar + structured builder driving every
+            project-view tab. Hidden on non-tab routes (Sessions/Dashboards/Tools/Cost). */}
+        {activeTab !== "" && <SpanQueryToolbar />}
 
         <main className="flex-1 overflow-auto p-4">
           <Outlet />

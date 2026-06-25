@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Span query, everywhere: the "Filter spans" bar moved into the shared top toolbar so one query now drives every project view — the executions list AND the Agent Graph / Agent Path trace pickers all narrow to the same span-query. A structured "Add Filter" builder (pick a field + value) appends a clause without typing the DSL by hand. The query is remembered across reloads (M30b)
 
 ### Changed
 
