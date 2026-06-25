@@ -68,6 +68,12 @@ describe("AppShell", () => {
     expect(screen.queryByLabelText("filter spans")).toBeNull();
   });
 
+  it("app_shell_renders_live_toggle", () => {
+    // M31: the Live toggle lives in the top bar on every route.
+    renderShell("/");
+    expect(screen.getByRole("button", { name: /live/i })).toBeInTheDocument();
+  });
+
   it("app_shell_marks_active_nav_from_path", () => {
     renderShell("/sessions");
     // active item carries aria-current="page"; a sibling does NOT (negative case)

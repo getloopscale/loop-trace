@@ -2,6 +2,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Sidebar, TopNav, Tabs } from "@theokit/ui";
 import { CommandPalette } from "./CommandPalette.js";
 import { DateRangePicker } from "./DateRangePicker.js";
+import { LiveToggle } from "./LiveToggle.js";
 import { SpanQueryToolbar } from "./SpanQueryToolbar.js";
 import {
   ListTree,
@@ -89,6 +90,7 @@ export function AppShell() {
             <span className="text-label font-display">Theo Lens</span>
           </TopNav.Left>
           <TopNav.Right>
+            <LiveToggle />
             <DateRangePicker />
           </TopNav.Right>
         </TopNav>
