@@ -19,6 +19,14 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [0.27.0] - 2026-06-25
+
+### Added
+- Executions list: a row now expands in place to show its span tree inline — each child span with its kind badge (agent/LLM/tool/retriever colour), name, latency and tokens — so you can scan an agent run without leaving the list. The tree loads only when you expand a row (M29d)
+- Executions list: a "Columns" menu hides/shows table columns; the choice is remembered across reloads (the Name column always stays) (M29d)
+- Trace detail: the Input/Output panel has a Pretty/Raw toggle — Pretty renders markdown (default), Raw shows the exact unrendered text (M29d)
+- Roadmap amended: added M29d (inline span-tree expansion + configurable columns + trace Pretty/Raw & sub-views) to the Arize peer-parity track, and sharpened M26/M30/M33 with details from a live teardown of the authenticated Arize demo (`/roadmap-feature arize-live-parity`)
+
 ## [0.26.0] - 2026-06-24
 
 ### Added

@@ -2,9 +2,11 @@ import { useMemo, useState } from "react";
 import type { DataTableSort } from "@theokit/ui";
 import { useTraceList } from "../hooks/useTraces.js";
 import { useRange, rangeToWindow } from "../hooks/useRange.js";
-import { TraceTable } from "../components/TraceTable.js";
+import { TraceTable, TOGGLEABLE_COLUMNS } from "../components/TraceTable.js";
 import { TraceFilters } from "../components/TraceFilters.js";
+import { ColumnToggle } from "../components/ColumnToggle.js";
 import { SavedViewSelector } from "../components/SavedViewSelector.js";
+import { useColumnVisibility } from "../hooks/useColumnVisibility.js";
 import { TraceSummaryStrip } from "../components/TraceSummaryStrip.js";
 import { AutoRefreshControl } from "../components/AutoRefreshControl.js";
 import { ErrorState } from "../components/states.js";
@@ -59,11 +61,15 @@ export function TraceListPage() {
     [query, window],
   );
   const { data, isError, dataUpdatedAt } = useTraceList(effectiveQuery);
+  const { hidden, toggle } = useColumnVisibility();
   return (
     <div className="trace-list-page flex flex-col gap-4">
       <header className="flex items-center justify-between">
         <h1 className="text-display-md font-display">Executions</h1>
-        <AutoRefreshControl dataUpdatedAt={dataUpdatedAt} />
+        <div className="flex items-center gap-2">
+          <ColumnToggle columns={TOGGLEABLE_COLUMNS} hidden={hidden} onToggle={toggle} />
+          <AutoRefreshControl dataUpdatedAt={dataUpdatedAt} />
+        </div>
       </header>
       <TraceSummaryStrip />
       <TraceFilters query={query} onChange={setQuery} exportQuery={effectiveQuery} />
@@ -78,6 +84,7 @@ export function TraceListPage() {
           sort={queryToTableSort(query)}
           onSortChange={(sort) => setQuery(tableSortToQuery(query, sort))}
           loading={!data && !isError}
+          hiddenColumns={hidden}
         />
       )}
     </div>

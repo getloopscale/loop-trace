@@ -114,7 +114,9 @@ describe("TraceListPage (integration)", () => {
     // M18: sorting is owned by the DataTable column headers (Arize-style), bound
     // to the same orderBy/dir query — clicking a header refetches with that orderBy.
     // (The asc→desc→none cycle itself is the DataTable's behavior, tested upstream.)
-    await userEvent.click(screen.getByText("Latency"));
+    // Target the sortable header button specifically — "Latency" now also appears
+    // as a ColumnToggle checkbox label (M29d), so disambiguate by the button role.
+    await userEvent.click(screen.getByRole("button", { name: "Latency" }));
     // the page maps the DataTable sort → M9 query, forwarding BOTH orderBy + dir
     // (first click = asc, the design system's standard sort cycle).
     await waitFor(() =>
@@ -184,6 +186,25 @@ describe("TraceListPage (integration)", () => {
     const href = screen.getByText("Export CSV").getAttribute("href") ?? "";
     expect(href).toMatch(/from=\d{4}-\d{2}-\d{2}T/);
     expect(href).toMatch(/to=\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("test_column_toggle_hides_a_column", async () => {
+    // M29d: unchecking a column in the Columns menu removes it from the table.
+    vi.mocked(client.listTraces).mockResolvedValue({
+      traces: [{ traceId: "t1", name: "checkout", costUsd: 0.01 }],
+    });
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByRole("columnheader", { name: "Cost" })).toBeInTheDocument(),
+    );
+    // open the Columns disclosure, then uncheck "Cost"
+    await userEvent.click(screen.getByText("Columns"));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Cost" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("columnheader", { name: "Cost" })).toBeNull(),
+    );
+    // Name is never offered for hiding (always-on)
+    expect(screen.queryByRole("checkbox", { name: "Name" })).toBeNull();
   });
 
   it("test_saved_view_apply_refetches_list_with_view_filters", async () => {
