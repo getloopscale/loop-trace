@@ -14,6 +14,10 @@ import {
   sessionDetailResponseSchema,
   traceTagsResponseSchema,
   normalizeTag,
+  annotationsResponseSchema,
+  normalizeAnnotation,
+  DEFAULT_ANNOTATION_NAME,
+  DEFAULT_ANNOTATOR_KIND,
 } from "@usetheo/lens-core";
 
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
@@ -23,6 +27,7 @@ import {
   spansIngested,
   tracesIngested,
   evaluationsExtracted,
+  annotationsWritten,
   logIngest,
 } from "./metrics.js";
 import { mountStatic } from "./static.js";
@@ -286,6 +291,53 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
     await repo.removeTag(traceId, tag);
     const tags = await repo.listTags(traceId);
     return c.json(traceTagsResponseSchema.parse({ tags }), 200);
+  });
+
+  app.get("/v1/traces/:traceId/annotations", async (c) => {
+    // M26b: a trace's annotations (trace-level + all spans'), newest-first.
+    const annotations = await repo.listAnnotations(c.req.param("traceId"));
+    return c.json(annotationsResponseSchema.parse({ annotations }), 200);
+  });
+
+  app.post("/v1/traces/:traceId/annotations", async (c) => {
+    // M26b: upsert a human annotation (👍/👎 + note) on a trace or span. 400 on an
+    // empty annotation (no label AND no note, Rule 8), 404 when the trace is absent
+    // (D2); idempotent upsert otherwise (latest wins). Returns the trace's annotations.
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "invalid json body" }, 400);
+    }
+    const ann = normalizeAnnotation(body);
+    if (ann === null) {
+      return c.json(
+        { error: "annotation requires a label or a note" },
+        400,
+      );
+    }
+    const traceId = c.req.param("traceId");
+    const ok = await repo.upsertAnnotation(traceId, ann);
+    if (!ok) return c.json({ error: "not found" }, 404);
+    annotationsWritten.add(1);
+    const annotations = await repo.listAnnotations(traceId);
+    return c.json(annotationsResponseSchema.parse({ annotations }), 200);
+  });
+
+  app.delete("/v1/traces/:traceId/annotations", async (c) => {
+    // M26b: clear an annotation by its target+channel key. `spanId`/`name`/`kind`
+    // travel in QUERY params (slash-safe, like the tag DELETE). Idempotent.
+    const name = c.req.query("name") ?? DEFAULT_ANNOTATION_NAME;
+    const traceId = c.req.param("traceId");
+    const spanId = c.req.query("spanId");
+    const annotatorKind = c.req.query("annotatorKind") ?? DEFAULT_ANNOTATOR_KIND;
+    await repo.removeAnnotation(traceId, {
+      ...(spanId != null && spanId.length > 0 ? { spanId } : {}),
+      name,
+      annotatorKind,
+    });
+    const annotations = await repo.listAnnotations(traceId);
+    return c.json(annotationsResponseSchema.parse({ annotations }), 200);
   });
 
   // Mount static UI serving LAST so the catch-all never shadows /v1/* (M7, D1).

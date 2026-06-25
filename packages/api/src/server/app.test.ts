@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type {
+  Annotation,
+  NormalizedAnnotation,
   CostByPeriodResponse,
   CostPeriod,
   EvaluatorSummary,
@@ -17,7 +19,7 @@ import type {
 } from "@usetheo/lens-core";
 
 import { createApp } from "./app.js";
-import { spansIngested, tracesIngested, evaluationsExtracted } from "./metrics.js";
+import { spansIngested, tracesIngested, evaluationsExtracted, annotationsWritten } from "./metrics.js";
 import { encodeOtlpProtobuf } from "../otlp/__fixtures__/otlp-protobuf.js";
 
 /**
@@ -179,6 +181,55 @@ class StubSpanRepository implements SpanRepository {
   async listTags(traceId: string): Promise<string[]> {
     return [...(this.tags.get(traceId) ?? [])].sort();
   }
+
+  // M26b annotations: in-memory list keyed by traceId; annTraceExists gates the 404.
+  readonly anns = new Map<string, Annotation[]>();
+  annTraceExists = true;
+  annWriteCount = 0;
+
+  async upsertAnnotation(traceId: string, ann: NormalizedAnnotation): Promise<boolean> {
+    if (!this.annTraceExists) return false;
+    const list = this.anns.get(traceId) ?? [];
+    const sameKey = (a: Annotation): boolean =>
+      (a.spanId ?? undefined) === ann.spanId &&
+      a.name === ann.name &&
+      a.annotatorKind === ann.annotatorKind;
+    const next = list.filter((a) => !sameKey(a)); // upsert: drop the prior, prepend the new
+    next.unshift({
+      ...(ann.spanId !== undefined ? { spanId: ann.spanId } : {}),
+      name: ann.name,
+      ...(ann.label !== undefined ? { label: ann.label } : {}),
+      ...(ann.note !== undefined ? { note: ann.note } : {}),
+      annotatorKind: ann.annotatorKind,
+      updatedAt: "2026-06-25T00:00:00.000Z",
+    });
+    this.anns.set(traceId, next);
+    this.annWriteCount += 1;
+    return true;
+  }
+
+  async listAnnotations(traceId: string): Promise<Annotation[]> {
+    return [...(this.anns.get(traceId) ?? [])];
+  }
+
+  async removeAnnotation(
+    traceId: string,
+    key: { spanId?: string; name: string; annotatorKind?: string },
+  ): Promise<void> {
+    const kind = key.annotatorKind ?? "HUMAN";
+    const list = this.anns.get(traceId) ?? [];
+    this.anns.set(
+      traceId,
+      list.filter(
+        (a) =>
+          !(
+            (a.spanId ?? undefined) === key.spanId &&
+            a.name === key.name &&
+            a.annotatorKind === kind
+          ),
+      ),
+    );
+  }
 }
 
 function tracesEnvelope(span: Record<string, unknown>): string {
@@ -203,6 +254,7 @@ describe("createApp (contract, stub repo)", () => {
     spansIngested.reset();
     tracesIngested.reset();
     evaluationsExtracted.reset();
+    annotationsWritten.reset();
   });
 
   function post(body: BodyInit, contentType = "application/json"): Promise<Response> {
@@ -764,6 +816,84 @@ describe("createApp (contract, stub repo)", () => {
     );
     const tree = (await (await app.request("/v1/traces/t-eval")).json()) as TraceTreeNode;
     expect(tree.evaluations).toEqual([{ name: "relevance", score: 0.9, label: "relevant" }]);
+  });
+
+  function postAnnotation(traceId: string, body: unknown): Promise<Response> {
+    return app.request(`/v1/traces/${traceId}/annotations`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("test_post_annotation_creates_and_returns_list", async () => {
+    const res = await postAnnotation("t1", { label: "thumbs_up", note: "great" });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { annotations: Annotation[] };
+    expect(body.annotations).toHaveLength(1);
+    expect(body.annotations[0]).toMatchObject({ name: "feedback", label: "thumbs_up", note: "great" });
+    expect(body.annotations[0]).not.toHaveProperty("spanId"); // trace-level
+    expect(annotationsWritten.value).toBe(1);
+  });
+
+  it("test_post_annotation_span_level", async () => {
+    const res = await postAnnotation("t1", { spanId: "s9", label: "thumbs_down" });
+    const body = (await res.json()) as { annotations: Annotation[] };
+    expect(body.annotations[0]?.spanId).toBe("s9");
+  });
+
+  it("test_post_annotation_empty_400_no_write", async () => {
+    const res = await postAnnotation("t1", { note: "   " });
+    expect(res.status).toBe(400);
+    expect(annotationsWritten.value).toBe(0);
+  });
+
+  it("test_post_annotation_absent_trace_404", async () => {
+    repo.annTraceExists = false;
+    expect((await postAnnotation("ghost", { label: "thumbs_up" })).status).toBe(404);
+    expect(annotationsWritten.value).toBe(0);
+  });
+
+  it("test_post_annotation_upsert_replaces", async () => {
+    await postAnnotation("t1", { label: "thumbs_up" });
+    await postAnnotation("t1", { label: "thumbs_down", note: "changed my mind" });
+    const list = await repo.listAnnotations("t1");
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ label: "thumbs_down", note: "changed my mind" });
+  });
+
+  it("test_get_annotations_returns_list", async () => {
+    await postAnnotation("t1", { label: "thumbs_up" });
+    const res = await app.request("/v1/traces/t1/annotations");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { annotations: Annotation[] };
+    expect(body.annotations).toHaveLength(1);
+  });
+
+  it("test_delete_annotation_idempotent", async () => {
+    await postAnnotation("t1", { label: "thumbs_up" });
+    const res = await app.request("/v1/traces/t1/annotations?name=feedback", { method: "DELETE" });
+    expect(res.status).toBe(200);
+    expect((await res.json() as { annotations: Annotation[] }).annotations).toHaveLength(0);
+    // deleting again → still 200, still empty (idempotent)
+    const again = await app.request("/v1/traces/t1/annotations?name=feedback", { method: "DELETE" });
+    expect(again.status).toBe(200);
+  });
+
+  it("test_annotations_route_rejects_leaked_column_at_boundary_with_5xx", async () => {
+    const leaky: SpanRepository = {
+      ...repo,
+      save: repo.save.bind(repo),
+      getBySpanId: repo.getBySpanId.bind(repo),
+      getTraceTree: repo.getTraceTree.bind(repo),
+      listTraces: repo.listTraces.bind(repo),
+      upsertAnnotation: async () => true,
+      listAnnotations: async () =>
+        [{ name: "feedback", annotatorKind: "HUMAN", updatedAt: "x", trace_id: "leak" }] as never,
+    };
+    expect(
+      (await createApp(leaky).request("/v1/traces/t1/annotations")).status,
+    ).toBeGreaterThanOrEqual(500);
   });
 
   it("test_get_sessions_returns_list_dto", async () => {
