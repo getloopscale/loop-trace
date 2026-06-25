@@ -161,6 +161,19 @@ export function addDatasetItem(
   );
 }
 
+/** Remove a trace from a dataset (M26d, idempotent); returns the updated detail. */
+export async function removeDatasetItem(
+  datasetId: string,
+  traceId: string,
+): Promise<DatasetDetail> {
+  const res = await fetch(
+    `${BASE}/v1/datasets/${encodeURIComponent(datasetId)}/items/${encodeURIComponent(traceId)}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok) throw new ApiError(res.status);
+  return (await res.json()) as DatasetDetail;
+}
+
 /** Fetch the sessions list, newest-first (M13). */
 export function getSessions(): Promise<SessionListResponse> {
   return getJson<SessionListResponse>("/v1/sessions");

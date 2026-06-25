@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ThemeProvider, violetForge } from "@theokit/ui";
@@ -9,7 +10,7 @@ import type { DatasetDetail } from "../api/types.js";
 
 vi.mock("../api/client.js", async (orig) => {
   const actual = await orig<typeof import("../api/client.js")>();
-  return { ...actual, getDataset: vi.fn() };
+  return { ...actual, getDataset: vi.fn(), removeDatasetItem: vi.fn() };
 });
 
 function renderAt(datasetId: string) {
@@ -51,5 +52,20 @@ describe("DatasetDetailPage (M26d)", () => {
     vi.mocked(client.getDataset).mockResolvedValue({ id: "d1", name: "empty", createdAt: "x", items: [] });
     renderAt("d1");
     await waitFor(() => expect(screen.getByText(/No items yet/)).toBeInTheDocument());
+  });
+
+  it("test_dataset_detail_remove_item", async () => {
+    vi.mocked(client.getDataset).mockResolvedValue({
+      id: "d1",
+      name: "travel",
+      createdAt: "x",
+      items: [{ traceId: "t1", inputSnapshot: "in", createdAt: "x" }],
+    });
+    vi.mocked(client.removeDatasetItem).mockResolvedValue({ id: "d1", name: "travel", createdAt: "x", items: [] });
+    const user = userEvent.setup();
+    renderAt("d1");
+    await waitFor(() => expect(screen.getByLabelText("remove t1 from dataset")).toBeInTheDocument());
+    await user.click(screen.getByLabelText("remove t1 from dataset"));
+    await waitFor(() => expect(client.removeDatasetItem).toHaveBeenCalledWith("d1", "t1"));
   });
 });

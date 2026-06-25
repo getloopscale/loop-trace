@@ -984,20 +984,39 @@ describe("createApp (contract, stub repo)", () => {
   it("test_post_dataset_item_missing_traceId_400", async () => {
     const ds = (await (await postJson("/v1/datasets", { name: "travel" })).json()) as Dataset;
     expect((await postJson(`/v1/datasets/${ds.id}/items`, {})).status).toBe(400);
+    expect(datasetItemsAdded.value).toBe(0); // no write on a 400
   });
 
   it("test_post_dataset_item_absent_dataset_404", async () => {
     expect((await postJson("/v1/datasets/ds-ghost/items", { traceId: "t1" })).status).toBe(404);
+    expect(datasetItemsAdded.value).toBe(0); // no write on a 404
   });
 
   it("test_post_dataset_item_absent_trace_404", async () => {
     repo.dsItemTraceExists = false;
     const ds = (await (await postJson("/v1/datasets", { name: "travel" })).json()) as Dataset;
     expect((await postJson(`/v1/datasets/${ds.id}/items`, { traceId: "ghost" })).status).toBe(404);
+    expect(datasetItemsAdded.value).toBe(0); // no write on a 404
   });
 
   it("test_get_dataset_detail_404_when_absent", async () => {
     expect((await app.request("/v1/datasets/ds-ghost")).status).toBe(404);
+  });
+
+  it("test_delete_dataset_item_removes_and_idempotent", async () => {
+    const ds = (await (await postJson("/v1/datasets", { name: "travel" })).json()) as Dataset;
+    await postJson(`/v1/datasets/${ds.id}/items`, { traceId: "t1" });
+    const res = await app.request(`/v1/datasets/${ds.id}/items/t1`, { method: "DELETE" });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as DatasetDetail).items).toHaveLength(0);
+    // deleting again → still 200 (idempotent)
+    expect((await app.request(`/v1/datasets/${ds.id}/items/t1`, { method: "DELETE" })).status).toBe(200);
+  });
+
+  it("test_delete_dataset_item_absent_dataset_404", async () => {
+    expect(
+      (await app.request("/v1/datasets/ds-ghost/items/t1", { method: "DELETE" })).status,
+    ).toBe(404);
   });
 
   it("test_datasets_route_rejects_leaked_column_at_boundary_with_5xx", async () => {

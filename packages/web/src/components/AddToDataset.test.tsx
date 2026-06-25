@@ -53,4 +53,35 @@ describe("AddToDataset (M26d)", () => {
     await waitFor(() => expect(client.addDatasetItem).toHaveBeenCalledWith("d1", "t1"));
     expect(client.createDataset).not.toHaveBeenCalled();
   });
+
+  it("test_add_to_dataset_surfaces_failure", async () => {
+    // HIGH-1: a rejected create/add must surface, not silently swallow (Rule 8).
+    vi.mocked(client.getDatasets).mockResolvedValue({ datasets: [] });
+    vi.mocked(client.createDataset).mockRejectedValue(new client.ApiError(500));
+    const user = userEvent.setup();
+    renderControl();
+    await user.click(screen.getByRole("button", { name: "add trace t1 to a dataset" }));
+    await user.type(screen.getByLabelText("new dataset name"), "new-ds");
+    await user.click(screen.getByRole("button", { name: "confirm add to dataset" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("failed"));
+  });
+
+  it("test_add_to_dataset_stops_propagation", async () => {
+    // D5: clicking the control must NOT bubble to a row-level handler (no row expand).
+    vi.mocked(client.getDatasets).mockResolvedValue({ datasets: [] });
+    const rowClick = vi.fn();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, retryDelay: 0 } } });
+    const user = userEvent.setup();
+    render(
+      <QueryClientProvider client={qc}>
+        <ThemeProvider defaultTheme="violet-forge" defaultMode="dark" themes={[violetForge]}>
+          <div onClick={rowClick}>
+            <AddToDataset traceId="t1" />
+          </div>
+        </ThemeProvider>
+      </QueryClientProvider>,
+    );
+    await user.click(screen.getByRole("button", { name: "add trace t1 to a dataset" }));
+    expect(rowClick).not.toHaveBeenCalled();
+  });
 });

@@ -5,6 +5,7 @@ import {
   createDataset,
   getDataset,
   getDatasets,
+  removeDatasetItem,
 } from "../api/client.js";
 
 /** Don't retry deterministic 4xx; retry transient errors up to twice. */
@@ -40,12 +41,21 @@ export function useDatasets() {
   return { query, create, addItem };
 }
 
-/** One dataset's detail (items), keyed by id (M26d). */
+/** One dataset's detail (items) + a remove-item mutation, keyed by id (M26d). */
 export function useDataset(datasetId: string) {
-  return useQuery({
+  const qc = useQueryClient();
+  const query = useQuery({
     queryKey: ["dataset", datasetId],
     queryFn: () => getDataset(datasetId),
     enabled: datasetId.length > 0,
     retry,
   });
+  const removeItem = useMutation({
+    mutationFn: (traceId: string) => removeDatasetItem(datasetId, traceId),
+    onSuccess: (data) => {
+      qc.setQueryData(["dataset", datasetId], data);
+      void qc.invalidateQueries({ queryKey: ["datasets"] }); // refresh item counts
+    },
+  });
+  return { query, removeItem };
 }

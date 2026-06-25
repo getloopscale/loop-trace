@@ -14,6 +14,7 @@ export function AddToDataset({ traceId }: { traceId: string }) {
   const [selectedId, setSelectedId] = useState("");
   const [newName, setNewName] = useState("");
   const [added, setAdded] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   const datasets = query.data?.datasets ?? [];
   const canAdd = newName.trim().length > 0 || selectedId.length > 0;
@@ -23,20 +24,21 @@ export function AddToDataset({ traceId }: { traceId: string }) {
   const onAdd = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!canAdd) return;
-    const trimmed = newName.trim();
-    const datasetId =
-      trimmed.length > 0 ? (await create.mutateAsync(trimmed)).id : selectedId;
-    addItem.mutate(
-      { datasetId, traceId },
-      {
-        onSuccess: () => {
-          setAdded(true);
-          setOpen(false);
-          setNewName("");
-          setSelectedId("");
-        },
-      },
-    );
+    setFailed(false);
+    try {
+      // Fail-clear (Rule 8): a rejected create/add MUST surface, never an unhandled
+      // promise rejection that silently leaves the popover open with no feedback.
+      const trimmed = newName.trim();
+      const datasetId =
+        trimmed.length > 0 ? (await create.mutateAsync(trimmed)).id : selectedId;
+      await addItem.mutateAsync({ datasetId, traceId });
+      setAdded(true);
+      setOpen(false);
+      setNewName("");
+      setSelectedId("");
+    } catch {
+      setFailed(true);
+    }
   };
 
   if (!open) {
@@ -89,6 +91,11 @@ export function AddToDataset({ traceId }: { traceId: string }) {
       >
         Add
       </button>
+      {failed ? (
+        <span role="alert" className="text-xs text-destructive">
+          failed
+        </span>
+      ) : null}
     </span>
   );
 }
