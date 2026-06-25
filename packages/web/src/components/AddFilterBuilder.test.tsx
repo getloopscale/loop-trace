@@ -38,4 +38,17 @@ describe("AddFilterBuilder (M30b)", () => {
     // model is text, empty → Add disabled
     expect(screen.getByRole("button", { name: "Add filter" })).toBeDisabled();
   });
+
+  it("test_add_filter_field_switch_resets_value", async () => {
+    // Switching the field resets the value control to that field's default — an enum
+    // field gets its first value; a text field clears (review F-test-1).
+    render(<AddFilterBuilder value="" onChange={() => {}} />);
+    // kind → status: the value dropdown defaults to the first status ("ok")
+    await userEvent.selectOptions(screen.getByLabelText("filter field"), "status");
+    expect(screen.getByLabelText("filter value")).toHaveValue("ok");
+    // status → name: the value control becomes an empty text input (Add disabled)
+    await userEvent.selectOptions(screen.getByLabelText("filter field"), "name");
+    expect(screen.getByLabelText("filter value")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Add filter" })).toBeDisabled();
+  });
 });
