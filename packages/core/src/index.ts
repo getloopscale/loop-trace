@@ -34,6 +34,17 @@ export {
   type EvaluatorSummary,
   type EvaluatorsResponse,
 } from "./domain/evaluation.js";
+// M26b: human-feedback annotations (write-path).
+export {
+  normalizeAnnotation,
+  annotationSchema,
+  annotationsResponseSchema,
+  DEFAULT_ANNOTATION_NAME,
+  DEFAULT_ANNOTATOR_KIND,
+  type Annotation,
+  type AnnotationsResponse,
+  type NormalizedAnnotation,
+} from "./domain/annotation.js";
 export {
   percentile,
   computeToolStats,

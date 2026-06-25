@@ -8,8 +8,10 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Human feedback (annotations write-path): you can attach a 👍/👎 plus an optional free-text note to a trace or a span — stored, listed newest-first, and editable (re-submitting replaces, latest wins). Surfaced in a writable trace-detail **Annotations** tab + a per-row quick-annotate in the executions list, which also gains an **Evals** count column (M26b)
 
 ### Changed
+- Retention prune now also hard-deletes a pruned trace's online-eval rows and human annotations (closes an orphan-row gap), reporting `evaluationsDeleted` / `annotationsDeleted` (M26b)
 
 ### Deprecated
 

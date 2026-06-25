@@ -14,6 +14,10 @@ export interface PruneStats {
   tagsDeleted: number;
   replaySessionsDeleted: number;
   sessionsDeleted: number;
+  /** M26 read-path eval rows of pruned traces (cascade — avoids orphan evals). */
+  evaluationsDeleted: number;
+  /** M26b human-feedback annotations of pruned traces (cascade — avoids orphans). */
+  annotationsDeleted: number;
 }
 
 /** Parsed retention config. `retentionDays === null` means retention is DISABLED. */

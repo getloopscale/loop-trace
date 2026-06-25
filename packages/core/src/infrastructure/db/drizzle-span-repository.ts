@@ -45,7 +45,12 @@ import {
 import type { PruneStats } from "../../domain/retention.js";
 import { parseSpanQuery, type SpanClause } from "../../domain/span-query.js";
 import type { EvaluatorSummary } from "../../domain/evaluation.js";
-import { spans, traces, sessions, replaySessions, traceTags, spanEvaluations } from "./schema.js";
+import { spans, traces, sessions, replaySessions, traceTags, spanEvaluations, annotations } from "./schema.js";
+import {
+  DEFAULT_ANNOTATOR_KIND,
+  type Annotation,
+  type NormalizedAnnotation,
+} from "../../domain/annotation.js";
 
 /** Build a pg connection pool for the given Postgres URI. */
 export function createPool(connectionString: string): pg.Pool {
@@ -157,6 +162,8 @@ interface EnrichedTraceRow {
   rootToolName: string | null;
   rootInputValue: string | null;
   rootOutputValue: string | null;
+  // M26b: per-trace online-eval row count (the executions-list "Evals" column).
+  evaluationsCount: number | null;
 }
 
 /** Truncate a span's input/output to a list-cell preview (≤120 chars), surrogate-safe (EC-3). */
@@ -194,6 +201,11 @@ function traceRowToItem(
   if (row.rootInputValue != null) item.inputPreview = preview(row.rootInputValue);
   if (row.rootOutputValue != null) {
     item.outputPreview = preview(row.rootOutputValue);
+  }
+  // M26b: surface the per-trace eval count when present (>0). Omitted otherwise so
+  // the list does not render a "0" column for traces with no evaluations.
+  if (row.evaluationsCount != null && row.evaluationsCount > 0) {
+    item.evaluationsCount = row.evaluationsCount;
   }
   return item;
 }
@@ -516,6 +528,11 @@ export class DrizzleSpanRepository implements SpanRepository {
         rootToolName: root.toolName,
         rootInputValue: root.inputValue,
         rootOutputValue: root.outputValue,
+        // M26b: per-trace online-eval count for the "Evals" list column (read-only,
+        // M26 data) — a correlated count on the indexed span_evaluations.trace_id.
+        evaluationsCount: sql<number>`(SELECT count(*)::int FROM span_evaluations se WHERE se.trace_id = ${traces.traceId})`.as(
+          "evaluations_count",
+        ),
       })
       .from(traces)
       .leftJoinLateral(root, sql`true`)
@@ -952,6 +969,82 @@ export class DrizzleSpanRepository implements SpanRepository {
     return rows.map((r) => r.tag);
   }
 
+  async upsertAnnotation(
+    traceId: string,
+    ann: NormalizedAnnotation,
+  ): Promise<boolean> {
+    // M26b (D2): one annotation per (trace, span, name, annotatorKind) — re-submitting
+    // REPLACES label/note/updatedAt (latest wins). `span_id = ''` sentinel = trace-level.
+    // Advisory trace-exists check (like addTag) → false → route 404; same orphan-window
+    // reasoning (traces are recompute-owned, never hard-deleted outside prune).
+    const existing = await this.db
+      .select({ traceId: traces.traceId })
+      .from(traces)
+      .where(eq(traces.traceId, traceId))
+      .limit(1);
+    if (existing.length === 0) return false;
+    const spanId = ann.spanId ?? "";
+    await this.db
+      .insert(annotations)
+      .values({
+        traceId,
+        spanId,
+        name: ann.name,
+        label: ann.label ?? null,
+        note: ann.note ?? null,
+        annotatorKind: ann.annotatorKind,
+      })
+      .onConflictDoUpdate({
+        target: [
+          annotations.traceId,
+          annotations.spanId,
+          annotations.name,
+          annotations.annotatorKind,
+        ],
+        set: {
+          label: ann.label ?? null,
+          note: ann.note ?? null,
+          updatedAt: sql`now()`,
+        },
+      });
+    return true;
+  }
+
+  async listAnnotations(traceId: string): Promise<Annotation[]> {
+    // Newest-first (D2); trace-level (span_id '') + all spans'. Empty when none.
+    const rows = await this.db
+      .select()
+      .from(annotations)
+      .where(eq(annotations.traceId, traceId))
+      .orderBy(desc(annotations.updatedAt));
+    return rows.map((r) => ({
+      // '' sentinel → trace-level: omit spanId so the DTO stays `.strict()` clean.
+      ...(r.spanId !== "" ? { spanId: r.spanId } : {}),
+      name: r.name,
+      ...(r.label != null ? { label: r.label } : {}),
+      ...(r.note != null ? { note: r.note } : {}),
+      annotatorKind: r.annotatorKind,
+      updatedAt: r.updatedAt.toISOString(),
+    }));
+  }
+
+  async removeAnnotation(
+    traceId: string,
+    key: { spanId?: string; name: string; annotatorKind?: string },
+  ): Promise<void> {
+    // Idempotent (D2): a no-op when the annotation/trace is absent.
+    await this.db
+      .delete(annotations)
+      .where(
+        and(
+          eq(annotations.traceId, traceId),
+          eq(annotations.spanId, key.spanId ?? ""),
+          eq(annotations.name, key.name),
+          eq(annotations.annotatorKind, key.annotatorKind ?? DEFAULT_ANNOTATOR_KIND),
+        ),
+      );
+  }
+
   async prune(olderThan: Date): Promise<PruneStats> {
     // M23 trace-granular hard-delete cascade, atomic in one transaction (the
     // tables have NO DB foreign keys — see the orphan-risk note on listTags — so
@@ -971,6 +1064,14 @@ export class DrizzleSpanRepository implements SpanRepository {
       const replayRes = await tx.execute(
         sql`DELETE FROM replay_sessions WHERE trace_id IN ${stale}`,
       );
+      // M26: eval rows of stale traces (avoid orphan span_evaluations). M26b: human
+      // annotations of stale traces. Both keyed by trace_id, no FK → explicit delete.
+      const evalsRes = await tx.execute(
+        sql`DELETE FROM span_evaluations WHERE trace_id IN ${stale}`,
+      );
+      const annotationsRes = await tx.execute(
+        sql`DELETE FROM annotations WHERE trace_id IN ${stale}`,
+      );
       const tracesRes = await tx.execute(
         sql`DELETE FROM traces WHERE updated_at < ${cutoff}`,
       );
@@ -986,6 +1087,8 @@ export class DrizzleSpanRepository implements SpanRepository {
         replaySessionsDeleted: rowCount(replayRes),
         tracesDeleted: rowCount(tracesRes),
         sessionsDeleted: rowCount(sessionsRes),
+        evaluationsDeleted: rowCount(evalsRes),
+        annotationsDeleted: rowCount(annotationsRes),
       };
     });
   }

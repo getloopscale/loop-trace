@@ -7,6 +7,7 @@ import type { ObservabilityRange, ObservabilityResponse } from "./observability.
 import type { SessionListResponse, SessionDetailResponse } from "./session.js";
 import type { PruneStats } from "./retention.js";
 import type { EvaluatorSummary } from "./evaluation.js";
+import type { Annotation, NormalizedAnnotation } from "./annotation.js";
 
 /** A span plus its reconstructed children — the trace tree node. */
 export interface TraceTreeNode extends Span {
@@ -56,6 +57,19 @@ export interface SpanRepository {
   removeTag(traceId: string, tag: string): Promise<void>;
   /** A trace's tags, ordered (M14); empty when the trace has none. */
   listTags(traceId: string): Promise<string[]>;
+  /**
+   * Upsert a human annotation on a trace (`spanId` undefined) or span (M26b).
+   * Idempotent on (trace, span, name, annotatorKind) — re-submitting replaces
+   * label/note/updatedAt (latest wins). Returns false if the trace is absent (→ 404).
+   */
+  upsertAnnotation(traceId: string, ann: NormalizedAnnotation): Promise<boolean>;
+  /** A trace's annotations (trace-level + all spans'), newest-first (M26b); empty when none. */
+  listAnnotations(traceId: string): Promise<Annotation[]>;
+  /** Remove an annotation by its target+channel key (M26b, idempotent — no-op if absent). */
+  removeAnnotation(
+    traceId: string,
+    key: { spanId?: string; name: string; annotatorKind?: string },
+  ): Promise<void>;
   /**
    * Hard-delete trace data older than `olderThan` (M23 retention) — trace-granular:
    * every trace with `updated_at < olderThan` and all its spans/tags/replay rows,
