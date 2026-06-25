@@ -59,6 +59,25 @@ export interface DatasetDetail {
   items: DatasetItem[];
 }
 
+/** One agent in the catalog — derived from `agent.*` span attributes (M32). */
+export interface Agent {
+  name: string;
+  firstSeenAt: string;
+  latestSeenAt: string;
+  runCount: number;
+  versions: string[];
+  versionCount: number;
+  tools: string[];
+  systemPrompt?: string;
+  stale: boolean;
+  highChurn: boolean;
+  anonymous: boolean;
+}
+
+export interface AgentCatalogResponse {
+  agents: Agent[];
+}
+
 export interface SpanNodeData {
   spanId: string;
   traceId: string;

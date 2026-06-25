@@ -1,4 +1,5 @@
 import type {
+  AgentCatalogResponse,
   AnnotationsResponse,
   Dataset,
   DatasetsResponse,
@@ -172,6 +173,11 @@ export async function removeDatasetItem(
   );
   if (!res.ok) throw new ApiError(res.status);
   return (await res.json()) as DatasetDetail;
+}
+
+/** Fetch the agents catalog (M32). */
+export function getAgents(): Promise<AgentCatalogResponse> {
+  return getJson<AgentCatalogResponse>("/v1/agents");
 }
 
 /** Fetch the sessions list, newest-first (M13). */
