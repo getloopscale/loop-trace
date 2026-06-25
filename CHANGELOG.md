@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Roadmap amended: added M29d (inline span-tree expansion + configurable columns + trace Pretty/Raw & sub-views) to the Arize peer-parity track, and sharpened M26/M30/M33 with details from a live teardown of the authenticated Arize demo (`/roadmap-feature arize-live-parity`)
 
 ### Changed
 
