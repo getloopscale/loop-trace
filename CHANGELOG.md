@@ -8,7 +8,6 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Online evals (read-path): evaluation results that arrive as span attributes (`eval.<name>.score` / `.label` / `.explanation`) are now extracted at ingest into a queryable store, surfaced per-span on the trace tree, and aggregated per-evaluator via a new `GET /v1/metrics/evaluators` endpoint (avg score + label distribution over the selected date range). A new **Evals & Metrics** page shows one Online Evaluator card per evaluator, and the trace detail gains an **Evaluations** tab listing a span's eval results (M26)
 
 ### Changed
 
@@ -19,6 +18,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 ### Security
+
+## [0.30.0] - 2026-06-25
+
+### Added
+- Online evals (read-path): evaluation results that arrive as span attributes (`eval.<name>.score` / `.label` / `.explanation`) are now extracted at ingest into a queryable store, surfaced per-span on the trace tree, and aggregated per-evaluator via a new `GET /v1/metrics/evaluators` endpoint (avg score + label distribution over the selected date range). A new **Evals & Metrics** page shows one Online Evaluator card per evaluator, and the trace detail gains an **Evaluations** tab listing a span's eval results (M26)
 
 ## [0.29.0] - 2026-06-25
 
