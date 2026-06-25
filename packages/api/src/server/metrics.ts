@@ -28,6 +28,9 @@ export const evaluationsExtracted = counter();
 // M26b: human-feedback annotations written via the API (upserts). A distinct
 // counter so feedback-write volume is observable at runtime (wiring-triad pillar c).
 export const annotationsWritten = counter();
+// M26d: dataset items added via the API. Distinct counter so curation volume is
+// observable at runtime (wiring-triad pillar c).
+export const datasetItemsAdded = counter();
 
 /** Structured ingest log line on stderr (stdout stays clean for piping). */
 export function logIngest(spans: number, evals = 0): void {
