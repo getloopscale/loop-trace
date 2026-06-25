@@ -94,6 +94,34 @@ describe("SpanInfoPanel", () => {
     expect(screen.getByText(/"role": "user"/)).toBeInTheDocument();
   });
 
+  it("span_info_panel_evaluations_tab_lists_span_evals", async () => {
+    const user = userEvent.setup();
+    render(
+      withTheme(
+        <SpanInfoPanel
+          span={{
+            ...rich,
+            evaluations: [
+              { name: "hallucination", score: 0.2, label: "factual", explanation: "well grounded" },
+            ],
+          }}
+        />,
+      ),
+    );
+    await user.click(screen.getByRole("tab", { name: "Evaluations" }));
+    expect(screen.getByText("hallucination")).toBeInTheDocument();
+    expect(screen.getByText("factual")).toBeInTheDocument();
+    expect(screen.getByText("0.20")).toBeInTheDocument();
+    expect(screen.getByText("well grounded")).toBeInTheDocument();
+  });
+
+  it("span_info_panel_evaluations_empty_state", async () => {
+    const user = userEvent.setup();
+    render(withTheme(<SpanInfoPanel span={bare} />));
+    await user.click(screen.getByRole("tab", { name: "Evaluations" }));
+    expect(screen.getByText("No evaluations")).toBeInTheDocument();
+  });
+
   it("span_info_panel_keeps_active_tab_across_span_change", async () => {
     // EC-2: switching the selected span keeps the chosen tab (local state, no remount).
     const user = userEvent.setup();

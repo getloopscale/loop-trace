@@ -1,5 +1,6 @@
 import type {
   CostByPeriodResponse,
+  EvaluatorsResponse,
   ListTracesQuery,
   NorthStarResponse,
   ObservabilityRange,
@@ -111,6 +112,13 @@ export function getObservability(
   return getJson<ObservabilityResponse>(
     `/v1/metrics/observability?range=${range}`,
   );
+}
+
+/** Fetch the per-evaluator aggregate (Online Evaluators) over a range (M26). */
+export function getEvaluators(
+  range: ObservabilityRange,
+): Promise<EvaluatorsResponse> {
+  return getJson<EvaluatorsResponse>(`/v1/metrics/evaluators?range=${range}`);
 }
 
 /** Fetch the sessions list, newest-first (M13). */

@@ -8,6 +8,7 @@ import {
   ListTree,
   Layers,
   LayoutDashboard,
+  Gauge,
   Wrench,
   DollarSign,
   type LucideIcon,
@@ -19,6 +20,8 @@ const NAV: { label: string; path: string; icon: LucideIcon }[] = [
   { label: "Sessions", path: "/sessions", icon: Layers },
   // M20: Dashboards is the unified metrics home (Pinned Charts + re-homed north-star).
   { label: "Dashboards", path: "/dashboards", icon: LayoutDashboard },
+  // M26: Evals & Metrics — a metrics page (Online Evaluators), not a span-query view.
+  { label: "Evals & Metrics", path: "/evals", icon: Gauge },
   { label: "Tools", path: "/tools", icon: Wrench },
   { label: "Cost", path: "/analytics", icon: DollarSign },
 ];

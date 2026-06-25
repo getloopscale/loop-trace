@@ -27,6 +27,7 @@ export function SpanInfoPanel({ span }: { span: SpanNodeData }) {
   const hasModel = span.model != null || span.provider != null;
   const hasTokens = span.inputTokens != null || span.outputTokens != null;
   const hasEvents = span.events != null && span.events.length > 0;
+  const hasEvals = span.evaluations != null && span.evaluations.length > 0;
   const hasAttrs =
     span.attributes != null && Object.keys(span.attributes).length > 0;
   // FE-02: derive from the span's own signals with hasChildren:false (a SpanNodeData
@@ -51,6 +52,7 @@ export function SpanInfoPanel({ span }: { span: SpanNodeData }) {
           <Tabs.Trigger value="info">Trace Info</Tabs.Trigger>
           <Tabs.Trigger value="attributes">Attributes</Tabs.Trigger>
           <Tabs.Trigger value="events">Events</Tabs.Trigger>
+          <Tabs.Trigger value="evaluations">Evaluations</Tabs.Trigger>
         </Tabs.List>
 
         <Tabs.Content value="info">
@@ -105,6 +107,42 @@ export function SpanInfoPanel({ span }: { span: SpanNodeData }) {
             </ul>
           ) : (
             <EmptyState message="No events" />
+          )}
+        </Tabs.Content>
+
+        <Tabs.Content value="evaluations">
+          {hasEvals ? (
+            <ul className="m-0 flex list-none flex-col gap-2 p-0">
+              {span.evaluations!.map((ev, i) => (
+                <li
+                  key={`${ev.name}-${i}`}
+                  className="flex flex-col gap-1 rounded-md border border-border bg-card p-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-label font-display">{ev.name}</span>
+                    <span className="flex items-center gap-2 text-body-sm">
+                      {ev.label != null ? (
+                        <span className="rounded-full border border-border px-2 py-0.5">
+                          {ev.label}
+                        </span>
+                      ) : null}
+                      {ev.score != null ? (
+                        <span className="font-display tabular-nums">
+                          {ev.score.toFixed(2)}
+                        </span>
+                      ) : null}
+                    </span>
+                  </div>
+                  {ev.explanation != null ? (
+                    <p className="text-body-sm text-muted-foreground">
+                      {ev.explanation}
+                    </p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EmptyState message="No evaluations" />
           )}
         </Tabs.Content>
       </Tabs>
