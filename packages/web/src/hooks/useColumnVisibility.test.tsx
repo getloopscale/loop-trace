@@ -57,6 +57,12 @@ describe("useColumnVisibility (M29d)", () => {
     expect(readHiddenColumns()).toEqual([]);
   });
 
+  it("test_column_visibility_filters_non_string_elements", () => {
+    // a valid array with junk elements keeps only the strings (element-level guard)
+    localStorage.setItem("theolens.columnVisibility", '["cost", 5, null, "model"]');
+    expect(readHiddenColumns()).toEqual(["cost", "model"]);
+  });
+
   it("test_column_visibility_disabled_storage_falls_back", () => {
     // Negative case (testing.md §4.1): disabled storage makes getItem THROW →
     // default (all visible / [] hidden), never crash.
