@@ -1,4 +1,5 @@
 import type {
+  AnnotationsResponse,
   CostByPeriodResponse,
   EvaluatorsResponse,
   ListTracesQuery,
@@ -150,6 +151,63 @@ async function mutateTags(path: string, method: "POST" | "DELETE", body?: unknow
 
 export function addTraceTag(traceId: string, tag: string): Promise<TraceTagsResponse> {
   return mutateTags(`/v1/traces/${encodeURIComponent(traceId)}/tags`, "POST", { tag });
+}
+
+/** A trace's annotations (trace-level + all spans'), newest-first (M26b). */
+export function getAnnotations(traceId: string): Promise<AnnotationsResponse> {
+  return getJson<AnnotationsResponse>(
+    `/v1/traces/${encodeURIComponent(traceId)}/annotations`,
+  );
+}
+
+/** Annotation input for an upsert (M26b). spanId omitted = trace-level. */
+export interface AnnotationInput {
+  spanId?: string;
+  name?: string;
+  label?: string;
+  note?: string;
+}
+
+async function mutateAnnotations(
+  path: string,
+  method: "POST" | "DELETE",
+  body?: unknown,
+): Promise<AnnotationsResponse> {
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    ...(body !== undefined
+      ? { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }
+      : {}),
+  });
+  if (!res.ok) throw new ApiError(res.status);
+  return (await res.json()) as AnnotationsResponse;
+}
+
+/** Upsert a 👍/👎 + note on a trace or span (M26b); returns the updated list. */
+export function addAnnotation(
+  traceId: string,
+  input: AnnotationInput,
+): Promise<AnnotationsResponse> {
+  return mutateAnnotations(
+    `/v1/traces/${encodeURIComponent(traceId)}/annotations`,
+    "POST",
+    input,
+  );
+}
+
+/** Clear an annotation by its target+channel key (M26b, idempotent). */
+export function removeAnnotation(
+  traceId: string,
+  key: { spanId?: string; name?: string; annotatorKind?: string },
+): Promise<AnnotationsResponse> {
+  const p = new URLSearchParams();
+  if (key.name) p.set("name", key.name);
+  if (key.spanId) p.set("spanId", key.spanId);
+  if (key.annotatorKind) p.set("annotatorKind", key.annotatorKind);
+  return mutateAnnotations(
+    `/v1/traces/${encodeURIComponent(traceId)}/annotations?${p.toString()}`,
+    "DELETE",
+  );
 }
 
 /** Remove a tag — the tag travels in an encoded query param (slash-safe, EC-1). */

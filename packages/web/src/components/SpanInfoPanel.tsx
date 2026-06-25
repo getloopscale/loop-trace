@@ -6,6 +6,7 @@ import { deriveKindFromSignals } from "../lib/span-kind.js";
 import { KindBadge } from "./kind-badge.js";
 import { EmptyState } from "./states.js";
 import { JsonBlock } from "./JsonBlock.js";
+import { AnnotationsPanel } from "./AnnotationsPanel.js";
 
 function strAttr(
   attrs: Record<string, unknown> | undefined,
@@ -53,6 +54,7 @@ export function SpanInfoPanel({ span }: { span: SpanNodeData }) {
           <Tabs.Trigger value="attributes">Attributes</Tabs.Trigger>
           <Tabs.Trigger value="events">Events</Tabs.Trigger>
           <Tabs.Trigger value="evaluations">Evaluations</Tabs.Trigger>
+          <Tabs.Trigger value="annotations">Annotations</Tabs.Trigger>
         </Tabs.List>
 
         <Tabs.Content value="info">
@@ -144,6 +146,11 @@ export function SpanInfoPanel({ span }: { span: SpanNodeData }) {
           ) : (
             <EmptyState message="No evaluations" />
           )}
+        </Tabs.Content>
+
+        <Tabs.Content value="annotations">
+          {/* M26b: writable human feedback (👍/👎 + note) for the selected span. */}
+          <AnnotationsPanel traceId={span.traceId} spanId={span.spanId} />
         </Tabs.Content>
       </Tabs>
     </section>

@@ -18,6 +18,20 @@ export interface SpanEvaluation {
   explanation?: string;
 }
 
+/** A human-feedback annotation on a trace (spanId omitted) or span (M26b). */
+export interface Annotation {
+  spanId?: string;
+  name: string;
+  label?: string;
+  note?: string;
+  annotatorKind: string;
+  updatedAt: string;
+}
+
+export interface AnnotationsResponse {
+  annotations: Annotation[];
+}
+
 export interface SpanNodeData {
   spanId: string;
   traceId: string;
@@ -66,6 +80,8 @@ export interface TraceListItem {
   endTimeUnixNano?: string;
   inputPreview?: string;
   outputPreview?: string;
+  /** M26b: per-trace online-eval row count (the "Evals" list column); omitted when 0. */
+  evaluationsCount?: number;
 }
 
 export interface TraceListResponse {

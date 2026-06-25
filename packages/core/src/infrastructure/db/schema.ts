@@ -178,3 +178,37 @@ export const spanEvaluations = pgTable(
     index("span_evaluations_trace_id_idx").on(t.traceId),
   ],
 );
+
+/**
+ * M26b: human-feedback annotations (write-path). A human attaches a 👍/👎 `label`
+ * and/or a free-text `note` to a trace (`span_id = ''` sentinel) or a span
+ * (`span_id` set), on a `name` channel, authored by `annotator_kind`. UPSERT — one
+ * row per (trace, span, name, annotator_kind); re-submitting replaces (latest wins,
+ * D2). `span_id` is NOT NULL DEFAULT '' so the unique key is a plain column tuple
+ * (a nullable span_id would defeat the unique via Postgres NULL != NULL). Distinct
+ * from the immutable `span_evaluations` read-path (D3).
+ */
+export const annotations = pgTable(
+  "annotations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    traceId: text("trace_id").notNull(),
+    spanId: text("span_id").default("").notNull(),
+    name: text("name").notNull(),
+    label: text("label"),
+    note: text("note"),
+    annotatorKind: text("annotator_kind").default("HUMAN").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    unique("annotations_target_channel_uq").on(
+      t.traceId,
+      t.spanId,
+      t.name,
+      t.annotatorKind,
+    ),
+    index("annotations_trace_id_idx").on(t.traceId),
+  ],
+);

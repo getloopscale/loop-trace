@@ -25,6 +25,9 @@ export const tracesIngested = counter();
 // distinct counter so "no evals on the Evals page" is distinguishable at runtime
 // from "evals arrived but extraction dropped them" (wiring-triad pillar c).
 export const evaluationsExtracted = counter();
+// M26b: human-feedback annotations written via the API (upserts). A distinct
+// counter so feedback-write volume is observable at runtime (wiring-triad pillar c).
+export const annotationsWritten = counter();
 
 /** Structured ingest log line on stderr (stdout stays clean for piping). */
 export function logIngest(spans: number, evals = 0): void {

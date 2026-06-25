@@ -28,6 +28,9 @@ export const traceListItemSchema = z
     endTimeUnixNano: z.string().regex(/^\d+$/).optional(),
     inputPreview: z.string().optional(),
     outputPreview: z.string().optional(),
+    // M26b — per-trace count of online-eval rows (the executions-list "Evals"
+    // column). Read-only (M26 data); omitted when the trace has no evaluations.
+    evaluationsCount: z.number().int().nonnegative().optional(),
   })
   .strict();
 
