@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Span query filter: a "Filter spans" bar on the executions list accepts a `field:value` query (`kind:llm status:error model:gpt-4o name:"…"`, space-separated, implicit AND) — a trace matches when one of its spans satisfies every clause. `kind:` matches the same semantic kind the UI shows (derived from the span's signals, not the raw OTLP kind). Parsed server-side, tolerant of half-typed input, and carried into the CSV export (M30)
 
 ### Changed
 

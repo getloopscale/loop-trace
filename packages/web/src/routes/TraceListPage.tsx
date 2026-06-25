@@ -4,6 +4,7 @@ import { useTraceList } from "../hooks/useTraces.js";
 import { useRange, rangeToWindow } from "../hooks/useRange.js";
 import { TraceTable, TOGGLEABLE_COLUMNS } from "../components/TraceTable.js";
 import { TraceFilters } from "../components/TraceFilters.js";
+import { SpanFilterBar } from "../components/SpanFilterBar.js";
 import { ColumnToggle } from "../components/ColumnToggle.js";
 import { SavedViewSelector } from "../components/SavedViewSelector.js";
 import { useColumnVisibility } from "../hooks/useColumnVisibility.js";
@@ -72,6 +73,17 @@ export function TraceListPage() {
         </div>
       </header>
       <TraceSummaryStrip />
+      <SpanFilterBar
+        value={query.spanQuery}
+        onChange={(spanQuery) =>
+          setQuery((q) => {
+            const next = { ...q };
+            if (spanQuery) next.spanQuery = spanQuery;
+            else delete next.spanQuery;
+            return next;
+          })
+        }
+      />
       <TraceFilters query={query} onChange={setQuery} exportQuery={effectiveQuery} />
       <SavedViewSelector query={query} onApply={setQuery} />
       {/* Prefer showing data (even stale, via keepPreviousData) over an error, so a

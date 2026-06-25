@@ -188,6 +188,19 @@ describe("TraceListPage (integration)", () => {
     expect(href).toMatch(/to=\d{4}-\d{2}-\d{2}T/);
   });
 
+  it("test_span_filter_bar_drives_listtraces", async () => {
+    // M30: typing a span-query in the Filter spans bar refetches listTraces with spanQuery.
+    vi.mocked(client.listTraces).mockResolvedValue({ traces: [] });
+    renderPage();
+    await waitFor(() => expect(client.listTraces).toHaveBeenCalled());
+    await userEvent.type(screen.getByLabelText("filter spans"), "kind:tool");
+    await waitFor(() =>
+      expect(client.listTraces).toHaveBeenCalledWith(
+        expect.objectContaining({ spanQuery: "kind:tool" }),
+      ),
+    );
+  });
+
   it("test_column_toggle_hides_a_column", async () => {
     // M29d: unchecking a column in the Columns menu removes it from the table.
     vi.mocked(client.listTraces).mockResolvedValue({
