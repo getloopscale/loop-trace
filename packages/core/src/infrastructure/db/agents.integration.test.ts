@@ -117,4 +117,26 @@ suite("agents catalog (integration, M32)", () => {
     const a = (await repo.aggregateAgents()).find((x) => x.name === "research_agent");
     expect(a?.systemPrompt).toBe("You are research_agent.");
   });
+
+  it("test_aggregate_system_prompt_picks_latest_by_ingested_at", async () => {
+    // F-tq-4: two same-name spans with different prompts → the NEWEST-ingested wins.
+    await repo.save([
+      span({ spanId: "old", traceId: "t1", name: "research_agent", attributes: { "agent.name": "research_agent", "agent.system_prompt": "OLD prompt" } }),
+      span({ spanId: "new", traceId: "t2", name: "research_agent", attributes: { "agent.name": "research_agent", "agent.system_prompt": "NEW prompt" } }),
+    ]);
+    await pool.query("UPDATE spans SET ingested_at = now() - interval '1 hour' WHERE span_id = 'old'");
+    const a = (await repo.aggregateAgents()).find((x) => x.name === "research_agent");
+    expect(a?.systemPrompt).toBe("NEW prompt"); // latest ingested_at wins
+  });
+
+  it("test_aggregate_agent_without_version", async () => {
+    // F-tq-5: an agent span carrying agent.name but NO agent.version → versionCount 0.
+    await repo.save([
+      span({ spanId: "a1", traceId: "t1", name: "x_agent", attributes: { "agent.name": "x_agent" } }),
+    ]);
+    const a = (await repo.aggregateAgents()).find((x) => x.name === "x_agent");
+    expect(a?.versions).toEqual([]);
+    expect(a?.versionCount).toBe(0);
+    expect(a?.highChurn).toBe(false);
+  });
 });
