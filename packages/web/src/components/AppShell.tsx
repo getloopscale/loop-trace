@@ -9,6 +9,7 @@ import {
   Layers,
   LayoutDashboard,
   Gauge,
+  Library,
   Wrench,
   DollarSign,
   type LucideIcon,
@@ -22,6 +23,8 @@ const NAV: { label: string; path: string; icon: LucideIcon }[] = [
   { label: "Dashboards", path: "/dashboards", icon: LayoutDashboard },
   // M26: Evals & Metrics — a metrics page (Online Evaluators), not a span-query view.
   { label: "Evals & Metrics", path: "/evals", icon: Gauge },
+  // M26d: Datasets — curated example sets.
+  { label: "Datasets", path: "/datasets", icon: Library },
   { label: "Tools", path: "/tools", icon: Wrench },
   { label: "Cost", path: "/analytics", icon: DollarSign },
 ];

@@ -32,6 +32,33 @@ export interface AnnotationsResponse {
   annotations: Annotation[];
 }
 
+/** A curated dataset in the list (with its item count) (M26d). */
+export interface Dataset {
+  id: string;
+  name: string;
+  createdAt: string;
+  itemCount: number;
+}
+
+export interface DatasetsResponse {
+  datasets: Dataset[];
+}
+
+/** One curated example: the source trace + its input/output snapshot at add-time (M26d). */
+export interface DatasetItem {
+  traceId: string;
+  inputSnapshot?: string;
+  outputSnapshot?: string;
+  createdAt: string;
+}
+
+export interface DatasetDetail {
+  id: string;
+  name: string;
+  createdAt: string;
+  items: DatasetItem[];
+}
+
 export interface SpanNodeData {
   spanId: string;
   traceId: string;
@@ -164,6 +191,8 @@ export interface SessionListItem {
   errorRate: number;
   /** M20: first user message (root input of the earliest trace, ≤120 chars); omitted when absent. */
   firstMessagePreview?: string;
+  /** M26d: per-session online-eval count (the sessions-list "Evals" column); omitted when 0. */
+  evaluationsCount?: number;
 }
 
 export interface SessionListResponse {
