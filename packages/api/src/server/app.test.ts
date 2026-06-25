@@ -4,6 +4,7 @@ import type {
   NormalizedAnnotation,
   Dataset,
   DatasetDetail,
+  Agent,
   CostByPeriodResponse,
   CostPeriod,
   EvaluatorSummary,
@@ -277,6 +278,12 @@ class StubSpanRepository implements SpanRepository {
   async removeDatasetItem(datasetId: string, traceId: string): Promise<void> {
     const d = this.dsDetail.get(datasetId);
     if (d) d.items = d.items.filter((i) => i.traceId !== traceId);
+  }
+
+  // M32 agents catalog stub.
+  agents: Agent[] = [];
+  async aggregateAgents(): Promise<Agent[]> {
+    return this.agents;
   }
 }
 
@@ -1030,6 +1037,50 @@ describe("createApp (contract, stub repo)", () => {
         [{ id: "d1", name: "x", createdAt: "x", itemCount: 0, secret: "leak" }] as never,
     };
     expect((await createApp(leaky).request("/v1/datasets")).status).toBeGreaterThanOrEqual(500);
+  });
+
+  it("test_get_agents_returns_catalog", async () => {
+    repo.agents = [
+      {
+        name: "research_agent",
+        firstSeenAt: "2026-06-20T00:00:00.000Z",
+        latestSeenAt: "2026-06-24T00:00:00.000Z",
+        runCount: 8,
+        versions: ["1.0.0", "1.1.0", "1.2.0"],
+        versionCount: 3,
+        tools: ["essential_info"],
+        systemPrompt: "You are a travel researcher.",
+        stale: false,
+        highChurn: true,
+        anonymous: false,
+      },
+    ];
+    const res = await app.request("/v1/agents");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { agents: Agent[] };
+    expect(body.agents[0]?.name).toBe("research_agent");
+    expect(body.agents[0]?.highChurn).toBe(true);
+    expect(body.agents[0]?.versionCount).toBe(3);
+  });
+
+  it("test_get_agents_empty_ok", async () => {
+    repo.agents = [];
+    const res = await app.request("/v1/agents");
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { agents: Agent[] }).agents).toEqual([]);
+  });
+
+  it("test_agents_route_rejects_leaked_column_at_boundary_with_5xx", async () => {
+    const leaky: SpanRepository = {
+      ...repo,
+      save: repo.save.bind(repo),
+      getBySpanId: repo.getBySpanId.bind(repo),
+      getTraceTree: repo.getTraceTree.bind(repo),
+      listTraces: repo.listTraces.bind(repo),
+      aggregateAgents: async () =>
+        [{ name: "x", firstSeenAt: "a", latestSeenAt: "b", runCount: 1, versions: [], versionCount: 0, tools: [], stale: false, highChurn: false, anonymous: false, secret: "leak" }] as never,
+    };
+    expect((await createApp(leaky).request("/v1/agents")).status).toBeGreaterThanOrEqual(500);
   });
 
   it("test_get_sessions_returns_list_dto", async () => {
