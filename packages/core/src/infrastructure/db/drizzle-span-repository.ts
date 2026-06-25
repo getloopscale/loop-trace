@@ -43,11 +43,50 @@ import {
   type RawSessionDetail,
 } from "../../domain/session.js";
 import type { PruneStats } from "../../domain/retention.js";
+import { parseSpanQuery, type SpanClause } from "../../domain/span-query.js";
 import { spans, traces, sessions, replaySessions, traceTags } from "./schema.js";
 
 /** Build a pg connection pool for the given Postgres URI. */
 export function createPool(connectionString: string): pg.Pool {
   return new pg.Pool({ connectionString });
+}
+
+/** `s.status_code IN ('2','ERROR',…)` fragment (M30 — same error vocabulary as the trace aggregate). */
+const ERROR_CODES_IN = sql`(${sql.join(
+  ERROR_STATUS_CODES.map((v) => sql`${v}`),
+  sql`, `,
+)})`;
+
+/**
+ * SQL fragment computing a span's SEMANTIC kind on alias `s` — mirrors the UI's
+ * `deriveKindFromSignals` precedence (tool > retriever > embedding > llm >
+ * chain[has children] > unknown). M30 ADR D3: the stored `spans.kind` is the OTLP
+ * numeric kind, so `kind:` MUST derive from the same `gen_ai.*` / model / has-children
+ * signals the UI uses, or the filter would not match what the operator sees.
+ */
+const DERIVED_SPAN_KIND_SQL = sql`CASE
+  WHEN s.attributes->>'gen_ai.tool.name' IS NOT NULL OR s.attributes->>'gen_ai.operation.name' = 'execute_tool' THEN 'tool'
+  WHEN s.attributes->>'gen_ai.operation.name' IN ('retrieve', 'search') THEN 'retriever'
+  WHEN s.attributes->>'gen_ai.operation.name' IN ('embeddings', 'embedding') THEN 'embedding'
+  WHEN s.attributes->>'gen_ai.operation.name' IN ('chat', 'text_completion') OR s.model IS NOT NULL THEN 'llm'
+  WHEN EXISTS (SELECT 1 FROM spans c WHERE c.parent_span_id = s.span_id) THEN 'chain'
+  ELSE 'unknown'
+END`;
+
+/** One span-query clause → a predicate on span alias `s` (every value is a bound param — no injection). */
+function spanClauseSql(c: SpanClause) {
+  switch (c.field) {
+    case "name":
+      return sql`s.name = ${c.value}`;
+    case "model":
+      return sql`s.model = ${c.value}`;
+    case "status":
+      return c.value === "error"
+        ? sql`s.status_code IN ${ERROR_CODES_IN}`
+        : sql`(s.status_code IS NULL OR s.status_code NOT IN ${ERROR_CODES_IN})`;
+    case "kind":
+      return sql`(${DERIVED_SPAN_KIND_SQL}) = ${c.value}`;
+  }
 }
 
 type SpanRow = typeof spans.$inferInsert;
@@ -369,6 +408,18 @@ export class DrizzleSpanRepository implements SpanRepository {
       conds.push(
         sql`EXISTS (SELECT 1 FROM spans s WHERE s.trace_id = ${traces.traceId} AND s.search_tsv @@ ${tsq})`,
       );
+    }
+    // M30: span-query DSL — a trace matches iff ONE span satisfies EVERY clause
+    // (span-scoped AND via EXISTS, D2). The parser is total, so a query with no valid
+    // clauses adds no condition (unfiltered). `kind:` uses the derived-kind CASE (D3).
+    if (opts.spanQuery) {
+      const { clauses } = parseSpanQuery(opts.spanQuery);
+      if (clauses.length > 0) {
+        const preds = sql.join(clauses.map(spanClauseSql), sql` AND `);
+        conds.push(
+          sql`EXISTS (SELECT 1 FROM spans s WHERE s.trace_id = ${traces.traceId} AND ${preds})`,
+        );
+      }
     }
     const where = conds.length > 0 ? and(...conds) : undefined;
 

@@ -85,4 +85,14 @@ describe("listTracesOptionsSchema (M9)", () => {
   it("test_list_options_schema_empty_is_valid", () => {
     expect(listTracesOptionsSchema.parse({})).toEqual({});
   });
+
+  it("test_list_options_schema_accepts_span_query", () => {
+    // M30: spanQuery is a free-form string (the parser, not zod, is the grammar).
+    const parsed = listTracesOptionsSchema.parse({ spanQuery: "kind:llm status:error" });
+    expect(parsed.spanQuery).toBe("kind:llm status:error");
+    // still strict — an unknown field is rejected
+    expect(() =>
+      listTracesOptionsSchema.parse({ spanQueryTypo: "x" }),
+    ).toThrow();
+  });
 });
