@@ -63,6 +63,11 @@ export const listTracesOptionsSchema = z
     tag: z.string().min(1).optional(),
     // M24: full-text search over span input/output content (websearch_to_tsquery).
     q: z.string().min(1).optional(),
+    // M30: span-query DSL (`kind:llm status:error model:gpt-4o name:"…"`). The raw
+    // string is parsed server-side by `parseSpanQuery` (pure + total); a trace matches
+    // iff one span satisfies every clause. Free-form string (the parser, not zod, is
+    // the grammar) — unparseable tokens are ignored, never a 400.
+    spanQuery: z.string().min(1).optional(),
   })
   .strict();
 

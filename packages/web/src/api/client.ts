@@ -30,6 +30,7 @@ function listQueryString(
   if (q.dir) p.set("dir", q.dir);
   if (q.tag) p.set("tag", q.tag);
   if (q.q) p.set("q", q.q);
+  if (q.spanQuery) p.set("span_query", q.spanQuery);
   for (const [k, v] of Object.entries(extra ?? {})) p.set(k, v);
   const s = p.toString();
   return s ? `?${s}` : "";

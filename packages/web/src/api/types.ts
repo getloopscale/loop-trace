@@ -75,6 +75,8 @@ export interface ListTracesQuery {
   tag?: string;
   /** M24: full-text search over span input/output content. */
   q?: string;
+  /** M30: span-query DSL (`kind:llm status:error model:gpt-4o`), parsed server-side. */
+  spanQuery?: string;
 }
 
 /** A trace's tags (M14). */

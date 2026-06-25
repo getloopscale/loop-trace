@@ -533,6 +533,27 @@ describe("createApp (contract, stub repo)", () => {
     expect(repo.lastListOpts).toMatchObject({ q: "lisbon", format: "csv" });
   });
 
+  it("get_traces_forwards_span_query", async () => {
+    // M30: the raw span-query DSL string reaches the repo (parsed server-side there).
+    const res = await app.request("/v1/traces?span_query=kind%3Allm");
+    expect(res.status).toBe(200);
+    expect(repo.lastListOpts?.spanQuery).toBe("kind:llm");
+  });
+
+  it("get_traces_empty_span_query_is_omitted", async () => {
+    // EC: a cleared "Filter spans" bar (`?span_query=`) is "no filter", NOT a 400.
+    const res = await app.request("/v1/traces?span_query=");
+    expect(res.status).toBe(200);
+    expect(repo.lastListOpts?.spanQuery).toBeUndefined();
+  });
+
+  it("get_traces_csv_export_honors_span_query", async () => {
+    const res = await app.request("/v1/traces?span_query=kind%3Atool&format=csv");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/csv");
+    expect(repo.lastListOpts).toMatchObject({ spanQuery: "kind:tool", format: "csv" });
+  });
+
   it("test_get_traces_csv_export_has_header_and_rows", async () => {
     await repo.save([{ spanId: "csv1", traceId: "csv-t1", name: "checkout", startTimeUnixNano: "1700000000000000000", endTimeUnixNano: "1700000000100000000" }]);
     const res = await app.request("/v1/traces?format=csv");
