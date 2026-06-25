@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { SpanIOPanel } from "./SpanIOPanel.js";
 import type { SpanNodeData } from "../api/types.js";
 
@@ -43,5 +44,41 @@ describe("SpanIOPanel", () => {
       />,
     );
     expect(screen.getByRole("alert")).toHaveTextContent("boom");
+  });
+
+  it("test_span_io_defaults_to_pretty", () => {
+    // M29d: Pretty is the default — markdown is parsed (not shown raw).
+    render(<SpanIOPanel span={{ ...base, inputValue: "**bold** ask" }} />);
+    expect(screen.getByText("bold")).toBeInTheDocument();
+    // the raw markdown asterisks are NOT present as literal text in Pretty mode
+    expect(screen.queryByText("**bold** ask")).toBeNull();
+    expect(screen.getByRole("button", { name: "Pretty" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("test_span_io_raw_shows_raw_string", async () => {
+    render(<SpanIOPanel span={{ ...base, inputValue: "**bold** ask" }} />);
+    await userEvent.click(screen.getByRole("button", { name: "Raw" }));
+    // Raw shows the exact unrendered string (incl. the markdown asterisks)
+    expect(screen.getByText("**bold** ask")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Raw" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("test_span_io_raw_escapes_html", async () => {
+    // Security negative case: Raw renders a dangerous string as TEXT, never as HTML.
+    render(
+      <SpanIOPanel span={{ ...base, inputValue: "<script>alert(1)</script>" }} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Raw" }));
+    // the literal string is visible as text, and NO script element was injected
+    expect(
+      screen.getByText("<script>alert(1)</script>"),
+    ).toBeInTheDocument();
+    expect(document.querySelector("script")).toBeNull();
   });
 });
