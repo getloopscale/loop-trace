@@ -22,6 +22,12 @@ export interface GenAiFields {
   inputValue?: string;
   /** Span output text (`output.value`), capped (M12). */
   outputValue?: string;
+  /** Time-to-first-token in ms (Claude Code `ttft_ms`, M34). */
+  ttftMs?: number;
+  /** Prompt-cache read tokens (Claude Code `cache_read_tokens`, M34). */
+  cacheReadTokens?: number;
+  /** Prompt-cache creation tokens (Claude Code `cache_creation_tokens`, M34). */
+  cacheCreationTokens?: number;
 }
 
 // Model resolution order (langfuse OtelIngestionProcessor.ts:2237-2242).

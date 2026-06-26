@@ -119,6 +119,10 @@ function toRow(span: Span): SpanRow {
     // M12: input/output text + events (already capped by ingest extraction).
     inputValue: span.inputValue ?? null,
     outputValue: span.outputValue ?? null,
+    // M34: Claude Code perf/cost signals.
+    ttftMs: span.ttftMs ?? null,
+    cacheReadTokens: span.cacheReadTokens ?? null,
+    cacheCreationTokens: span.cacheCreationTokens ?? null,
     events: span.events ?? null,
     attributes: span.attributes ?? null,
   };
@@ -143,6 +147,13 @@ function fromRow(row: typeof spans.$inferSelect): Span {
     ...(row.sessionId != null ? { sessionId: row.sessionId } : {}),
     ...(row.inputValue != null ? { inputValue: row.inputValue } : {}),
     ...(row.outputValue != null ? { outputValue: row.outputValue } : {}),
+    ...(row.ttftMs != null ? { ttftMs: row.ttftMs } : {}),
+    ...(row.cacheReadTokens != null
+      ? { cacheReadTokens: row.cacheReadTokens }
+      : {}),
+    ...(row.cacheCreationTokens != null
+      ? { cacheCreationTokens: row.cacheCreationTokens }
+      : {}),
     ...(row.events != null
       ? { events: row.events as Span["events"] }
       : {}),
@@ -522,9 +533,13 @@ export class DrizzleSpanRepository implements SpanRepository {
         operationName: sql<
           string | null
         >`${spans.attributes}->>'gen_ai.operation.name'`.as("op_name"),
+        // M34: the typed `tool_name` column (Claude Code's `tool_name`) wins; fall
+        // back to the `gen_ai.tool.name` attribute for producers that only emit it.
         toolName: sql<
           string | null
-        >`${spans.attributes}->>'gen_ai.tool.name'`.as("tool_name"),
+        >`coalesce(${spans.toolName}, ${spans.attributes}->>'gen_ai.tool.name')`.as(
+          "tool_name",
+        ),
         inputValue: spans.inputValue,
         outputValue: spans.outputValue,
       })

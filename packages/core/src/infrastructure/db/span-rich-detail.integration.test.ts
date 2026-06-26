@@ -78,6 +78,62 @@ suite("rich span detail persistence (integration, M12)", () => {
     expect(read?.spanId).toBe("s3"); // existing span shape intact (backward-compat)
   });
 
+  it("test_integration_claude_perf_cache_roundtrip", async () => {
+    // M34: TTFT + prompt-cache token columns round-trip through save → read.
+    await repo.save([
+      span({
+        spanId: "llm1",
+        traceId: "tllm",
+        name: "claude_code.llm_request",
+        ttftMs: 10741,
+        cacheReadTokens: 14503,
+        cacheCreationTokens: 671522,
+      }),
+    ]);
+    const read = await repo.getBySpanId("llm1");
+    expect(read?.ttftMs).toBe(10741);
+    expect(read?.cacheReadTokens).toBe(14503);
+    expect(read?.cacheCreationTokens).toBe(671522);
+    // backward-compat: a span without them reads them as absent.
+    await repo.save([span({ spanId: "plain", traceId: "tplain" })]);
+    const plain = await repo.getBySpanId("plain");
+    expect(plain?.ttftMs).toBeUndefined();
+    expect(plain?.cacheCreationTokens).toBeUndefined();
+  });
+
+  it("test_integration_claude_tool_appears_in_tool_stats", async () => {
+    // M34: a `claude_code.tool` child span carrying toolName classifies + shows in
+    // Tools; the root llm_request (no toolName) must NOT pollute tool stats.
+    await repo.save([
+      span({
+        spanId: "llm2",
+        traceId: "ttool",
+        name: "claude_code.llm_request",
+        model: "claude-opus-4-8",
+      }),
+      span({
+        spanId: "tool1",
+        traceId: "ttool",
+        parentSpanId: "llm2",
+        name: "claude_code.tool",
+        toolName: "Bash",
+        inputValue: "echo x",
+        outputValue: "x\n",
+      }),
+    ]);
+    const stats = await repo.aggregateToolStats();
+    expect(stats.tools.map((t) => t.toolName)).toContain("Bash");
+    expect(stats.tools.map((t) => t.toolName)).not.toContain(
+      "claude_code.llm_request",
+    );
+    // the tool span round-trips its typed fields through the tree (child of llm2).
+    const tree = await repo.getTraceTree("ttool");
+    const toolNode = tree?.children.find((c) => c.spanId === "tool1");
+    expect(toolNode?.toolName).toBe("Bash");
+    expect(toolNode?.inputValue).toBe("echo x");
+    expect(toolNode?.outputValue).toBe("x\n");
+  });
+
   it("test_integration_get_trace_tree_returns_rich_fields", async () => {
     await repo.save([
       span({ spanId: "root", traceId: "tt", inputValue: "in", outputValue: "out" }),

@@ -55,6 +55,46 @@ describe("SpanInfoPanel", () => {
     expect(screen.getByText(/in 100 \/ out 50/)).toBeInTheDocument();
   });
 
+  it("test_span_info_shows_ttft_and_cache", () => {
+    // M34: a Claude Code llm_request span surfaces TTFT + cache token counts.
+    const claudeLlm: SpanNodeData = {
+      ...rich,
+      ttftMs: 10741,
+      cacheReadTokens: 14503,
+      cacheCreationTokens: 671522,
+    };
+    render(withTheme(<SpanInfoPanel span={claudeLlm} />));
+    expect(screen.getByText("TTFT")).toBeInTheDocument();
+    // TTFT uses the same ms format as the Duration row (panel-consistent).
+    expect(screen.getByText("10741 ms")).toBeInTheDocument();
+    expect(screen.getByText("Cache tokens")).toBeInTheDocument();
+    expect(screen.getByText(/read 14503 \/ created 671522/)).toBeInTheDocument();
+  });
+
+  it("test_span_info_classifies_claude_tool_by_typed_toolname", () => {
+    // M34/F-arch-1: a `claude_code.tool` span carries the typed `toolName` column
+    // (NOT a `gen_ai.tool.name` attribute) — the kind badge must still read "tool".
+    const claudeTool: SpanNodeData = {
+      spanId: "t",
+      traceId: "t1",
+      name: "claude_code.tool",
+      startTimeUnixNano: "1700000000000000000",
+      endTimeUnixNano: "1700000000010000000",
+      toolName: "Bash",
+      inputValue: "echo x",
+      outputValue: "x\n",
+    };
+    render(withTheme(<SpanInfoPanel span={claudeTool} />));
+    expect(screen.getByText("tool")).toBeInTheDocument();
+  });
+
+  it("test_span_info_omits_ttft_cache_when_absent", () => {
+    // a non-Claude span has neither → no TTFT/Cache rows (no "undefined" leak).
+    render(withTheme(<SpanInfoPanel span={rich} />));
+    expect(screen.queryByText("TTFT")).not.toBeInTheDocument();
+    expect(screen.queryByText("Cache tokens")).not.toBeInTheDocument();
+  });
+
   it("span_info_panel_attributes_and_events_tabs", async () => {
     const user = userEvent.setup();
     render(withTheme(<SpanInfoPanel span={rich} />));

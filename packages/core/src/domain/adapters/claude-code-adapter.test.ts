@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { claudeCodeAdapter } from "./claude-code-adapter.js";
+import { defaultAdapter } from "./default-adapter.js";
 import { selectAdapter } from "./registry.js";
 import { computeTraceCost } from "../pricing.js";
 import { resolveModelPrice } from "../pricing.js";
@@ -80,5 +81,149 @@ describe("claudeCodeAdapter (M15 D2/D3)", () => {
 
   it("test_select_adapter_picks_claude_by_service_name", () => {
     expect(selectAdapter({ "service.name": "claude-code" }).name).toBe("claude-code");
+  });
+
+  // ── M34: beta-trace content (tool I/O + name, TTFT + cache) ──────────────────
+
+  it("test_claude_tool_span_maps_name_input_output_bash", () => {
+    const out = claudeCodeAdapter.extract(
+      { tool_name: "Bash", full_command: "echo x" },
+      "claude_code.tool",
+      [{ name: "tool.output", attributes: { output: "x\n", bash_command: "echo x" } }],
+    );
+    expect(out.toolName).toBe("Bash");
+    expect(out.inputValue).toBe("echo x");
+    expect(out.outputValue).toBe("x\n");
+  });
+
+  it("test_claude_tool_output_variants", () => {
+    // Read → content; Edit → diff; Write (capped) → __truncated.
+    const read = claudeCodeAdapter.extract(
+      { tool_name: "Read", file_path: "/p" },
+      "claude_code.tool",
+      [{ name: "tool.output", attributes: { content: "file body", file_path: "/p" } }],
+    );
+    expect(read.outputValue).toBe("file body");
+
+    const edit = claudeCodeAdapter.extract(
+      { tool_name: "Edit", file_path: "/p" },
+      "claude_code.tool",
+      [{ name: "tool.output", attributes: { diff: "@@ -1 +1 @@", file_path: "/p" } }],
+    );
+    expect(edit.outputValue).toBe("@@ -1 +1 @@");
+
+    const write = claudeCodeAdapter.extract(
+      { tool_name: "Write", file_path: "/p" },
+      "claude_code.tool",
+      [{ name: "tool.output", attributes: { __truncated: "…(truncated 60KB)" } }],
+    );
+    expect(write.outputValue).toBe("…(truncated 60KB)");
+  });
+
+  it("test_claude_tool_input_from_file_path", () => {
+    const out = claudeCodeAdapter.extract(
+      { tool_name: "Write", file_path: "/p" },
+      "claude_code.tool",
+    );
+    expect(out.toolName).toBe("Write");
+    expect(out.inputValue).toBe("/p");
+  });
+
+  it("test_claude_llm_request_ttft_and_cache", () => {
+    // OTLP intValue flattens to a string; the adapter coerces it.
+    const out = claudeCodeAdapter.extract(
+      {
+        ttft_ms: "10741",
+        cache_read_tokens: "14503",
+        cache_creation_tokens: "671522",
+      },
+      "claude_code.llm_request",
+    );
+    expect(out.ttftMs).toBe(10741);
+    expect(out.cacheReadTokens).toBe(14503);
+    expect(out.cacheCreationTokens).toBe(671522);
+  });
+
+  it("test_claude_tool_degrades_when_no_output_event", () => {
+    const out = claudeCodeAdapter.extract(
+      { tool_name: "ToolSearch" },
+      "claude_code.tool",
+    );
+    expect(out.toolName).toBe("ToolSearch");
+    expect(out.outputValue).toBeUndefined();
+    expect(out.inputValue).toBeUndefined();
+  });
+
+  it("test_claude_tool_output_first_match_wins_priority", () => {
+    // The result key order is output > content > diff > __truncated; a real result
+    // must beat the cap marker. One event carrying several keys → the first wins.
+    const all = claudeCodeAdapter.extract(
+      { tool_name: "Bash" },
+      "claude_code.tool",
+      [{ name: "tool.output", attributes: { output: "A", content: "B", diff: "C", __truncated: "M" } }],
+    );
+    expect(all.outputValue).toBe("A");
+    const noOutput = claudeCodeAdapter.extract(
+      { tool_name: "Read" },
+      "claude_code.tool",
+      [{ name: "tool.output", attributes: { content: "B", __truncated: "M" } }],
+    );
+    expect(noOutput.outputValue).toBe("B"); // __truncated is lowest priority
+  });
+
+  it("test_claude_tool_ignores_non_output_events_and_unknown_keys", () => {
+    // Only a `tool.output` event yields output; an unknown content key yields none.
+    const wrongName = claudeCodeAdapter.extract(
+      { tool_name: "Bash" },
+      "claude_code.tool",
+      [{ name: "chunk", attributes: { output: "leak" } }],
+    );
+    expect(wrongName.outputValue).toBeUndefined();
+    const unknownKey = claudeCodeAdapter.extract(
+      { tool_name: "Bash" },
+      "claude_code.tool",
+      [{ name: "tool.output", attributes: { weird: "v" } }],
+    );
+    expect(unknownKey.outputValue).toBeUndefined();
+  });
+
+  it("test_claude_input_priority_user_prompt_over_command_over_path", () => {
+    // user_prompt > full_command > file_path.
+    expect(
+      claudeCodeAdapter.extract(
+        { tool_name: "X", full_command: "cmd", file_path: "/p" },
+        "claude_code.tool",
+      ).inputValue,
+    ).toBe("cmd");
+    expect(
+      claudeCodeAdapter.extract(
+        { user_prompt: "P", full_command: "cmd" },
+        "claude_code.interaction",
+      ).inputValue,
+    ).toBe("P");
+  });
+
+  it("test_claude_tool_output_is_capped", () => {
+    // M12 cap still applies to tool output from the event (8192 code points + marker).
+    const huge = "x".repeat(20_000);
+    const out = claudeCodeAdapter.extract(
+      { tool_name: "Bash" },
+      "claude_code.tool",
+      [{ name: "tool.output", attributes: { output: huge } }],
+    );
+    expect([...out.outputValue!].length).toBeLessThanOrEqual(
+      8192 + "…[truncated]".length,
+    );
+    expect(out.outputValue!.endsWith("…[truncated]")).toBe(true);
+  });
+
+  it("test_default_adapter_ignores_events", () => {
+    const attrs = { "gen_ai.request.model": "gpt-4o", "input.value": "hi" };
+    const withEvents = defaultAdapter.extract(attrs, "llm", [
+      { name: "tool.output", attributes: { output: "should be ignored" } },
+    ]);
+    const without = defaultAdapter.extract(attrs, "llm");
+    expect(withEvents).toEqual(without);
+    expect(withEvents.outputValue).toBeUndefined();
   });
 });

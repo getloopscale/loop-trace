@@ -19,6 +19,12 @@ describe("deriveSpanKind (M10)", () => {
     expect(deriveSpanKind(node({ spanId: "b", attributes: { "gen_ai.operation.name": "execute_tool" } }))).toBe("tool");
   });
 
+  it("test_derive_span_kind_tool_from_typed_toolname_column", () => {
+    // M34/F-arch-1: a Claude Code tool span carries the typed `toolName` column and
+    // NO `gen_ai.tool.name` attribute — it must still classify as "tool".
+    expect(deriveSpanKind(node({ spanId: "c", toolName: "Bash" }))).toBe("tool");
+  });
+
   it("test_derive_span_kind_llm_from_operation_or_model", () => {
     expect(deriveSpanKind(node({ spanId: "a", attributes: { "gen_ai.operation.name": "chat" } }))).toBe("llm");
     expect(deriveSpanKind(node({ spanId: "b", model: "gpt-4o" }))).toBe("llm");

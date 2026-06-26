@@ -258,6 +258,68 @@ describe("parseResourceSpans", () => {
     expect(out?.attributes).toEqual({ "span.type": "interaction" });
   });
 
+  it("test_parse_claude_tool_maps_name_input_output_from_event", () => {
+    // M34: a `claude_code.tool` span → toolName (classifies as a tool), inputValue
+    // from full_command, outputValue from the `tool.output` event's `output` key.
+    const toolSpan = {
+      ...rawSpan,
+      name: "claude_code.tool",
+      attributes: [
+        { key: "tool_name", value: { stringValue: "Bash" } },
+        { key: "full_command", value: { stringValue: "echo x" } },
+      ],
+      events: [
+        {
+          name: "tool.output",
+          timeUnixNano: "1700000000050000000",
+          attributes: [
+            { key: "output", value: { stringValue: "x\n" } },
+            { key: "bash_command", value: { stringValue: "echo x" } },
+          ],
+        },
+      ],
+    };
+    const span = parseResourceSpans(envelopeWithService("claude-code", [toolSpan]))[0];
+    expect(span?.toolName).toBe("Bash");
+    expect(span?.inputValue).toBe("echo x");
+    expect(span?.outputValue).toBe("x\n");
+    // move-not-copy: the uncapped tool input is stripped from the persisted bag.
+    expect(span?.attributes).not.toHaveProperty("full_command");
+  });
+
+  it("test_parse_claude_tool_strips_file_path_from_bag_when_mapped", () => {
+    // M34/PII: a Read/Write/Edit tool's `file_path` → inputValue; the uncapped
+    // source key must NOT remain in the persisted attributes bag (move-not-copy).
+    const toolSpan = {
+      ...rawSpan,
+      name: "claude_code.tool",
+      attributes: [
+        { key: "tool_name", value: { stringValue: "Read" } },
+        { key: "file_path", value: { stringValue: "/secret/path" } },
+      ],
+    };
+    const span = parseResourceSpans(envelopeWithService("claude-code", [toolSpan]))[0];
+    expect(span?.inputValue).toBe("/secret/path");
+    expect(span?.attributes).not.toHaveProperty("file_path");
+  });
+
+  it("test_parse_claude_llm_ttft_and_cache", () => {
+    // M34: TTFT + prompt-cache token counts (OTLP intValue → string → coerced int).
+    const llmSpan = {
+      ...rawSpan,
+      name: "claude_code.llm_request",
+      attributes: [
+        { key: "ttft_ms", value: { intValue: "10741" } },
+        { key: "cache_read_tokens", value: { intValue: "14503" } },
+        { key: "cache_creation_tokens", value: { intValue: "671522" } },
+      ],
+    };
+    const span = parseResourceSpans(envelopeWithService("claude-code", [llmSpan]))[0];
+    expect(span?.ttftMs).toBe(10741);
+    expect(span?.cacheReadTokens).toBe(14503);
+    expect(span?.cacheCreationTokens).toBe(671522);
+  });
+
   it("test_parse_uses_default_adapter_for_generic_service", () => {
     // a generic gen_ai producer: bare input_tokens must NOT be read (default only
     // reads gen_ai.usage.*) — proves the claude mapping does not leak to others.
