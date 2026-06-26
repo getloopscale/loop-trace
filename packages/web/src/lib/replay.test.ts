@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { buildReplaySteps } from "./replay.js";
-import type { TraceTreeNode } from "../api/types.js";
+import { buildReplaySteps, initialStepIndex } from "./replay.js";
+import type { SpanNodeData, TraceTreeNode } from "../api/types.js";
 
 function node(
   spanId: string,
@@ -61,5 +61,41 @@ describe("buildReplaySteps", () => {
     expect(ids.length).toBe(5);
     expect(new Set(ids).size).toBe(5); // no duplicates
     expect([...ids].sort()).toEqual(["a", "a1", "b", "orphan", "root"]);
+  });
+});
+
+describe("initialStepIndex (M35)", () => {
+  const step = (spanId: string, io?: Partial<SpanNodeData>): SpanNodeData => ({
+    spanId,
+    traceId: "t",
+    name: spanId,
+    startTimeUnixNano: "0",
+    endTimeUnixNano: "0",
+    ...io,
+  });
+
+  it("test_initial_step_index_picks_first_span_with_io", () => {
+    // Claude shape: root llm_request (no I/O) then a tool with input+output.
+    const steps = [
+      step("llm"),
+      step("tool", { inputValue: "echo x", outputValue: "x\n" }),
+      step("tool2", { inputValue: "ls" }),
+    ];
+    expect(initialStepIndex(steps)).toBe(1);
+  });
+
+  it("test_initial_step_index_zero_when_root_has_io", () => {
+    // Non-Claude shape (demo/langfuse): the root carries the I/O → no regression.
+    const steps = [step("root", { inputValue: "q", outputValue: "a" }), step("child")];
+    expect(initialStepIndex(steps)).toBe(0);
+  });
+
+  it("test_initial_step_index_zero_when_none_have_io", () => {
+    expect(initialStepIndex([step("a"), step("b"), step("c")])).toBe(0);
+  });
+
+  it("test_initial_step_index_matches_output_only_span", () => {
+    // output without input still counts as I/O-bearing.
+    expect(initialStepIndex([step("a"), step("b", { outputValue: "r" })])).toBe(1);
   });
 });
