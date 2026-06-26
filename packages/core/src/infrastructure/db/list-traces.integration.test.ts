@@ -286,6 +286,65 @@ suite("listTraces enrichment (integration, M18)", () => {
     expect(row?.rootToolName).toBeUndefined();
   });
 
+  it("test_list_representative_io_picks_earliest_child_by_start", async () => {
+    // M35 tie-break: root has no I/O; two children both carry I/O, inserted out of
+    // start order → the EARLIEST by start_time wins (the secondary ORDER BY), not
+    // insertion order. Real Claude traces have many tool children.
+    await repo.save([
+      span({
+        spanId: "llm",
+        traceId: "t-tie",
+        name: "claude_code.llm_request",
+        startTimeUnixNano: "1700000000000000000",
+        model: "claude-opus-4-8",
+      }),
+      span({
+        spanId: "later",
+        traceId: "t-tie",
+        parentSpanId: "llm",
+        startTimeUnixNano: "1700000000050000000",
+        inputValue: "LATER cmd",
+        outputValue: "later out",
+      }),
+      span({
+        spanId: "earlier",
+        traceId: "t-tie",
+        parentSpanId: "llm",
+        startTimeUnixNano: "1700000000030000000",
+        inputValue: "EARLIER cmd",
+        outputValue: "earlier out",
+      }),
+    ]);
+    const { traces } = await repo.listTraces({});
+    const row = traces.find((t) => t.traceId === "t-tie");
+    expect(row?.inputPreview).toBe("EARLIER cmd"); // start 030 < 050
+    expect(row?.outputPreview).toBe("earlier out");
+  });
+
+  it("test_list_representative_io_handles_output_only_child", async () => {
+    // M35: the WHERE admits one-sided I/O (input OR output) — a child with ONLY
+    // output (no input) is a valid representative; inputPreview stays absent.
+    await repo.save([
+      span({
+        spanId: "llm",
+        traceId: "t-outonly",
+        name: "claude_code.llm_request",
+        startTimeUnixNano: "1700000000000000000",
+      }),
+      span({
+        spanId: "tool",
+        traceId: "t-outonly",
+        parentSpanId: "llm",
+        startTimeUnixNano: "1700000000050000000",
+        outputValue: "result only",
+      }),
+    ]);
+    const { traces } = await repo.listTraces({});
+    const row = traces.find((t) => t.traceId === "t-outonly");
+    expect(row?.outputPreview).toBe("result only");
+    expect(row?.inputPreview).toBeUndefined();
+  });
+
   it("test_list_no_io_anywhere_omits_preview", async () => {
     // M35: a trace whose spans carry no input/output at all → preview omitted.
     await repo.save([

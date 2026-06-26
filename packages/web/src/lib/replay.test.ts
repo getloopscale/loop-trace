@@ -94,6 +94,10 @@ describe("initialStepIndex (M35)", () => {
     expect(initialStepIndex([step("a"), step("b"), step("c")])).toBe(0);
   });
 
+  it("test_initial_step_index_zero_for_empty_steps", () => {
+    expect(initialStepIndex([])).toBe(0); // findIndex → -1, no crash
+  });
+
   it("test_initial_step_index_matches_output_only_span", () => {
     // output without input still counts as I/O-bearing.
     expect(initialStepIndex([step("a"), step("b", { outputValue: "r" })])).toBe(1);
