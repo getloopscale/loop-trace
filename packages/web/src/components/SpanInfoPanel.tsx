@@ -42,7 +42,8 @@ export function SpanInfoPanel({ span }: { span: SpanNodeData }) {
   // authoritative kind view (it has the full node with children); this badge is a hint.
   const kind = deriveKindFromSignals({
     operationName: strAttr(span.attributes, "gen_ai.operation.name"),
-    toolName: strAttr(span.attributes, "gen_ai.tool.name"),
+    // M34: typed `toolName` column wins (Claude Code's `tool_name`), attr is fallback.
+    toolName: span.toolName ?? strAttr(span.attributes, "gen_ai.tool.name"),
     model: span.model ?? undefined,
     hasChildren: false,
   });

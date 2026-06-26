@@ -533,9 +533,13 @@ export class DrizzleSpanRepository implements SpanRepository {
         operationName: sql<
           string | null
         >`${spans.attributes}->>'gen_ai.operation.name'`.as("op_name"),
+        // M34: the typed `tool_name` column (Claude Code's `tool_name`) wins; fall
+        // back to the `gen_ai.tool.name` attribute for producers that only emit it.
         toolName: sql<
           string | null
-        >`${spans.attributes}->>'gen_ai.tool.name'`.as("tool_name"),
+        >`coalesce(${spans.toolName}, ${spans.attributes}->>'gen_ai.tool.name')`.as(
+          "tool_name",
+        ),
         inputValue: spans.inputValue,
         outputValue: spans.outputValue,
       })

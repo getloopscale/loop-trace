@@ -102,11 +102,19 @@ suite("rich span detail persistence (integration, M12)", () => {
   });
 
   it("test_integration_claude_tool_appears_in_tool_stats", async () => {
-    // M34: a `claude_code.tool` span carrying toolName classifies + shows in Tools.
+    // M34: a `claude_code.tool` child span carrying toolName classifies + shows in
+    // Tools; the root llm_request (no toolName) must NOT pollute tool stats.
     await repo.save([
+      span({
+        spanId: "llm2",
+        traceId: "ttool",
+        name: "claude_code.llm_request",
+        model: "claude-opus-4-8",
+      }),
       span({
         spanId: "tool1",
         traceId: "ttool",
+        parentSpanId: "llm2",
         name: "claude_code.tool",
         toolName: "Bash",
         inputValue: "echo x",
@@ -115,10 +123,15 @@ suite("rich span detail persistence (integration, M12)", () => {
     ]);
     const stats = await repo.aggregateToolStats();
     expect(stats.tools.map((t) => t.toolName)).toContain("Bash");
+    expect(stats.tools.map((t) => t.toolName)).not.toContain(
+      "claude_code.llm_request",
+    );
+    // the tool span round-trips its typed fields through the tree (child of llm2).
     const tree = await repo.getTraceTree("ttool");
-    expect(tree?.toolName).toBe("Bash");
-    expect(tree?.inputValue).toBe("echo x");
-    expect(tree?.outputValue).toBe("x\n");
+    const toolNode = tree?.children.find((c) => c.spanId === "tool1");
+    expect(toolNode?.toolName).toBe("Bash");
+    expect(toolNode?.inputValue).toBe("echo x");
+    expect(toolNode?.outputValue).toBe("x\n");
   });
 
   it("test_integration_get_trace_tree_returns_rich_fields", async () => {

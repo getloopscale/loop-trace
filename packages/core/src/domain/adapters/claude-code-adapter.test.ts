@@ -154,6 +154,69 @@ describe("claudeCodeAdapter (M15 D2/D3)", () => {
     expect(out.inputValue).toBeUndefined();
   });
 
+  it("test_claude_tool_output_first_match_wins_priority", () => {
+    // The result key order is output > content > diff > __truncated; a real result
+    // must beat the cap marker. One event carrying several keys → the first wins.
+    const all = claudeCodeAdapter.extract(
+      { tool_name: "Bash" },
+      "claude_code.tool",
+      [{ name: "tool.output", attributes: { output: "A", content: "B", diff: "C", __truncated: "M" } }],
+    );
+    expect(all.outputValue).toBe("A");
+    const noOutput = claudeCodeAdapter.extract(
+      { tool_name: "Read" },
+      "claude_code.tool",
+      [{ name: "tool.output", attributes: { content: "B", __truncated: "M" } }],
+    );
+    expect(noOutput.outputValue).toBe("B"); // __truncated is lowest priority
+  });
+
+  it("test_claude_tool_ignores_non_output_events_and_unknown_keys", () => {
+    // Only a `tool.output` event yields output; an unknown content key yields none.
+    const wrongName = claudeCodeAdapter.extract(
+      { tool_name: "Bash" },
+      "claude_code.tool",
+      [{ name: "chunk", attributes: { output: "leak" } }],
+    );
+    expect(wrongName.outputValue).toBeUndefined();
+    const unknownKey = claudeCodeAdapter.extract(
+      { tool_name: "Bash" },
+      "claude_code.tool",
+      [{ name: "tool.output", attributes: { weird: "v" } }],
+    );
+    expect(unknownKey.outputValue).toBeUndefined();
+  });
+
+  it("test_claude_input_priority_user_prompt_over_command_over_path", () => {
+    // user_prompt > full_command > file_path.
+    expect(
+      claudeCodeAdapter.extract(
+        { tool_name: "X", full_command: "cmd", file_path: "/p" },
+        "claude_code.tool",
+      ).inputValue,
+    ).toBe("cmd");
+    expect(
+      claudeCodeAdapter.extract(
+        { user_prompt: "P", full_command: "cmd" },
+        "claude_code.interaction",
+      ).inputValue,
+    ).toBe("P");
+  });
+
+  it("test_claude_tool_output_is_capped", () => {
+    // M12 cap still applies to tool output from the event (8192 code points + marker).
+    const huge = "x".repeat(20_000);
+    const out = claudeCodeAdapter.extract(
+      { tool_name: "Bash" },
+      "claude_code.tool",
+      [{ name: "tool.output", attributes: { output: huge } }],
+    );
+    expect([...out.outputValue!].length).toBeLessThanOrEqual(
+      8192 + "…[truncated]".length,
+    );
+    expect(out.outputValue!.endsWith("…[truncated]")).toBe(true);
+  });
+
   it("test_default_adapter_ignores_events", () => {
     const attrs = { "gen_ai.request.model": "gpt-4o", "input.value": "hi" };
     const withEvents = defaultAdapter.extract(attrs, "llm", [

@@ -92,6 +92,8 @@ export interface SpanNodeData {
   provider?: string;
   inputTokens?: number;
   outputTokens?: number;
+  /** Tool name (typed column — `gen_ai.tool.name` or Claude's `tool_name`, M34). */
+  toolName?: string;
   sessionId?: string;
   /** Span input text (`input.value`), capped at ingest (M12). */
   inputValue?: string;

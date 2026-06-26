@@ -65,9 +65,27 @@ describe("SpanInfoPanel", () => {
     };
     render(withTheme(<SpanInfoPanel span={claudeLlm} />));
     expect(screen.getByText("TTFT")).toBeInTheDocument();
-    expect(screen.getByText(/10\.74s|10741/)).toBeInTheDocument();
+    // TTFT uses the same ms format as the Duration row (panel-consistent).
+    expect(screen.getByText("10741 ms")).toBeInTheDocument();
     expect(screen.getByText("Cache tokens")).toBeInTheDocument();
     expect(screen.getByText(/read 14503 \/ created 671522/)).toBeInTheDocument();
+  });
+
+  it("test_span_info_classifies_claude_tool_by_typed_toolname", () => {
+    // M34/F-arch-1: a `claude_code.tool` span carries the typed `toolName` column
+    // (NOT a `gen_ai.tool.name` attribute) — the kind badge must still read "tool".
+    const claudeTool: SpanNodeData = {
+      spanId: "t",
+      traceId: "t1",
+      name: "claude_code.tool",
+      startTimeUnixNano: "1700000000000000000",
+      endTimeUnixNano: "1700000000010000000",
+      toolName: "Bash",
+      inputValue: "echo x",
+      outputValue: "x\n",
+    };
+    render(withTheme(<SpanInfoPanel span={claudeTool} />));
+    expect(screen.getByText("tool")).toBeInTheDocument();
   });
 
   it("test_span_info_omits_ttft_cache_when_absent", () => {

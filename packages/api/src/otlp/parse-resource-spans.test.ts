@@ -287,6 +287,22 @@ describe("parseResourceSpans", () => {
     expect(span?.attributes).not.toHaveProperty("full_command");
   });
 
+  it("test_parse_claude_tool_strips_file_path_from_bag_when_mapped", () => {
+    // M34/PII: a Read/Write/Edit tool's `file_path` → inputValue; the uncapped
+    // source key must NOT remain in the persisted attributes bag (move-not-copy).
+    const toolSpan = {
+      ...rawSpan,
+      name: "claude_code.tool",
+      attributes: [
+        { key: "tool_name", value: { stringValue: "Read" } },
+        { key: "file_path", value: { stringValue: "/secret/path" } },
+      ],
+    };
+    const span = parseResourceSpans(envelopeWithService("claude-code", [toolSpan]))[0];
+    expect(span?.inputValue).toBe("/secret/path");
+    expect(span?.attributes).not.toHaveProperty("file_path");
+  });
+
   it("test_parse_claude_llm_ttft_and_cache", () => {
     // M34: TTFT + prompt-cache token counts (OTLP intValue → string → coerced int).
     const llmSpan = {

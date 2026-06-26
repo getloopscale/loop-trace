@@ -61,7 +61,9 @@ export function deriveKindFromSignals(s: KindSignals): SpanKind {
 export function deriveSpanKind(span: TraceTreeNode): SpanKind {
   return deriveKindFromSignals({
     operationName: attr(span, "gen_ai.operation.name"),
-    toolName: attr(span, "gen_ai.tool.name"),
+    // M34: the typed `toolName` column (set from `tool_name` for Claude Code, or
+    // `gen_ai.tool.name` for others) wins; fall back to the attr for legacy spans.
+    toolName: span.toolName ?? attr(span, "gen_ai.tool.name"),
     model: span.model ?? undefined,
     hasChildren: span.children.length > 0,
   });
