@@ -31,6 +31,22 @@ describe("useReplay", () => {
     expect(result.current.index).toBe(2);
   });
 
+  it("test_use_replay_honors_initial_index", () => {
+    // M35: opens at the given index (the first I/O-bearing span), can step back to 0.
+    const { result } = renderHook(() => useReplay(steps, 2));
+    expect(result.current.index).toBe(2);
+    expect(result.current.active?.spanId).toBe("c");
+    act(() => result.current.prev());
+    expect(result.current.active?.spanId).toBe("b");
+  });
+
+  it("test_use_replay_defaults_initial_index_zero", () => {
+    // no-regression: without the arg, opens at the root (index 0).
+    const { result } = renderHook(() => useReplay(steps));
+    expect(result.current.index).toBe(0);
+    expect(result.current.active?.spanId).toBe("a");
+  });
+
   it("useReplay_resets_and_clamps_when_steps_change_to_a_new_session", () => {
     const { result, rerender } = renderHook(({ s }) => useReplay(s), {
       initialProps: { s: steps },

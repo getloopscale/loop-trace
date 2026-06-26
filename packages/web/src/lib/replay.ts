@@ -37,3 +37,18 @@ export function buildReplaySteps(root: TraceTreeNode): SpanNodeData[] {
   walk(root);
   return steps;
 }
+
+/**
+ * The replay index the trace detail should OPEN on (M35): the first step that has
+ * input/output text, else 0. A Claude Code trace's root is `claude_code.llm_request`
+ * (no I/O — the LLM body is not emitted), but its `claude_code.tool` children carry
+ * the real command + result; opening on the first I/O-bearing step surfaces that
+ * content without the user hunting for it. A trace whose root DOES have I/O (demo /
+ * langfuse) returns 0 — no regression. Pure; the replay ORDER is unchanged.
+ */
+export function initialStepIndex(steps: readonly SpanNodeData[]): number {
+  const i = steps.findIndex(
+    (s) => s.inputValue != null || s.outputValue != null,
+  );
+  return i >= 0 ? i : 0;
+}

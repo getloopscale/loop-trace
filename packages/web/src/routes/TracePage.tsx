@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useTraceTree } from "../hooks/useTraces.js";
 import { useReplay } from "../hooks/useReplay.js";
 import { useTraceCost } from "../hooks/useCost.js";
-import { buildReplaySteps } from "../lib/replay.js";
+import { buildReplaySteps, initialStepIndex } from "../lib/replay.js";
 import { formatUsd } from "../lib/money.js";
 import { ApiError, recordReplaySession } from "../api/client.js";
 import { SpanTree } from "../components/SpanTree.js";
@@ -25,7 +25,10 @@ export function TracePage() {
 
   // Hooks run unconditionally (steps is empty until data arrives).
   const steps = useMemo(() => (data ? buildReplaySteps(data) : []), [data]);
-  const { index, active, next, prev, jumpTo } = useReplay(steps);
+  // M35: open on the first span that has I/O (a Claude Code trace's root
+  // llm_request has none — its tool children carry the command + result), else 0.
+  const startIndex = useMemo(() => initialStepIndex(steps), [steps]);
+  const { index, active, next, prev, jumpTo } = useReplay(steps, startIndex);
   // Per-trace cost is supplementary (M5 DoD #3) — never blocks the tree/replay.
   const { data: cost } = useTraceCost(traceId);
 

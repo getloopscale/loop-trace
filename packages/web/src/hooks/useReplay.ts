@@ -16,14 +16,15 @@ export interface Replay {
  * steps without re-creating the handlers each render), so a keyboard listener can
  * depend on them safely. `index` is clamped so a shrinking `steps` never overruns.
  */
-export function useReplay(steps: SpanNodeData[]): Replay {
-  const [index, setIndex] = useState(0);
+export function useReplay(steps: SpanNodeData[], initialIndex = 0): Replay {
+  const [index, setIndex] = useState(initialIndex);
   const stepsRef = useRef(steps);
   stepsRef.current = steps;
 
-  // A new session (new steps array) restarts replay at step 1 — without this a stale
-  // index would carry over when navigating between traces (review F-fe-3).
-  useEffect(() => setIndex(0), [steps]);
+  // A new session (new steps array) restarts replay at the initial step — M35: the
+  // first I/O-bearing span (else the root). Without this a stale index would carry
+  // over when navigating between traces (review F-fe-3).
+  useEffect(() => setIndex(initialIndex), [steps, initialIndex]);
 
   const next = useCallback(
     () => setIndex((i) => Math.min(i + 1, stepsRef.current.length - 1)),
