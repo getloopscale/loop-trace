@@ -10,7 +10,6 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 ### Changed
-- Trace detail now opens on the first span that actually has input/output instead of the trace's root — so a Claude Code trace shows its first tool's command + result immediately (the root `llm_request` carries no I/O), without hunting through the tree. The executions list's input/output preview likewise comes from a representative span: the root when it has I/O, otherwise the earliest child that does. Non-Claude traces (whose root carries the I/O) are unchanged (M35)
 
 ### Deprecated
 
@@ -19,6 +18,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 ### Security
+
+## [0.35.0] - 2026-06-26
+
+### Changed
+- Trace detail now opens on the first span that actually has input/output instead of the trace's root — so a Claude Code trace shows its first tool's command + result immediately (the root `llm_request` carries no I/O), without hunting through the tree. The executions list's input/output preview likewise comes from a representative span: the root when it has I/O, otherwise the earliest child that does. Non-Claude traces (whose root carries the I/O) are unchanged (M35)
 
 ## [0.34.0] - 2026-06-26
 
