@@ -97,6 +97,12 @@ export interface SpanNodeData {
   inputValue?: string;
   /** Span output text (`output.value`), capped at ingest (M12). */
   outputValue?: string;
+  /** Time-to-first-token in ms (Claude Code `ttft_ms`, M34). */
+  ttftMs?: number;
+  /** Prompt-cache read tokens (Claude Code, M34). */
+  cacheReadTokens?: number;
+  /** Prompt-cache creation tokens (Claude Code, M34). */
+  cacheCreationTokens?: number;
   /** OTLP span events, capped at ingest (M12). */
   events?: SpanEvent[];
   /** Online-eval results extracted at ingest (`eval.<name>.*`, M26). */

@@ -55,6 +55,28 @@ describe("SpanInfoPanel", () => {
     expect(screen.getByText(/in 100 \/ out 50/)).toBeInTheDocument();
   });
 
+  it("test_span_info_shows_ttft_and_cache", () => {
+    // M34: a Claude Code llm_request span surfaces TTFT + cache token counts.
+    const claudeLlm: SpanNodeData = {
+      ...rich,
+      ttftMs: 10741,
+      cacheReadTokens: 14503,
+      cacheCreationTokens: 671522,
+    };
+    render(withTheme(<SpanInfoPanel span={claudeLlm} />));
+    expect(screen.getByText("TTFT")).toBeInTheDocument();
+    expect(screen.getByText(/10\.74s|10741/)).toBeInTheDocument();
+    expect(screen.getByText("Cache tokens")).toBeInTheDocument();
+    expect(screen.getByText(/read 14503 \/ created 671522/)).toBeInTheDocument();
+  });
+
+  it("test_span_info_omits_ttft_cache_when_absent", () => {
+    // a non-Claude span has neither → no TTFT/Cache rows (no "undefined" leak).
+    render(withTheme(<SpanInfoPanel span={rich} />));
+    expect(screen.queryByText("TTFT")).not.toBeInTheDocument();
+    expect(screen.queryByText("Cache tokens")).not.toBeInTheDocument();
+  });
+
   it("span_info_panel_attributes_and_events_tabs", async () => {
     const user = userEvent.setup();
     render(withTheme(<SpanInfoPanel span={rich} />));

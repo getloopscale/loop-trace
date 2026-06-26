@@ -27,6 +27,11 @@ export function SpanInfoPanel({ span }: { span: SpanNodeData }) {
   const dur = durationMs(span.startTimeUnixNano, span.endTimeUnixNano);
   const hasModel = span.model != null || span.provider != null;
   const hasTokens = span.inputTokens != null || span.outputTokens != null;
+  // M34: Claude Code perf/cost signals — rendered ONLY when present (absent for
+  // other producers, so no "undefined" rows leak into a generic span's info).
+  const hasTtft = span.ttftMs != null;
+  const hasCache =
+    span.cacheReadTokens != null || span.cacheCreationTokens != null;
   const hasEvents = span.events != null && span.events.length > 0;
   const hasEvals = span.evaluations != null && span.evaluations.length > 0;
   const hasAttrs =
@@ -87,6 +92,25 @@ export function SpanInfoPanel({ span }: { span: SpanNodeData }) {
             </p>
           ) : (
             <EmptyState message="No token usage" />
+          )}
+          {hasTtft && (
+            <>
+              <h3 className="mb-1 mt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                TTFT
+              </h3>
+              <p className="text-sm">{formatDuration(span.ttftMs!)}</p>
+            </>
+          )}
+          {hasCache && (
+            <>
+              <h3 className="mb-1 mt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Cache tokens
+              </h3>
+              <p className="text-sm">
+                read {span.cacheReadTokens ?? 0} / created{" "}
+                {span.cacheCreationTokens ?? 0}
+              </p>
+            </>
           )}
         </Tabs.Content>
 
