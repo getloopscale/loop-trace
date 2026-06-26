@@ -97,18 +97,24 @@ export function parseResourceSpans(envelope: unknown): Span[] {
           | undefined;
         const attrs =
           r["attributes"] != null ? flattenAttrs(r["attributes"]) : undefined;
-        const genai = adapter.extract(attrs, String(r["name"] ?? ""));
+        // M12 (D3): OTLP span events are parsed (capped) — previously dropped. M34:
+        // the adapter needs them — the tool result lives in a `tool.output` event.
+        const events = extractSpanEvents(r["events"], flattenAttrs);
+        const genai = adapter.extract(attrs, String(r["name"] ?? ""), events);
         // M12 (D2/EC-8): move-not-copy — when input/output text was actually
         // extracted (string path) into the capped typed field, delete the key
         // from the persisted bag so the uncapped duplicate never lands on disk.
         // A non-string input.value is NOT extracted, so it stays in the bag.
         if (attrs) {
           // The capped typed field is the single home for the text — strip every
-          // source key (default `input.value`; Claude's `user_prompt`, M15) so the
-          // uncapped duplicate never persists in the bag (M12 invariant + PII bound).
+          // source key (default `input.value`; Claude's `user_prompt`, M15; the M34
+          // tool inputs `full_command`/`file_path`) so the uncapped duplicate never
+          // persists in the bag (M12 invariant + PII bound).
           if (genai.inputValue !== undefined) {
             delete attrs["input.value"];
             delete attrs["user_prompt"];
+            delete attrs["full_command"];
+            delete attrs["file_path"];
           }
           if (genai.outputValue !== undefined) delete attrs["output.value"];
         }
@@ -117,8 +123,6 @@ export function parseResourceSpans(envelope: unknown): Span[] {
         // GenAI). Total — a malformed eval attr is ignored, never fatal.
         const { evaluations, strippedKeys } = extractEvaluations(attrs);
         if (attrs) for (const k of strippedKeys) delete attrs[k];
-        // M12 (D3): OTLP span events are parsed (capped) — previously dropped.
-        const events = extractSpanEvents(r["events"], flattenAttrs);
         const candidate = {
           // Normalize all ids to canonical lowercase hex (resolves M0 F-otlp-6).
           spanId: normalizeId(r["spanId"]),

@@ -78,6 +78,49 @@ suite("rich span detail persistence (integration, M12)", () => {
     expect(read?.spanId).toBe("s3"); // existing span shape intact (backward-compat)
   });
 
+  it("test_integration_claude_perf_cache_roundtrip", async () => {
+    // M34: TTFT + prompt-cache token columns round-trip through save → read.
+    await repo.save([
+      span({
+        spanId: "llm1",
+        traceId: "tllm",
+        name: "claude_code.llm_request",
+        ttftMs: 10741,
+        cacheReadTokens: 14503,
+        cacheCreationTokens: 671522,
+      }),
+    ]);
+    const read = await repo.getBySpanId("llm1");
+    expect(read?.ttftMs).toBe(10741);
+    expect(read?.cacheReadTokens).toBe(14503);
+    expect(read?.cacheCreationTokens).toBe(671522);
+    // backward-compat: a span without them reads them as absent.
+    await repo.save([span({ spanId: "plain", traceId: "tplain" })]);
+    const plain = await repo.getBySpanId("plain");
+    expect(plain?.ttftMs).toBeUndefined();
+    expect(plain?.cacheCreationTokens).toBeUndefined();
+  });
+
+  it("test_integration_claude_tool_appears_in_tool_stats", async () => {
+    // M34: a `claude_code.tool` span carrying toolName classifies + shows in Tools.
+    await repo.save([
+      span({
+        spanId: "tool1",
+        traceId: "ttool",
+        name: "claude_code.tool",
+        toolName: "Bash",
+        inputValue: "echo x",
+        outputValue: "x\n",
+      }),
+    ]);
+    const stats = await repo.aggregateToolStats();
+    expect(stats.tools.map((t) => t.toolName)).toContain("Bash");
+    const tree = await repo.getTraceTree("ttool");
+    expect(tree?.toolName).toBe("Bash");
+    expect(tree?.inputValue).toBe("echo x");
+    expect(tree?.outputValue).toBe("x\n");
+  });
+
   it("test_integration_get_trace_tree_returns_rich_fields", async () => {
     await repo.save([
       span({ spanId: "root", traceId: "tt", inputValue: "in", outputValue: "out" }),
