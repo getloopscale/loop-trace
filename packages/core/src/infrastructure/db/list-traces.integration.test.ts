@@ -229,6 +229,75 @@ suite("listTraces enrichment (integration, M18)", () => {
     expect(row?.endTimeUnixNano).toBe("1700000000100000000");
   });
 
+  it("test_list_representative_io_prefers_root_when_present", async () => {
+    // M35: root has I/O (demo/langfuse shape) → the preview is the ROOT's, even
+    // though a later child also has different I/O. No regression.
+    await repo.save([
+      span({
+        spanId: "root",
+        traceId: "t-rootio",
+        startTimeUnixNano: "1700000000000000000",
+        inputValue: "ROOT prompt",
+        outputValue: "ROOT answer",
+      }),
+      span({
+        spanId: "child",
+        traceId: "t-rootio",
+        parentSpanId: "root",
+        startTimeUnixNano: "1700000000050000000",
+        inputValue: "child input",
+        outputValue: "child output",
+      }),
+    ]);
+    const { traces } = await repo.listTraces({});
+    const row = traces.find((t) => t.traceId === "t-rootio");
+    expect(row?.inputPreview).toBe("ROOT prompt");
+    expect(row?.outputPreview).toBe("ROOT answer");
+  });
+
+  it("test_list_representative_io_falls_back_to_child", async () => {
+    // M35: a Claude-shape trace — root llm_request has NO I/O; its first tool child
+    // carries the command + result → the preview falls back to the child's I/O.
+    await repo.save([
+      span({
+        spanId: "llm",
+        traceId: "t-claude",
+        name: "claude_code.llm_request",
+        startTimeUnixNano: "1700000000000000000",
+        model: "claude-opus-4-8",
+      }),
+      span({
+        spanId: "tool",
+        traceId: "t-claude",
+        parentSpanId: "llm",
+        name: "claude_code.tool",
+        toolName: "Bash",
+        startTimeUnixNano: "1700000000050000000",
+        inputValue: "echo hi",
+        outputValue: "hi\n",
+      }),
+    ]);
+    const { traces } = await repo.listTraces({});
+    const row = traces.find((t) => t.traceId === "t-claude");
+    expect(row?.inputPreview).toBe("echo hi");
+    expect(row?.outputPreview).toBe("hi\n");
+    // kind stays root-derived: the root is llm_request (no tool_name) → model present.
+    expect(row?.model).toBe("claude-opus-4-8");
+    expect(row?.rootToolName).toBeUndefined();
+  });
+
+  it("test_list_no_io_anywhere_omits_preview", async () => {
+    // M35: a trace whose spans carry no input/output at all → preview omitted.
+    await repo.save([
+      span({ spanId: "r", traceId: "t-noio", startTimeUnixNano: "1700000000000000000" }),
+      span({ spanId: "c", traceId: "t-noio", parentSpanId: "r" }),
+    ]);
+    const { traces } = await repo.listTraces({});
+    const row = traces.find((t) => t.traceId === "t-noio");
+    expect(row?.inputPreview).toBeUndefined();
+    expect(row?.outputPreview).toBeUndefined();
+  });
+
   it("list_trace_item_omits_enriched_fields_when_absent", async () => {
     // a trace whose only span has a parent → NO root span → root-derived fields omitted
     await repo.save([

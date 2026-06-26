@@ -540,8 +540,6 @@ export class DrizzleSpanRepository implements SpanRepository {
         >`coalesce(${spans.toolName}, ${spans.attributes}->>'gen_ai.tool.name')`.as(
           "tool_name",
         ),
-        inputValue: spans.inputValue,
-        outputValue: spans.outputValue,
       })
       .from(spans)
       .where(and(eq(spans.traceId, traces.traceId), isNull(spans.parentSpanId)))
@@ -549,14 +547,38 @@ export class DrizzleSpanRepository implements SpanRepository {
       .limit(1)
       .as("root");
 
+    // M35: the I/O PREVIEW comes from a representative span — the root when it has
+    // I/O (demo/langfuse, unchanged), else the earliest span in the trace with a
+    // non-null input/output. A Claude Code trace's root is `claude_code.llm_request`
+    // (no I/O); its first `claude_code.tool` child carries the command + result.
+    // Kind stays root-derived (above); only the I/O sourcing differs.
+    const repr = this.db
+      .select({
+        inputValue: spans.inputValue,
+        outputValue: spans.outputValue,
+      })
+      .from(spans)
+      .where(
+        and(
+          eq(spans.traceId, traces.traceId),
+          sql`(${spans.inputValue} IS NOT NULL OR ${spans.outputValue} IS NOT NULL)`,
+        ),
+      )
+      .orderBy(
+        sql`(${spans.parentSpanId} IS NULL) DESC`,
+        asc(sql`${spans.startTimeUnixNano}::numeric`),
+      )
+      .limit(1)
+      .as("repr");
+
     const rows = await this.db
       .select({
         ...getTableColumns(traces),
         rootModel: root.model,
         rootOperationName: root.operationName,
         rootToolName: root.toolName,
-        rootInputValue: root.inputValue,
-        rootOutputValue: root.outputValue,
+        rootInputValue: repr.inputValue,
+        rootOutputValue: repr.outputValue,
         // M26b: per-trace online-eval count for the "Evals" list column (read-only,
         // M26 data) — a correlated count on the indexed span_evaluations.trace_id.
         evaluationsCount: sql<number>`(SELECT count(*)::int FROM span_evaluations se WHERE se.trace_id = ${traces.traceId})`.as(
@@ -565,6 +587,7 @@ export class DrizzleSpanRepository implements SpanRepository {
       })
       .from(traces)
       .leftJoinLateral(root, sql`true`)
+      .leftJoinLateral(repr, sql`true`)
       .where(where)
       .orderBy(sql`${sortCol} ${dir} nulls last`, desc(traces.updatedAt))
       .limit(limit);
