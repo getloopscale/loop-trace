@@ -9,6 +9,7 @@ import { ToolAnalyticsPage } from "./routes/ToolAnalyticsPage.js";
 import { ToolTracesPage } from "./routes/ToolTracesPage.js";
 import { DashboardPage } from "./routes/DashboardPage.js";
 import { EvalsPage } from "./routes/EvalsPage.js";
+import { EvaluatorsPage } from "./routes/EvaluatorsPage.js";
 import { DatasetsListPage } from "./routes/DatasetsListPage.js";
 import { DatasetDetailPage } from "./routes/DatasetDetailPage.js";
 import { AgentsListPage } from "./routes/AgentsListPage.js";
@@ -39,6 +40,7 @@ const router = createBrowserRouter([
       { path: "/metrics", element: <Navigate to="/dashboards" replace /> },
       { path: "/dashboards", element: <DashboardPage /> },
       { path: "/evals", element: <EvalsPage /> },
+      { path: "/evaluators", element: <EvaluatorsPage /> },
       { path: "/datasets", element: <DatasetsListPage /> },
       { path: "/datasets/:datasetId", element: <DatasetDetailPage /> },
       { path: "/agents", element: <AgentsListPage /> },

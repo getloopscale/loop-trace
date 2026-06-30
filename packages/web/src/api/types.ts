@@ -283,3 +283,44 @@ export interface EvaluatorSummary {
 export interface EvaluatorsResponse {
   evaluators: EvaluatorSummary[];
 }
+
+// --- M36: online evaluators ---
+export interface EvaluatorRecordDTO {
+  id: string;
+  name: string;
+  kind: "rule" | "llm_judge";
+  target: string;
+  config: unknown;
+  enabled: boolean;
+  createdAt: string;
+  passLabel?: string;
+  failLabel?: string;
+}
+export interface NewEvaluatorDTO {
+  name: string;
+  kind: "rule" | "llm_judge";
+  config: { predicate: string } | { prompt: string; model: string };
+  target?: string;
+}
+export interface EvaluatorRunResultDTO {
+  evaluator: string;
+  written: number;
+  skipped: number;
+  truncated: boolean;
+  errors: { spanId: string; reason: string }[];
+}
+export interface GuardRecordDTO {
+  id: string;
+  evaluatorId: string;
+  operator: string;
+  threshold?: number;
+  labelValue?: string;
+  enabled: boolean;
+  createdAt: string;
+}
+export interface NewGuardDTO {
+  evaluatorId: string;
+  operator: string;
+  threshold?: number;
+  labelValue?: string;
+}
