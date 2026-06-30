@@ -148,6 +148,20 @@ export function validatePredicate(predicate: string): string | null {
 }
 
 /**
+ * Whether a span matches a span-query predicate (every clause satisfied; an empty
+ * predicate matches all). Total — never throws. Reused by `evaluateRule` AND by the
+ * engine's target selector (which span-query picks the spans to evaluate, D3).
+ */
+export function spanMatchesPredicate(
+  predicate: string,
+  span: Span,
+  hasChildren = false,
+): boolean {
+  const { clauses } = parseSpanQuery(predicate);
+  return clauses.every((c) => spanSatisfies(c, span, hasChildren));
+}
+
+/**
  * Evaluate a rule evaluator against one span. Match (every clause satisfied, or an
  * empty predicate) → pass verdict; otherwise fail. Total — never throws.
  */
@@ -156,8 +170,7 @@ export function evaluateRule(
   span: Span,
   hasChildren = false,
 ): Verdict {
-  const { clauses } = parseSpanQuery(ev.config.predicate);
-  const matched = clauses.every((c) => spanSatisfies(c, span, hasChildren));
+  const matched = spanMatchesPredicate(ev.config.predicate, span, hasChildren);
   return matched
     ? { score: 1, label: ev.passLabel ?? "pass" }
     : { score: 0, label: ev.failLabel ?? "fail" };

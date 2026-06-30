@@ -55,6 +55,7 @@ export {
   judgeConfigSchema,
   evaluateRule,
   evaluateGuard,
+  spanMatchesPredicate,
   validatePredicate,
   deriveKind,
   type EvaluatorKind,
@@ -77,6 +78,12 @@ export {
   parseBackfillMax,
   DEFAULT_EVAL_BACKFILL_MAX,
 } from "./domain/evaluator-config.js";
+export {
+  runEvaluator,
+  runSweep,
+  type EngineDeps,
+  type RunOptions,
+} from "./domain/evaluator-engine.js";
 export type {
   EvaluatorRepository,
   EvaluatorRecord,
