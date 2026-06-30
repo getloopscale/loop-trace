@@ -45,6 +45,54 @@ export {
   type EvaluatorSummary,
   type EvaluatorsResponse,
 } from "./domain/evaluation.js";
+// M36: online evaluators (compute/write path) — types + pure rule/guard engines.
+export {
+  EVALUATOR_KINDS,
+  GUARD_OPERATORS,
+  evaluatorSchema,
+  guardSchema,
+  ruleConfigSchema,
+  judgeConfigSchema,
+  evaluateRule,
+  spanMatchesPredicate,
+  validatePredicate,
+  deriveKind,
+  type EvaluatorKind,
+  type GuardOperator,
+  type Evaluator,
+  type Guard,
+  type Verdict,
+  type RunResult,
+} from "./domain/evaluator.js";
+export {
+  JudgeError,
+  OpenAICompatibleJudge,
+  parseJudgeVerdict,
+  type JudgeClient,
+  type JudgeConfig,
+} from "./domain/llm-judge.js";
+export {
+  parseJudgeConfig,
+  parseEvalSweepHours,
+  parseBackfillMax,
+  DEFAULT_EVAL_BACKFILL_MAX,
+} from "./domain/evaluator-config.js";
+export {
+  runEvaluator,
+  runSweep,
+  type EngineDeps,
+  type RunOptions,
+} from "./domain/evaluator-engine.js";
+export type {
+  EvaluatorRepository,
+  EvaluatorRecord,
+  GuardRecord,
+} from "./domain/evaluator-repository.js";
+export {
+  DrizzleEvaluatorRepository,
+  createEvaluatorRepository,
+  evaluatorRepoFromPool,
+} from "./infrastructure/db/drizzle-evaluator-repository.js";
 // M26b: human-feedback annotations (write-path).
 export {
   normalizeAnnotation,
@@ -145,7 +193,7 @@ export {
   type RetentionConfig,
   parseRetentionConfig,
 } from "./domain/retention.js";
-export { spans, traces, sessions, replaySessions } from "./infrastructure/db/schema.js";
+export { spans, traces, sessions, replaySessions, evaluators, guards } from "./infrastructure/db/schema.js";
 export {
   DrizzleSpanRepository,
   createPool,

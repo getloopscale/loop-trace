@@ -17,6 +17,11 @@ import type {
   TraceListResponse,
   TraceTagsResponse,
   TraceTreeNode,
+  EvaluatorRecordDTO,
+  NewEvaluatorDTO,
+  EvaluatorRunResultDTO,
+  GuardRecordDTO,
+  NewGuardDTO,
 } from "./types.js";
 
 /** Hard cap mirrored from the API so an export pulls the full filtered set, not one page. */
@@ -289,4 +294,42 @@ export function recordReplaySession(traceId: string): void {
   }).catch(() => {
     /* fail-soft: the replay does not depend on this metric ping */
   });
+}
+
+// --- M36: online evaluators (compute/write path) ---
+
+/** List the workspace's evaluators (M36). */
+export function getEvaluatorDefs(): Promise<{ evaluators: EvaluatorRecordDTO[] }> {
+  return getJson<{ evaluators: EvaluatorRecordDTO[] }>("/v1/evaluators");
+}
+
+/** Create-or-update an evaluator (M36). */
+export function createEvaluatorDef(body: NewEvaluatorDTO): Promise<EvaluatorRecordDTO> {
+  return postJson<EvaluatorRecordDTO>("/v1/evaluators", body);
+}
+
+/** Run an evaluator's backfill (M36); returns the run result. */
+export function runEvaluatorDef(id: string): Promise<EvaluatorRunResultDTO> {
+  return postJson<EvaluatorRunResultDTO>(
+    `/v1/evaluators/${encodeURIComponent(id)}/run`,
+    {},
+  );
+}
+
+/** Delete an evaluator (cascades its guards, M36). */
+export async function deleteEvaluatorDef(id: string): Promise<void> {
+  const res = await fetch(`${BASE}/v1/evaluators/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new ApiError(res.status);
+}
+
+/** List guards (M36). */
+export function getGuardDefs(): Promise<{ guards: GuardRecordDTO[] }> {
+  return getJson<{ guards: GuardRecordDTO[] }>("/v1/guards");
+}
+
+/** Create a guard (M36). */
+export function createGuardDef(body: NewGuardDTO): Promise<GuardRecordDTO> {
+  return postJson<GuardRecordDTO>("/v1/guards", body);
 }

@@ -38,6 +38,18 @@ import {
   listKeysHandler,
   revokeKeyHandler,
 } from "./handlers/admin-keys.js";
+import {
+  type EvaluatorApiDeps,
+  createEvaluatorHandler,
+  listEvaluatorsHandler,
+  getEvaluatorHandler,
+  deleteEvaluatorHandler,
+  runEvaluatorHandler,
+  createGuardHandler,
+  listGuardsHandler,
+  deleteGuardHandler,
+  guardBreachesHandler,
+} from "./handlers/evaluators.js";
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
 import { OtlpParseError } from "../otlp/otlp-error.js";
 import { decodeOtlpBody } from "../otlp/decode-protobuf.js";
@@ -90,6 +102,7 @@ export function createApp(
   repo: SpanRepository,
   webDistDir?: string,
   auth: AuthOptions = {},
+  evaluators?: EvaluatorApiDeps,
 ): Hono {
   const app = new Hono();
 
@@ -517,6 +530,21 @@ export function createApp(
       ? c.json(datasetDetailSchema.parse(detail), 200)
       : c.json({ error: "not found" }, 404);
   });
+
+  // M36: online-evaluators surface (mounted only when wired by the composition root).
+  // Per-verb scope; workspace from the Principal (never the body).
+  if (evaluators !== undefined) {
+    const ev = evaluators;
+    app.post("/v1/evaluators", requireScopeOnPrincipal("lens:write"), (c) => createEvaluatorHandler(c, ev));
+    app.get("/v1/evaluators", requireScopeOnPrincipal("lens:read"), (c) => listEvaluatorsHandler(c, ev));
+    app.get("/v1/evaluators/:id", requireScopeOnPrincipal("lens:read"), (c) => getEvaluatorHandler(c, ev));
+    app.delete("/v1/evaluators/:id", requireScopeOnPrincipal("lens:delete"), (c) => deleteEvaluatorHandler(c, ev));
+    app.post("/v1/evaluators/:id/run", requireScopeOnPrincipal("lens:write"), (c) => runEvaluatorHandler(c, ev));
+    app.post("/v1/guards", requireScopeOnPrincipal("lens:write"), (c) => createGuardHandler(c, ev));
+    app.get("/v1/guards", requireScopeOnPrincipal("lens:read"), (c) => listGuardsHandler(c, ev));
+    app.delete("/v1/guards/:id", requireScopeOnPrincipal("lens:delete"), (c) => deleteGuardHandler(c, ev));
+    app.get("/v1/guards/:id/breaches", requireScopeOnPrincipal("lens:read"), (c) => guardBreachesHandler(c, ev));
+  }
 
   // Mount static UI serving LAST so the catch-all never shadows /v1/* (M7, D1).
   if (webDistDir !== undefined) {

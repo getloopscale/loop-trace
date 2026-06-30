@@ -2,7 +2,20 @@ import { pathToFileURL } from "node:url";
 
 import { serve } from "@hono/node-server";
 import type { Hono } from "hono";
-import { createSpanRepository, migrateLatest, parseRetentionConfig } from "@usetheo/lens-core";
+import {
+  createSpanRepository,
+  migrateLatest,
+  parseRetentionConfig,
+  evaluatorRepoFromPool,
+  OpenAICompatibleJudge,
+  parseJudgeConfig,
+  parseBackfillMax,
+  parseEvalSweepHours,
+  runSweep,
+  DEFAULT_WORKSPACE_ID,
+  type EngineDeps,
+  type JudgeClient,
+} from "@usetheo/lens-core";
 import type pg from "pg";
 
 import { createApp } from "./app.js";
@@ -53,7 +66,37 @@ export async function bootstrap(
     ...(requireCredential ? { verifier: new ApiKeyAuthVerifier(pool) } : {}),
     ...(bootstrapToken !== undefined ? { bootstrapToken } : {}),
   };
-  const app = createApp(repo, webDistDir, authOptions);
+  // M36: wire the online-evaluators surface. The evaluator repo shares the pool;
+  // the LLM-judge is enabled only when configured (else null → fail-closed per span).
+  const evaluatorRepo = evaluatorRepoFromPool(pool);
+  const judgeConfig = parseJudgeConfig(process.env);
+  const judge: JudgeClient | null =
+    judgeConfig !== null ? new OpenAICompatibleJudge(judgeConfig) : null;
+  const engine: EngineDeps = {
+    evaluatorRepo,
+    spanRepo: repo,
+    judge,
+    backfillMax: parseBackfillMax(process.env),
+  };
+  const app = createApp(repo, webDistDir, authOptions, {
+    repo: evaluatorRepo,
+    engine,
+  });
+
+  // M36: opt-in periodic evaluator sweep (default OFF, D5). v1 sweeps the `default`
+  // workspace; per-workspace fan-out is a documented follow-on. Timer is unref'd.
+  const evalSweepHours = parseEvalSweepHours(process.env);
+  let evalSweepTimer: ReturnType<typeof setInterval> | undefined;
+  if (evalSweepHours > 0) {
+    evalSweepTimer = setInterval(() => {
+      void runSweep(DEFAULT_WORKSPACE_ID, engine).catch((err: unknown) => {
+        console.error(
+          JSON.stringify({ level: "error", msg: "eval_sweep_failed", error: String(err) }),
+        );
+      });
+    }, evalSweepHours * HOUR_MS);
+    evalSweepTimer.unref();
+  }
 
   const retention = parseRetentionConfig(process.env);
   if (retention.warning) {
@@ -78,6 +121,12 @@ export async function bootstrap(
     });
     stop = handle.stop;
   }
+  // Compose retention stop with the eval-sweep timer clear (graceful shutdown/tests).
+  const retentionStop = stop;
+  stop = (): void => {
+    retentionStop();
+    if (evalSweepTimer !== undefined) clearInterval(evalSweepTimer);
+  };
   return { app, pool, stop };
 }
 

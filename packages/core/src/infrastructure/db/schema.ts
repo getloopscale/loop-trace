@@ -381,3 +381,69 @@ export const theoApiKeys = pgTable(
     index("theo_api_keys_workspace_id_idx").on(t.workspaceId),
   ],
 );
+
+/**
+ * M36: an online evaluator definition. `kind` selects the seam: `'rule'` (a
+ * deterministic predicate reusing the M30 span-query DSL) or `'llm_judge'` (a
+ * configurable OpenAI-compatible judge). `target` is a span-query selecting which
+ * spans to evaluate (empty = the trace's root span). `config` jsonb holds the
+ * kind-specific shape (`{predicate}` | `{prompt, model}`). Verdicts the engine
+ * computes are written into `span_evaluations` (one row per matched span). Name is
+ * the dedup key (create-or-update), workspace-leading (M22).
+ */
+export const evaluators = pgTable(
+  "evaluators",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceIdCol(),
+    name: text("name").notNull(),
+    kind: text("kind").notNull(),
+    target: text("target").default("").notNull(),
+    config: jsonb("config").notNull(),
+    passLabel: text("pass_label"),
+    failLabel: text("fail_label"),
+    enabled: integer("enabled").default(1).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  // M22: workspace-leading dedup — the same evaluator name in two workspaces is two
+  // distinct rows; create-or-update upserts on this key.
+  (t) => [
+    unique("evaluators_workspace_id_name_uq").on(t.workspaceId, t.name),
+    index("evaluators_workspace_id_idx").on(t.workspaceId),
+  ],
+);
+
+/**
+ * M36: a flag-only guard — a threshold over an evaluator's verdict. `operator` is
+ * one of lt/lte/gt/gte/eq (over `threshold`) or label_eq (over `label_value`). A
+ * breaching verdict flags the trace (surfaced read-side; no alert/block in v1).
+ * Workspace-leading (M22); deleting an evaluator cascades its guards (EC-4).
+ */
+export const guards = pgTable(
+  "guards",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceIdCol(),
+    evaluatorId: uuid("evaluator_id").notNull(),
+    operator: text("operator").notNull(),
+    threshold: doublePrecision("threshold"),
+    labelValue: text("label_value"),
+    enabled: integer("enabled").default(1).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    // M36 (review M36-EVAL-1): NULLS NOT DISTINCT — a numeric guard has label_value
+    // NULL (and a label_eq guard has threshold NULL); under the PG default
+    // (NULLS DISTINCT) two identical guards never collide → the create upsert never
+    // dedupes → duplicate rows. NULLS NOT DISTINCT makes the dedup actually fire.
+    unique("guards_workspace_id_dedup_uq")
+      .on(t.workspaceId, t.evaluatorId, t.operator, t.threshold, t.labelValue)
+      .nullsNotDistinct(),
+    index("guards_workspace_id_idx").on(t.workspaceId),
+    index("guards_evaluator_id_idx").on(t.evaluatorId),
+  ],
+);

@@ -32,6 +32,9 @@ const VALID_SCOPES = new Set([
 const PRIVILEGED_MINT_SCOPES = new Set(["lens:platform-admin"]);
 const WORKSPACE_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const ID_RE = /^apk-[0-9a-f]{16}$/;
+/** Strict ISO-8601 datetime: date + T + time, optional fractional seconds, Z or ±hh:mm offset. */
+const ISO_DATETIME_RE =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
 interface CallerCtx {
   workspaceId: string;
@@ -111,8 +114,15 @@ export async function createKeyHandler(
   }
   let expiresAt: string | null = null;
   if (body.expires_at !== undefined) {
-    if (typeof body.expires_at !== "string" || Number.isNaN(Date.parse(body.expires_at))) {
-      return c.json({ code: "INVALID_EXPIRES_AT", message: "expires_at must be an ISO datetime" }, 400);
+    // Strict ISO-8601 datetime (LENS-AUTH-3): `Date.parse` alone accepts loose
+    // formats like "Jan 1 2027", contradicting the "ISO datetime" contract. Require
+    // the canonical shape AND a real parse before normalizing.
+    if (
+      typeof body.expires_at !== "string" ||
+      !ISO_DATETIME_RE.test(body.expires_at) ||
+      Number.isNaN(Date.parse(body.expires_at))
+    ) {
+      return c.json({ code: "INVALID_EXPIRES_AT", message: "expires_at must be an ISO-8601 datetime (e.g. 2027-01-01T00:00:00Z)" }, 400);
     }
     expiresAt = new Date(body.expires_at).toISOString();
   }
@@ -158,16 +168,30 @@ export async function createKeyHandler(
 
   const id = newId();
   const { secret, hash, prefix } = newKey();
-  // Ensure the target workspace row exists (FK), then insert the key.
-  await pool.query(
-    `INSERT INTO workspaces (id, name) VALUES ($1, $1) ON CONFLICT DO NOTHING`,
-    [targetWorkspace],
-  );
-  await pool.query(
-    `INSERT INTO theo_api_keys (id, subject, tenant_id, workspace_id, key_name, key_hash, key_prefix, scopes, expires_at)
-     VALUES ($1, $2, 'self', $3, $4, $5, $6, $7::jsonb, $8)`,
-    [id, targetWorkspace, targetWorkspace, name, hash, prefix, JSON.stringify(scopesIn), expiresAt],
-  );
+  const WORKSPACE_SQL = `INSERT INTO workspaces (id, name) VALUES ($1, $1) ON CONFLICT DO NOTHING`;
+  const KEY_SQL = `INSERT INTO theo_api_keys (id, subject, tenant_id, workspace_id, key_name, key_hash, key_prefix, scopes, expires_at)
+     VALUES ($1, $2, 'self', $3, $4, $5, $6, $7::jsonb, $8)`;
+  const keyParams = [id, targetWorkspace, targetWorkspace, name, hash, prefix, JSON.stringify(scopesIn), expiresAt];
+  // Atomic (LENS-AUTH-4): the workspace upsert + key insert run in ONE transaction
+  // so a failed key insert never leaves an orphan workspace row. Falls back to two
+  // sequential queries when the pool can't pin a connection (e.g. a test stub).
+  if (pool.connect !== undefined) {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN", []);
+      await client.query(WORKSPACE_SQL, [targetWorkspace]);
+      await client.query(KEY_SQL, keyParams);
+      await client.query("COMMIT", []);
+    } catch (err) {
+      await client.query("ROLLBACK", []).catch(() => undefined);
+      throw err; // fail loud (Rule 8) → onError → 500
+    } finally {
+      client.release();
+    }
+  } else {
+    await pool.query(WORKSPACE_SQL, [targetWorkspace]);
+    await pool.query(KEY_SQL, keyParams);
+  }
   return c.json({ id, name, key_prefix: prefix, scopes: scopesIn, workspace_id: targetWorkspace, secret }, 200);
 }
 

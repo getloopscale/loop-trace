@@ -24,6 +24,8 @@ const NAV: { label: string; path: string; icon: LucideIcon }[] = [
   { label: "Dashboards", path: "/dashboards", icon: LayoutDashboard },
   // M26: Evals & Metrics — a metrics page (Online Evaluators), not a span-query view.
   { label: "Evals & Metrics", path: "/evals", icon: Gauge },
+  // M36: Evaluators — define/run evaluators + guards (management surface).
+  { label: "Evaluators", path: "/evaluators", icon: Gauge },
   // M26d: Datasets — curated example sets.
   { label: "Datasets", path: "/datasets", icon: Library },
   // M32: Agents — the versioned-lifecycle agents catalog.

@@ -1,0 +1,2 @@
+ALTER TABLE "guards" DROP CONSTRAINT "guards_workspace_id_dedup_uq";--> statement-breakpoint
+ALTER TABLE "guards" ADD CONSTRAINT "guards_workspace_id_dedup_uq" UNIQUE NULLS NOT DISTINCT("workspace_id","evaluator_id","operator","threshold","label_value");
