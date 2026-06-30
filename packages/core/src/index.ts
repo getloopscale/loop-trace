@@ -64,6 +64,19 @@ export {
   type Verdict,
   type RunResult,
 } from "./domain/evaluator.js";
+export {
+  JudgeError,
+  OpenAICompatibleJudge,
+  parseJudgeVerdict,
+  type JudgeClient,
+  type JudgeConfig,
+} from "./domain/llm-judge.js";
+export {
+  parseJudgeConfig,
+  parseEvalSweepHours,
+  parseBackfillMax,
+  DEFAULT_EVAL_BACKFILL_MAX,
+} from "./domain/evaluator-config.js";
 export type {
   EvaluatorRepository,
   EvaluatorRecord,
