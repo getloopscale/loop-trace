@@ -242,3 +242,11 @@ export function createEvaluatorRepository(connectionString: string): {
   const pool = new pg.Pool({ connectionString });
   return { repo: new DrizzleEvaluatorRepository(drizzle(pool)), pool };
 }
+
+/**
+ * Build an evaluator repo on an EXISTING pool (shares the span repo's pool, so the
+ * api package never needs a direct `drizzle-orm` import — it stays in core).
+ */
+export function evaluatorRepoFromPool(pool: pg.Pool): DrizzleEvaluatorRepository {
+  return new DrizzleEvaluatorRepository(drizzle(pool));
+}

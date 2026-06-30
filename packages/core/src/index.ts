@@ -92,6 +92,7 @@ export type {
 export {
   DrizzleEvaluatorRepository,
   createEvaluatorRepository,
+  evaluatorRepoFromPool,
 } from "./infrastructure/db/drizzle-evaluator-repository.js";
 // M26b: human-feedback annotations (write-path).
 export {
