@@ -5,6 +5,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
 
 import type { Span } from "../../domain/span.js";
+import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
 import type {
   SpanRepository,
   TraceTreeNode,
@@ -99,9 +100,10 @@ function spanClauseSql(c: SpanClause) {
 
 type SpanRow = typeof spans.$inferInsert;
 
-function toRow(span: Span): SpanRow {
+function toRow(span: Span, workspaceId: string): SpanRow {
   return {
     spanId: span.spanId,
+    workspaceId,
     traceId: span.traceId,
     parentSpanId: span.parentSpanId ?? null,
     name: span.name,
@@ -242,7 +244,10 @@ export class DrizzleSpanRepository implements SpanRepository {
     private readonly priceTable: PriceTable = DEFAULT_PRICES,
   ) {}
 
-  async save(spansToSave: Span[]): Promise<void> {
+  async save(
+    spansToSave: Span[],
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<void> {
     if (spansToSave.length === 0) return;
     // Dedupe intra-batch duplicate spanId (M0 EC-1).
     const unique = [...new Map(spansToSave.map((s) => [s.spanId, s])).values()];
@@ -258,13 +263,14 @@ export class DrizzleSpanRepository implements SpanRepository {
     await this.db.transaction(async (tx) => {
       await tx
         .insert(spans)
-        .values(unique.map(toRow))
+        .values(unique.map((s) => toRow(s, workspaceId)))
         .onConflictDoNothing({ target: spans.spanId });
 
       // M26: persist extracted online-evals to the side-table. Idempotent on
       // (span_id, name) so re-ingest of the same span never duplicates rows.
       const evalRows = unique.flatMap((s) =>
         (s.evaluations ?? []).map((e) => ({
+          workspaceId,
           spanId: s.spanId,
           traceId: s.traceId,
           name: e.name,
@@ -297,9 +303,10 @@ export class DrizzleSpanRepository implements SpanRepository {
         // (M9); error tokens are the same constant the UI/tool-stats use.
         const errorList = ERROR_STATUS_CODES.map((c) => `'${c}'`).join(", ");
         await tx.execute(sql`
-          INSERT INTO traces (trace_id, session_id, name, start_time_unix_nano, end_time_unix_nano, input_tokens, output_tokens, total_tokens, cost_usd, status_code, updated_at)
+          INSERT INTO traces (trace_id, workspace_id, session_id, name, start_time_unix_nano, end_time_unix_nano, input_tokens, output_tokens, total_tokens, cost_usd, status_code, updated_at)
           SELECT
             ${traceId},
+            ${workspaceId},
             max(session_id),
             (array_agg(name ORDER BY (parent_span_id IS NOT NULL), start_time_unix_nano::numeric))[1],
             min(start_time_unix_nano::numeric)::text,
@@ -312,6 +319,7 @@ export class DrizzleSpanRepository implements SpanRepository {
             now()
           FROM spans WHERE trace_id = ${traceId}
           ON CONFLICT (trace_id) DO UPDATE SET
+            workspace_id = excluded.workspace_id,
             session_id = excluded.session_id,
             name = excluded.name,
             start_time_unix_nano = excluded.start_time_unix_nano,
@@ -347,8 +355,8 @@ export class DrizzleSpanRepository implements SpanRepository {
 
       for (const sessionId of sessionIds) {
         await tx.execute(sql`
-          INSERT INTO sessions (session_id, first_seen_at, last_seen_at)
-          VALUES (${sessionId}, now(), now())
+          INSERT INTO sessions (session_id, workspace_id, first_seen_at, last_seen_at)
+          VALUES (${sessionId}, ${workspaceId}, now(), now())
           ON CONFLICT (session_id) DO UPDATE SET last_seen_at = now()
         `);
       }
