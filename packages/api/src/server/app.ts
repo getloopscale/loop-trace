@@ -31,6 +31,13 @@ import {
   getPrincipal,
   requireScopeOnPrincipal,
 } from "./auth/middleware.js";
+import { requireScope } from "./auth/scope-verifier.js";
+import type { AuthPool } from "./auth/api-key-verifier.js";
+import {
+  createKeyHandler,
+  listKeysHandler,
+  revokeKeyHandler,
+} from "./handlers/admin-keys.js";
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
 import { OtlpParseError } from "../otlp/otlp-error.js";
 import { decodeOtlpBody } from "../otlp/decode-protobuf.js";
@@ -73,6 +80,10 @@ import { tracesToCsv } from "./csv.js";
 export interface AuthOptions {
   readonly verifier?: AuthVerifier;
   readonly requireCredential?: boolean;
+  /** The pg pool for the admin key-lifecycle routes (`/v1/admin/keys`). */
+  readonly pool?: AuthPool;
+  /** Env-sourced bootstrap admin token (mints the first admin key). */
+  readonly bootstrapToken?: string;
 }
 
 export function createApp(
@@ -97,11 +108,32 @@ export function createApp(
     return c.json({ error: "internal error" }, 500);
   });
 
-  // M22: resolve a Principal for every /v1/* request and set it on context. With no
-  // verifier configured (single-tenant dev) this collapses to the `default` workspace;
-  // in multi-tenant mode (requireCredential) a missing/bad credential fails closed.
-  // Per-verb scope is enforced by `requireScopeOnPrincipal` on each data route below.
-  app.use("/v1/*", bearerAuth(auth.verifier, { requireCredential: auth.requireCredential === true }));
+  // M22 admin surface (the Model B broker mints per-tenant keys here). Gated by
+  // `requireScope('lens:admin')` — a `lens:platform-admin` key satisfies it via the
+  // scope hierarchy; an env bootstrap token bypasses (mints the first admin key).
+  // Mounted BEFORE the data-plane bearer so the admin path uses its own gate.
+  if (auth.pool !== undefined) {
+    const pool = auth.pool;
+    const adminGate = auth.bootstrapToken !== undefined
+      ? { pool, requiredScope: "lens:admin", bootstrapToken: auth.bootstrapToken }
+      : { pool, requiredScope: "lens:admin" };
+    app.use("/v1/admin/*", requireScope(adminGate));
+    app.post("/v1/admin/keys", (c) => createKeyHandler(c, pool, auth.bootstrapToken));
+    app.get("/v1/admin/keys", (c) => listKeysHandler(c, pool, auth.bootstrapToken));
+    app.delete("/v1/admin/keys/:id", (c) => revokeKeyHandler(c, pool, auth.bootstrapToken));
+  }
+
+  // M22: resolve a Principal for every /v1/* DATA request and set it on context. With
+  // no verifier (single-tenant dev) this collapses to the `default` workspace; in
+  // multi-tenant mode a missing/bad credential fails closed. The `/v1/admin/*` routes
+  // have their own `requireScope` gate above, so the data bearer skips them.
+  const dataBearer = bearerAuth(auth.verifier, {
+    requireCredential: auth.requireCredential === true,
+  });
+  app.use("/v1/*", async (c, next) => {
+    if (c.req.path.startsWith("/v1/admin")) return next();
+    return dataBearer(c, next);
+  });
 
   app.post("/v1/traces", requireScopeOnPrincipal("lens:write"), async (c) => {
     const contentType = (c.req.header("content-type") ?? "").toLowerCase();

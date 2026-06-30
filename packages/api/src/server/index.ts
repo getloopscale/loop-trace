@@ -42,13 +42,18 @@ export async function bootstrap(
   const requireCredential = parseRequireCredentialEnv(
     process.env["THEOLENS_REQUIRE_CREDENTIAL"],
   );
-  const app = createApp(
-    repo,
-    webDistDir,
-    requireCredential
-      ? { verifier: new ApiKeyAuthVerifier(pool), requireCredential: true }
-      : { requireCredential: false },
-  );
+  const bootstrapRaw = process.env["THEOLENS_PLATFORM_ADMIN_BOOTSTRAP"];
+  const bootstrapToken =
+    bootstrapRaw !== undefined && bootstrapRaw.trim().length > 0
+      ? bootstrapRaw
+      : undefined;
+  const authOptions: Parameters<typeof createApp>[2] = {
+    pool,
+    requireCredential,
+    ...(requireCredential ? { verifier: new ApiKeyAuthVerifier(pool) } : {}),
+    ...(bootstrapToken !== undefined ? { bootstrapToken } : {}),
+  };
+  const app = createApp(repo, webDistDir, authOptions);
 
   const retention = parseRetentionConfig(process.env);
   if (retention.warning) {
