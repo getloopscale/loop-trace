@@ -11,6 +11,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - Roadmap consolidated into **`ROADMAP-v4.md`** — a single authoritative view of every delivered milestone (M0–M35, all `[x]`, each with its shipped version), since the work had been split across the phased `ROADMAP.md` (V1, M0–M8), `ROADMAP-v2.md` (V2, M9–M14) and `ROADMAP-v3.md` (V3, M15–M21) plus the CHANGELOG, with M22–M35 never recorded as milestone headers. The three phased files are kept as historical phase records (V1 gains a "superseded — see v4" banner); the M22 block briefly added to V1 was moved into v4 where it belongs (auth/production is a V3.x concern, not V1). New work appends to v4 (next free id M36).
+- Roadmap: queued **M36 — Online Evaluators (eval-as-rule + guards)** in `ROADMAP-v4.md` as the next milestone (provisional objective + DoD, to be sharpened by `/grill-me` + `/discover-plan` before `/to-plan`). Closes the evals track by adding the compute/write path on top of M26's read path.
 
 ### Deprecated
 
