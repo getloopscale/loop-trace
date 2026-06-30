@@ -1122,7 +1122,9 @@ export class DrizzleSpanRepository implements SpanRepository {
     await this.db
       .insert(datasets)
       .values({ name })
-      .onConflictDoNothing({ target: datasets.name });
+      // M22: the dedup unique is workspace-leading; conflict on the composite
+      // (workspace_id binds via the column default until P3 threads the Principal).
+      .onConflictDoNothing({ target: [datasets.workspaceId, datasets.name] });
     const rows = await this.db
       .select({
         id: datasets.id,

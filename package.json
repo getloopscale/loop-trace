@@ -10,7 +10,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && node scripts/copy-migrations.mjs",
     "typecheck": "tsc -b --noEmit || tsc -b",
     "lint": "eslint .",
     "test": "vitest run -c vitest.contract.config.ts",

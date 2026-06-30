@@ -25,7 +25,7 @@ suite("composition root migrate-on-boot (integration)", () => {
     // "relation already exists".
     await pool.query("DROP SCHEMA IF EXISTS drizzle CASCADE");
     await pool.query(
-      "DROP TABLE IF EXISTS spans, traces, sessions, replay_sessions, trace_tags, span_evaluations, annotations, dataset_items, datasets CASCADE",
+      "DROP TABLE IF EXISTS spans, traces, sessions, replay_sessions, trace_tags, span_evaluations, annotations, dataset_items, datasets, theo_api_keys, workspace_users, workspaces CASCADE",
     );
   });
 
