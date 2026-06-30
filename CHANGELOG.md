@@ -8,7 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Authentication & multi-tenant workspace isolation (M22, in progress): per-tenant API keys resolve a Principal (workspace + scopes); every data route is gated by per-verb scope (`lens:read`/`write`/`delete`); every query is scoped by `workspace_id`; an admin key surface mints per-tenant keys with anti-escalation; multi-tenant mode fails closed. Closes the open-ingestion/open-read gap (the data-plane auth pattern from theo-memory)
+- Authentication & multi-tenant workspace isolation (M22): theo-lens is now a tenant-isolated data-plane capability. Per-tenant API keys (`theo_live_*`, SHA-256-stored) resolve a Principal (workspace + scopes); every data route is gated by per-verb scope (`lens:read`/`lens:write`/`lens:delete`); every query is scoped by `workspace_id` (cross-tenant isolation proven per repository method); an admin key surface (`/v1/admin/keys` mint/list/revoke) lets the gateway mint per-tenant keys with anti-escalation (a `lens:platform-admin` key is 403 on every data verb); multi-tenant mode (`THEOLENS_REQUIRE_CREDENTIAL`) fails closed (401 missing/bad credential, 503 backend error — never a privileged default); single-tenant deployments collapse to a `default` workspace unchanged. Isolation is proven end-to-end through a hermetic ForwardAuth edge contract, with a committed auth-overhead benchmark (~0.5 ms p50). Closes the open-ingestion/open-read security gap
 
 ### Changed
 
