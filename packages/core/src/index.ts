@@ -65,6 +65,14 @@ export {
   type RunResult,
 } from "./domain/evaluator.js";
 export {
+  ChatError,
+  openaiChatCompletion,
+  OpenAICompatibleChat,
+  type ChatClient,
+  type ChatConfig,
+  type ChatMessage,
+} from "./domain/chat.js";
+export {
   JudgeError,
   OpenAICompatibleJudge,
   parseJudgeVerdict,

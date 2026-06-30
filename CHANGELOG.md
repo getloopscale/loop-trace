@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- "Ask about this step" trace copilot (M33, in progress): a `POST /v1/traces/:id/ask` endpoint answers natural-language questions about a selected span/trace via a configurable OpenAI-compatible LLM (reusing the M36 provider seam — no new dependency), fail-closed + per-workspace rate-limited; an Ask panel in the trace detail renders the answer. [Phase 1: shared `openaiChatCompletion` chat seam]
 
 ### Changed
 
