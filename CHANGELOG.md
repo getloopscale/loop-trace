@@ -10,6 +10,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 ### Changed
+- ROADMAP.md: materialized the already-delivered **M22 — Auth + multi-tenant workspace isolation** milestone (marked `[x]`, shipped in v0.36.0) in the Milestones section. The V1 roadmap had stayed at M8 while delivery numbering ran through M35; this records M22 retroactively with its objective, DoD, and links to the plan/review/release.
 
 ### Deprecated
 
