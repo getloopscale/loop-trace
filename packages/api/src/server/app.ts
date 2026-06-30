@@ -131,7 +131,10 @@ export function createApp(
     requireCredential: auth.requireCredential === true,
   });
   app.use("/v1/*", async (c, next) => {
-    if (c.req.path.startsWith("/v1/admin")) return next();
+    // Segment-boundary match (not a bare prefix) so a future `/v1/administrators`
+    // style DATA route is NOT inadvertently skipped past the data bearer.
+    const p = c.req.path;
+    if (p === "/v1/admin" || p.startsWith("/v1/admin/")) return next();
     return dataBearer(c, next);
   });
 

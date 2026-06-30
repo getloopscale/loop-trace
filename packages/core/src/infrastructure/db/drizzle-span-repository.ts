@@ -78,7 +78,7 @@ const DERIVED_SPAN_KIND_SQL = sql`CASE
   WHEN s.attributes->>'gen_ai.operation.name' IN ('retrieve', 'search') THEN 'retriever'
   WHEN s.attributes->>'gen_ai.operation.name' IN ('embeddings', 'embedding') THEN 'embedding'
   WHEN s.attributes->>'gen_ai.operation.name' IN ('chat', 'text_completion') OR s.model IS NOT NULL THEN 'llm'
-  WHEN EXISTS (SELECT 1 FROM spans c WHERE c.parent_span_id = s.span_id) THEN 'chain'
+  WHEN EXISTS (SELECT 1 FROM spans c WHERE c.parent_span_id = s.span_id AND c.workspace_id = s.workspace_id) THEN 'chain'
   ELSE 'unknown'
 END`;
 
@@ -298,8 +298,11 @@ export class DrizzleSpanRepository implements SpanRepository {
         // Serialize concurrent ingests of the SAME trace so each recompute sees
         // all prior-committed spans (READ COMMITTED recompute alone undercounts
         // under interleaving). pg_advisory_xact_lock releases at commit.
+        // Keyed on the (workspace, trace) PAIR — trace_id is no longer globally
+        // unique (composite PK), so locking on trace_id alone would falsely
+        // serialize two tenants ingesting a colliding trace_id (M22).
         await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${traceId}))`,
+          sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId + ":" + traceId}))`,
         );
         // Trace-level status = 'error' if ANY span errored (error propagates from
         // child to parent — Phoenix convention), else 'ok'. This populates the
@@ -1256,7 +1259,13 @@ export class DrizzleSpanRepository implements SpanRepository {
         itemCount: sql<number>`count(${datasetItems.id})::int`.as("item_count"),
       })
       .from(datasets)
-      .leftJoin(datasetItems, eq(datasetItems.datasetId, datasets.id))
+      .leftJoin(
+        datasetItems,
+        and(
+          eq(datasetItems.datasetId, datasets.id),
+          eq(datasetItems.workspaceId, datasets.workspaceId),
+        ),
+      )
       .where(and(eq(datasets.name, name), eq(datasets.workspaceId, workspaceId)))
       .groupBy(datasets.id, datasets.name, datasets.createdAt)
       .limit(1);
@@ -1276,7 +1285,13 @@ export class DrizzleSpanRepository implements SpanRepository {
         itemCount: sql<number>`count(${datasetItems.id})::int`.as("item_count"),
       })
       .from(datasets)
-      .leftJoin(datasetItems, eq(datasetItems.datasetId, datasets.id))
+      .leftJoin(
+        datasetItems,
+        and(
+          eq(datasetItems.datasetId, datasets.id),
+          eq(datasetItems.workspaceId, datasets.workspaceId),
+        ),
+      )
       .where(eq(datasets.workspaceId, workspaceId))
       .groupBy(datasets.id, datasets.name, datasets.createdAt)
       .orderBy(desc(datasets.createdAt));

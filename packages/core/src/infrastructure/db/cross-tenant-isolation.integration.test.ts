@@ -216,6 +216,144 @@ suite("M22 cross-tenant isolation (integration)", () => {
     expect(await repo.addDatasetItem(dsA.id, "ta", WS_B)).toBe(false);
   });
 
+  it("test_list_traces_filter_subqueries_isolate", async () => {
+    // F4: listTraces' filter subqueries (model / tag / full-text / span-query) are the
+    // subqueries most at risk of an omitted workspace_id. Seed MATCHING-but-distinct
+    // traces in A and B and assert each filter returns only the caller's trace.
+    await repo.save(
+      [
+        span({
+          spanId: "a-root",
+          traceId: "a-t",
+          model: "gpt-4o",
+          inputValue: "rome catacombs tour",
+        }),
+        span({ spanId: "a-child", traceId: "a-t", parentSpanId: "a-root" }),
+      ],
+      WS_A,
+    );
+    await repo.save(
+      [
+        span({
+          spanId: "b-root",
+          traceId: "b-t",
+          model: "gpt-4o",
+          inputValue: "rome catacombs tour",
+        }),
+        span({ spanId: "b-child", traceId: "b-t", parentSpanId: "b-root" }),
+      ],
+      WS_B,
+    );
+    await repo.addTag("a-t", "shared-tag", WS_A);
+    await repo.addTag("b-t", "shared-tag", WS_B);
+
+    // model filter
+    const byModelA = (await repo.listTraces({ model: "gpt-4o" }, WS_A)).traces;
+    expect(byModelA.map((t) => t.traceId)).toEqual(["a-t"]);
+    // tag filter (same tag string in both workspaces)
+    const byTagA = (await repo.listTraces({ tag: "shared-tag" }, WS_A)).traces;
+    expect(byTagA.map((t) => t.traceId)).toEqual(["a-t"]);
+    expect((await repo.listTraces({ tag: "shared-tag" }, WS_B)).traces.map((t) => t.traceId)).toEqual(["b-t"]);
+    // full-text search (identical search term hits both tenants' content)
+    const byQA = (await repo.listTraces({ q: "catacombs" }, WS_A)).traces;
+    expect(byQA.map((t) => t.traceId)).toEqual(["a-t"]);
+    // span-query DSL (a plain clause): each tenant matches only its own trace.
+    expect((await repo.listTraces({ spanQuery: "model:gpt-4o" }, WS_A)).traces.map((t) => t.traceId)).toEqual(["a-t"]);
+  });
+
+  it("test_kind_chain_does_not_leak_on_span_id_collision", async () => {
+    // LENS-M22-001 direct regression. The derived `kind:chain` is "a span with NO
+    // model/tool/operation signal that HAS children". A's parent "p" (no model) has a
+    // child "c" in A → A's trace is chain. B ingests a span whose parent_span_id == "p"
+    // (a deliberate cross-tenant span_id collision). The chain EXISTS is now
+    // workspace-scoped, so:
+    //   - A's chain match is correct (its OWN child counts), and
+    //   - A's CHILDLESS leaf "leaf" stays NON-chain even though B has a child → "leaf".
+    await repo.save(
+      [
+        span({ spanId: "p", traceId: "a-chain" }),
+        span({ spanId: "c", traceId: "a-chain", parentSpanId: "p" }),
+        span({ spanId: "leaf", traceId: "a-leaf" }),
+      ],
+      WS_A,
+    );
+    await repo.save(
+      [
+        // cross-tenant collision: B's child points at A's "leaf" span_id.
+        span({ spanId: "b-child", traceId: "b-t", parentSpanId: "leaf" }),
+      ],
+      WS_B,
+    );
+    const chainA = (await repo.listTraces({ spanQuery: "kind:chain" }, WS_A)).traces.map((t) => t.traceId);
+    // A's own parent→child trace IS chain; A's childless-leaf trace is NOT (B's
+    // colliding child must not flip it via a leaked, unscoped EXISTS).
+    expect(chainA).toContain("a-chain");
+    expect(chainA).not.toContain("a-leaf");
+  });
+
+  it("test_same_trace_id_tags_and_annotations_isolate", async () => {
+    // F5: the hostile case for tags/annotations — the SAME trace_id in BOTH workspaces,
+    // each tagged/annotated independently. listTags/listAnnotations must return only the
+    // caller-tenant rows (workspace-leading uniques + scoped reads).
+    await repo.save([span({ spanId: "a1", traceId: "shared", inputValue: "x" })], WS_A);
+    await repo.save([span({ spanId: "b1", traceId: "shared", inputValue: "y" })], WS_B);
+    expect(await repo.addTag("shared", "a-only", WS_A)).toBe(true);
+    expect(await repo.addTag("shared", "b-only", WS_B)).toBe(true);
+    expect(await repo.listTags("shared", WS_A)).toEqual(["a-only"]);
+    expect(await repo.listTags("shared", WS_B)).toEqual(["b-only"]);
+    await repo.upsertAnnotation("shared", { name: "note-a", annotatorKind: "HUMAN", spanId: undefined }, WS_A);
+    await repo.upsertAnnotation("shared", { name: "note-b", annotatorKind: "HUMAN", spanId: undefined }, WS_B);
+    expect((await repo.listAnnotations("shared", WS_A)).map((a) => a.name)).toEqual(["note-a"]);
+    expect((await repo.listAnnotations("shared", WS_B)).map((a) => a.name)).toEqual(["note-b"]);
+  });
+
+  it("test_aggregate_agents_isolate_on_same_agent_name", async () => {
+    // F1: aggregateAgents groups by the `agent.name` ATTRIBUTE and joins tools/prompt via
+    // correlated subqueries over the whole spans table — exactly the shape where a missed
+    // workspace filter merges two tenants. Seed the SAME agent.name in both with different
+    // tools + system prompts; each tenant must see only its own.
+    await repo.save(
+      [
+        span({
+          spanId: "a1",
+          traceId: "a-t",
+          attributes: { "agent.name": "TripAgent", "agent.system_prompt": "ALICE PROMPT" },
+        }),
+        span({
+          spanId: "a2",
+          traceId: "a-t",
+          parentSpanId: "a1",
+          toolName: "alice_tool",
+          attributes: { "gen_ai.tool.name": "alice_tool" },
+        }),
+      ],
+      WS_A,
+    );
+    await repo.save(
+      [
+        span({
+          spanId: "b1",
+          traceId: "b-t",
+          attributes: { "agent.name": "TripAgent", "agent.system_prompt": "BOB PROMPT" },
+        }),
+        span({
+          spanId: "b2",
+          traceId: "b-t",
+          parentSpanId: "b1",
+          toolName: "bob_tool",
+          attributes: { "gen_ai.tool.name": "bob_tool" },
+        }),
+      ],
+      WS_B,
+    );
+    const agA = (await repo.aggregateAgents(WS_A)).find((a) => a.name === "TripAgent");
+    const agB = (await repo.aggregateAgents(WS_B)).find((a) => a.name === "TripAgent");
+    expect(agA?.systemPrompt).toBe("ALICE PROMPT");
+    expect(agA?.tools).toEqual(["alice_tool"]);
+    expect(agB?.systemPrompt).toBe("BOB PROMPT");
+    expect(agB?.tools).toEqual(["bob_tool"]);
+  });
+
   it("test_metrics_aggregates_isolate", async () => {
     await repo.save(
       [span({ spanId: "a1", traceId: "ta", model: "gpt-4o", inputTokens: 100, outputTokens: 50 })],

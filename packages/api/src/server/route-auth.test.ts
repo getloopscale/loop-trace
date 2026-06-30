@@ -116,4 +116,66 @@ describe("M22 route auth (per-verb scope)", () => {
     const app = createApp(repo);
     expect((await app.request(ingest(undefined))).status).toBe(200);
   });
+
+  it("test_fail_closed_503_on_auth_backend_throw_no_privileged_default", async () => {
+    // Invariant 5 (the 503 half): when the auth backend throws (e.g. DB down), the
+    // request fails with 503 — NEVER served via a privileged default. F3 regression.
+    const { repo, lastSaveWorkspace } = repoStub();
+    const throwing: AuthVerifier = {
+
+      resolvePrincipal: async () => {
+        throw new Error("auth db down");
+      },
+
+      verify: async () => {
+        throw new Error("auth db down");
+      },
+    };
+    const app = createApp(repo, undefined, {
+      verifier: throwing,
+      requireCredential: true,
+    });
+    const res = await app.request(ingest("any"));
+    expect(res.status).toBe(503);
+    expect((await res.json()).code).toBe("SERVICE_UNAVAILABLE");
+    // The handler never ran → no privileged default leaked the write through.
+    expect(lastSaveWorkspace()).toBeUndefined();
+  });
+
+  it("test_every_data_route_requires_credential_in_multitenant", async () => {
+    // LENS-AUTH-1 mechanical guard: with requireCredential and NO token, every data
+    // route (one per resource family + the path-param variants) must fail closed (401),
+    // proving bearerAuth precedes them and getPrincipal's default never authorizes.
+    const { repo } = repoStub();
+    const app = createApp(repo, undefined, {
+      verifier: verifierFor({ rw: principal(["lens:read", "lens:write", "lens:delete"]) }),
+      requireCredential: true,
+    });
+    const dataRoutes = [
+      "GET /v1/traces",
+      "GET /v1/spans/x",
+      "GET /v1/traces/x",
+      "GET /v1/traces/x/cost",
+      "GET /v1/agents",
+      "GET /v1/analytics/tools",
+      "GET /v1/analytics/tools/x/traces",
+      "GET /v1/analytics/cost",
+      "GET /v1/metrics/north-star",
+      "GET /v1/metrics/observability",
+      "GET /v1/metrics/evaluators",
+      "GET /v1/sessions",
+      "GET /v1/sessions/x",
+      "GET /v1/traces/x/tags",
+      "GET /v1/traces/x/annotations",
+      "GET /v1/datasets",
+      "GET /v1/datasets/x",
+    ];
+    for (const route of dataRoutes) {
+      const [method, path] = route.split(" ");
+      const res = await app.request(
+        new Request(`http://x${path}`, { method }),
+      );
+      expect(`${route} → ${res.status}`).toBe(`${route} → 401`);
+    }
+  });
 });

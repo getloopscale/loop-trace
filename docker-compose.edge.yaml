@@ -1,0 +1,67 @@
+# Hermetic ForwardAuth edge stack for the M22 invariant-6 proof (`make e2e-edge`
+# pattern). Self-contained — NO theo-cloud dependency:
+#
+#   client ──(X-Customer-Key: cust_<tenant>)──▶ Traefik :8090
+#                                                  │ forwardAuth → broker shim
+#                                                  │   (mints per-tenant theo_live_* via
+#                                                  │    the REAL /v1/admin/keys + bootstrap)
+#                                                  │ strip X-Customer-Key
+#                                                  ▼ Authorization: Bearer <minted>
+#                                               lens api (multi-tenant, fail-closed)
+#                                                  ▼
+#                                               postgres
+#
+# The api is ALSO exposed on :4319 so the e2e can assert the raw customer key is
+# rejected when sent DIRECTLY to the service (it only honors minted keys).
+services:
+  edge-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: theolens
+      POSTGRES_PASSWORD: theolens
+      POSTGRES_DB: theolens
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U theolens -d theolens"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      edge-postgres:
+        condition: service_healthy
+    environment:
+      THEOLENS_PG_URI: postgresql://theolens:theolens@edge-postgres:5432/theolens
+      THEOLENS_PORT: "4318"
+      THEOLENS_REQUIRE_CREDENTIAL: "true"
+      THEOLENS_PLATFORM_ADMIN_BOOTSTRAP: ${EDGE_BOOTSTRAP:-edge-boot-secret-do-not-use-in-prod}
+    ports:
+      - "4319:4318"   # direct access for the "customer key never reaches service" assertion
+
+  forward-auth:
+    image: node:20-alpine
+    depends_on:
+      - api
+    environment:
+      API_URL: http://api:4318
+      BOOTSTRAP: ${EDGE_BOOTSTRAP:-edge-boot-secret-do-not-use-in-prod}
+      PORT: "4181"
+    volumes:
+      - ./test/edge/forward-auth-shim.mjs:/shim.mjs:ro
+    command: ["node", "/shim.mjs"]
+
+  traefik:
+    image: traefik:v3.1
+    depends_on:
+      - api
+      - forward-auth
+    command: ["--configFile=/etc/traefik/traefik.yml"]
+    volumes:
+      - ./test/edge/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./test/edge/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+    ports:
+      - "${EDGE_TRAEFIK_PORT:-8095}:80"
