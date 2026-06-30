@@ -363,24 +363,31 @@ export class DrizzleSpanRepository implements SpanRepository {
     });
   }
 
-  async getBySpanId(spanId: string): Promise<Span | null> {
+  async getBySpanId(
+    spanId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<Span | null> {
     const rows = await this.db
       .select()
       .from(spans)
-      .where(eq(spans.spanId, spanId))
+      .where(and(eq(spans.spanId, spanId), eq(spans.workspaceId, workspaceId)))
       .limit(1);
     const row = rows[0];
     return row ? fromRow(row) : null;
   }
 
-  async getTraceTree(traceId: string): Promise<TraceTreeNode | null> {
+  async getTraceTree(
+    traceId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<TraceTreeNode | null> {
     // Deterministic sibling order at the source: numeric start time, then spanId
     // (the PK — a stable total order). Makes the persisted tree reproducible across
     // fetches and aligns the rendered tree with the replay step order (review F-rp-1).
+    // M22: scoped by workspace — a trace's spans never cross the tenant boundary.
     const rows = await this.db
       .select()
       .from(spans)
-      .where(eq(spans.traceId, traceId))
+      .where(and(eq(spans.traceId, traceId), eq(spans.workspaceId, workspaceId)))
       .orderBy(sql`start_time_unix_nano::numeric`, spans.spanId);
     if (rows.length === 0) return null;
 
@@ -395,7 +402,12 @@ export class DrizzleSpanRepository implements SpanRepository {
     const evalRows = await this.db
       .select()
       .from(spanEvaluations)
-      .where(eq(spanEvaluations.traceId, traceId));
+      .where(
+        and(
+          eq(spanEvaluations.traceId, traceId),
+          eq(spanEvaluations.workspaceId, workspaceId),
+        ),
+      );
     for (const e of evalRows) {
       const node = nodes.get(e.spanId);
       if (node == null) continue;
