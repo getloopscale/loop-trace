@@ -64,6 +64,15 @@ export {
   type Verdict,
   type RunResult,
 } from "./domain/evaluator.js";
+export type {
+  EvaluatorRepository,
+  EvaluatorRecord,
+  GuardRecord,
+} from "./domain/evaluator-repository.js";
+export {
+  DrizzleEvaluatorRepository,
+  createEvaluatorRepository,
+} from "./infrastructure/db/drizzle-evaluator-repository.js";
 // M26b: human-feedback annotations (write-path).
 export {
   normalizeAnnotation,
