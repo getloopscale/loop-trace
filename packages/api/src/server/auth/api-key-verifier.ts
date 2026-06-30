@@ -124,7 +124,7 @@ export class ApiKeyAuthVerifier implements AuthVerifier {
       .then(() => undefined)
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);
-        // eslint-disable-next-line no-console
+         
         console.warn(`[theo-lens] last_used_at update failed: ${msg}`);
       });
   }

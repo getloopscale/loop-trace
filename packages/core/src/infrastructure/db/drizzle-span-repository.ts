@@ -264,7 +264,7 @@ export class DrizzleSpanRepository implements SpanRepository {
       await tx
         .insert(spans)
         .values(unique.map((s) => toRow(s, workspaceId)))
-        .onConflictDoNothing({ target: spans.spanId });
+        .onConflictDoNothing({ target: [spans.workspaceId, spans.spanId] });
 
       // M26: persist extracted online-evals to the side-table. Idempotent on
       // (span_id, name) so re-ingest of the same span never duplicates rows.
@@ -284,7 +284,11 @@ export class DrizzleSpanRepository implements SpanRepository {
           .insert(spanEvaluations)
           .values(evalRows)
           .onConflictDoNothing({
-            target: [spanEvaluations.spanId, spanEvaluations.name],
+            target: [
+              spanEvaluations.workspaceId,
+              spanEvaluations.spanId,
+              spanEvaluations.name,
+            ],
           });
       }
 
@@ -317,9 +321,8 @@ export class DrizzleSpanRepository implements SpanRepository {
             NULL,
             CASE WHEN bool_or(status_code IN (${sql.raw(errorList)})) THEN 'error' ELSE 'ok' END,
             now()
-          FROM spans WHERE trace_id = ${traceId}
-          ON CONFLICT (trace_id) DO UPDATE SET
-            workspace_id = excluded.workspace_id,
+          FROM spans WHERE trace_id = ${traceId} AND workspace_id = ${workspaceId}
+          ON CONFLICT (workspace_id, trace_id) DO UPDATE SET
             session_id = excluded.session_id,
             name = excluded.name,
             start_time_unix_nano = excluded.start_time_unix_nano,
@@ -337,7 +340,7 @@ export class DrizzleSpanRepository implements SpanRepository {
           SELECT model,
                  coalesce(sum(input_tokens), 0)::int AS i,
                  coalesce(sum(output_tokens), 0)::int AS o
-          FROM spans WHERE trace_id = ${traceId} AND model IS NOT NULL
+          FROM spans WHERE trace_id = ${traceId} AND workspace_id = ${workspaceId} AND model IS NOT NULL
           GROUP BY model
         `);
         const cost = computeTraceCost(
@@ -349,7 +352,7 @@ export class DrizzleSpanRepository implements SpanRepository {
           this.priceTable,
         );
         await tx.execute(
-          sql`UPDATE traces SET cost_usd = ${cost} WHERE trace_id = ${traceId}`,
+          sql`UPDATE traces SET cost_usd = ${cost} WHERE trace_id = ${traceId} AND workspace_id = ${workspaceId}`,
         );
       }
 
@@ -357,7 +360,7 @@ export class DrizzleSpanRepository implements SpanRepository {
         await tx.execute(sql`
           INSERT INTO sessions (session_id, workspace_id, first_seen_at, last_seen_at)
           VALUES (${sessionId}, ${workspaceId}, now(), now())
-          ON CONFLICT (session_id) DO UPDATE SET last_seen_at = now()
+          ON CONFLICT (workspace_id, session_id) DO UPDATE SET last_seen_at = now()
         `);
       }
     });
@@ -484,7 +487,9 @@ export class DrizzleSpanRepository implements SpanRepository {
       const modelTraceIds = this.db
         .selectDistinct({ traceId: spans.traceId })
         .from(spans)
-        .where(eq(spans.model, opts.model));
+        .where(
+          and(eq(spans.model, opts.model), eq(spans.workspaceId, workspaceId)),
+        );
       conds.push(inArray(traces.traceId, modelTraceIds));
     }
     if (opts.tag) {
@@ -493,7 +498,12 @@ export class DrizzleSpanRepository implements SpanRepository {
       const taggedTraceIds = this.db
         .selectDistinct({ traceId: traceTags.traceId })
         .from(traceTags)
-        .where(eq(traceTags.tag, opts.tag));
+        .where(
+          and(
+            eq(traceTags.tag, opts.tag),
+            eq(traceTags.workspaceId, workspaceId),
+          ),
+        );
       conds.push(inArray(traces.traceId, taggedTraceIds));
     }
     // M24: one parsed tsquery, reused by the filter AND the relevance rank so both
@@ -507,7 +517,7 @@ export class DrizzleSpanRepository implements SpanRepository {
       // Full-text search over ANY span's input/output (D1 — not root-only; EXISTS
       // lists the trace once, no row multiplication).
       conds.push(
-        sql`EXISTS (SELECT 1 FROM spans s WHERE s.trace_id = ${traces.traceId} AND s.search_tsv @@ ${tsq})`,
+        sql`EXISTS (SELECT 1 FROM spans s WHERE s.trace_id = ${traces.traceId} AND s.workspace_id = ${workspaceId} AND s.search_tsv @@ ${tsq})`,
       );
     }
     // M30: span-query DSL — a trace matches iff ONE span satisfies EVERY clause
@@ -518,7 +528,7 @@ export class DrizzleSpanRepository implements SpanRepository {
       if (clauses.length > 0) {
         const preds = sql.join(clauses.map(spanClauseSql), sql` AND `);
         conds.push(
-          sql`EXISTS (SELECT 1 FROM spans s WHERE s.trace_id = ${traces.traceId} AND ${preds})`,
+          sql`EXISTS (SELECT 1 FROM spans s WHERE s.trace_id = ${traces.traceId} AND s.workspace_id = ${workspaceId} AND ${preds})`,
         );
       }
     }
@@ -533,7 +543,7 @@ export class DrizzleSpanRepository implements SpanRepository {
     const relevanceSort =
       tsq != null && (opts.orderBy == null || opts.orderBy === "recent");
     const sortCol = relevanceSort
-      ? sql`(SELECT max(ts_rank(s.search_tsv, ${tsq})) FROM spans s WHERE s.trace_id = ${traces.traceId} AND s.search_tsv @@ ${tsq})`
+      ? sql`(SELECT max(ts_rank(s.search_tsv, ${tsq})) FROM spans s WHERE s.trace_id = ${traces.traceId} AND s.workspace_id = ${workspaceId} AND s.search_tsv @@ ${tsq})`
       : opts.orderBy === "latency"
         ? // A one-sided NULL (only start OR only end) must sort NULLS LAST, not as
           // 0 — `greatest(0, end - NULL)` returns 0, so guard with an explicit CASE
@@ -567,7 +577,13 @@ export class DrizzleSpanRepository implements SpanRepository {
         ),
       })
       .from(spans)
-      .where(and(eq(spans.traceId, traces.traceId), isNull(spans.parentSpanId)))
+      .where(
+        and(
+          eq(spans.traceId, traces.traceId),
+          eq(spans.workspaceId, workspaceId),
+          isNull(spans.parentSpanId),
+        ),
+      )
       .orderBy(asc(sql`${spans.startTimeUnixNano}::numeric`))
       .limit(1)
       .as("root");
@@ -586,6 +602,7 @@ export class DrizzleSpanRepository implements SpanRepository {
       .where(
         and(
           eq(spans.traceId, traces.traceId),
+          eq(spans.workspaceId, workspaceId),
           sql`(${spans.inputValue} IS NOT NULL OR ${spans.outputValue} IS NOT NULL)`,
         ),
       )
@@ -606,7 +623,7 @@ export class DrizzleSpanRepository implements SpanRepository {
         rootOutputValue: repr.outputValue,
         // M26b: per-trace online-eval count for the "Evals" list column (read-only,
         // M26 data) — a correlated count on the indexed span_evaluations.trace_id.
-        evaluationsCount: sql<number>`(SELECT count(*)::int FROM span_evaluations se WHERE se.trace_id = ${traces.traceId})`.as(
+        evaluationsCount: sql<number>`(SELECT count(*)::int FROM span_evaluations se WHERE se.trace_id = ${traces.traceId} AND se.workspace_id = ${workspaceId})`.as(
           "evaluations_count",
         ),
       })
@@ -882,7 +899,7 @@ export class DrizzleSpanRepository implements SpanRepository {
              count(*)::int AS count,
              avg(se.score) AS "avgScore"
       FROM span_evaluations se
-      JOIN traces t ON t.trace_id = se.trace_id
+      JOIN traces t ON t.trace_id = se.trace_id AND t.workspace_id = se.workspace_id
       WHERE t.updated_at >= now() - ${window} AND se.workspace_id = ${workspaceId}
       GROUP BY se.name
       ORDER BY se.name ASC
@@ -891,7 +908,7 @@ export class DrizzleSpanRepository implements SpanRepository {
     const labelRes = await this.db.execute(sql`
       SELECT se.name AS name, se.label AS label, count(*)::int AS count
       FROM span_evaluations se
-      JOIN traces t ON t.trace_id = se.trace_id
+      JOIN traces t ON t.trace_id = se.trace_id AND t.workspace_id = se.workspace_id
       WHERE t.updated_at >= now() - ${window} AND se.label IS NOT NULL AND se.workspace_id = ${workspaceId}
       GROUP BY se.name, se.label
     `);
@@ -933,18 +950,21 @@ export class DrizzleSpanRepository implements SpanRepository {
              count(t.trace_id) FILTER (WHERE t.status_code = 'error')::int AS "errorCount",
              (SELECT count(*)::int
                 FROM span_evaluations se
-                JOIN traces te ON te.trace_id = se.trace_id
-               WHERE te.session_id = s.session_id) AS "evaluationsCount",
+               WHERE se.workspace_id = ${workspaceId}
+                 AND se.trace_id IN (SELECT te.trace_id FROM traces te
+                                      WHERE te.session_id = s.session_id
+                                        AND te.workspace_id = ${workspaceId})) AS "evaluationsCount",
              (SELECT sp.input_value
                 FROM spans sp
-                JOIN traces tt ON tt.trace_id = sp.trace_id
+                JOIN traces tt ON tt.trace_id = sp.trace_id AND tt.workspace_id = ${workspaceId}
                WHERE tt.session_id = s.session_id
+                 AND sp.workspace_id = ${workspaceId}
                  AND sp.parent_span_id IS NULL
                  AND sp.start_time_unix_nano ~ '^\\d+$'
                ORDER BY sp.start_time_unix_nano::numeric ASC
                LIMIT 1) AS "firstMessageRaw"
       FROM sessions s
-      LEFT JOIN traces t ON t.session_id = s.session_id
+      LEFT JOIN traces t ON t.session_id = s.session_id AND t.workspace_id = s.workspace_id
       WHERE s.workspace_id = ${workspaceId}
       GROUP BY s.session_id, s.first_seen_at, s.last_seen_at
       ORDER BY s.last_seen_at DESC, s.session_id DESC
@@ -1013,7 +1033,7 @@ export class DrizzleSpanRepository implements SpanRepository {
              percentile_cont(0.95) WITHIN GROUP (ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6))
                FILTER (WHERE start_time_unix_nano ~ '^\\d+$' AND end_time_unix_nano ~ '^\\d+$')::double precision AS p95
       FROM traces
-      WHERE session_id = ${sessionId}
+      WHERE session_id = ${sessionId} AND workspace_id = ${workspaceId}
     `);
     const agg = (aggRes.rows as unknown as {
       traceCount: number;
@@ -1028,7 +1048,12 @@ export class DrizzleSpanRepository implements SpanRepository {
     const memberRows = await this.db
       .select()
       .from(traces)
-      .where(eq(traces.sessionId, sessionId))
+      .where(
+        and(
+          eq(traces.sessionId, sessionId),
+          eq(traces.workspaceId, workspaceId),
+        ),
+      )
       .orderBy(desc(traces.updatedAt));
 
     const raw: RawSessionDetail = {
@@ -1070,7 +1095,7 @@ export class DrizzleSpanRepository implements SpanRepository {
       .insert(traceTags)
       .values({ traceId, tag, workspaceId })
       .onConflictDoNothing({
-        target: [traceTags.traceId, traceTags.tag],
+        target: [traceTags.workspaceId, traceTags.traceId, traceTags.tag],
       });
     return true;
   }
@@ -1141,6 +1166,7 @@ export class DrizzleSpanRepository implements SpanRepository {
       })
       .onConflictDoUpdate({
         target: [
+          annotations.workspaceId,
           annotations.traceId,
           annotations.spanId,
           annotations.name,
@@ -1343,7 +1369,11 @@ export class DrizzleSpanRepository implements SpanRepository {
         outputSnapshot: snap?.output ?? null,
       })
       .onConflictDoNothing({
-        target: [datasetItems.datasetId, datasetItems.traceId],
+        target: [
+          datasetItems.workspaceId,
+          datasetItems.datasetId,
+          datasetItems.traceId,
+        ],
       });
     return true;
   }
@@ -1444,31 +1474,38 @@ export class DrizzleSpanRepository implements SpanRepository {
     const cutoff = olderThan.toISOString();
     const rowCount = (r: { rowCount: number | null }): number => r.rowCount ?? 0;
     return this.db.transaction(async (tx) => {
-      const stale = sql`(SELECT trace_id FROM traces WHERE updated_at < ${cutoff})`;
+      // M22: trace_id is no longer globally unique (composite PK (workspace_id,
+      // trace_id)). The stale set is keyed by BOTH columns so a stale trace in one
+      // workspace never cascades a delete onto a same-trace_id row in another
+      // workspace (row-value IN over the pair). Retention itself stays system-wide
+      // (age-based operator policy) — only the cascade is workspace-precise.
+      const stale = sql`(SELECT workspace_id, trace_id FROM traces WHERE updated_at < ${cutoff})`;
       const spansRes = await tx.execute(
-        sql`DELETE FROM spans WHERE trace_id IN ${stale}`,
+        sql`DELETE FROM spans WHERE (workspace_id, trace_id) IN ${stale}`,
       );
       const tagsRes = await tx.execute(
-        sql`DELETE FROM trace_tags WHERE trace_id IN ${stale}`,
+        sql`DELETE FROM trace_tags WHERE (workspace_id, trace_id) IN ${stale}`,
       );
       const replayRes = await tx.execute(
-        sql`DELETE FROM replay_sessions WHERE trace_id IN ${stale}`,
+        sql`DELETE FROM replay_sessions WHERE (workspace_id, trace_id) IN ${stale}`,
       );
       // M26: eval rows of stale traces (avoid orphan span_evaluations). M26b: human
-      // annotations of stale traces. Both keyed by trace_id, no FK → explicit delete.
+      // annotations of stale traces. Both keyed by (workspace_id, trace_id), no FK.
       const evalsRes = await tx.execute(
-        sql`DELETE FROM span_evaluations WHERE trace_id IN ${stale}`,
+        sql`DELETE FROM span_evaluations WHERE (workspace_id, trace_id) IN ${stale}`,
       );
       const annotationsRes = await tx.execute(
-        sql`DELETE FROM annotations WHERE trace_id IN ${stale}`,
+        sql`DELETE FROM annotations WHERE (workspace_id, trace_id) IN ${stale}`,
       );
       const tracesRes = await tx.execute(
         sql`DELETE FROM traces WHERE updated_at < ${cutoff}`,
       );
       // EC-1: the `IS NOT NULL` guard is mandatory — a NULL in a NOT IN set makes
-      // the whole predicate UNKNOWN and would silently delete ZERO orphans.
+      // the whole predicate UNKNOWN and would silently delete ZERO orphans. The pair
+      // (workspace_id, session_id) matches the composite sessions PK so a live
+      // session in workspace B is never orphan-deleted by workspace A's traces.
       const sessionsRes = await tx.execute(
-        sql`DELETE FROM sessions WHERE session_id NOT IN (SELECT session_id FROM traces WHERE session_id IS NOT NULL)`,
+        sql`DELETE FROM sessions WHERE (workspace_id, session_id) NOT IN (SELECT workspace_id, session_id FROM traces WHERE session_id IS NOT NULL)`,
       );
       return {
         cutoff,

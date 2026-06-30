@@ -2,7 +2,9 @@
  * Admin key lifecycle — `POST/GET/DELETE /v1/admin/keys[*]` (M22). The admin
  * surface the theo-cloud gateway (Model B broker) mints per-tenant keys against.
  * Ported from the reference `theo-memory` (`handlers/admin-keys.ts`), focused on
- * the security-critical core: mint / list / revoke / rotate with anti-escalation.
+ * the security-critical core: mint / list / revoke with anti-escalation. (Key
+ * rotation = revoke + mint via these endpoints; a dedicated rotate route is not
+ * shipped in M22 — YAGNI until a caller needs atomic rotate-in-place.)
  *
  * Key format `theo_live_` + 32 random bytes (base64url); stored ONLY as a SHA-256
  * hash (the raw secret is returned ONCE on mint, never persisted). Gated upstream
@@ -16,6 +18,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { Context } from "hono";
 
 import { scopeSatisfies } from "../auth/scope-hierarchy.js";
+import { constantTimeEqual } from "../auth/scope-verifier.js";
 import type { AuthPool } from "../auth/api-key-verifier.js";
 
 const PREFIX = "theo_live_";
@@ -48,7 +51,9 @@ async function resolveCaller(
   if (
     bootstrapToken !== undefined &&
     bootstrapToken.trim().length > 0 &&
-    token === bootstrapToken
+    // Constant-time compare (F-sec-6): a `===` on the bootstrap secret leaks its
+    // length/prefix via timing. Reuses the scope-verifier helper (length-guarded).
+    constantTimeEqual(token, bootstrapToken)
   ) {
     // Bootstrap token: implicit platform-admin in the default workspace.
     return { workspaceId: "default", scopes: ["lens:platform-admin"] };

@@ -106,6 +106,82 @@ suite("M22 cross-tenant isolation (integration)", () => {
     expect(bTree?.spanId).toBe("b1");
   });
 
+  it("test_identical_ids_full_collision_isolate", async () => {
+    // The hostile case the review's BLOCKERs (F-sec-1/2/3) turn on: an attacker in
+    // workspace B replays the EXACT span_id + trace_id + session_id of workspace A.
+    // Pre-composite-PK this aliased rows (shared single-column keys) and leaked A's
+    // aggregates/content into B's reads (and flipped trace ownership on the upsert).
+    // With composite (workspace_id, *) keys + workspace-scoped queries, every read
+    // is per-tenant and the second ingest is NOT dropped (onConflict is per-pair).
+    const ID = { spanId: "x", traceId: "t" };
+    await repo.save(
+      [
+        span({
+          ...ID,
+          sessionId: "s",
+          model: "gpt-4o",
+          inputTokens: 100,
+          outputTokens: 100,
+          inputValue: "ALICE PRIVATE",
+          evaluations: [{ name: "quality", score: 0.9, label: "good" }],
+        }),
+      ],
+      WS_A,
+    );
+    await repo.save(
+      [
+        span({
+          ...ID,
+          sessionId: "s",
+          model: "gpt-4o",
+          inputTokens: 1,
+          outputTokens: 1,
+          inputValue: "BOB PRIVATE",
+          evaluations: [{ name: "quality", score: 0.1, label: "bad" }],
+        }),
+      ],
+      WS_B,
+    );
+
+    // Both ingests survived (the second was NOT silently dropped by onConflict).
+    expect((await repo.getBySpanId("x", WS_A))?.inputValue).toBe("ALICE PRIVATE");
+    expect((await repo.getBySpanId("x", WS_B))?.inputValue).toBe("BOB PRIVATE");
+
+    // getTraceTree: each tenant sees ONLY its own span content under the shared id.
+    expect((await repo.getTraceTree("t", WS_A))?.inputValue).toBe("ALICE PRIVATE");
+    expect((await repo.getTraceTree("t", WS_B))?.inputValue).toBe("BOB PRIVATE");
+
+    // getTraceCost: distinct token counts → distinct, non-summed costs (F-sec-3:
+    // the recompute reads only the caller's spans, never the other tenant's).
+    const costA = await repo.getTraceCost("t", WS_A);
+    const costB = await repo.getTraceCost("t", WS_B);
+    expect(costA?.totalTokens).toBe(200);
+    expect(costB?.totalTokens).toBe(2);
+
+    // getSessionDetail (F-sec-1): aggregates are per-tenant — traceCount 1 each,
+    // tokens NOT summed across the shared session_id.
+    const sdA = await repo.getSessionDetail("s", WS_A);
+    const sdB = await repo.getSessionDetail("s", WS_B);
+    expect(sdA?.traceCount).toBe(1);
+    expect(sdA?.totalTokens).toBe(200);
+    expect(sdB?.traceCount).toBe(1);
+    expect(sdB?.totalTokens).toBe(2);
+
+    // listSessions (F-sec-2): one session per tenant, tokens scoped, no cross-bleed.
+    const lsA = (await repo.listSessions(WS_A)).sessions;
+    const lsB = (await repo.listSessions(WS_B)).sessions;
+    expect(lsA).toHaveLength(1);
+    expect(lsA[0]?.totalTokens).toBe(200);
+    expect(lsB[0]?.totalTokens).toBe(2);
+
+    // aggregateEvaluators (the JOIN-scope fix): each tenant's "quality" eval is its
+    // own — A's avg is 0.9, B's is 0.1, never averaged together across the shared id.
+    const evA = await repo.aggregateEvaluators("30d", WS_A);
+    const evB = await repo.aggregateEvaluators("30d", WS_B);
+    expect(evA.find((e) => e.name === "quality")?.avgScore).toBeCloseTo(0.9);
+    expect(evB.find((e) => e.name === "quality")?.avgScore).toBeCloseTo(0.1);
+  });
+
   it("test_tags_annotations_datasets_isolate", async () => {
     await repo.save([span({ spanId: "a1", traceId: "ta", inputValue: "in", outputValue: "out" })], WS_A);
     await repo.save([span({ spanId: "b1", traceId: "tb", inputValue: "in", outputValue: "out" })], WS_B);

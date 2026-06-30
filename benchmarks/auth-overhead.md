@@ -1,6 +1,7 @@
 # M22 — Auth overhead benchmark
 
-**Date:** 2026-06-26 · **Script:** `benchmarks/auth-overhead.mjs` (reproducible) ·
+**Date:** 2026-06-30 (re-run after the workspace-leading composite-key isolation fix) ·
+**Script:** `benchmarks/auth-overhead.mjs` (reproducible) ·
 **DB:** Postgres 16 (`postgres:16-alpine`), local · **Node:** v24 · **N:** 500 requests/run × 3 runs (50-request warmup discarded).
 
 ## What is measured
@@ -16,20 +17,27 @@ Every figure is a real timed `app.request` against a real DB — no fabricated n
 
 | Path | mode | p50 | p95 | mean ± std |
 |---|---|---|---|---|
-| `GET /v1/traces` (read) | single-tenant | 1.22 | 1.78 | 1.25 ± 0.30 |
-| `GET /v1/traces` (read) | multi-tenant (auth) | 1.75 | 2.31 | 1.79 ± 0.39 |
-| `POST /v1/traces` (ingest, empty) | single-tenant | 0.016 | 0.026 | 0.018 ± 0.017 |
-| `POST /v1/traces` (ingest, empty) | multi-tenant (auth) | 0.53 | 0.74 | 0.56 ± 0.19 |
+| `GET /v1/traces` (read) | single-tenant | 2.83 | 3.95 | 2.90 ± 0.68 |
+| `GET /v1/traces` (read) | multi-tenant (auth) | 3.62 | 5.98 | 4.64 ± 5.28 |
+| `POST /v1/traces` (ingest, empty) | single-tenant | 0.078 | 0.129 | 0.081 ± 0.039 |
+| `POST /v1/traces` (ingest, empty) | multi-tenant (auth) | 1.25 | 2.03 | 1.33 ± 0.37 |
 
-**Auth overhead (p50 delta):** read **+0.54 ms**, ingest **+0.51 ms**.
+**Auth overhead (p50 delta):** read **+0.79 ms**, ingest **+1.17 ms**.
+
+> Absolute numbers vary run-to-run with machine load (this run was on a busier host
+> than the 2026-06-26 baseline — note the wider read multi-tenant std). The **delta**
+> is the signal: a sub-1.2 ms p50 constant cost dominated by one SHA-256 + one indexed
+> `theo_api_keys` probe, independent of trace size. The composite-key isolation fix
+> touches only data-table writes (the recompute), not the auth path, so it does not
+> change the auth overhead being measured here.
 
 ## Interpretation
 
 - The added cost is the **SHA-256 hash of the bearer token + one indexed lookup** on
   `theo_api_keys (key_hash)` (a `UNIQUE` index → single-row probe) + the scope check.
-- ~0.5 ms p50 is a **modest, constant** overhead, independent of trace size (the lookup
-  is O(1) on the key, not on the data). It does not scale with ingest volume.
-- The read path's absolute latency (1.2–1.8 ms) is dominated by the list query, not auth.
+- Sub-1.2 ms p50 is a **modest, constant** overhead, independent of trace size (the
+  lookup is O(1) on the key, not on the data). It does not scale with ingest volume.
+- The read path's absolute latency is dominated by the list query, not auth.
 - The fire-and-forget `last_used_at` touch is off the critical path (never awaited).
 
 ## Reproduce

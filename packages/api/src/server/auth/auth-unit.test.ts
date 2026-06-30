@@ -54,7 +54,7 @@ describe("BearerAuthVerifier (M22)", () => {
 describe("ApiKeyAuthVerifier (M22)", () => {
   function poolReturning(rows: unknown[]): AuthPool {
     return {
-      // eslint-disable-next-line @typescript-eslint/require-await
+       
       query: async <T>() => ({ rows: rows as T[] }),
     };
   }
@@ -62,7 +62,7 @@ describe("ApiKeyAuthVerifier (M22)", () => {
   it("test_api_key_verifier_bad_prefix_short_circuits_before_db", async () => {
     let queried = false;
     const pool: AuthPool = {
-      // eslint-disable-next-line @typescript-eslint/require-await
+       
       query: async <T>() => {
         queried = true;
         return { rows: [] as T[] };

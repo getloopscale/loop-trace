@@ -5,9 +5,9 @@ import { createApp } from "./app.js";
 /** A fake verifier mapping a token → a Principal (M22 route-auth tests). */
 function verifierFor(map: Record<string, Principal>): AuthVerifier {
   return {
-    // eslint-disable-next-line @typescript-eslint/require-await
+     
     resolvePrincipal: async (token) => map[token] ?? null,
-    // eslint-disable-next-line @typescript-eslint/require-await
+     
     verify: async (token) => map[token] !== undefined,
   };
 }

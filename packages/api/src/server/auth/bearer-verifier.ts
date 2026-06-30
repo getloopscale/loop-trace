@@ -40,7 +40,7 @@ export class BearerAuthVerifier implements AuthVerifier {
     this.#expectedToken = expectedToken;
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await -- DIP contract returns Promise for future async impls; bearer compare is sync.
+   
   async verify(token: string): Promise<boolean> {
     if (token.length !== this.#expectedToken.length) return false;
     if (this.#expectedToken === "") return false;

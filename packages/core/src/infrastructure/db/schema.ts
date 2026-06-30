@@ -6,6 +6,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -41,7 +42,11 @@ const tsvector = customType<{ data: string }>({
 export const spans = pgTable(
   "spans",
   {
-    spanId: text("span_id").primaryKey(),
+    // M22: span_id is client-supplied (OTLP) → no longer a global PK. The composite
+    // PK (workspace_id, span_id) keeps every upsert per-workspace so a cross-tenant
+    // span_id collision creates a separate row instead of silently dropping the
+    // second tenant's span (onConflictDoNothing) — an isolation/data-loss defect.
+    spanId: text("span_id").notNull(),
     workspaceId: workspaceIdCol(),
     traceId: text("trace_id").notNull(),
     parentSpanId: text("parent_span_id"),
@@ -78,6 +83,7 @@ export const spans = pgTable(
     ),
   },
   (t) => [
+    primaryKey({ columns: [t.workspaceId, t.spanId] }),
     index("spans_workspace_id_idx").on(t.workspaceId),
     index("spans_trace_id_idx").on(t.traceId),
     index("spans_parent_span_id_idx").on(t.parentSpanId),
@@ -95,7 +101,11 @@ export const spans = pgTable(
 export const traces = pgTable(
   "traces",
   {
-    traceId: text("trace_id").primaryKey(),
+    // M22: trace_id is no longer a global PK — a given trace_id may exist in two
+    // workspaces as separate rows. The composite PK (workspace_id, trace_id) keeps
+    // the recompute upsert per-workspace so a cross-tenant trace_id collision can
+    // never flip ownership or cross-sum aggregates (review F-sec-3).
+    traceId: text("trace_id").notNull(),
     workspaceId: workspaceIdCol(),
     sessionId: text("session_id"),
     name: text("name"),
@@ -111,6 +121,7 @@ export const traces = pgTable(
       .notNull(),
   },
   (t) => [
+    primaryKey({ columns: [t.workspaceId, t.traceId] }),
     index("traces_workspace_id_idx").on(t.workspaceId),
     index("traces_session_id_idx").on(t.sessionId),
     // Backs the day/week cost aggregation (M5 risk #2 — period GROUP BY date_trunc(updated_at)).
@@ -123,7 +134,10 @@ export const traces = pgTable(
 export const sessions = pgTable(
   "sessions",
   {
-    sessionId: text("session_id").primaryKey(),
+    // M22: composite PK (workspace_id, session_id) — session_id is a low-entropy
+    // client-supplied value, so a global PK let the first workspace to ingest a
+    // given session_id "own" it and leak others' traces sharing it (review F-sec-1/2).
+    sessionId: text("session_id").notNull(),
     workspaceId: workspaceIdCol(),
     firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull(),
@@ -131,6 +145,7 @@ export const sessions = pgTable(
   // Backs the M13 sessions list ORDER BY last_seen_at DESC (same time-ordered-list
   // pattern as traces_updated_at_idx / replay_sessions_opened_at_idx).
   (t) => [
+    primaryKey({ columns: [t.workspaceId, t.sessionId] }),
     index("sessions_workspace_id_idx").on(t.workspaceId),
     index("sessions_last_seen_at_idx").on(t.lastSeenAt),
   ],
@@ -175,7 +190,9 @@ export const traceTags = pgTable(
     tag: text("tag").notNull(),
   },
   (t) => [
-    unique("trace_tags_trace_id_tag_uq").on(t.traceId, t.tag),
+    // M22: workspace-leading — the same (trace_id, tag) in two workspaces must not
+    // collide (a cross-tenant trace_id is a distinct tag row per workspace).
+    unique("trace_tags_trace_id_tag_uq").on(t.workspaceId, t.traceId, t.tag),
     index("trace_tags_tag_idx").on(t.tag),
     index("trace_tags_trace_id_idx").on(t.traceId),
   ],
@@ -200,7 +217,13 @@ export const spanEvaluations = pgTable(
     explanation: text("explanation"),
   },
   (t) => [
-    unique("span_evaluations_span_id_name_uq").on(t.spanId, t.name),
+    // M22: workspace-leading — a (span_id, evaluator name) collision across tenants
+    // must be two distinct rows, never an upsert that overwrites the other tenant.
+    unique("span_evaluations_span_id_name_uq").on(
+      t.workspaceId,
+      t.spanId,
+      t.name,
+    ),
     index("span_evaluations_name_idx").on(t.name),
     index("span_evaluations_trace_id_idx").on(t.traceId),
   ],
@@ -231,7 +254,10 @@ export const annotations = pgTable(
       .notNull(),
   },
   (t) => [
+    // M22: workspace-leading — a (trace, span, name, channel) collision across
+    // tenants must be two distinct annotations, never a cross-tenant upsert.
     unique("annotations_target_channel_uq").on(
+      t.workspaceId,
       t.traceId,
       t.spanId,
       t.name,
@@ -280,7 +306,13 @@ export const datasetItems = pgTable(
       .notNull(),
   },
   (t) => [
-    unique("dataset_items_dataset_id_trace_id_uq").on(t.datasetId, t.traceId),
+    // M22: workspace-leading (dataset_id is a server UUID, already isolated; the
+    // leading workspace_id keeps the dedup key consistent with every other table).
+    unique("dataset_items_dataset_id_trace_id_uq").on(
+      t.workspaceId,
+      t.datasetId,
+      t.traceId,
+    ),
     index("dataset_items_dataset_id_idx").on(t.datasetId),
   ],
 );

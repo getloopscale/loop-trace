@@ -26,9 +26,9 @@ function verifier(): AuthVerifier {
     map[tok] = { workspaceId: "ws", userId: "u", role: "member", scopes };
   }
   return {
-    // eslint-disable-next-line @typescript-eslint/require-await
+     
     resolvePrincipal: async (t) => map[t] ?? null,
-    // eslint-disable-next-line @typescript-eslint/require-await
+     
     verify: async (t) => map[t] !== undefined,
   };
 }
