@@ -8,22 +8,32 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Online Evaluators (M36): theo-lens can now **compute** eval verdicts (not just store ingested ones). Define an evaluator — a deterministic **rule** (reusing the M30 span-query DSL) or an **LLM-judge** (a configurable OpenAI-compatible endpoint via `THEOLENS_JUDGE_*`) — that runs on-demand (`POST /v1/evaluators/:id/run` backfill, bounded by `THEOLENS_EVAL_BACKFILL_MAX`, default 500) or via an opt-in periodic in-process sweep (`THEOLENS_EVAL_SWEEP_HOURS`, default OFF), OFF the ingest hot path. The engine writes one verdict per matched span into the existing `span_evaluations` store, so the M26 read surfaces (trace Evaluations tab, `GET /v1/metrics/evaluators`) light up automatically. Flag-only **guards** (`{evaluator, operator, threshold}`) flag traces whose verdict breaches a threshold (`GET /v1/guards/:id/breaches`). A new **Evaluators** page manages them (list/create/run + guard form). The LLM-judge is fail-closed (a 5xx / unparseable reply / out-of-range or empty verdict throws, never a silent pass) and uses native `fetch` (no new dependency). Everything is per-workspace (M22 invariants); evaluator + guard definitions live in two new workspace-leading tables, and deleting an evaluator cascades its guards. Throughput benchmark committed (`benchmarks/evaluator-throughput.md`: ~156 rule / ~164 mocked-judge evals/sec)
 
 ### Changed
-- Roadmap consolidated into **`ROADMAP-v4.md`** — a single authoritative view of every delivered milestone (M0–M35, all `[x]`, each with its shipped version), since the work had been split across the phased `ROADMAP.md` (V1, M0–M8), `ROADMAP-v2.md` (V2, M9–M14) and `ROADMAP-v3.md` (V3, M15–M21) plus the CHANGELOG, with M22–M35 never recorded as milestone headers. The three phased files are kept as historical phase records (V1 gains a "superseded — see v4" banner); the M22 block briefly added to V1 was moved into v4 where it belongs (auth/production is a V3.x concern, not V1). New work appends to v4 (next free id M36).
-- Roadmap: queued **M36 — Online Evaluators (eval-as-rule + guards)** in `ROADMAP-v4.md` as the next milestone (provisional objective + DoD, to be sharpened by `/grill-me` + `/discover-plan` before `/to-plan`). Closes the evals track by adding the compute/write path on top of M26's read path.
 
 ### Deprecated
 
 ### Removed
 
 ### Fixed
+
+### Security
+
+## [0.37.0] - 2026-06-30
+
+### Added
+- Online Evaluators (M36): theo-lens can now **compute** eval verdicts (not just store ingested ones). Define an evaluator — a deterministic **rule** (reusing the M30 span-query DSL) or an **LLM-judge** (a configurable OpenAI-compatible endpoint via `THEOLENS_JUDGE_*`) — that runs on-demand (`POST /v1/evaluators/:id/run` backfill, bounded by `THEOLENS_EVAL_BACKFILL_MAX`, default 500) or via an opt-in periodic in-process sweep (`THEOLENS_EVAL_SWEEP_HOURS`, default OFF), OFF the ingest hot path. The engine writes one verdict per matched span into the existing `span_evaluations` store, so the M26 read surfaces (trace Evaluations tab, `GET /v1/metrics/evaluators`) light up automatically. Flag-only **guards** (`{evaluator, operator, threshold}`) flag traces whose verdict breaches a threshold (`GET /v1/guards/:id/breaches`). A new **Evaluators** page manages them (list/create/run + guard form). The LLM-judge is fail-closed (a 5xx / unparseable reply / out-of-range or empty verdict throws, never a silent pass) and uses native `fetch` (no new dependency). Everything is per-workspace (M22 invariants); evaluator + guard definitions live in two new workspace-leading tables, and deleting an evaluator cascades its guards. Throughput benchmark committed (`benchmarks/evaluator-throughput.md`: ~156 rule / ~164 mocked-judge evals/sec)
+
+
+### Changed
+- Roadmap consolidated into **`ROADMAP-v4.md`** — a single authoritative view of every delivered milestone (M0–M35, all `[x]`, each with its shipped version), since the work had been split across the phased `ROADMAP.md` (V1, M0–M8), `ROADMAP-v2.md` (V2, M9–M14) and `ROADMAP-v3.md` (V3, M15–M21) plus the CHANGELOG, with M22–M35 never recorded as milestone headers. The three phased files are kept as historical phase records (V1 gains a "superseded — see v4" banner); the M22 block briefly added to V1 was moved into v4 where it belongs (auth/production is a V3.x concern, not V1). New work appends to v4 (next free id M36).
+- Roadmap: queued **M36 — Online Evaluators (eval-as-rule + guards)** in `ROADMAP-v4.md` as the next milestone (provisional objective + DoD, to be sharpened by `/grill-me` + `/discover-plan` before `/to-plan`). Closes the evals track by adding the compute/write path on top of M26's read path.
+
+
+### Fixed
 - `/code-quality` audit no longer walks `knowledge-base/references/` (cloned third-party reference repos): the skip-list used `referencia` (PT) instead of the real directory name `references` (EN), so the symbol-fabrication detector parsed ~25k foreign files — wasting minutes and gigabytes of RAM and producing a spurious `FAIL_HARD` verdict that blocked `/review`. Now the references zone is correctly skipped, with a behavioral regression test. (#37)
 - Admin key mint (`POST /v1/admin/keys`) is now atomic: the target-workspace upsert and the key insert run in one transaction, so a failed key insert never leaves an orphan workspace row (closes review item LENS-AUTH-4).
 - Admin key mint `expires_at` is validated as a strict ISO-8601 datetime instead of any string `Date.parse` accepts (e.g. "Jan 1 2027" is now rejected), matching the documented contract (closes review item LENS-AUTH-3).
-
-### Security
 
 ## [0.36.0] - 2026-06-30
 
