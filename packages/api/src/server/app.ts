@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import {
   type SpanRepository,
+  type AuthVerifier,
   traceListResponseSchema,
   listTracesOptionsSchema,
   traceCostSchema,
@@ -25,6 +26,11 @@ import {
   agentCatalogResponseSchema,
 } from "@usetheo/lens-core";
 
+import {
+  bearerAuth,
+  getPrincipal,
+  requireScopeOnPrincipal,
+} from "./auth/middleware.js";
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
 import { OtlpParseError } from "../otlp/otlp-error.js";
 import { decodeOtlpBody } from "../otlp/decode-protobuf.js";
@@ -63,7 +69,17 @@ import { tracesToCsv } from "./csv.js";
  * routes so the API is never shadowed (M7, D1). Omitting it keeps API-only
  * behavior (backward compatible).
  */
-export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
+/** M22: auth wiring injected by the composition root (verifier + fail-closed mode). */
+export interface AuthOptions {
+  readonly verifier?: AuthVerifier;
+  readonly requireCredential?: boolean;
+}
+
+export function createApp(
+  repo: SpanRepository,
+  webDistDir?: string,
+  auth: AuthOptions = {},
+): Hono {
   const app = new Hono();
 
   // Fail-loud, fail-clear (Rule 8): any unhandled error (e.g. Postgres
@@ -81,7 +97,13 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
     return c.json({ error: "internal error" }, 500);
   });
 
-  app.post("/v1/traces", async (c) => {
+  // M22: resolve a Principal for every /v1/* request and set it on context. With no
+  // verifier configured (single-tenant dev) this collapses to the `default` workspace;
+  // in multi-tenant mode (requireCredential) a missing/bad credential fails closed.
+  // Per-verb scope is enforced by `requireScopeOnPrincipal` on each data route below.
+  app.use("/v1/*", bearerAuth(auth.verifier, { requireCredential: auth.requireCredential === true }));
+
+  app.post("/v1/traces", requireScopeOnPrincipal("lens:write"), async (c) => {
     const contentType = (c.req.header("content-type") ?? "").toLowerCase();
     if (
       !contentType.includes("application/json") &&
@@ -115,7 +137,7 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
       return c.json({}, 200);
     }
 
-    await repo.save(toSave);
+    await repo.save(toSave, getPrincipal(c).workspaceId);
     spansIngested.add(toSave.length);
     tracesIngested.add(new Set(toSave.map((s) => s.traceId)).size);
     const evals = toSave.reduce((n, s) => n + (s.evaluations?.length ?? 0), 0);
@@ -124,7 +146,7 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
     return c.json({ partialSuccess: {} }, 200);
   });
 
-  app.get("/v1/traces", async (c) => {
+  app.get("/v1/traces", requireScopeOnPrincipal("lens:read"), async (c) => {
     // M9: whitelisted filter/sort/export. Validate query params at the boundary
     // (fail-fast 400, Rule 8) — a fixed enum whitelist, NOT a DSL (D1).
     const parsed = listTracesOptionsSchema.safeParse({
@@ -151,7 +173,9 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
     }
     // Parse through the strict DTO at the boundary so the no-column-leak invariant
     // (risk #2) is enforced at runtime, not just by adapter discipline (F-arch-1).
-    const list = traceListResponseSchema.parse(await repo.listTraces(parsed.data));
+    const list = traceListResponseSchema.parse(
+      await repo.listTraces(parsed.data, getPrincipal(c).workspaceId),
+    );
     if (parsed.data.format === "csv") {
       // Export reuses the SAME filtered query (D3) → the CSV always honors the
       // current filter; bounded by the validated limit (never a full-table dump).
@@ -163,50 +187,66 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
     return c.json(list, 200);
   });
 
-  app.get("/v1/spans/:spanId", async (c) => {
-    const span = await repo.getBySpanId(c.req.param("spanId"));
+  app.get("/v1/spans/:spanId", requireScopeOnPrincipal("lens:read"), async (c) => {
+    const span = await repo.getBySpanId(
+      c.req.param("spanId"),
+      getPrincipal(c).workspaceId,
+    );
     return span ? c.json(span, 200) : c.json({ error: "not found" }, 404);
   });
 
-  app.get("/v1/traces/:traceId/cost", async (c) => {
-    const cost = await repo.getTraceCost(c.req.param("traceId"));
+  app.get("/v1/traces/:traceId/cost", requireScopeOnPrincipal("lens:read"), async (c) => {
+    const cost = await repo.getTraceCost(
+      c.req.param("traceId"),
+      getPrincipal(c).workspaceId,
+    );
     return cost
       ? c.json(traceCostSchema.parse(cost), 200)
       : c.json({ error: "not found" }, 404);
   });
 
-  app.get("/v1/traces/:traceId", async (c) => {
-    const tree = await repo.getTraceTree(c.req.param("traceId"));
+  app.get("/v1/traces/:traceId", requireScopeOnPrincipal("lens:read"), async (c) => {
+    const tree = await repo.getTraceTree(
+      c.req.param("traceId"),
+      getPrincipal(c).workspaceId,
+    );
     return tree ? c.json(tree, 200) : c.json({ error: "not found" }, 404);
   });
 
-  app.get("/v1/agents", async (c) => {
+  app.get("/v1/agents", requireScopeOnPrincipal("lens:read"), async (c) => {
     // M32: the agents catalog (derived from `agent.*` span attributes), with health.
-    const agents = await repo.aggregateAgents();
+    const agents = await repo.aggregateAgents(getPrincipal(c).workspaceId);
     return c.json(agentCatalogResponseSchema.parse({ agents }), 200);
   });
 
-  app.get("/v1/analytics/tools", async (c) => {
-    const stats = await repo.aggregateToolStats();
+  app.get("/v1/analytics/tools", requireScopeOnPrincipal("lens:read"), async (c) => {
+    const stats = await repo.aggregateToolStats(getPrincipal(c).workspaceId);
     return c.json(toolStatsResponseSchema.parse(stats), 200);
   });
 
-  app.get("/v1/analytics/tools/:toolName/traces", async (c) => {
-    const list = await repo.listTracesForTool(c.req.param("toolName"));
+  app.get("/v1/analytics/tools/:toolName/traces", requireScopeOnPrincipal("lens:read"), async (c) => {
+    const list = await repo.listTracesForTool(
+      c.req.param("toolName"),
+      undefined,
+      getPrincipal(c).workspaceId,
+    );
     return c.json(traceListResponseSchema.parse(list), 200);
   });
 
-  app.get("/v1/analytics/cost", async (c) => {
+  app.get("/v1/analytics/cost", requireScopeOnPrincipal("lens:read"), async (c) => {
     // Whitelist the period (fail-fast on anything but day/week, Rule 8); default day.
     const raw = c.req.query("period");
     if (raw !== undefined && raw !== "day" && raw !== "week") {
       return c.json({ error: "invalid period (use day or week)" }, 400);
     }
-    const result = await repo.aggregateCostByPeriod(raw === "week" ? "week" : "day");
+    const result = await repo.aggregateCostByPeriod(
+      raw === "week" ? "week" : "day",
+      getPrincipal(c).workspaceId,
+    );
     return c.json(costByPeriodResponseSchema.parse(result), 200);
   });
 
-  app.post("/v1/replay-sessions", async (c) => {
+  app.post("/v1/replay-sessions", requireScopeOnPrincipal("lens:write"), async (c) => {
     // Record a replay-open event (M8 north-star). Fail-fast 400 on a missing
     // traceId (Rule 8); the UI calls this fire-and-forget so a 5xx never
     // degrades the replay UX (D3).
@@ -220,27 +260,30 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
     if (typeof traceId !== "string" || traceId.length === 0) {
       return c.json({ error: "traceId is required" }, 400);
     }
-    await repo.recordReplaySession(traceId);
+    await repo.recordReplaySession(traceId, getPrincipal(c).workspaceId);
     return c.json({ recorded: true }, 200);
   });
 
-  app.get("/v1/metrics/north-star", async (c) => {
-    const ns = await repo.aggregateNorthStar();
+  app.get("/v1/metrics/north-star", requireScopeOnPrincipal("lens:read"), async (c) => {
+    const ns = await repo.aggregateNorthStar(getPrincipal(c).workspaceId);
     return c.json(northStarResponseSchema.parse(ns), 200);
   });
 
-  app.get("/v1/metrics/observability", async (c) => {
+  app.get("/v1/metrics/observability", requireScopeOnPrincipal("lens:read"), async (c) => {
     // Validate the range at the boundary (fail-fast 400, Rule 8); default 24h.
     const raw = c.req.query("range");
     const parsed = observabilityRangeSchema.safeParse(raw ?? "24h");
     if (!parsed.success) {
       return c.json({ error: "invalid range (use 1h|24h|7d|30d)" }, 400);
     }
-    const obs = await repo.aggregateObservability(parsed.data);
+    const obs = await repo.aggregateObservability(
+      parsed.data,
+      getPrincipal(c).workspaceId,
+    );
     return c.json(observabilityResponseSchema.parse(obs), 200);
   });
 
-  app.get("/v1/metrics/evaluators", async (c) => {
+  app.get("/v1/metrics/evaluators", requireScopeOnPrincipal("lens:read"), async (c) => {
     // M26: per-evaluator aggregate (Online Evaluators cards). Range validated at the
     // boundary (Rule 8), same whitelist as observability; default 24h.
     const parsed = observabilityRangeSchema.safeParse(c.req.query("range") ?? "24h");
@@ -250,29 +293,38 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
     // Parse through the strict DTO at the boundary so the no-column-leak invariant
     // is enforced at runtime, uniform with every other read route (F-api-1).
     const summary = evaluatorsResponseSchema.parse({
-      evaluators: await repo.aggregateEvaluators(parsed.data),
+      evaluators: await repo.aggregateEvaluators(
+        parsed.data,
+        getPrincipal(c).workspaceId,
+      ),
     });
     return c.json(summary, 200);
   });
 
-  app.get("/v1/sessions", async (c) => {
-    const list = await repo.listSessions();
+  app.get("/v1/sessions", requireScopeOnPrincipal("lens:read"), async (c) => {
+    const list = await repo.listSessions(getPrincipal(c).workspaceId);
     return c.json(sessionListResponseSchema.parse(list), 200);
   });
 
-  app.get("/v1/sessions/:sessionId", async (c) => {
-    const detail = await repo.getSessionDetail(c.req.param("sessionId"));
+  app.get("/v1/sessions/:sessionId", requireScopeOnPrincipal("lens:read"), async (c) => {
+    const detail = await repo.getSessionDetail(
+      c.req.param("sessionId"),
+      getPrincipal(c).workspaceId,
+    );
     return detail
       ? c.json(sessionDetailResponseSchema.parse(detail), 200)
       : c.json({ error: "not found" }, 404);
   });
 
-  app.get("/v1/traces/:traceId/tags", async (c) => {
-    const tags = await repo.listTags(c.req.param("traceId"));
+  app.get("/v1/traces/:traceId/tags", requireScopeOnPrincipal("lens:read"), async (c) => {
+    const tags = await repo.listTags(
+      c.req.param("traceId"),
+      getPrincipal(c).workspaceId,
+    );
     return c.json(traceTagsResponseSchema.parse({ tags }), 200);
   });
 
-  app.post("/v1/traces/:traceId/tags", async (c) => {
+  app.post("/v1/traces/:traceId/tags", requireScopeOnPrincipal("lens:write"), async (c) => {
     // Add a tag (M14). 400 on an invalid tag (Rule 8), 404 when the trace is
     // absent (D2 — you cannot tag what is not there); idempotent otherwise.
     let body: unknown;
@@ -286,13 +338,14 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
       return c.json({ error: "tag is required (1-64 chars after trim)" }, 400);
     }
     const traceId = c.req.param("traceId");
-    const ok = await repo.addTag(traceId, tag);
+    const ws = getPrincipal(c).workspaceId;
+    const ok = await repo.addTag(traceId, tag, ws);
     if (!ok) return c.json({ error: "not found" }, 404);
-    const tags = await repo.listTags(traceId);
+    const tags = await repo.listTags(traceId, ws);
     return c.json(traceTagsResponseSchema.parse({ tags }), 200);
   });
 
-  app.delete("/v1/traces/:traceId/tags", async (c) => {
+  app.delete("/v1/traces/:traceId/tags", requireScopeOnPrincipal("lens:delete"), async (c) => {
     // Remove a tag (M14). The tag travels in a QUERY param (NOT a path segment)
     // so a slash-bearing free-form tag routes safely (EC-1). Idempotent (D2).
     const tag = normalizeTag(c.req.query("tag"));
@@ -300,18 +353,22 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
       return c.json({ error: "tag query param is required (1-64 chars)" }, 400);
     }
     const traceId = c.req.param("traceId");
-    await repo.removeTag(traceId, tag);
-    const tags = await repo.listTags(traceId);
+    const ws = getPrincipal(c).workspaceId;
+    await repo.removeTag(traceId, tag, ws);
+    const tags = await repo.listTags(traceId, ws);
     return c.json(traceTagsResponseSchema.parse({ tags }), 200);
   });
 
-  app.get("/v1/traces/:traceId/annotations", async (c) => {
+  app.get("/v1/traces/:traceId/annotations", requireScopeOnPrincipal("lens:read"), async (c) => {
     // M26b: a trace's annotations (trace-level + all spans'), newest-first.
-    const annotations = await repo.listAnnotations(c.req.param("traceId"));
+    const annotations = await repo.listAnnotations(
+      c.req.param("traceId"),
+      getPrincipal(c).workspaceId,
+    );
     return c.json(annotationsResponseSchema.parse({ annotations }), 200);
   });
 
-  app.post("/v1/traces/:traceId/annotations", async (c) => {
+  app.post("/v1/traces/:traceId/annotations", requireScopeOnPrincipal("lens:write"), async (c) => {
     // M26b: upsert a human annotation (👍/👎 + note) on a trace or span. 400 on an
     // empty annotation (no label AND no note, Rule 8), 404 when the trace is absent
     // (D2); idempotent upsert otherwise (latest wins). Returns the trace's annotations.
@@ -329,36 +386,42 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
       );
     }
     const traceId = c.req.param("traceId");
-    const ok = await repo.upsertAnnotation(traceId, ann);
+    const ws = getPrincipal(c).workspaceId;
+    const ok = await repo.upsertAnnotation(traceId, ann, ws);
     if (!ok) return c.json({ error: "not found" }, 404);
     annotationsWritten.add(1);
-    const annotations = await repo.listAnnotations(traceId);
+    const annotations = await repo.listAnnotations(traceId, ws);
     return c.json(annotationsResponseSchema.parse({ annotations }), 200);
   });
 
-  app.delete("/v1/traces/:traceId/annotations", async (c) => {
+  app.delete("/v1/traces/:traceId/annotations", requireScopeOnPrincipal("lens:delete"), async (c) => {
     // M26b: clear an annotation by its target+channel key. `spanId`/`name`/`kind`
     // travel in QUERY params (slash-safe, like the tag DELETE). Idempotent.
     const name = c.req.query("name") ?? DEFAULT_ANNOTATION_NAME;
     const traceId = c.req.param("traceId");
     const spanId = c.req.query("spanId");
     const annotatorKind = c.req.query("annotatorKind") ?? DEFAULT_ANNOTATOR_KIND;
-    await repo.removeAnnotation(traceId, {
-      ...(spanId != null && spanId.length > 0 ? { spanId } : {}),
-      name,
-      annotatorKind,
-    });
-    const annotations = await repo.listAnnotations(traceId);
+    const ws = getPrincipal(c).workspaceId;
+    await repo.removeAnnotation(
+      traceId,
+      {
+        ...(spanId != null && spanId.length > 0 ? { spanId } : {}),
+        name,
+        annotatorKind,
+      },
+      ws,
+    );
+    const annotations = await repo.listAnnotations(traceId, ws);
     return c.json(annotationsResponseSchema.parse({ annotations }), 200);
   });
 
-  app.get("/v1/datasets", async (c) => {
+  app.get("/v1/datasets", requireScopeOnPrincipal("lens:read"), async (c) => {
     // M26d: all datasets with their item counts, newest-first.
-    const datasets = await repo.listDatasets();
+    const datasets = await repo.listDatasets(getPrincipal(c).workspaceId);
     return c.json(datasetsResponseSchema.parse({ datasets }), 200);
   });
 
-  app.post("/v1/datasets", async (c) => {
+  app.post("/v1/datasets", requireScopeOnPrincipal("lens:write"), async (c) => {
     // M26d: create-or-get a dataset by name (D1, idempotent). 400 on a blank name.
     let body: unknown;
     try {
@@ -370,19 +433,22 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
     if (name === null) {
       return c.json({ error: "dataset name is required (1-120 chars after trim)" }, 400);
     }
-    const dataset = await repo.createDataset(name);
+    const dataset = await repo.createDataset(name, getPrincipal(c).workspaceId);
     return c.json(datasetSchema.parse(dataset), 200);
   });
 
-  app.get("/v1/datasets/:datasetId", async (c) => {
+  app.get("/v1/datasets/:datasetId", requireScopeOnPrincipal("lens:read"), async (c) => {
     // M26d: a dataset + its items (snapshot input/output), or 404 if absent.
-    const detail = await repo.getDataset(c.req.param("datasetId"));
+    const detail = await repo.getDataset(
+      c.req.param("datasetId"),
+      getPrincipal(c).workspaceId,
+    );
     return detail
       ? c.json(datasetDetailSchema.parse(detail), 200)
       : c.json({ error: "not found" }, 404);
   });
 
-  app.post("/v1/datasets/:datasetId/items", async (c) => {
+  app.post("/v1/datasets/:datasetId/items", requireScopeOnPrincipal("lens:write"), async (c) => {
     // M26d: add a trace to a dataset (snapshot at add-time, D2). 400 on a missing
     // traceId, 404 when the dataset OR the trace is absent (D3); idempotent otherwise.
     let body: unknown;
@@ -396,20 +462,22 @@ export function createApp(repo: SpanRepository, webDistDir?: string): Hono {
       return c.json({ error: "traceId is required" }, 400);
     }
     const datasetId = c.req.param("datasetId");
-    const ok = await repo.addDatasetItem(datasetId, traceId);
+    const ws = getPrincipal(c).workspaceId;
+    const ok = await repo.addDatasetItem(datasetId, traceId, ws);
     if (!ok) return c.json({ error: "not found" }, 404);
     datasetItemsAdded.add(1);
-    const detail = await repo.getDataset(datasetId);
+    const detail = await repo.getDataset(datasetId, ws);
     // detail is non-null here (the dataset existed for the add to succeed).
     return c.json(datasetDetailSchema.parse(detail), 200);
   });
 
-  app.delete("/v1/datasets/:datasetId/items/:traceId", async (c) => {
+  app.delete("/v1/datasets/:datasetId/items/:traceId", requireScopeOnPrincipal("lens:delete"), async (c) => {
     // M26d: remove an item by (dataset, trace). Idempotent. Returns the dataset (404
     // only if the dataset itself is absent — a missing item is a no-op).
     const datasetId = c.req.param("datasetId");
-    await repo.removeDatasetItem(datasetId, c.req.param("traceId"));
-    const detail = await repo.getDataset(datasetId);
+    const ws = getPrincipal(c).workspaceId;
+    await repo.removeDatasetItem(datasetId, c.req.param("traceId"), ws);
+    const detail = await repo.getDataset(datasetId, ws);
     return detail
       ? c.json(datasetDetailSchema.parse(detail), 200)
       : c.json({ error: "not found" }, 404);

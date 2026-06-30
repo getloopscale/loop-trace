@@ -13,6 +13,10 @@ vi.mock("@usetheo/lens-core", () => ({
   migrateLatest: vi.fn(async () => {
     throw new Error("simulated migration failure");
   }),
+  // M22: the auth middleware (imported transitively via app.ts) reads these.
+  DEFAULT_WORKSPACE_ID: "default",
+  DEFAULT_OWNER_USER_ID: "default-owner",
+  roleSatisfies: () => true,
 }));
 
 vi.mock("@hono/node-server", () => ({
