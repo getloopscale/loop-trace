@@ -10,7 +10,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 ### Changed
-- ROADMAP.md: materialized the already-delivered **M22 — Auth + multi-tenant workspace isolation** milestone (marked `[x]`, shipped in v0.36.0) in the Milestones section. The V1 roadmap had stayed at M8 while delivery numbering ran through M35; this records M22 retroactively with its objective, DoD, and links to the plan/review/release.
+- Roadmap consolidated into **`ROADMAP-v4.md`** — a single authoritative view of every delivered milestone (M0–M35, all `[x]`, each with its shipped version), since the work had been split across the phased `ROADMAP.md` (V1, M0–M8), `ROADMAP-v2.md` (V2, M9–M14) and `ROADMAP-v3.md` (V3, M15–M21) plus the CHANGELOG, with M22–M35 never recorded as milestone headers. The three phased files are kept as historical phase records (V1 gains a "superseded — see v4" banner); the M22 block briefly added to V1 was moved into v4 where it belongs (auth/production is a V3.x concern, not V1). New work appends to v4 (next free id M36).
 
 ### Deprecated
 
