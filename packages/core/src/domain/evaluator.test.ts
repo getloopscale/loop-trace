@@ -52,12 +52,18 @@ describe("M36 evaluator schema (T1.2)", () => {
   });
 
   it("test_evaluator_name_boundary", () => {
-    const mk = (name: string) =>
-      evaluatorSchema.parse({ name, kind: "rule", config: { predicate: "" } });
-    expect(() => mk("a")).not.toThrow(); // 1 char
-    expect(() => mk("a".repeat(64))).not.toThrow(); // 64 chars
-    expect(() => mk("")).toThrow(); // 0 chars
-    expect(() => mk("a".repeat(65))).toThrow(); // 65 chars
+    const parse = (name: string) =>
+      evaluatorSchema.safeParse({ name, kind: "rule", config: { predicate: "" } });
+    expect(parse("a").success).toBe(true); // 1 char
+    expect(parse("a".repeat(64)).success).toBe(true); // 64 chars
+    // F6: assert the TYPED failure is the name-regex issue, not a bare throw.
+    for (const bad of ["", "a".repeat(65), "Bad Name"]) {
+      const res = parse(bad);
+      expect(res.success).toBe(false);
+      if (!res.success) {
+        expect(res.error.issues.some((i) => i.path.includes("name"))).toBe(true);
+      }
+    }
   });
 
   it("test_guard_schema_accepts_operators", () => {

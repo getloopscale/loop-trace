@@ -82,6 +82,49 @@ suite("M36 EvaluatorRepository (integration)", () => {
     expect(rows[0]!.score).toBe(0.2); // latest wins
   });
 
+  it("test_create_guard_is_idempotent_no_duplicate_rows", async () => {
+    // M36-EVAL-1: re-POSTing an identical numeric guard (label_value NULL) must NOT
+    // create a duplicate — the NULLS NOT DISTINCT unique makes the upsert dedupe.
+    const ev = await repo.createEvaluator(ruleEv("q"), WS_A);
+    const g1 = await repo.createGuard(
+      guardSchema.parse({ evaluatorId: ev.id, operator: "lt", threshold: 0.5 }),
+      WS_A,
+    );
+    const g2 = await repo.createGuard(
+      guardSchema.parse({ evaluatorId: ev.id, operator: "lt", threshold: 0.5 }),
+      WS_A,
+    );
+    expect(g2.id).toBe(g1.id); // same row (upsert)
+    expect(await repo.listGuards(WS_A)).toHaveLength(1);
+    // a label_eq guard (threshold NULL) also dedupes
+    await repo.createGuard(guardSchema.parse({ evaluatorId: ev.id, operator: "label_eq", labelValue: "bad" }), WS_A);
+    await repo.createGuard(guardSchema.parse({ evaluatorId: ev.id, operator: "label_eq", labelValue: "bad" }), WS_A);
+    expect(await repo.listGuards(WS_A)).toHaveLength(2); // lt + label_eq, no dupes
+  });
+
+  it("test_breaches_operator_matrix_sql_path", async () => {
+    // F2: exercise the production SQL breach path for EVERY operator + null-score,
+    // not just `lt` (the SQL CASE mirrors the canonical evaluateGuard).
+    const ev = await repo.createEvaluator(ruleEv("quality"), WS_A);
+    await repo.writeVerdict(WS_A, { spanId: "s1", traceId: "t-low" }, "quality", { score: 0.2 });
+    await repo.writeVerdict(WS_A, { spanId: "s2", traceId: "t-high" }, "quality", { score: 0.8 });
+    await repo.writeVerdict(WS_A, { spanId: "s3", traceId: "t-label" }, "quality", { label: "bad" });
+    const breach = async (operator: string, over: Record<string, unknown>) => {
+      const g = await repo.createGuard(guardSchema.parse({ evaluatorId: ev.id, operator, ...over }), WS_A);
+      const r = (await repo.listBreachingTraces(g.id, WS_A)).sort();
+      await repo.deleteGuard(g.id, WS_A);
+      return r;
+    };
+    expect(await breach("lt", { threshold: 0.5 })).toEqual(["t-low"]);
+    expect(await breach("lte", { threshold: 0.2 })).toEqual(["t-low"]);
+    expect(await breach("gt", { threshold: 0.5 })).toEqual(["t-high"]);
+    expect(await breach("gte", { threshold: 0.8 })).toEqual(["t-high"]);
+    expect(await breach("eq", { threshold: 0.2 })).toEqual(["t-low"]);
+    expect(await breach("label_eq", { labelValue: "bad" })).toEqual(["t-label"]);
+    // null-score row never breaches a score operator
+    expect(await breach("lt", { threshold: 1 })).toEqual(["t-high", "t-low"]); // t-label (no score) excluded
+  });
+
   it("test_list_breaching_traces_scoped_and_correct", async () => {
     const ev = await repo.createEvaluator(ruleEv("quality"), WS_A);
     const guard = await repo.createGuard(

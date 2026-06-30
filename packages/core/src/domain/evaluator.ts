@@ -179,6 +179,13 @@ export function evaluateRule(
 /**
  * Evaluate a guard against a verdict. Returns true when the verdict BREACHES the
  * guard. Null-safe: a score operator over a verdict with no score is NOT a breach.
+ *
+ * This is the canonical, unit-tested spec of the guard operator semantics. The
+ * production breach query (`DrizzleEvaluatorRepository.listBreachingTraces`) MIRRORS
+ * this CASE in SQL for set-based efficiency; the two MUST stay in lock-step (the
+ * repo's integration operator-matrix test guards the SQL side). `eq` uses exact
+ * equality — meaningful for the 0/1 rule scores; for an arbitrary judge score in
+ * [0,1] prefer a threshold operator (lt/lte/gt/gte) over exact `eq` (EVAL-4).
  */
 export function evaluateGuard(guard: Guard, verdict: Verdict): boolean {
   if (guard.operator === "label_eq") {

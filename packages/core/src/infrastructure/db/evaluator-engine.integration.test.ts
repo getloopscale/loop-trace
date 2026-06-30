@@ -99,6 +99,21 @@ suite("M36 evaluator engine (integration)", () => {
     expect(await verdictCount(WS_A, "swept")).toBe(1);
   });
 
+  it("test_concurrent_runs_same_span_leave_one_row", async () => {
+    // F4/CV-1: two concurrent runs on the SAME (evaluator, span) must leave exactly
+    // one span_evaluations row (workspace-leading unique + onConflict — no Lost Update).
+    await spanRepo.save([span({ spanId: "s1", traceId: "t1" })], WS_A);
+    const ev = await evalRepo.createEvaluator(
+      evaluatorSchema.parse({ name: "q", kind: "rule", config: { predicate: "" } }),
+      WS_A,
+    );
+    await Promise.all([
+      runEvaluator(ev, {}, WS_A, deps),
+      runEvaluator(ev, {}, WS_A, deps),
+    ]);
+    expect(await verdictCount(WS_A, "q")).toBe(1);
+  });
+
   it("test_backfill_zero_matches_writes_nothing", async () => {
     // no spans → nothing to evaluate
     const ev = await evalRepo.createEvaluator(

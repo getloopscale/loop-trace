@@ -75,9 +75,12 @@ export async function runEvaluator(
     traceIds = opts.traceIds.slice(0, cap);
     result.truncated = opts.traceIds.length > cap;
   } else {
-    const list = await deps.spanRepo.listTraces({ limit: cap }, workspaceId);
-    traceIds = list.traces.map((t) => t.traceId);
-    result.truncated = traceIds.length >= cap;
+    // Fetch cap+1 so "exactly cap traces" is NOT a false-positive truncation (EC-10):
+    // truncated iff strictly MORE than cap exist; then process only the first cap.
+    const list = await deps.spanRepo.listTraces({ limit: cap + 1 }, workspaceId);
+    const all = list.traces.map((t) => t.traceId);
+    result.truncated = all.length > cap;
+    traceIds = all.slice(0, cap);
   }
 
   for (const traceId of traceIds) {

@@ -72,8 +72,23 @@ export async function runEvaluatorHandler(c: Context, deps: EvaluatorApiDeps): P
   if (ev === null) {
     return c.json({ code: "EVALUATOR_NOT_FOUND", message: "not found" }, 404);
   }
-  const body = (await readJson(c)) as { traceIds?: string[]; limit?: number } | null;
-  const opts = body ?? {};
+  // Validate the run body at the boundary (EVAL-2): garbage traceIds / a negative or
+  // non-integer limit are rejected rather than reaching the engine untrusted.
+  const raw = (await readJson(c)) as Record<string, unknown> | null;
+  const opts: { traceIds?: string[]; limit?: number } = {};
+  if (raw && raw["traceIds"] !== undefined) {
+    if (!Array.isArray(raw["traceIds"]) || raw["traceIds"].some((t) => typeof t !== "string")) {
+      return c.json({ code: "INVALID_RUN_OPTS", message: "traceIds must be string[]" }, 400);
+    }
+    opts.traceIds = raw["traceIds"] as string[];
+  }
+  if (raw && raw["limit"] !== undefined) {
+    const lim = raw["limit"];
+    if (typeof lim !== "number" || !Number.isInteger(lim) || lim <= 0) {
+      return c.json({ code: "INVALID_RUN_OPTS", message: "limit must be a positive integer" }, 400);
+    }
+    opts.limit = lim;
+  }
   const result = await runEvaluator(ev, opts, ws, deps.engine);
   return c.json(result, 200);
 }
@@ -85,7 +100,14 @@ export async function createGuardHandler(c: Context, deps: EvaluatorApiDeps): Pr
   if (!parsed.success) {
     return c.json({ code: "INVALID_GUARD", message: parsed.error.message }, 400);
   }
-  const rec = await deps.repo.createGuard(parsed.data, getPrincipal(c).workspaceId);
+  const ws = getPrincipal(c).workspaceId;
+  // EVAL-5: reject a guard pointing at a non-existent (or cross-workspace) evaluator
+  // loudly (404) instead of storing an inert guard.
+  const target = await deps.repo.getEvaluator(parsed.data.evaluatorId, ws);
+  if (target === null) {
+    return c.json({ code: "EVALUATOR_NOT_FOUND", message: "guard.evaluatorId not found in workspace" }, 404);
+  }
+  const rec = await deps.repo.createGuard(parsed.data, ws);
   return c.json(rec, 200);
 }
 

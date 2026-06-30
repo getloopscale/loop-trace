@@ -212,6 +212,12 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
     // Join guard → its evaluator → that evaluator's verdicts; a row breaches per the
     // guard's operator. Workspace-scoped on every table (M22). The breach predicate
     // is built from the controlled `operator` enum (no injection — bound params).
+    // This CASE MIRRORS the canonical `evaluateGuard` (domain/evaluator.ts) — keep
+    // them in lock-step (the operator-matrix integration test guards this side).
+    // NOTE (EVAL-3): verdicts are matched by `name` within the workspace, so a guard
+    // flags ALL same-named verdicts — both engine-computed AND any M26-ingested
+    // `eval.<name>.*` rows of that name. This is intentional (a guard over "toxicity"
+    // watches every toxicity verdict in the workspace), and is workspace-confined.
     const rows = await this.db.execute(sql`
       SELECT DISTINCT se.trace_id AS trace_id
       FROM guards g

@@ -54,7 +54,6 @@ export {
   ruleConfigSchema,
   judgeConfigSchema,
   evaluateRule,
-  evaluateGuard,
   spanMatchesPredicate,
   validatePredicate,
   deriveKind,

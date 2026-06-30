@@ -436,13 +436,13 @@ export const guards = pgTable(
       .notNull(),
   },
   (t) => [
-    unique("guards_workspace_id_dedup_uq").on(
-      t.workspaceId,
-      t.evaluatorId,
-      t.operator,
-      t.threshold,
-      t.labelValue,
-    ),
+    // M36 (review M36-EVAL-1): NULLS NOT DISTINCT — a numeric guard has label_value
+    // NULL (and a label_eq guard has threshold NULL); under the PG default
+    // (NULLS DISTINCT) two identical guards never collide → the create upsert never
+    // dedupes → duplicate rows. NULLS NOT DISTINCT makes the dedup actually fire.
+    unique("guards_workspace_id_dedup_uq")
+      .on(t.workspaceId, t.evaluatorId, t.operator, t.threshold, t.labelValue)
+      .nullsNotDistinct(),
     index("guards_workspace_id_idx").on(t.workspaceId),
     index("guards_evaluator_id_idx").on(t.evaluatorId),
   ],

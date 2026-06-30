@@ -119,4 +119,29 @@ describe("M36 run engine (T5.1)", () => {
     const r = await runEvaluator(rec({}), { traceIds: ["a", "b", "c"], limit: 2 }, "ws", d);
     expect(r.truncated).toBe(true); // 3 ids > cap 2
   });
+
+  it("test_backfill_at_exact_cap_not_truncated", async () => {
+    // EC-10: exactly `cap` traces → truncated=false; > cap → true. Covers BOTH the
+    // traceIds path and the listTraces path (which now fetches cap+1).
+    const { deps: d } = deps();
+    // traceIds path: exactly cap
+    expect((await runEvaluator(rec({}), { traceIds: ["a", "b"], limit: 2 }, "ws", d)).truncated).toBe(false);
+    // listTraces path: stub returns exactly `cap` (2) trace ids
+    const listExactly = (n: number) => {
+      const traces = Array.from({ length: n }, (_, i) => ({ traceId: `t${i}` }));
+      return {
+        ...d,
+        spanRepo: {
+          listTraces: async (opts: { limit?: number }) => ({
+            traces: traces.slice(0, opts.limit),
+          }),
+          getTraceTree: async () => tree(),
+        } as unknown as SpanRepository,
+      };
+    };
+    // 2 traces available, cap 2 → fetch 3, get 2 → not truncated
+    expect((await runEvaluator(rec({}), { limit: 2 }, "ws", listExactly(2))).truncated).toBe(false);
+    // 3 traces available, cap 2 → fetch 3, get 3 → truncated
+    expect((await runEvaluator(rec({}), { limit: 2 }, "ws", listExactly(3))).truncated).toBe(true);
+  });
 });
