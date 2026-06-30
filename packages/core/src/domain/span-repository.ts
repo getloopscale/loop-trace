@@ -21,81 +21,87 @@ export interface TraceTreeNode extends Span {
  * infrastructure layer (Drizzle/Postgres) implements it.
  */
 export interface SpanRepository {
+  // M22: every method takes an optional `workspaceId` (defaults to the `default`
+  // workspace → single-tenant behavior unchanged). Reads/deletes scope by it;
+  // `save` binds it on insert. The route layer passes the Principal's workspace.
   /** Persist a batch of spans and recompute the trace/session aggregates. */
-  save(spans: Span[]): Promise<void>;
+  save(spans: Span[], workspaceId?: string): Promise<void>;
   /** Read a single span by its spanId, or null if absent. */
-  getBySpanId(spanId: string): Promise<Span | null>;
+  getBySpanId(spanId: string, workspaceId?: string): Promise<Span | null>;
   /** Reconstruct the tree of spans sharing a trace_id, or null if none exist. */
-  getTraceTree(traceId: string): Promise<TraceTreeNode | null>;
+  getTraceTree(traceId: string, workspaceId?: string): Promise<TraceTreeNode | null>;
   /**
    * List executions (traces) as the stable UI list DTO (M3 D2). With no options,
    * newest-first by updated_at (legacy behavior). With options (M9): whitelisted
    * filter (status/model/time) + sort (recent/latency/tokens/cost, dir) + limit.
    */
-  listTraces(opts?: ListTracesOptions): Promise<TraceListResponse>;
+  listTraces(opts?: ListTracesOptions, workspaceId?: string): Promise<TraceListResponse>;
   /** Per-trace cost summary (M5), or null if the trace is absent. */
-  getTraceCost(traceId: string): Promise<TraceCost | null>;
+  getTraceCost(traceId: string, workspaceId?: string): Promise<TraceCost | null>;
   /** Cost aggregated into day/week time buckets (M5). */
-  aggregateCostByPeriod(period: CostPeriod): Promise<CostByPeriodResponse>;
+  aggregateCostByPeriod(period: CostPeriod, workspaceId?: string): Promise<CostByPeriodResponse>;
   /** Per-tool operational stats (count/p50/p95/error-rate) over a recent window (M6). */
-  aggregateToolStats(): Promise<ToolStatsResponse>;
+  aggregateToolStats(workspaceId?: string): Promise<ToolStatsResponse>;
   /** Executions (traces) that called a given tool, newest-first (M6 drill-down). */
-  listTracesForTool(toolName: string, limit?: number): Promise<TraceListResponse>;
+  listTracesForTool(toolName: string, limit?: number, workspaceId?: string): Promise<TraceListResponse>;
   /** Record that a trace's replay was opened in the UI (M8 north-star). */
-  recordReplaySession(traceId: string): Promise<void>;
+  recordReplaySession(traceId: string, workspaceId?: string): Promise<void>;
   /** North-star metrics: traces ingested per day + replay sessions per week (M8). */
-  aggregateNorthStar(): Promise<NorthStarResponse>;
+  aggregateNorthStar(workspaceId?: string): Promise<NorthStarResponse>;
   /** Time-series observability over a range: traffic+error-rate, latency percentiles, tokens/cost by model (M11). */
-  aggregateObservability(range: ObservabilityRange): Promise<ObservabilityResponse>;
+  aggregateObservability(range: ObservabilityRange, workspaceId?: string): Promise<ObservabilityResponse>;
   /** M26: per-evaluator aggregate (count, avg score, label distribution) within the range window. */
-  aggregateEvaluators(range: ObservabilityRange): Promise<EvaluatorSummary[]>;
+  aggregateEvaluators(range: ObservabilityRange, workspaceId?: string): Promise<EvaluatorSummary[]>;
   /** Sessions newest-first with per-session scoped aggregates (M13). */
-  listSessions(): Promise<SessionListResponse>;
+  listSessions(workspaceId?: string): Promise<SessionListResponse>;
   /** One session's scoped aggregates + member traces (M13), or null if absent. */
-  getSessionDetail(sessionId: string): Promise<SessionDetailResponse | null>;
+  getSessionDetail(sessionId: string, workspaceId?: string): Promise<SessionDetailResponse | null>;
   /** Add a tag to a trace (M14, idempotent). Returns false if the trace is absent. */
-  addTag(traceId: string, tag: string): Promise<boolean>;
+  addTag(traceId: string, tag: string, workspaceId?: string): Promise<boolean>;
   /** Remove a tag from a trace (M14, idempotent — no-op if absent). */
-  removeTag(traceId: string, tag: string): Promise<void>;
+  removeTag(traceId: string, tag: string, workspaceId?: string): Promise<void>;
   /** A trace's tags, ordered (M14); empty when the trace has none. */
-  listTags(traceId: string): Promise<string[]>;
+  listTags(traceId: string, workspaceId?: string): Promise<string[]>;
   /**
    * Upsert a human annotation on a trace (`spanId` undefined) or span (M26b).
    * Idempotent on (trace, span, name, annotatorKind) — re-submitting replaces
    * label/note/updatedAt (latest wins). Returns false if the trace is absent (→ 404).
    */
-  upsertAnnotation(traceId: string, ann: NormalizedAnnotation): Promise<boolean>;
+  upsertAnnotation(traceId: string, ann: NormalizedAnnotation, workspaceId?: string): Promise<boolean>;
   /** A trace's annotations (trace-level + all spans'), newest-first (M26b); empty when none. */
-  listAnnotations(traceId: string): Promise<Annotation[]>;
+  listAnnotations(traceId: string, workspaceId?: string): Promise<Annotation[]>;
   /** Remove an annotation by its target+channel key (M26b, idempotent — no-op if absent). */
   removeAnnotation(
     traceId: string,
     key: { spanId?: string; name: string; annotatorKind?: string },
+    workspaceId?: string,
   ): Promise<void>;
   /** Create a dataset, or return the existing one with the same name (M26d, idempotent). */
-  createDataset(name: string): Promise<Dataset>;
+  createDataset(name: string, workspaceId?: string): Promise<Dataset>;
   /** All datasets with their item counts, newest-first (M26d); empty when none. */
-  listDatasets(): Promise<Dataset[]>;
+  listDatasets(workspaceId?: string): Promise<Dataset[]>;
   /** A dataset + its items (newest-first), or null if absent (M26d). */
-  getDataset(datasetId: string): Promise<DatasetDetail | null>;
+  getDataset(datasetId: string, workspaceId?: string): Promise<DatasetDetail | null>;
   /**
    * Add a trace to a dataset (M26d), snapshotting its root input/output at add-time.
    * Idempotent on (dataset, trace) — keeps the first snapshot. Returns false if the
    * dataset OR the trace is absent (→ 404).
    */
-  addDatasetItem(datasetId: string, traceId: string): Promise<boolean>;
+  addDatasetItem(datasetId: string, traceId: string, workspaceId?: string): Promise<boolean>;
   /** Remove a dataset item by (dataset, trace) (M26d, idempotent — no-op if absent). */
-  removeDatasetItem(datasetId: string, traceId: string): Promise<void>;
+  removeDatasetItem(datasetId: string, traceId: string, workspaceId?: string): Promise<void>;
   /**
    * Agents catalog (M32): spans grouped by the `agent.name` attribute into per-agent
    * rows (latest-seen, run count, versions, tools, system prompt) with health flags.
    * Derived (no table); only `agent.name`-bearing spans are cataloged. Empty when none.
    */
-  aggregateAgents(): Promise<Agent[]>;
+  aggregateAgents(workspaceId?: string): Promise<Agent[]>;
   /**
    * Hard-delete trace data older than `olderThan` (M23 retention) — trace-granular:
    * every trace with `updated_at < olderThan` and all its spans/tags/replay rows,
    * plus sessions left with no remaining trace. Atomic (single transaction).
+   * M22: a SYSTEM-wide retention sweep (operator policy, age-based) — NOT
+   * tenant-scoped; retention prunes every workspace by age, by design.
    */
   prune(olderThan: Date): Promise<PruneStats>;
 }

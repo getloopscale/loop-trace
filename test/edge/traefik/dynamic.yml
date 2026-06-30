@@ -1,0 +1,33 @@
+# Hermetic Traefik dynamic config for the M22 edge e2e (invariant 6).
+#
+# The /v1 router chains TWO middlewares (applied in order, left→right on the
+# request path):
+#   1. broker-forward-auth — calls the shim; on 2xx, copies the minted
+#      `Authorization` header upstream (authResponseHeaders). On non-2xx, Traefik
+#      returns the shim's response (401) and the service is NEVER called.
+#   2. strip-customer-key — removes `X-Customer-Key` so the customer credential
+#      NEVER reaches the lens service (CWE-441 edge half). Runs AFTER forward-auth
+#      so the shim still sees the key.
+http:
+  routers:
+    lens:
+      rule: "PathPrefix(`/v1`)"
+      entryPoints: [web]
+      service: lens-api
+      middlewares: [broker-forward-auth, strip-customer-key]
+
+  middlewares:
+    broker-forward-auth:
+      forwardAuth:
+        address: "http://forward-auth:4181/"
+        authResponseHeaders: ["Authorization"]
+    strip-customer-key:
+      headers:
+        customRequestHeaders:
+          X-Customer-Key: ""   # empty value removes the header before the backend
+
+  services:
+    lens-api:
+      loadBalancer:
+        servers:
+          - url: "http://api:4318"

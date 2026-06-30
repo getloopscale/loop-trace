@@ -3,6 +3,17 @@
  */
 export { type Span, spanSchema } from "./domain/span.js";
 export { type SpanRepository, type TraceTreeNode } from "./domain/span-repository.js";
+// M22: multi-tenant workspace-isolation domain types (ported from theo-memory).
+export {
+  type Workspace,
+  type WorkspaceRole,
+  type Principal,
+  type AuthVerifier,
+  roleSatisfies,
+  makeVerifyShim,
+  DEFAULT_WORKSPACE_ID,
+  DEFAULT_OWNER_USER_ID,
+} from "./domain/principal.js";
 export {
   traceListItemSchema,
   traceListResponseSchema,

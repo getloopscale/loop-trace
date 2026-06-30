@@ -1,10 +1,11 @@
 import { fileURLToPath } from "node:url";
-import { and, asc, desc, eq, getTableColumns, gte, inArray, isNull, lte, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, gte, inArray, isNull, lte, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
 
 import type { Span } from "../../domain/span.js";
+import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
 import type {
   SpanRepository,
   TraceTreeNode,
@@ -77,7 +78,7 @@ const DERIVED_SPAN_KIND_SQL = sql`CASE
   WHEN s.attributes->>'gen_ai.operation.name' IN ('retrieve', 'search') THEN 'retriever'
   WHEN s.attributes->>'gen_ai.operation.name' IN ('embeddings', 'embedding') THEN 'embedding'
   WHEN s.attributes->>'gen_ai.operation.name' IN ('chat', 'text_completion') OR s.model IS NOT NULL THEN 'llm'
-  WHEN EXISTS (SELECT 1 FROM spans c WHERE c.parent_span_id = s.span_id) THEN 'chain'
+  WHEN EXISTS (SELECT 1 FROM spans c WHERE c.parent_span_id = s.span_id AND c.workspace_id = s.workspace_id) THEN 'chain'
   ELSE 'unknown'
 END`;
 
@@ -99,9 +100,10 @@ function spanClauseSql(c: SpanClause) {
 
 type SpanRow = typeof spans.$inferInsert;
 
-function toRow(span: Span): SpanRow {
+function toRow(span: Span, workspaceId: string): SpanRow {
   return {
     spanId: span.spanId,
+    workspaceId,
     traceId: span.traceId,
     parentSpanId: span.parentSpanId ?? null,
     name: span.name,
@@ -242,7 +244,10 @@ export class DrizzleSpanRepository implements SpanRepository {
     private readonly priceTable: PriceTable = DEFAULT_PRICES,
   ) {}
 
-  async save(spansToSave: Span[]): Promise<void> {
+  async save(
+    spansToSave: Span[],
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<void> {
     if (spansToSave.length === 0) return;
     // Dedupe intra-batch duplicate spanId (M0 EC-1).
     const unique = [...new Map(spansToSave.map((s) => [s.spanId, s])).values()];
@@ -258,13 +263,14 @@ export class DrizzleSpanRepository implements SpanRepository {
     await this.db.transaction(async (tx) => {
       await tx
         .insert(spans)
-        .values(unique.map(toRow))
-        .onConflictDoNothing({ target: spans.spanId });
+        .values(unique.map((s) => toRow(s, workspaceId)))
+        .onConflictDoNothing({ target: [spans.workspaceId, spans.spanId] });
 
       // M26: persist extracted online-evals to the side-table. Idempotent on
       // (span_id, name) so re-ingest of the same span never duplicates rows.
       const evalRows = unique.flatMap((s) =>
         (s.evaluations ?? []).map((e) => ({
+          workspaceId,
           spanId: s.spanId,
           traceId: s.traceId,
           name: e.name,
@@ -278,7 +284,11 @@ export class DrizzleSpanRepository implements SpanRepository {
           .insert(spanEvaluations)
           .values(evalRows)
           .onConflictDoNothing({
-            target: [spanEvaluations.spanId, spanEvaluations.name],
+            target: [
+              spanEvaluations.workspaceId,
+              spanEvaluations.spanId,
+              spanEvaluations.name,
+            ],
           });
       }
 
@@ -288,8 +298,11 @@ export class DrizzleSpanRepository implements SpanRepository {
         // Serialize concurrent ingests of the SAME trace so each recompute sees
         // all prior-committed spans (READ COMMITTED recompute alone undercounts
         // under interleaving). pg_advisory_xact_lock releases at commit.
+        // Keyed on the (workspace, trace) PAIR — trace_id is no longer globally
+        // unique (composite PK), so locking on trace_id alone would falsely
+        // serialize two tenants ingesting a colliding trace_id (M22).
         await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${traceId}))`,
+          sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId + ":" + traceId}))`,
         );
         // Trace-level status = 'error' if ANY span errored (error propagates from
         // child to parent — Phoenix convention), else 'ok'. This populates the
@@ -297,9 +310,10 @@ export class DrizzleSpanRepository implements SpanRepository {
         // (M9); error tokens are the same constant the UI/tool-stats use.
         const errorList = ERROR_STATUS_CODES.map((c) => `'${c}'`).join(", ");
         await tx.execute(sql`
-          INSERT INTO traces (trace_id, session_id, name, start_time_unix_nano, end_time_unix_nano, input_tokens, output_tokens, total_tokens, cost_usd, status_code, updated_at)
+          INSERT INTO traces (trace_id, workspace_id, session_id, name, start_time_unix_nano, end_time_unix_nano, input_tokens, output_tokens, total_tokens, cost_usd, status_code, updated_at)
           SELECT
             ${traceId},
+            ${workspaceId},
             max(session_id),
             (array_agg(name ORDER BY (parent_span_id IS NOT NULL), start_time_unix_nano::numeric))[1],
             min(start_time_unix_nano::numeric)::text,
@@ -310,8 +324,8 @@ export class DrizzleSpanRepository implements SpanRepository {
             NULL,
             CASE WHEN bool_or(status_code IN (${sql.raw(errorList)})) THEN 'error' ELSE 'ok' END,
             now()
-          FROM spans WHERE trace_id = ${traceId}
-          ON CONFLICT (trace_id) DO UPDATE SET
+          FROM spans WHERE trace_id = ${traceId} AND workspace_id = ${workspaceId}
+          ON CONFLICT (workspace_id, trace_id) DO UPDATE SET
             session_id = excluded.session_id,
             name = excluded.name,
             start_time_unix_nano = excluded.start_time_unix_nano,
@@ -329,7 +343,7 @@ export class DrizzleSpanRepository implements SpanRepository {
           SELECT model,
                  coalesce(sum(input_tokens), 0)::int AS i,
                  coalesce(sum(output_tokens), 0)::int AS o
-          FROM spans WHERE trace_id = ${traceId} AND model IS NOT NULL
+          FROM spans WHERE trace_id = ${traceId} AND workspace_id = ${workspaceId} AND model IS NOT NULL
           GROUP BY model
         `);
         const cost = computeTraceCost(
@@ -341,38 +355,45 @@ export class DrizzleSpanRepository implements SpanRepository {
           this.priceTable,
         );
         await tx.execute(
-          sql`UPDATE traces SET cost_usd = ${cost} WHERE trace_id = ${traceId}`,
+          sql`UPDATE traces SET cost_usd = ${cost} WHERE trace_id = ${traceId} AND workspace_id = ${workspaceId}`,
         );
       }
 
       for (const sessionId of sessionIds) {
         await tx.execute(sql`
-          INSERT INTO sessions (session_id, first_seen_at, last_seen_at)
-          VALUES (${sessionId}, now(), now())
-          ON CONFLICT (session_id) DO UPDATE SET last_seen_at = now()
+          INSERT INTO sessions (session_id, workspace_id, first_seen_at, last_seen_at)
+          VALUES (${sessionId}, ${workspaceId}, now(), now())
+          ON CONFLICT (workspace_id, session_id) DO UPDATE SET last_seen_at = now()
         `);
       }
     });
   }
 
-  async getBySpanId(spanId: string): Promise<Span | null> {
+  async getBySpanId(
+    spanId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<Span | null> {
     const rows = await this.db
       .select()
       .from(spans)
-      .where(eq(spans.spanId, spanId))
+      .where(and(eq(spans.spanId, spanId), eq(spans.workspaceId, workspaceId)))
       .limit(1);
     const row = rows[0];
     return row ? fromRow(row) : null;
   }
 
-  async getTraceTree(traceId: string): Promise<TraceTreeNode | null> {
+  async getTraceTree(
+    traceId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<TraceTreeNode | null> {
     // Deterministic sibling order at the source: numeric start time, then spanId
     // (the PK — a stable total order). Makes the persisted tree reproducible across
     // fetches and aligns the rendered tree with the replay step order (review F-rp-1).
+    // M22: scoped by workspace — a trace's spans never cross the tenant boundary.
     const rows = await this.db
       .select()
       .from(spans)
-      .where(eq(spans.traceId, traceId))
+      .where(and(eq(spans.traceId, traceId), eq(spans.workspaceId, workspaceId)))
       .orderBy(sql`start_time_unix_nano::numeric`, spans.spanId);
     if (rows.length === 0) return null;
 
@@ -387,7 +408,12 @@ export class DrizzleSpanRepository implements SpanRepository {
     const evalRows = await this.db
       .select()
       .from(spanEvaluations)
-      .where(eq(spanEvaluations.traceId, traceId));
+      .where(
+        and(
+          eq(spanEvaluations.traceId, traceId),
+          eq(spanEvaluations.workspaceId, workspaceId),
+        ),
+      );
     for (const e of evalRows) {
       const node = nodes.get(e.spanId);
       if (node == null) continue;
@@ -433,11 +459,16 @@ export class DrizzleSpanRepository implements SpanRepository {
     return primary;
   }
 
-  async listTraces(opts: ListTracesOptions = {}): Promise<TraceListResponse> {
+  async listTraces(
+    opts: ListTracesOptions = {},
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<TraceListResponse> {
     // M9: whitelisted filter (status/model/time) + sort (recent/latency/tokens/
     // cost, dir) + bounded limit. No opts → newest-50 by updated_at (legacy).
     // Maps rows → strict DTO so no Drizzle column leaks (M3 D2).
-    const conds = [];
+    // M22: scoped by workspace — the filtered `traces` set bounds the LATERAL +
+    // inArray subqueries (a cross-workspace traceId is never in the filtered set).
+    const conds: (SQL | undefined)[] = [eq(traces.workspaceId, workspaceId)];
     if (opts.from) conds.push(gte(traces.updatedAt, new Date(opts.from)));
     if (opts.to) conds.push(lte(traces.updatedAt, new Date(opts.to)));
     if (opts.status === "error") {
@@ -459,7 +490,9 @@ export class DrizzleSpanRepository implements SpanRepository {
       const modelTraceIds = this.db
         .selectDistinct({ traceId: spans.traceId })
         .from(spans)
-        .where(eq(spans.model, opts.model));
+        .where(
+          and(eq(spans.model, opts.model), eq(spans.workspaceId, workspaceId)),
+        );
       conds.push(inArray(traces.traceId, modelTraceIds));
     }
     if (opts.tag) {
@@ -468,7 +501,12 @@ export class DrizzleSpanRepository implements SpanRepository {
       const taggedTraceIds = this.db
         .selectDistinct({ traceId: traceTags.traceId })
         .from(traceTags)
-        .where(eq(traceTags.tag, opts.tag));
+        .where(
+          and(
+            eq(traceTags.tag, opts.tag),
+            eq(traceTags.workspaceId, workspaceId),
+          ),
+        );
       conds.push(inArray(traces.traceId, taggedTraceIds));
     }
     // M24: one parsed tsquery, reused by the filter AND the relevance rank so both
@@ -482,7 +520,7 @@ export class DrizzleSpanRepository implements SpanRepository {
       // Full-text search over ANY span's input/output (D1 — not root-only; EXISTS
       // lists the trace once, no row multiplication).
       conds.push(
-        sql`EXISTS (SELECT 1 FROM spans s WHERE s.trace_id = ${traces.traceId} AND s.search_tsv @@ ${tsq})`,
+        sql`EXISTS (SELECT 1 FROM spans s WHERE s.trace_id = ${traces.traceId} AND s.workspace_id = ${workspaceId} AND s.search_tsv @@ ${tsq})`,
       );
     }
     // M30: span-query DSL — a trace matches iff ONE span satisfies EVERY clause
@@ -493,7 +531,7 @@ export class DrizzleSpanRepository implements SpanRepository {
       if (clauses.length > 0) {
         const preds = sql.join(clauses.map(spanClauseSql), sql` AND `);
         conds.push(
-          sql`EXISTS (SELECT 1 FROM spans s WHERE s.trace_id = ${traces.traceId} AND ${preds})`,
+          sql`EXISTS (SELECT 1 FROM spans s WHERE s.trace_id = ${traces.traceId} AND s.workspace_id = ${workspaceId} AND ${preds})`,
         );
       }
     }
@@ -508,7 +546,7 @@ export class DrizzleSpanRepository implements SpanRepository {
     const relevanceSort =
       tsq != null && (opts.orderBy == null || opts.orderBy === "recent");
     const sortCol = relevanceSort
-      ? sql`(SELECT max(ts_rank(s.search_tsv, ${tsq})) FROM spans s WHERE s.trace_id = ${traces.traceId} AND s.search_tsv @@ ${tsq})`
+      ? sql`(SELECT max(ts_rank(s.search_tsv, ${tsq})) FROM spans s WHERE s.trace_id = ${traces.traceId} AND s.workspace_id = ${workspaceId} AND s.search_tsv @@ ${tsq})`
       : opts.orderBy === "latency"
         ? // A one-sided NULL (only start OR only end) must sort NULLS LAST, not as
           // 0 — `greatest(0, end - NULL)` returns 0, so guard with an explicit CASE
@@ -542,7 +580,13 @@ export class DrizzleSpanRepository implements SpanRepository {
         ),
       })
       .from(spans)
-      .where(and(eq(spans.traceId, traces.traceId), isNull(spans.parentSpanId)))
+      .where(
+        and(
+          eq(spans.traceId, traces.traceId),
+          eq(spans.workspaceId, workspaceId),
+          isNull(spans.parentSpanId),
+        ),
+      )
       .orderBy(asc(sql`${spans.startTimeUnixNano}::numeric`))
       .limit(1)
       .as("root");
@@ -561,6 +605,7 @@ export class DrizzleSpanRepository implements SpanRepository {
       .where(
         and(
           eq(spans.traceId, traces.traceId),
+          eq(spans.workspaceId, workspaceId),
           sql`(${spans.inputValue} IS NOT NULL OR ${spans.outputValue} IS NOT NULL)`,
         ),
       )
@@ -581,7 +626,7 @@ export class DrizzleSpanRepository implements SpanRepository {
         rootOutputValue: repr.outputValue,
         // M26b: per-trace online-eval count for the "Evals" list column (read-only,
         // M26 data) — a correlated count on the indexed span_evaluations.trace_id.
-        evaluationsCount: sql<number>`(SELECT count(*)::int FROM span_evaluations se WHERE se.trace_id = ${traces.traceId})`.as(
+        evaluationsCount: sql<number>`(SELECT count(*)::int FROM span_evaluations se WHERE se.trace_id = ${traces.traceId} AND se.workspace_id = ${workspaceId})`.as(
           "evaluations_count",
         ),
       })
@@ -594,11 +639,16 @@ export class DrizzleSpanRepository implements SpanRepository {
     return { traces: rows.map(traceRowToItem) };
   }
 
-  async getTraceCost(traceId: string): Promise<TraceCost | null> {
+  async getTraceCost(
+    traceId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<TraceCost | null> {
     const rows = await this.db
       .select()
       .from(traces)
-      .where(eq(traces.traceId, traceId))
+      .where(
+        and(eq(traces.traceId, traceId), eq(traces.workspaceId, workspaceId)),
+      )
       .limit(1);
     const row = rows[0];
     if (!row) return null;
@@ -613,6 +663,7 @@ export class DrizzleSpanRepository implements SpanRepository {
 
   async aggregateCostByPeriod(
     period: CostPeriod,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<CostByPeriodResponse> {
     // `period` is whitelisted to the union literal (no raw interpolation) AND
     // bound as a parameter; date_trunc buckets the precomputed cost. The 90-day
@@ -625,7 +676,7 @@ export class DrizzleSpanRepository implements SpanRepository {
              coalesce(sum(total_tokens), 0)::int AS tokens,
              count(*)::int AS n
       FROM traces
-      WHERE updated_at >= now() - interval '90 days'
+      WHERE updated_at >= now() - interval '90 days' AND workspace_id = ${workspaceId}
       GROUP BY bucket
       ORDER BY bucket DESC
     `);
@@ -641,7 +692,9 @@ export class DrizzleSpanRepository implements SpanRepository {
     return { period, buckets };
   }
 
-  async aggregateToolStats(): Promise<ToolStatsResponse> {
+  async aggregateToolStats(
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<ToolStatsResponse> {
     // Per-tool stats over execute_tool spans in a 90-day window, GROUP BY the typed
     // indexed tool_name, ORDER BY call count DESC + top-100 (bounds high cardinality,
     // risk #2). p50/p95 via engine-side percentile_cont over latency-in-ms; the pure
@@ -661,7 +714,7 @@ export class DrizzleSpanRepository implements SpanRepository {
                ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6)
              )::double precision AS p95
       FROM spans
-      WHERE tool_name IS NOT NULL AND ingested_at >= now() - interval '90 days'
+      WHERE tool_name IS NOT NULL AND ingested_at >= now() - interval '90 days' AND workspace_id = ${workspaceId}
       GROUP BY tool_name
       ORDER BY call_count DESC
       LIMIT 100
@@ -688,6 +741,7 @@ export class DrizzleSpanRepository implements SpanRepository {
   async listTracesForTool(
     toolName: string,
     limit = 50,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<TraceListResponse> {
     // Drill-down (M6): executions whose spans include this tool, newest-active first.
     // Reuses the M3 TraceListResponse DTO (no new shape). Uses the query builder so
@@ -698,25 +752,36 @@ export class DrizzleSpanRepository implements SpanRepository {
       .where(
         and(
           eq(spans.toolName, toolName),
+          eq(spans.workspaceId, workspaceId),
           gte(spans.ingestedAt, sql`now() - interval '90 days'`),
         ),
       );
     const rows = await this.db
       .select()
       .from(traces)
-      .where(inArray(traces.traceId, callingTraceIds))
+      .where(
+        and(
+          inArray(traces.traceId, callingTraceIds),
+          eq(traces.workspaceId, workspaceId),
+        ),
+      )
       .orderBy(desc(traces.updatedAt))
       .limit(limit);
     return { traces: rows.map(traceRowToItem) };
   }
 
-  async recordReplaySession(traceId: string): Promise<void> {
+  async recordReplaySession(
+    traceId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<void> {
     // One row per replay opened in the UI — the sole data source for the
     // "replay sessions per week" north-star (replay is otherwise client-only).
-    await this.db.insert(replaySessions).values({ traceId });
+    await this.db.insert(replaySessions).values({ traceId, workspaceId });
   }
 
-  async aggregateNorthStar(): Promise<NorthStarResponse> {
+  async aggregateNorthStar(
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<NorthStarResponse> {
     // North-star (M8, D2): traces ingested per day (real telemetry arriving) +
     // replay sessions opened per week (active debugging). Both via date_trunc
     // over an indexed timestamp + a bounded recent window (reuses the M5 cost
@@ -732,7 +797,7 @@ export class DrizzleSpanRepository implements SpanRepository {
       SELECT date_trunc('day', ingested_at) AS bucket,
              count(DISTINCT trace_id)::int AS count
       FROM spans
-      WHERE ingested_at >= now() - interval '30 days'
+      WHERE ingested_at >= now() - interval '30 days' AND workspace_id = ${workspaceId}
       GROUP BY bucket
       ORDER BY bucket DESC
     `);
@@ -740,7 +805,7 @@ export class DrizzleSpanRepository implements SpanRepository {
       SELECT date_trunc('week', opened_at) AS bucket,
              count(*)::int AS count
       FROM replay_sessions
-      WHERE opened_at >= now() - interval '12 weeks'
+      WHERE opened_at >= now() - interval '12 weeks' AND workspace_id = ${workspaceId}
       GROUP BY bucket
       ORDER BY bucket DESC
     `);
@@ -754,6 +819,7 @@ export class DrizzleSpanRepository implements SpanRepository {
 
   async aggregateObservability(
     range: ObservabilityRange,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<ObservabilityResponse> {
     // M11: three windowed time-series, reusing the M5 date_trunc bucket + the M6
     // percentile_cont/error-FILTER templates. `trunc`/`interval` come from the
@@ -769,7 +835,7 @@ export class DrizzleSpanRepository implements SpanRepository {
              count(*)::int AS "traceCount",
              count(*) FILTER (WHERE status_code = 'error')::int AS "errorCount"
       FROM traces
-      WHERE updated_at >= now() - ${sql.raw(`interval '${interval}'`)}
+      WHERE updated_at >= now() - ${sql.raw(`interval '${interval}'`)} AND workspace_id = ${workspaceId}
       GROUP BY bucket
       ORDER BY bucket ASC
     `);
@@ -784,7 +850,7 @@ export class DrizzleSpanRepository implements SpanRepository {
              percentile_cont(0.95) WITHIN GROUP (ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6))::double precision AS p95,
              percentile_cont(0.99) WITHIN GROUP (ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6))::double precision AS p99
       FROM traces
-      WHERE updated_at >= now() - ${sql.raw(`interval '${interval}'`)}
+      WHERE updated_at >= now() - ${sql.raw(`interval '${interval}'`)} AND workspace_id = ${workspaceId}
         AND start_time_unix_nano ~ '^\\d+$' AND end_time_unix_nano ~ '^\\d+$'
       GROUP BY bucket
       ORDER BY bucket ASC
@@ -800,7 +866,7 @@ export class DrizzleSpanRepository implements SpanRepository {
              coalesce(sum(output_tokens), 0)::int AS "outputTokens"
       FROM spans
       WHERE ingested_at >= now() - ${sql.raw(`interval '${interval}'`)}
-        AND model IS NOT NULL
+        AND model IS NOT NULL AND workspace_id = ${workspaceId}
       GROUP BY bucket, model
       ORDER BY bucket ASC
     `);
@@ -823,6 +889,7 @@ export class DrizzleSpanRepository implements SpanRepository {
 
   async aggregateEvaluators(
     range: ObservabilityRange,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<EvaluatorSummary[]> {
     // M26: per-evaluator aggregate over the side-table, range-windowed by the
     // trace's updated_at (same RANGE_BUCKETS interval whitelist the M11 observability
@@ -835,8 +902,8 @@ export class DrizzleSpanRepository implements SpanRepository {
              count(*)::int AS count,
              avg(se.score) AS "avgScore"
       FROM span_evaluations se
-      JOIN traces t ON t.trace_id = se.trace_id
-      WHERE t.updated_at >= now() - ${window}
+      JOIN traces t ON t.trace_id = se.trace_id AND t.workspace_id = se.workspace_id
+      WHERE t.updated_at >= now() - ${window} AND se.workspace_id = ${workspaceId}
       GROUP BY se.name
       ORDER BY se.name ASC
     `);
@@ -844,8 +911,8 @@ export class DrizzleSpanRepository implements SpanRepository {
     const labelRes = await this.db.execute(sql`
       SELECT se.name AS name, se.label AS label, count(*)::int AS count
       FROM span_evaluations se
-      JOIN traces t ON t.trace_id = se.trace_id
-      WHERE t.updated_at >= now() - ${window} AND se.label IS NOT NULL
+      JOIN traces t ON t.trace_id = se.trace_id AND t.workspace_id = se.workspace_id
+      WHERE t.updated_at >= now() - ${window} AND se.label IS NOT NULL AND se.workspace_id = ${workspaceId}
       GROUP BY se.name, se.label
     `);
     const labelsByName = new Map<string, Record<string, number>>();
@@ -864,7 +931,9 @@ export class DrizzleSpanRepository implements SpanRepository {
     );
   }
 
-  async listSessions(): Promise<SessionListResponse> {
+  async listSessions(
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<SessionListResponse> {
     // One row per real session (only session.id-bearing traces — D3), with
     // scoped aggregates summed over the spans-derived traces table (D2). LEFT JOIN
     // so a session with zero member traces still lists (traceCount 0). Deterministic
@@ -884,18 +953,22 @@ export class DrizzleSpanRepository implements SpanRepository {
              count(t.trace_id) FILTER (WHERE t.status_code = 'error')::int AS "errorCount",
              (SELECT count(*)::int
                 FROM span_evaluations se
-                JOIN traces te ON te.trace_id = se.trace_id
-               WHERE te.session_id = s.session_id) AS "evaluationsCount",
+               WHERE se.workspace_id = ${workspaceId}
+                 AND se.trace_id IN (SELECT te.trace_id FROM traces te
+                                      WHERE te.session_id = s.session_id
+                                        AND te.workspace_id = ${workspaceId})) AS "evaluationsCount",
              (SELECT sp.input_value
                 FROM spans sp
-                JOIN traces tt ON tt.trace_id = sp.trace_id
+                JOIN traces tt ON tt.trace_id = sp.trace_id AND tt.workspace_id = ${workspaceId}
                WHERE tt.session_id = s.session_id
+                 AND sp.workspace_id = ${workspaceId}
                  AND sp.parent_span_id IS NULL
                  AND sp.start_time_unix_nano ~ '^\\d+$'
                ORDER BY sp.start_time_unix_nano::numeric ASC
                LIMIT 1) AS "firstMessageRaw"
       FROM sessions s
-      LEFT JOIN traces t ON t.session_id = s.session_id
+      LEFT JOIN traces t ON t.session_id = s.session_id AND t.workspace_id = s.workspace_id
+      WHERE s.workspace_id = ${workspaceId}
       GROUP BY s.session_id, s.first_seen_at, s.last_seen_at
       ORDER BY s.last_seen_at DESC, s.session_id DESC
     `);
@@ -931,12 +1004,20 @@ export class DrizzleSpanRepository implements SpanRepository {
     return { sessions: sessionsOut };
   }
 
-  async getSessionDetail(sessionId: string): Promise<SessionDetailResponse | null> {
-    // Absent session → null (route 404). "Absent" = no row in the sessions table.
+  async getSessionDetail(
+    sessionId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<SessionDetailResponse | null> {
+    // Absent session → null (route 404). "Absent" = no row in the workspace's sessions.
     const sessionRows = await this.db
       .select()
       .from(sessions)
-      .where(eq(sessions.sessionId, sessionId))
+      .where(
+        and(
+          eq(sessions.sessionId, sessionId),
+          eq(sessions.workspaceId, workspaceId),
+        ),
+      )
       .limit(1);
     const session = sessionRows[0];
     if (!session) return null;
@@ -955,7 +1036,7 @@ export class DrizzleSpanRepository implements SpanRepository {
              percentile_cont(0.95) WITHIN GROUP (ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6))
                FILTER (WHERE start_time_unix_nano ~ '^\\d+$' AND end_time_unix_nano ~ '^\\d+$')::double precision AS p95
       FROM traces
-      WHERE session_id = ${sessionId}
+      WHERE session_id = ${sessionId} AND workspace_id = ${workspaceId}
     `);
     const agg = (aggRes.rows as unknown as {
       traceCount: number;
@@ -970,7 +1051,12 @@ export class DrizzleSpanRepository implements SpanRepository {
     const memberRows = await this.db
       .select()
       .from(traces)
-      .where(eq(traces.sessionId, sessionId))
+      .where(
+        and(
+          eq(traces.sessionId, sessionId),
+          eq(traces.workspaceId, workspaceId),
+        ),
+      )
       .orderBy(desc(traces.updatedAt));
 
     const raw: RawSessionDetail = {
@@ -988,7 +1074,11 @@ export class DrizzleSpanRepository implements SpanRepository {
     return shapeSessionDetail(raw);
   }
 
-  async addTag(traceId: string, tag: string): Promise<boolean> {
+  async addTag(
+    traceId: string,
+    tag: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<boolean> {
     // M14 (D2): you can only tag a real trace. Returns false → route 404 when the
     // trace does not exist. The insert is idempotent (UNIQUE(trace_id,tag) +
     // ON CONFLICT DO NOTHING) so a duplicate add is a harmless no-op.
@@ -999,31 +1089,51 @@ export class DrizzleSpanRepository implements SpanRepository {
     const existing = await this.db
       .select({ traceId: traces.traceId })
       .from(traces)
-      .where(eq(traces.traceId, traceId))
+      .where(
+        and(eq(traces.traceId, traceId), eq(traces.workspaceId, workspaceId)),
+      )
       .limit(1);
     if (existing.length === 0) return false;
     await this.db
       .insert(traceTags)
-      .values({ traceId, tag })
+      .values({ traceId, tag, workspaceId })
       .onConflictDoNothing({
-        target: [traceTags.traceId, traceTags.tag],
+        target: [traceTags.workspaceId, traceTags.traceId, traceTags.tag],
       });
     return true;
   }
 
-  async removeTag(traceId: string, tag: string): Promise<void> {
-    // Idempotent (D2): a no-op when the tag/trace is absent.
+  async removeTag(
+    traceId: string,
+    tag: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<void> {
+    // Idempotent (D2): a no-op when the tag/trace is absent (within the workspace).
     await this.db
       .delete(traceTags)
-      .where(and(eq(traceTags.traceId, traceId), eq(traceTags.tag, tag)));
+      .where(
+        and(
+          eq(traceTags.traceId, traceId),
+          eq(traceTags.tag, tag),
+          eq(traceTags.workspaceId, workspaceId),
+        ),
+      );
   }
 
-  async listTags(traceId: string): Promise<string[]> {
+  async listTags(
+    traceId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<string[]> {
     // Ordered for a stable UI / deterministic test (EC-6); empty when none.
     const rows = await this.db
       .select({ tag: traceTags.tag })
       .from(traceTags)
-      .where(eq(traceTags.traceId, traceId))
+      .where(
+        and(
+          eq(traceTags.traceId, traceId),
+          eq(traceTags.workspaceId, workspaceId),
+        ),
+      )
       .orderBy(asc(traceTags.tag));
     return rows.map((r) => r.tag);
   }
@@ -1031,6 +1141,7 @@ export class DrizzleSpanRepository implements SpanRepository {
   async upsertAnnotation(
     traceId: string,
     ann: NormalizedAnnotation,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<boolean> {
     // M26b (D2): one annotation per (trace, span, name, annotatorKind) — re-submitting
     // REPLACES label/note/updatedAt (latest wins). `span_id = ''` sentinel = trace-level.
@@ -1039,13 +1150,16 @@ export class DrizzleSpanRepository implements SpanRepository {
     const existing = await this.db
       .select({ traceId: traces.traceId })
       .from(traces)
-      .where(eq(traces.traceId, traceId))
+      .where(
+        and(eq(traces.traceId, traceId), eq(traces.workspaceId, workspaceId)),
+      )
       .limit(1);
     if (existing.length === 0) return false;
     const spanId = ann.spanId ?? "";
     await this.db
       .insert(annotations)
       .values({
+        workspaceId,
         traceId,
         spanId,
         name: ann.name,
@@ -1055,6 +1169,7 @@ export class DrizzleSpanRepository implements SpanRepository {
       })
       .onConflictDoUpdate({
         target: [
+          annotations.workspaceId,
           annotations.traceId,
           annotations.spanId,
           annotations.name,
@@ -1069,12 +1184,20 @@ export class DrizzleSpanRepository implements SpanRepository {
     return true;
   }
 
-  async listAnnotations(traceId: string): Promise<Annotation[]> {
+  async listAnnotations(
+    traceId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<Annotation[]> {
     // Newest-first (D2); trace-level (span_id '') + all spans'. Empty when none.
     const rows = await this.db
       .select()
       .from(annotations)
-      .where(eq(annotations.traceId, traceId))
+      .where(
+        and(
+          eq(annotations.traceId, traceId),
+          eq(annotations.workspaceId, workspaceId),
+        ),
+      )
       .orderBy(desc(annotations.updatedAt));
     return rows.map((r) => ({
       // '' sentinel → trace-level: omit spanId so the DTO stays `.strict()` clean.
@@ -1090,13 +1213,15 @@ export class DrizzleSpanRepository implements SpanRepository {
   async removeAnnotation(
     traceId: string,
     key: { spanId?: string; name: string; annotatorKind?: string },
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<void> {
-    // Idempotent (D2): a no-op when the annotation/trace is absent.
+    // Idempotent (D2): a no-op when the annotation/trace is absent (in the workspace).
     await this.db
       .delete(annotations)
       .where(
         and(
           eq(annotations.traceId, traceId),
+          eq(annotations.workspaceId, workspaceId),
           eq(annotations.spanId, key.spanId ?? ""),
           eq(annotations.name, key.name),
           eq(annotations.annotatorKind, key.annotatorKind ?? DEFAULT_ANNOTATOR_KIND),
@@ -1116,13 +1241,16 @@ export class DrizzleSpanRepository implements SpanRepository {
     };
   }
 
-  async createDataset(name: string): Promise<Dataset> {
-    // D1: create-or-get on the UNIQUE name (idempotent). Insert-or-nothing, then read
-    // the row back (covers both the just-created and the pre-existing case) + item count.
+  async createDataset(
+    name: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<Dataset> {
+    // D1: create-or-get on the workspace-leading UNIQUE (idempotent). Insert-or-
+    // nothing, then read the row back (just-created or pre-existing) + item count.
     await this.db
       .insert(datasets)
-      .values({ name })
-      .onConflictDoNothing({ target: datasets.name });
+      .values({ name, workspaceId })
+      .onConflictDoNothing({ target: [datasets.workspaceId, datasets.name] });
     const rows = await this.db
       .select({
         id: datasets.id,
@@ -1131,14 +1259,22 @@ export class DrizzleSpanRepository implements SpanRepository {
         itemCount: sql<number>`count(${datasetItems.id})::int`.as("item_count"),
       })
       .from(datasets)
-      .leftJoin(datasetItems, eq(datasetItems.datasetId, datasets.id))
-      .where(eq(datasets.name, name))
+      .leftJoin(
+        datasetItems,
+        and(
+          eq(datasetItems.datasetId, datasets.id),
+          eq(datasetItems.workspaceId, datasets.workspaceId),
+        ),
+      )
+      .where(and(eq(datasets.name, name), eq(datasets.workspaceId, workspaceId)))
       .groupBy(datasets.id, datasets.name, datasets.createdAt)
       .limit(1);
     return this.datasetRow(rows[0]!);
   }
 
-  async listDatasets(): Promise<Dataset[]> {
+  async listDatasets(
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<Dataset[]> {
     // LEFT JOIN + GROUP BY for the per-dataset item count (a correlated subquery in
     // the projection did not correlate reliably here; the grouped join is idiomatic).
     const rows = await this.db
@@ -1149,25 +1285,42 @@ export class DrizzleSpanRepository implements SpanRepository {
         itemCount: sql<number>`count(${datasetItems.id})::int`.as("item_count"),
       })
       .from(datasets)
-      .leftJoin(datasetItems, eq(datasetItems.datasetId, datasets.id))
+      .leftJoin(
+        datasetItems,
+        and(
+          eq(datasetItems.datasetId, datasets.id),
+          eq(datasetItems.workspaceId, datasets.workspaceId),
+        ),
+      )
+      .where(eq(datasets.workspaceId, workspaceId))
       .groupBy(datasets.id, datasets.name, datasets.createdAt)
       .orderBy(desc(datasets.createdAt));
     return rows.map((r) => this.datasetRow(r));
   }
 
-  async getDataset(datasetId: string): Promise<DatasetDetail | null> {
+  async getDataset(
+    datasetId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<DatasetDetail | null> {
     if (!isUuid(datasetId)) return null; // non-uuid path param → absent, not a 500
     const dsRows = await this.db
       .select()
       .from(datasets)
-      .where(eq(datasets.id, datasetId))
+      .where(
+        and(eq(datasets.id, datasetId), eq(datasets.workspaceId, workspaceId)),
+      )
       .limit(1);
     const ds = dsRows[0];
     if (!ds) return null;
     const items = await this.db
       .select()
       .from(datasetItems)
-      .where(eq(datasetItems.datasetId, datasetId))
+      .where(
+        and(
+          eq(datasetItems.datasetId, datasetId),
+          eq(datasetItems.workspaceId, workspaceId),
+        ),
+      )
       .orderBy(desc(datasetItems.createdAt));
     return {
       id: ds.id,
@@ -1182,46 +1335,69 @@ export class DrizzleSpanRepository implements SpanRepository {
     };
   }
 
-  async addDatasetItem(datasetId: string, traceId: string): Promise<boolean> {
+  async addDatasetItem(
+    datasetId: string,
+    traceId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<boolean> {
     // D2/D3: snapshot the trace's root input/output AT ADD-TIME (durable past prune),
     // idempotent on (dataset, trace). Returns false if the dataset OR the trace is
-    // absent (→ 404) — advisory checks, like addTag/upsertAnnotation.
+    // absent in the workspace (→ 404) — advisory checks, like addTag/upsertAnnotation.
     if (!isUuid(datasetId)) return false;
     const ds = await this.db
       .select({ id: datasets.id })
       .from(datasets)
-      .where(eq(datasets.id, datasetId))
+      .where(
+        and(eq(datasets.id, datasetId), eq(datasets.workspaceId, workspaceId)),
+      )
       .limit(1);
     if (ds.length === 0) return false;
     const tr = await this.db
       .select({ traceId: traces.traceId })
       .from(traces)
-      .where(eq(traces.traceId, traceId))
+      .where(
+        and(eq(traces.traceId, traceId), eq(traces.workspaceId, workspaceId)),
+      )
       .limit(1);
     if (tr.length === 0) return false;
     // The root span (earliest, parent_span_id IS NULL) carries the trace's I/O.
     const root = await this.db
       .select({ input: spans.inputValue, output: spans.outputValue })
       .from(spans)
-      .where(and(eq(spans.traceId, traceId), isNull(spans.parentSpanId)))
+      .where(
+        and(
+          eq(spans.traceId, traceId),
+          eq(spans.workspaceId, workspaceId),
+          isNull(spans.parentSpanId),
+        ),
+      )
       .orderBy(asc(sql`${spans.startTimeUnixNano}::numeric`))
       .limit(1);
     const snap = root[0];
     await this.db
       .insert(datasetItems)
       .values({
+        workspaceId,
         datasetId,
         traceId,
         inputSnapshot: snap?.input ?? null,
         outputSnapshot: snap?.output ?? null,
       })
       .onConflictDoNothing({
-        target: [datasetItems.datasetId, datasetItems.traceId],
+        target: [
+          datasetItems.workspaceId,
+          datasetItems.datasetId,
+          datasetItems.traceId,
+        ],
       });
     return true;
   }
 
-  async removeDatasetItem(datasetId: string, traceId: string): Promise<void> {
+  async removeDatasetItem(
+    datasetId: string,
+    traceId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<void> {
     if (!isUuid(datasetId)) return; // idempotent: a non-uuid id removes nothing
     await this.db
       .delete(datasetItems)
@@ -1229,11 +1405,14 @@ export class DrizzleSpanRepository implements SpanRepository {
         and(
           eq(datasetItems.datasetId, datasetId),
           eq(datasetItems.traceId, traceId),
+          eq(datasetItems.workspaceId, workspaceId),
         ),
       );
   }
 
-  async aggregateAgents(): Promise<Agent[]> {
+  async aggregateAgents(
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<Agent[]> {
     // M32 (D1/D2): derive the catalog by GROUP BY `agent.name`. Only spans carrying
     // that attribute are cataloged (a plain span is excluded). Correlated subqueries
     // give the latest non-empty system prompt + the distinct tools across the agent's
@@ -1253,14 +1432,17 @@ export class DrizzleSpanRepository implements SpanRepository {
         (SELECT s3.attributes->>'agent.system_prompt'
            FROM spans s3
           WHERE s3.attributes->>'agent.name' = base.agent_name
+            AND s3.workspace_id = ${workspaceId}
             AND nullif(btrim(s3.attributes->>'agent.system_prompt'), '') IS NOT NULL
           ORDER BY s3.ingested_at DESC
           LIMIT 1) AS system_prompt,
         COALESCE((SELECT array_agg(DISTINCT tl.tool_name)
            FROM spans tl
           WHERE tl.tool_name IS NOT NULL
+            AND tl.workspace_id = ${workspaceId}
             AND tl.parent_span_id IN (SELECT s2.span_id FROM spans s2
-                                       WHERE s2.attributes->>'agent.name' = base.agent_name)
+                                       WHERE s2.attributes->>'agent.name' = base.agent_name
+                                         AND s2.workspace_id = ${workspaceId})
         ), ARRAY[]::text[]) AS tools
       FROM (
         SELECT attributes->>'agent.name' AS agent_name,
@@ -1269,6 +1451,7 @@ export class DrizzleSpanRepository implements SpanRepository {
                ingested_at
           FROM spans
          WHERE attributes->>'agent.name' IS NOT NULL
+           AND workspace_id = ${workspaceId}
       ) base
       GROUP BY base.agent_name
       ORDER BY max(base.ingested_at) DESC
@@ -1306,31 +1489,38 @@ export class DrizzleSpanRepository implements SpanRepository {
     const cutoff = olderThan.toISOString();
     const rowCount = (r: { rowCount: number | null }): number => r.rowCount ?? 0;
     return this.db.transaction(async (tx) => {
-      const stale = sql`(SELECT trace_id FROM traces WHERE updated_at < ${cutoff})`;
+      // M22: trace_id is no longer globally unique (composite PK (workspace_id,
+      // trace_id)). The stale set is keyed by BOTH columns so a stale trace in one
+      // workspace never cascades a delete onto a same-trace_id row in another
+      // workspace (row-value IN over the pair). Retention itself stays system-wide
+      // (age-based operator policy) — only the cascade is workspace-precise.
+      const stale = sql`(SELECT workspace_id, trace_id FROM traces WHERE updated_at < ${cutoff})`;
       const spansRes = await tx.execute(
-        sql`DELETE FROM spans WHERE trace_id IN ${stale}`,
+        sql`DELETE FROM spans WHERE (workspace_id, trace_id) IN ${stale}`,
       );
       const tagsRes = await tx.execute(
-        sql`DELETE FROM trace_tags WHERE trace_id IN ${stale}`,
+        sql`DELETE FROM trace_tags WHERE (workspace_id, trace_id) IN ${stale}`,
       );
       const replayRes = await tx.execute(
-        sql`DELETE FROM replay_sessions WHERE trace_id IN ${stale}`,
+        sql`DELETE FROM replay_sessions WHERE (workspace_id, trace_id) IN ${stale}`,
       );
       // M26: eval rows of stale traces (avoid orphan span_evaluations). M26b: human
-      // annotations of stale traces. Both keyed by trace_id, no FK → explicit delete.
+      // annotations of stale traces. Both keyed by (workspace_id, trace_id), no FK.
       const evalsRes = await tx.execute(
-        sql`DELETE FROM span_evaluations WHERE trace_id IN ${stale}`,
+        sql`DELETE FROM span_evaluations WHERE (workspace_id, trace_id) IN ${stale}`,
       );
       const annotationsRes = await tx.execute(
-        sql`DELETE FROM annotations WHERE trace_id IN ${stale}`,
+        sql`DELETE FROM annotations WHERE (workspace_id, trace_id) IN ${stale}`,
       );
       const tracesRes = await tx.execute(
         sql`DELETE FROM traces WHERE updated_at < ${cutoff}`,
       );
       // EC-1: the `IS NOT NULL` guard is mandatory — a NULL in a NOT IN set makes
-      // the whole predicate UNKNOWN and would silently delete ZERO orphans.
+      // the whole predicate UNKNOWN and would silently delete ZERO orphans. The pair
+      // (workspace_id, session_id) matches the composite sessions PK so a live
+      // session in workspace B is never orphan-deleted by workspace A's traces.
       const sessionsRes = await tx.execute(
-        sql`DELETE FROM sessions WHERE session_id NOT IN (SELECT session_id FROM traces WHERE session_id IS NOT NULL)`,
+        sql`DELETE FROM sessions WHERE (workspace_id, session_id) NOT IN (SELECT workspace_id, session_id FROM traces WHERE session_id IS NOT NULL)`,
       );
       return {
         cutoff,

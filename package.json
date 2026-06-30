@@ -1,7 +1,7 @@
 {
   "name": "theo-lens-workspace",
   "version": "0.0.0",
-  "description": "Workspace root for Theo Lens — OpenTelemetry-native observability for AI agents",
+  "description": "Workspace root for Theo Lens \u2014 OpenTelemetry-native observability for AI agents",
   "type": "module",
   "license": "Apache-2.0",
   "private": true,
@@ -10,7 +10,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && node scripts/copy-migrations.mjs",
     "typecheck": "tsc -b --noEmit || tsc -b",
     "lint": "eslint .",
     "test": "vitest run -c vitest.contract.config.ts",
@@ -22,7 +22,8 @@
     "db:prune": "tsx packages/api/src/bin/prune.ts",
     "db:seed:demo": "tsx packages/api/src/bin/seed-demo.ts",
     "compose:up": "docker compose up -d",
-    "compose:down": "docker compose down"
+    "compose:down": "docker compose down",
+    "test:e2e:edge": "bash scripts/e2e-edge.sh"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

@@ -6,6 +6,8 @@ import { createSpanRepository, migrateLatest, parseRetentionConfig } from "@uset
 import type pg from "pg";
 
 import { createApp } from "./app.js";
+import { parseRequireCredentialEnv } from "./auth/middleware.js";
+import { ApiKeyAuthVerifier } from "./auth/api-key-verifier.js";
 import { runPrune } from "./retention-run.js";
 import { startRetentionScheduler } from "./retention-scheduler.js";
 
@@ -35,7 +37,23 @@ export async function bootstrap(
 ): Promise<{ app: Hono; pool: pg.Pool; stop: () => void }> {
   const { repo, pool } = createSpanRepository(uri);
   await migrateLatest(pool);
-  const app = createApp(repo, webDistDir);
+  // M22: in multi-tenant mode (THEOLENS_REQUIRE_CREDENTIAL) resolve a Principal from
+  // the per-tenant `theo_api_keys` table; single-tenant dev collapses to `default`.
+  const requireCredential = parseRequireCredentialEnv(
+    process.env["THEOLENS_REQUIRE_CREDENTIAL"],
+  );
+  const bootstrapRaw = process.env["THEOLENS_PLATFORM_ADMIN_BOOTSTRAP"];
+  const bootstrapToken =
+    bootstrapRaw !== undefined && bootstrapRaw.trim().length > 0
+      ? bootstrapRaw
+      : undefined;
+  const authOptions: Parameters<typeof createApp>[2] = {
+    pool,
+    requireCredential,
+    ...(requireCredential ? { verifier: new ApiKeyAuthVerifier(pool) } : {}),
+    ...(bootstrapToken !== undefined ? { bootstrapToken } : {}),
+  };
+  const app = createApp(repo, webDistDir, authOptions);
 
   const retention = parseRetentionConfig(process.env);
   if (retention.warning) {

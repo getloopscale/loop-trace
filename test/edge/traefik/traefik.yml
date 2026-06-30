@@ -1,0 +1,15 @@
+# Hermetic Traefik static config for the M22 edge e2e (invariant 6).
+# File provider points at the dynamic config; one web entrypoint.
+entryPoints:
+  web:
+    address: ":80"
+
+providers:
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: false
+
+log:
+  level: ERROR
+
+# No dashboard / api — this is a one-shot test edge, not an operator surface.
