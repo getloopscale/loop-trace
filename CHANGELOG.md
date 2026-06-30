@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Authentication & multi-tenant workspace isolation (M22, in progress): per-tenant API keys resolve a Principal (workspace + scopes); every data route is gated by per-verb scope (`lens:read`/`write`/`delete`); every query is scoped by `workspace_id`; an admin key surface mints per-tenant keys with anti-escalation; multi-tenant mode fails closed. Closes the open-ingestion/open-read gap (the data-plane auth pattern from theo-memory)
 
 ### Changed
 
