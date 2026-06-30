@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Online Evaluators (M36, in progress): theo-lens can now **compute** eval verdicts (not just store ingested ones) — an evaluator (deterministic **rule** reusing the M30 span-query DSL, or an **LLM-judge** via a configurable OpenAI-compatible endpoint) runs on-demand or via an opt-in periodic sweep and writes verdicts into the existing `span_evaluations` store (M26 read surfaces light up automatically); flag-only **guards** flag traces whose verdict breaches a threshold. Per-workspace (M22). [Phase 1: `evaluators`/`guards` tables + rule/guard domain engine]
 
 ### Changed
 - Roadmap consolidated into **`ROADMAP-v4.md`** — a single authoritative view of every delivered milestone (M0–M35, all `[x]`, each with its shipped version), since the work had been split across the phased `ROADMAP.md` (V1, M0–M8), `ROADMAP-v2.md` (V2, M9–M14) and `ROADMAP-v3.md` (V3, M15–M21) plus the CHANGELOG, with M22–M35 never recorded as milestone headers. The three phased files are kept as historical phase records (V1 gains a "superseded — see v4" banner); the M22 block briefly added to V1 was moved into v4 where it belongs (auth/production is a V3.x concern, not V1). New work appends to v4 (next free id M36).

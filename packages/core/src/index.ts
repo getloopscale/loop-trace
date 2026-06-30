@@ -45,6 +45,25 @@ export {
   type EvaluatorSummary,
   type EvaluatorsResponse,
 } from "./domain/evaluation.js";
+// M36: online evaluators (compute/write path) — types + pure rule/guard engines.
+export {
+  EVALUATOR_KINDS,
+  GUARD_OPERATORS,
+  evaluatorSchema,
+  guardSchema,
+  ruleConfigSchema,
+  judgeConfigSchema,
+  evaluateRule,
+  evaluateGuard,
+  validatePredicate,
+  deriveKind,
+  type EvaluatorKind,
+  type GuardOperator,
+  type Evaluator,
+  type Guard,
+  type Verdict,
+  type RunResult,
+} from "./domain/evaluator.js";
 // M26b: human-feedback annotations (write-path).
 export {
   normalizeAnnotation,
@@ -145,7 +164,7 @@ export {
   type RetentionConfig,
   parseRetentionConfig,
 } from "./domain/retention.js";
-export { spans, traces, sessions, replaySessions } from "./infrastructure/db/schema.js";
+export { spans, traces, sessions, replaySessions, evaluators, guards } from "./infrastructure/db/schema.js";
 export {
   DrizzleSpanRepository,
   createPool,
