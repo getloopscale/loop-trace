@@ -18,6 +18,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - `/code-quality` audit no longer walks `knowledge-base/references/` (cloned third-party reference repos): the skip-list used `referencia` (PT) instead of the real directory name `references` (EN), so the symbol-fabrication detector parsed ~25k foreign files — wasting minutes and gigabytes of RAM and producing a spurious `FAIL_HARD` verdict that blocked `/review`. Now the references zone is correctly skipped, with a behavioral regression test. (#37)
+- Admin key mint (`POST /v1/admin/keys`) is now atomic: the target-workspace upsert and the key insert run in one transaction, so a failed key insert never leaves an orphan workspace row (closes review item LENS-AUTH-4).
+- Admin key mint `expires_at` is validated as a strict ISO-8601 datetime instead of any string `Date.parse` accepts (e.g. "Jan 1 2027" is now rejected), matching the documented contract (closes review item LENS-AUTH-3).
 
 ### Security
 

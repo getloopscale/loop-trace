@@ -61,6 +61,36 @@ suite("M22 admin keys (integration)", () => {
     expect(probe.status).toBe(200);
   });
 
+  it("test_admin_mint_expires_at_must_be_strict_iso", async () => {
+    // LENS-AUTH-3: a loose date string is rejected (the contract says ISO-8601),
+    // while a canonical ISO datetime is accepted and the transactional mint commits.
+    const loose = await mint(BOOTSTRAP, {
+      name: "loose-exp",
+      scopes: ["lens:read"],
+      workspace_id: "ws-exp",
+      expires_at: "Jan 1 2027",
+    });
+    expect(loose.status).toBe(400);
+    expect(((await loose.json()) as { code: string }).code).toBe("INVALID_EXPIRES_AT");
+
+    const ok = await mint(BOOTSTRAP, {
+      name: "iso-exp",
+      scopes: ["lens:read"],
+      workspace_id: "ws-exp",
+      expires_at: "2027-01-01T00:00:00Z",
+    });
+    expect(ok.status).toBe(200);
+    // The transactional mint persisted exactly one key (workspace upsert + key insert
+    // committed atomically), with the normalized expiry stored.
+    const id = ((await ok.json()) as { id: string }).id;
+    const { rows } = await pool.query<{ expires_at: Date | null }>(
+      "SELECT expires_at FROM theo_api_keys WHERE id = $1",
+      [id],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.expires_at).not.toBeNull();
+  });
+
   it("test_admin_anti_escalation_platform_admin_mint_requires_holding_it", async () => {
     // Bootstrap holds platform-admin → mint a tenant key WITHOUT platform-admin.
     const tenant = await mint(BOOTSTRAP, {
