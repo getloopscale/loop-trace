@@ -80,8 +80,12 @@ export function buildCopilotPrompt(
   let context: string;
   if (spanId != null) {
     const found = all.find((e) => e.node.spanId === spanId);
-    // The handler guarantees existence (EC-2); defensively fall back to a header line.
-    const e = found ?? all[0]!;
+    // EC-2: a spanId not in the trace is a client error, NOT a silent trace-mode
+    // fallback — surface it so the handler returns 404 SPAN_NOT_FOUND.
+    if (found === undefined) {
+      throw new CopilotError(`span ${spanId} not in trace`, "SPAN_NOT_FOUND");
+    }
+    const e = found;
     const io = [
       e.node.inputValue != null ? `input: ${bound(e.node.inputValue)}` : "",
       e.node.outputValue != null ? `output: ${bound(e.node.outputValue)}` : "",

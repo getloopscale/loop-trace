@@ -11,10 +11,14 @@ import {
   parseJudgeConfig,
   parseBackfillMax,
   parseEvalSweepHours,
+  parseCopilotRpm,
   runSweep,
+  OpenAICompatibleChat,
+  RateLimiter,
   DEFAULT_WORKSPACE_ID,
   type EngineDeps,
   type JudgeClient,
+  type ChatClient,
 } from "@usetheo/lens-core";
 import type pg from "pg";
 
@@ -78,10 +82,19 @@ export async function bootstrap(
     judge,
     backfillMax: parseBackfillMax(process.env),
   };
-  const app = createApp(repo, webDistDir, authOptions, {
-    repo: evaluatorRepo,
-    engine,
-  });
+  // M33: the "Ask about this step" copilot reuses the same provider config (D1); the
+  // chat client is null when unconfigured → the endpoint fails closed (503). Per-
+  // workspace rate limiter (D3).
+  const chat: ChatClient | null =
+    judgeConfig !== null ? new OpenAICompatibleChat(judgeConfig) : null;
+  const copilotLimiter = new RateLimiter(parseCopilotRpm(process.env));
+  const app = createApp(
+    repo,
+    webDistDir,
+    authOptions,
+    { repo: evaluatorRepo, engine },
+    { spanRepo: repo, chat, limiter: copilotLimiter },
+  );
 
   // M36: opt-in periodic evaluator sweep (default OFF, D5). v1 sweeps the `default`
   // workspace; per-workspace fan-out is a documented follow-on. Timer is unref'd.

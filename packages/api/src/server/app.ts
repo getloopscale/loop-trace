@@ -19,10 +19,6 @@ import {
   normalizeAnnotation,
   DEFAULT_ANNOTATION_NAME,
   DEFAULT_ANNOTATOR_KIND,
-  datasetsResponseSchema,
-  datasetSchema,
-  datasetDetailSchema,
-  normalizeDatasetName,
   agentCatalogResponseSchema,
 } from "@usetheo/lens-core";
 
@@ -38,18 +34,10 @@ import {
   listKeysHandler,
   revokeKeyHandler,
 } from "./handlers/admin-keys.js";
-import {
-  type EvaluatorApiDeps,
-  createEvaluatorHandler,
-  listEvaluatorsHandler,
-  getEvaluatorHandler,
-  deleteEvaluatorHandler,
-  runEvaluatorHandler,
-  createGuardHandler,
-  listGuardsHandler,
-  deleteGuardHandler,
-  guardBreachesHandler,
-} from "./handlers/evaluators.js";
+import type { EvaluatorApiDeps } from "./handlers/evaluators.js";
+import type { CopilotApiDeps } from "./handlers/copilot.js";
+import { registerExtraRoutes } from "./routes/register-extra-routes.js";
+import { registerDatasetRoutes } from "./routes/dataset-routes.js";
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
 import { OtlpParseError } from "../otlp/otlp-error.js";
 import { decodeOtlpBody } from "../otlp/decode-protobuf.js";
@@ -58,7 +46,6 @@ import {
   tracesIngested,
   evaluationsExtracted,
   annotationsWritten,
-  datasetItemsAdded,
   logIngest,
 } from "./metrics.js";
 import { mountStatic } from "./static.js";
@@ -103,6 +90,7 @@ export function createApp(
   webDistDir?: string,
   auth: AuthOptions = {},
   evaluators?: EvaluatorApiDeps,
+  copilot?: CopilotApiDeps,
 ): Hono {
   const app = new Hono();
 
@@ -463,88 +451,10 @@ export function createApp(
     return c.json(annotationsResponseSchema.parse({ annotations }), 200);
   });
 
-  app.get("/v1/datasets", requireScopeOnPrincipal("lens:read"), async (c) => {
-    // M26d: all datasets with their item counts, newest-first.
-    const datasets = await repo.listDatasets(getPrincipal(c).workspaceId);
-    return c.json(datasetsResponseSchema.parse({ datasets }), 200);
-  });
-
-  app.post("/v1/datasets", requireScopeOnPrincipal("lens:write"), async (c) => {
-    // M26d: create-or-get a dataset by name (D1, idempotent). 400 on a blank name.
-    let body: unknown;
-    try {
-      body = await c.req.json();
-    } catch {
-      return c.json({ error: "invalid json body" }, 400);
-    }
-    const name = normalizeDatasetName((body as { name?: unknown })?.name);
-    if (name === null) {
-      return c.json({ error: "dataset name is required (1-120 chars after trim)" }, 400);
-    }
-    const dataset = await repo.createDataset(name, getPrincipal(c).workspaceId);
-    return c.json(datasetSchema.parse(dataset), 200);
-  });
-
-  app.get("/v1/datasets/:datasetId", requireScopeOnPrincipal("lens:read"), async (c) => {
-    // M26d: a dataset + its items (snapshot input/output), or 404 if absent.
-    const detail = await repo.getDataset(
-      c.req.param("datasetId"),
-      getPrincipal(c).workspaceId,
-    );
-    return detail
-      ? c.json(datasetDetailSchema.parse(detail), 200)
-      : c.json({ error: "not found" }, 404);
-  });
-
-  app.post("/v1/datasets/:datasetId/items", requireScopeOnPrincipal("lens:write"), async (c) => {
-    // M26d: add a trace to a dataset (snapshot at add-time, D2). 400 on a missing
-    // traceId, 404 when the dataset OR the trace is absent (D3); idempotent otherwise.
-    let body: unknown;
-    try {
-      body = await c.req.json();
-    } catch {
-      return c.json({ error: "invalid json body" }, 400);
-    }
-    const traceId = (body as { traceId?: unknown })?.traceId;
-    if (typeof traceId !== "string" || traceId.length === 0) {
-      return c.json({ error: "traceId is required" }, 400);
-    }
-    const datasetId = c.req.param("datasetId");
-    const ws = getPrincipal(c).workspaceId;
-    const ok = await repo.addDatasetItem(datasetId, traceId, ws);
-    if (!ok) return c.json({ error: "not found" }, 404);
-    datasetItemsAdded.add(1);
-    const detail = await repo.getDataset(datasetId, ws);
-    // detail is non-null here (the dataset existed for the add to succeed).
-    return c.json(datasetDetailSchema.parse(detail), 200);
-  });
-
-  app.delete("/v1/datasets/:datasetId/items/:traceId", requireScopeOnPrincipal("lens:delete"), async (c) => {
-    // M26d: remove an item by (dataset, trace). Idempotent. Returns the dataset (404
-    // only if the dataset itself is absent — a missing item is a no-op).
-    const datasetId = c.req.param("datasetId");
-    const ws = getPrincipal(c).workspaceId;
-    await repo.removeDatasetItem(datasetId, c.req.param("traceId"), ws);
-    const detail = await repo.getDataset(datasetId, ws);
-    return detail
-      ? c.json(datasetDetailSchema.parse(detail), 200)
-      : c.json({ error: "not found" }, 404);
-  });
-
-  // M36: online-evaluators surface (mounted only when wired by the composition root).
-  // Per-verb scope; workspace from the Principal (never the body).
-  if (evaluators !== undefined) {
-    const ev = evaluators;
-    app.post("/v1/evaluators", requireScopeOnPrincipal("lens:write"), (c) => createEvaluatorHandler(c, ev));
-    app.get("/v1/evaluators", requireScopeOnPrincipal("lens:read"), (c) => listEvaluatorsHandler(c, ev));
-    app.get("/v1/evaluators/:id", requireScopeOnPrincipal("lens:read"), (c) => getEvaluatorHandler(c, ev));
-    app.delete("/v1/evaluators/:id", requireScopeOnPrincipal("lens:delete"), (c) => deleteEvaluatorHandler(c, ev));
-    app.post("/v1/evaluators/:id/run", requireScopeOnPrincipal("lens:write"), (c) => runEvaluatorHandler(c, ev));
-    app.post("/v1/guards", requireScopeOnPrincipal("lens:write"), (c) => createGuardHandler(c, ev));
-    app.get("/v1/guards", requireScopeOnPrincipal("lens:read"), (c) => listGuardsHandler(c, ev));
-    app.delete("/v1/guards/:id", requireScopeOnPrincipal("lens:delete"), (c) => deleteGuardHandler(c, ev));
-    app.get("/v1/guards/:id/breaches", requireScopeOnPrincipal("lens:read"), (c) => guardBreachesHandler(c, ev));
-  }
+  // M26d dataset routes + M36 evaluators + M33 copilot routes (extracted to keep
+  // app.ts ≤ 500 — M33 D5).
+  registerDatasetRoutes(app, repo);
+  registerExtraRoutes(app, { evaluators, copilot });
 
   // Mount static UI serving LAST so the catch-all never shadows /v1/* (M7, D1).
   if (webDistDir !== undefined) {

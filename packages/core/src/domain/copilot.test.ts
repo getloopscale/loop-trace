@@ -30,6 +30,17 @@ describe("M33 buildCopilotPrompt (T2.1)", () => {
     expect(msgs[1]!.content).toContain("TRACE t1 spans:");
     expect(msgs[1]!.content).toContain("child");
   });
+  it("test_prompt_throws_span_not_found_when_spanId_absent", () => {
+    // EC-2: a spanId not in the trace is a typed client error, NOT a silent
+    // fall-back to the root span — the handler turns this into a 404.
+    const tree = node({ spanId: "root", children: [node({ spanId: "c", name: "child" })] });
+    expect(() => buildCopilotPrompt(tree, "ghost", "why?")).toThrow(CopilotError);
+    try {
+      buildCopilotPrompt(tree, "ghost", "why?");
+    } catch (err) {
+      expect((err as CopilotError).code).toBe("SPAN_NOT_FOUND");
+    }
+  });
 });
 
 describe("M33 validateQuestion + capAnswer (T2.1 / EC-1 / EC-6)", () => {

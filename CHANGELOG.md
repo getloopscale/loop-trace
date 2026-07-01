@@ -8,9 +8,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- "Ask about this step" trace copilot (M33, in progress): a `POST /v1/traces/:id/ask` endpoint answers natural-language questions about a selected span/trace via a configurable OpenAI-compatible LLM (reusing the M36 provider seam — no new dependency), fail-closed + per-workspace rate-limited; an Ask panel in the trace detail renders the answer. [Phase 1: shared `openaiChatCompletion` chat seam]
+- "Ask about this step" trace copilot (M33, in progress): a `POST /v1/traces/:id/ask` endpoint answers natural-language questions about a selected span/trace via a configurable OpenAI-compatible LLM (reusing the M36 provider seam — no new dependency), fail-closed (503 when no provider configured, 502 on provider failure) + per-workspace rate-limited (429, `THEOLENS_COPILOT_RPM` default 20); an Ask panel in the trace detail renders the answer. [Phases 1-3: shared `openaiChatCompletion` chat seam, copilot domain + rate limiter, the `lens:read`-scoped endpoint]
 
 ### Changed
+
+- Extracted the M26d dataset routes and the M36 evaluator/copilot route registration out of `app.ts` into dedicated route modules, bringing `app.ts` back under the 500-LoC budget (M33 D5; closes the M36 review's F5 debt). No behaviour change.
 
 ### Deprecated
 
