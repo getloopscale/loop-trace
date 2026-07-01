@@ -11,6 +11,7 @@ import { SpanInfoPanel } from "../components/SpanInfoPanel.js";
 import { SpanIOPanel } from "../components/SpanIOPanel.js";
 import { TraceTags } from "../components/TraceTags.js";
 import { ReplayControls } from "../components/ReplayControls.js";
+import { AskPanel } from "./AskPanel.js";
 import { Loading, ErrorState } from "../components/states.js";
 
 /**
@@ -111,6 +112,9 @@ export function TracePage() {
         <SpanInfoPanel span={active ?? data} />
         <SpanIOPanel span={active ?? data} />
       </div>
+      {/* M33: "Ask about this step" copilot — scoped to the active span (or the
+          whole trace when none is selected). */}
+      <AskPanel traceId={traceId} spanId={active?.spanId} />
     </div>
   );
 }

@@ -65,6 +65,22 @@ export {
   type RunResult,
 } from "./domain/evaluator.js";
 export {
+  ChatError,
+  openaiChatCompletion,
+  OpenAICompatibleChat,
+  type ChatClient,
+  type ChatConfig,
+  type ChatMessage,
+} from "./domain/chat.js";
+export {
+  buildCopilotPrompt,
+  validateQuestion,
+  capAnswer,
+  CopilotError,
+  MAX_ANSWER_BYTES,
+} from "./domain/copilot.js";
+export { RateLimiter } from "./domain/rate-limiter.js";
+export {
   JudgeError,
   OpenAICompatibleJudge,
   parseJudgeVerdict,
@@ -75,7 +91,9 @@ export {
   parseJudgeConfig,
   parseEvalSweepHours,
   parseBackfillMax,
+  parseCopilotRpm,
   DEFAULT_EVAL_BACKFILL_MAX,
+  DEFAULT_COPILOT_RPM,
 } from "./domain/evaluator-config.js";
 export {
   runEvaluator,

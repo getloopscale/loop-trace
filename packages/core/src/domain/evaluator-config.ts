@@ -41,3 +41,12 @@ export function parseBackfillMax(env: NodeJS.ProcessEnv = process.env): number {
   const n = Number(raw);
   return Number.isInteger(n) && n > 0 ? n : DEFAULT_EVAL_BACKFILL_MAX;
 }
+
+/** M33: copilot per-workspace requests/minute (D3). Invalid/unset → default 20; never ≤ 0. */
+export const DEFAULT_COPILOT_RPM = 20;
+export function parseCopilotRpm(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env["THEOLENS_COPILOT_RPM"];
+  if (raw === undefined) return DEFAULT_COPILOT_RPM;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : DEFAULT_COPILOT_RPM;
+}

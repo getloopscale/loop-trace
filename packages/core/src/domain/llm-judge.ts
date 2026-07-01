@@ -9,6 +9,11 @@
 import { z } from "zod";
 
 import type { Verdict } from "./evaluator.js";
+import {
+  ChatError,
+  openaiChatCompletion,
+  type ChatConfig,
+} from "./chat.js";
 
 /** Typed error for any judge failure — fail-closed, never a silent verdict. */
 export class JudgeError extends Error {
@@ -66,11 +71,8 @@ export function parseJudgeVerdict(raw: string): Verdict {
   return out;
 }
 
-export interface JudgeConfig {
-  baseUrl: string;
-  apiKey: string | undefined;
-  model: string;
-}
+/** Provider config — an alias of the shared {@link ChatConfig} (M33 D1). */
+export type JudgeConfig = ChatConfig;
 
 /** Truncate span I/O to the prompt budget (UTF-8-safe byte bound). */
 function boundSpanIO(spanIO: string): string {
@@ -79,7 +81,11 @@ function boundSpanIO(spanIO: string): string {
   return buf.subarray(0, MAX_SPAN_IO_BYTES).toString("utf8");
 }
 
-/** OpenAI-compatible Chat-Completions judge. Pins temperature 0 for reproducibility. */
+/**
+ * OpenAI-compatible Chat-Completions judge. Delegates the HTTP/content-extraction to
+ * the shared {@link openaiChatCompletion} (M33 D1) — mapping its `ChatError` to
+ * `JudgeError` so the M36 contract is preserved — then parses a verdict on top.
+ */
 export class OpenAICompatibleJudge implements JudgeClient {
   constructor(
     private readonly config: JudgeConfig,
@@ -87,44 +93,20 @@ export class OpenAICompatibleJudge implements JudgeClient {
   ) {}
 
   async judge(prompt: string, spanIO: string): Promise<Verdict> {
-    let resp: Response;
+    let content: string;
     try {
-      resp = await this.fetchImpl(
-        `${this.config.baseUrl.replace(/\/$/, "")}/chat/completions`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            ...(this.config.apiKey
-              ? { authorization: `Bearer ${this.config.apiKey}` }
-              : {}),
-          },
-          body: JSON.stringify({
-            model: this.config.model,
-            temperature: 0,
-            messages: [
-              { role: "system", content: prompt },
-              { role: "user", content: boundSpanIO(spanIO) },
-            ],
-          }),
-        },
+      content = await openaiChatCompletion(
+        this.config,
+        [
+          { role: "system", content: prompt },
+          { role: "user", content: boundSpanIO(spanIO) },
+        ],
+        this.fetchImpl,
       );
     } catch (err) {
-      throw new JudgeError(`judge request failed: ${String(err)}`);
-    }
-    if (!resp.ok) {
-      throw new JudgeError(`judge endpoint returned ${resp.status}`);
-    }
-    let body: unknown;
-    try {
-      body = await resp.json();
-    } catch {
-      throw new JudgeError("judge response was not JSON");
-    }
-    const content = (body as { choices?: { message?: { content?: unknown } }[] })
-      ?.choices?.[0]?.message?.content;
-    if (typeof content !== "string") {
-      throw new JudgeError("judge response missing choices[0].message.content");
+      // Preserve the judge's fail-closed contract (EC-4): any transport/shape failure
+      // surfaces as JudgeError, exactly as before the extract.
+      throw err instanceof ChatError ? new JudgeError(err.message) : err;
     }
     return parseJudgeVerdict(content);
   }
