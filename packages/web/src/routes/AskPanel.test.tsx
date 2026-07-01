@@ -12,7 +12,9 @@ vi.mock("../api/client.js", async (orig) => {
 });
 
 function renderPanel(spanId?: string) {
-  const qc = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+  // retryDelay:0 keeps useCopilot's own retry-once-on-5xx logic but makes it instant,
+  // so the error-state assertion is deterministic (no ~1s backoff race — flaky-bug fix).
+  const qc = new QueryClient({ defaultOptions: { mutations: { retryDelay: 0 } } });
   return render(
     <QueryClientProvider client={qc}>
       <ThemeProvider defaultTheme="violet-forge" defaultMode="dark" themes={[violetForge]}>
