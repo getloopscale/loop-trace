@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Second roadmap `ROADMAP-edge-integration.md` (milestones `L0`–`L6`): graduate theo-lens into a Level-2 (Model B per-tenant) capability behind the Theo unified edge, mirroring theo-rag's edge roadmap. Scoped to the real gap — M22 already closed the module-side half (scopes/per-verb/mint/fail-closed + a theo-lens-side hermetic proof), so the roadmap is an audit gate (L0) then the theo-cloud broker (L1) → edge wiring (L2) → cross-repo hermetic proof (L3, keystone) → BFF/dogfood/register (L4–L6). MCP proxy is explicitly out of scope (theo-lens has no first-party MCP tools).
 
 ### Changed
 
