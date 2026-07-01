@@ -8,11 +8,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- "Ask about this step" trace copilot (M33, in progress): a `POST /v1/traces/:id/ask` endpoint answers natural-language questions about a selected span/trace via a configurable OpenAI-compatible LLM (reusing the M36 provider seam — no new dependency), fail-closed (503 when no provider configured, 502 on provider failure) + per-workspace rate-limited (429, `THEOLENS_COPILOT_RPM` default 20); an Ask panel in the trace detail (scoped to the selected span, or the whole trace) renders the answer through the XSS-safe markdown renderer; runtime counters (answered / rate-limited / unavailable) make the endpoint observable in production. [Phases 1-5 + review: shared `openaiChatCompletion` chat seam, copilot domain + rate limiter, the `lens:read`-scoped endpoint, the UI Ask panel, an endpoint-overhead benchmark (theo-side ~1.4 ms mean / ~2.1 ms p95, LLM excluded)]
 
 ### Changed
-
-- Extracted the M26d dataset routes and the M36 evaluator/copilot route registration out of `app.ts` into dedicated route modules, bringing `app.ts` back under the 500-LoC budget (M33 D5; closes the M36 review's F5 debt). No behaviour change.
 
 ### Deprecated
 
@@ -21,6 +18,16 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 ### Security
+
+## [0.38.0] - 2026-07-01
+
+### Added
+- "Ask about this step" trace copilot (M33): a `POST /v1/traces/:id/ask` endpoint answers natural-language questions about a selected span/trace via a configurable OpenAI-compatible LLM (reusing the M36 provider seam — no new dependency), fail-closed (503 when no provider configured, 502 on provider failure) + per-workspace rate-limited (429, `THEOLENS_COPILOT_RPM` default 20); an Ask panel in the trace detail (scoped to the selected span, or the whole trace) renders the answer through the XSS-safe markdown renderer; runtime counters (answered / rate-limited / unavailable) make the endpoint observable in production. [Phases 1-5 + review: shared `openaiChatCompletion` chat seam, copilot domain + rate limiter, the `lens:read`-scoped endpoint, the UI Ask panel, an endpoint-overhead benchmark (theo-side ~1.4 ms mean / ~2.1 ms p95, LLM excluded)]
+
+
+### Changed
+
+- Extracted the M26d dataset routes and the M36 evaluator/copilot route registration out of `app.ts` into dedicated route modules, bringing `app.ts` back under the 500-LoC budget (M33 D5; closes the M36 review's F5 debt). No behaviour change.
 
 ## [0.37.0] - 2026-06-30
 
