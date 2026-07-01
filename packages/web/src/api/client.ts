@@ -22,6 +22,8 @@ import type {
   EvaluatorRunResultDTO,
   GuardRecordDTO,
   NewGuardDTO,
+  CopilotAskRequest,
+  CopilotAskResponse,
 } from "./types.js";
 
 /** Hard cap mirrored from the API so an export pulls the full filtered set, not one page. */
@@ -332,4 +334,20 @@ export function getGuardDefs(): Promise<{ guards: GuardRecordDTO[] }> {
 /** Create a guard (M36). */
 export function createGuardDef(body: NewGuardDTO): Promise<GuardRecordDTO> {
   return postJson<GuardRecordDTO>("/v1/guards", body);
+}
+
+/**
+ * Ask the trace copilot about a span/trace (M33). `spanId` scopes the answer to
+ * one span; omitting it summarizes the trace. A non-2xx (503 disabled / 502
+ * provider down / 429 rate-limited / 400 bad question) throws {@link ApiError}
+ * so the hook surfaces the state — never a fabricated answer (D2, fail-closed).
+ */
+export function askCopilot(
+  traceId: string,
+  body: CopilotAskRequest,
+): Promise<CopilotAskResponse> {
+  return postJson<CopilotAskResponse>(
+    `/v1/traces/${encodeURIComponent(traceId)}/ask`,
+    body,
+  );
 }

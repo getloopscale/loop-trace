@@ -8,7 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- "Ask about this step" trace copilot (M33, in progress): a `POST /v1/traces/:id/ask` endpoint answers natural-language questions about a selected span/trace via a configurable OpenAI-compatible LLM (reusing the M36 provider seam — no new dependency), fail-closed (503 when no provider configured, 502 on provider failure) + per-workspace rate-limited (429, `THEOLENS_COPILOT_RPM` default 20); an Ask panel in the trace detail renders the answer. [Phases 1-3: shared `openaiChatCompletion` chat seam, copilot domain + rate limiter, the `lens:read`-scoped endpoint]
+- "Ask about this step" trace copilot (M33, in progress): a `POST /v1/traces/:id/ask` endpoint answers natural-language questions about a selected span/trace via a configurable OpenAI-compatible LLM (reusing the M36 provider seam — no new dependency), fail-closed (503 when no provider configured, 502 on provider failure) + per-workspace rate-limited (429, `THEOLENS_COPILOT_RPM` default 20); an Ask panel in the trace detail (scoped to the selected span, or the whole trace) renders the answer through the XSS-safe markdown renderer. [Phases 1-4: shared `openaiChatCompletion` chat seam, copilot domain + rate limiter, the `lens:read`-scoped endpoint, the UI Ask panel]
 
 ### Changed
 

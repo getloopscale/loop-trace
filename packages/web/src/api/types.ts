@@ -324,3 +324,13 @@ export interface NewGuardDTO {
   threshold?: number;
   labelValue?: string;
 }
+
+/** M33 "Ask about this step" copilot request (spanId optional → trace-scoped Q&A). */
+export interface CopilotAskRequest {
+  spanId?: string;
+  question: string;
+}
+/** M33 copilot response: a single grounded free-text (markdown) answer. */
+export interface CopilotAskResponse {
+  answer: string;
+}
