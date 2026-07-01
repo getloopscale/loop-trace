@@ -33,7 +33,15 @@ function errorMessage(err: unknown): string {
  * none). Stateless (D4): each ask is one mutation; disabled/unavailable/rate-limited
  * surface as an inline alert (fail-closed — never a fabricated answer).
  */
-export function AskPanel({ traceId, spanId }: { traceId: string; spanId?: string }) {
+export function AskPanel({
+  traceId,
+  spanId,
+}: {
+  traceId: string;
+  // `| undefined` is required under exactOptionalPropertyTypes so callers may pass a
+  // possibly-undefined selected span (TracePage's `active?.spanId`) directly.
+  spanId?: string | undefined;
+}) {
   const [question, setQuestion] = useState("");
   const ask = useCopilot(traceId);
   const trimmed = question.trim();
