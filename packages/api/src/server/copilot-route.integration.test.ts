@@ -12,6 +12,11 @@ import {
 import type pg from "pg";
 
 import { createApp } from "./app.js";
+import {
+  copilotAsksAnswered,
+  copilotAsksRateLimited,
+  copilotAsksUnavailable,
+} from "./metrics.js";
 
 const PG_URI = process.env["THEOLENS_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
@@ -213,6 +218,37 @@ suite("M33 copilot route (integration)", () => {
     const res = await ask(app, "t1", "ro", { spanId: "ghost", question: "why?" }); // EC-2
     expect(res.status).toBe(404);
     expect(((await res.json()) as { code: string }).code).toBe("SPAN_NOT_FOUND");
+  });
+
+  it("test_ask_400_on_invalid_json_body", async () => {
+    const app = makeApp({ chat: new FakeChat("hi") });
+    await ingest(app, "t1", "s1");
+    const res = await app.request("http://x/v1/traces/t1/ask", {
+      method: "POST",
+      headers: { authorization: "Bearer ro", "content-type": "application/json" },
+      body: "{not json", // malformed
+    });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { code: string }).code).toBe("INVALID_BODY");
+  });
+
+  it("test_ask_increments_runtime_counters", async () => {
+    // Wiring-triad pillar (c): the endpoint MUST be observable in production. Assert
+    // the answered / rate-limited / unavailable counters actually fire (F-wire-1).
+    const answered0 = copilotAsksAnswered.value;
+    const limited0 = copilotAsksRateLimited.value;
+    const unavail0 = copilotAsksUnavailable.value;
+    // rpm=1 → first ask answered (+answered), second rate-limited (+limited).
+    const app = makeApp({ chat: new FakeChat("ok"), rpm: 1, now: () => 5_000_000 });
+    await ingest(app, "t1", "s1");
+    expect((await ask(app, "t1", "ro", { question: "q1" })).status).toBe(200);
+    expect((await ask(app, "t1", "ro", { question: "q2" })).status).toBe(429);
+    // A provider failure (+unavailable) via a separate app with a failing chat.
+    const failApp = makeApp({ chat: new FailingChat(), rpm: 100 });
+    expect((await ask(failApp, "t1", "ro", { question: "q3" })).status).toBe(502);
+    expect(copilotAsksAnswered.value).toBe(answered0 + 1);
+    expect(copilotAsksRateLimited.value).toBe(limited0 + 1);
+    expect(copilotAsksUnavailable.value).toBe(unavail0 + 1);
   });
 
   it("test_ask_caps_oversized_answer", async () => {

@@ -18,6 +18,11 @@ import {
 } from "@usetheo/lens-core";
 
 import { getPrincipal } from "../auth/middleware.js";
+import {
+  copilotAsksAnswered,
+  copilotAsksRateLimited,
+  copilotAsksUnavailable,
+} from "../metrics.js";
 
 /** Deps the copilot route needs (wired by the composition root). */
 export interface CopilotApiDeps {
@@ -35,6 +40,7 @@ export async function askHandler(c: Context, deps: CopilotApiDeps): Promise<Resp
 
   // Rate-limit first (protects the whole endpoint, D3).
   if (!deps.limiter.tryAcquire(ws, nowMs)) {
+    copilotAsksRateLimited.add(1); // observable: an abuse/spike is visible at runtime (pillar c)
     return c.json({ code: "RATE_LIMITED", message: "copilot rate limit exceeded" }, 429);
   }
   // Fail-closed: no provider configured → disabled (D2).
@@ -76,9 +82,11 @@ export async function askHandler(c: Context, deps: CopilotApiDeps): Promise<Resp
 
   try {
     const answer = await deps.chat.ask(messages);
+    copilotAsksAnswered.add(1); // observable: healthy answered-ask volume (pillar c)
     return c.json({ answer: capAnswer(answer) }, 200); // EC-6 cap
   } catch (err) {
     // Fail-closed: surface the LLM failure, never a fabricated/empty answer (D2).
+    copilotAsksUnavailable.add(1); // observable: a provider-outage spike is visible (pillar c)
     const reason = err instanceof ChatError ? err.message : String(err);
     return c.json({ code: "COPILOT_UNAVAILABLE", message: reason }, 502);
   }

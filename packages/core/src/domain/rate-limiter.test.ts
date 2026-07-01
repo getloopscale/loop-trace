@@ -28,4 +28,15 @@ describe("M33 RateLimiter (T2.2)", () => {
     );
     expect(results.filter(Boolean)).toHaveLength(3);
   });
+  it("test_expired_windows_are_swept_to_bound_memory", () => {
+    // F-sec-8: many distinct workspaces over time must not grow the map unbounded —
+    // expired windows are swept once the map exceeds the internal threshold.
+    const rl = new RateLimiter(1, 60_000);
+    // Fill past the sweep threshold (1024) at t=0, all in the same window.
+    for (let i = 0; i < 1100; i++) rl.tryAcquire(`ws-${i}`, 0);
+    // A later acquire (past the window) triggers the sweep of the now-expired entries.
+    rl.tryAcquire("late", 60_000);
+    // The map holds far fewer than the 1101 distinct workspaces seen (expired dropped).
+    expect(rl.size).toBeLessThan(1101);
+  });
 });

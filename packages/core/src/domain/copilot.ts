@@ -70,6 +70,13 @@ export function buildCopilotPrompt(
   spanId: string | undefined,
   question: string,
 ): ChatMessage[] {
+  // Security note (residual, accepted for v1): span I/O is untrusted, ingested content,
+  // so a crafted span could attempt prompt injection. Mitigations: the content lives in
+  // the USER role (never the system prompt), is byte-bounded per field, and the answer is
+  // advisory + rendered XSS-safe in the UI — so the blast radius is a wrong free-text
+  // answer over the caller's OWN workspace-scoped data, never privilege escalation or
+  // cross-tenant exfiltration. A hardening pass (delimiter fencing / injection detection)
+  // is a documented follow-up.
   const all: { node: TraceTreeNode; hasChildren: boolean }[] = [];
   flatten(tree, all);
   const system =
