@@ -5,7 +5,7 @@
  *
  * Compatible only with `theo_live_*` keys: hashes the token, looks up
  * `theo_api_keys.scopes`, checks the required scope (honoring `scopeSatisfies` so
- * `lens:platform-admin` reaches the `lens:admin` gate). A bootstrap admin token
+ * `observability:platform-admin` reaches the `observability:admin` gate). A bootstrap admin token
  * (env) bypasses the scope check — it IS admin by definition (bootstraps the first
  * admin key). Mounted on the admin sub-app BEFORE the generic bearer middleware.
  *

@@ -51,7 +51,7 @@ suite("M22 ForwardAuth edge contract (integration)", () => {
         tenant,
         hash,
         secret.slice(0, 12),
-        JSON.stringify(["lens:read", "lens:write", "lens:delete"]),
+        JSON.stringify(["observability:read", "observability:write", "observability:delete"]),
       ],
     );
     minted.set(tenant, secret);

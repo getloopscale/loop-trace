@@ -110,14 +110,14 @@ export function createApp(
   });
 
   // M22 admin surface (the Model B broker mints per-tenant keys here). Gated by
-  // `requireScope('lens:admin')` — a `lens:platform-admin` key satisfies it via the
+  // `requireScope('observability:admin')` — a `observability:platform-admin` key satisfies it via the
   // scope hierarchy; an env bootstrap token bypasses (mints the first admin key).
   // Mounted BEFORE the data-plane bearer so the admin path uses its own gate.
   if (auth.pool !== undefined) {
     const pool = auth.pool;
     const adminGate = auth.bootstrapToken !== undefined
-      ? { pool, requiredScope: "lens:admin", bootstrapToken: auth.bootstrapToken }
-      : { pool, requiredScope: "lens:admin" };
+      ? { pool, requiredScope: "observability:admin", bootstrapToken: auth.bootstrapToken }
+      : { pool, requiredScope: "observability:admin" };
     app.use("/v1/admin/*", requireScope(adminGate));
     app.post("/v1/admin/keys", (c) => createKeyHandler(c, pool, auth.bootstrapToken));
     app.get("/v1/admin/keys", (c) => listKeysHandler(c, pool, auth.bootstrapToken));
@@ -139,7 +139,7 @@ export function createApp(
     return dataBearer(c, next);
   });
 
-  app.post("/v1/traces", requireScopeOnPrincipal("lens:write"), async (c) => {
+  app.post("/v1/traces", requireScopeOnPrincipal("observability:write"), async (c) => {
     const contentType = (c.req.header("content-type") ?? "").toLowerCase();
     if (
       !contentType.includes("application/json") &&
@@ -182,7 +182,7 @@ export function createApp(
     return c.json({ partialSuccess: {} }, 200);
   });
 
-  app.get("/v1/traces", requireScopeOnPrincipal("lens:read"), async (c) => {
+  app.get("/v1/traces", requireScopeOnPrincipal("observability:read"), async (c) => {
     // M9: whitelisted filter/sort/export. Validate query params at the boundary
     // (fail-fast 400, Rule 8) — a fixed enum whitelist, NOT a DSL (D1).
     const parsed = listTracesOptionsSchema.safeParse({
@@ -223,7 +223,7 @@ export function createApp(
     return c.json(list, 200);
   });
 
-  app.get("/v1/spans/:spanId", requireScopeOnPrincipal("lens:read"), async (c) => {
+  app.get("/v1/spans/:spanId", requireScopeOnPrincipal("observability:read"), async (c) => {
     const span = await repo.getBySpanId(
       c.req.param("spanId"),
       getPrincipal(c).workspaceId,
@@ -231,7 +231,7 @@ export function createApp(
     return span ? c.json(span, 200) : c.json({ error: "not found" }, 404);
   });
 
-  app.get("/v1/traces/:traceId/cost", requireScopeOnPrincipal("lens:read"), async (c) => {
+  app.get("/v1/traces/:traceId/cost", requireScopeOnPrincipal("observability:read"), async (c) => {
     const cost = await repo.getTraceCost(
       c.req.param("traceId"),
       getPrincipal(c).workspaceId,
@@ -241,7 +241,7 @@ export function createApp(
       : c.json({ error: "not found" }, 404);
   });
 
-  app.get("/v1/traces/:traceId", requireScopeOnPrincipal("lens:read"), async (c) => {
+  app.get("/v1/traces/:traceId", requireScopeOnPrincipal("observability:read"), async (c) => {
     const tree = await repo.getTraceTree(
       c.req.param("traceId"),
       getPrincipal(c).workspaceId,
@@ -249,18 +249,18 @@ export function createApp(
     return tree ? c.json(tree, 200) : c.json({ error: "not found" }, 404);
   });
 
-  app.get("/v1/agents", requireScopeOnPrincipal("lens:read"), async (c) => {
+  app.get("/v1/agents", requireScopeOnPrincipal("observability:read"), async (c) => {
     // M32: the agents catalog (derived from `agent.*` span attributes), with health.
     const agents = await repo.aggregateAgents(getPrincipal(c).workspaceId);
     return c.json(agentCatalogResponseSchema.parse({ agents }), 200);
   });
 
-  app.get("/v1/analytics/tools", requireScopeOnPrincipal("lens:read"), async (c) => {
+  app.get("/v1/analytics/tools", requireScopeOnPrincipal("observability:read"), async (c) => {
     const stats = await repo.aggregateToolStats(getPrincipal(c).workspaceId);
     return c.json(toolStatsResponseSchema.parse(stats), 200);
   });
 
-  app.get("/v1/analytics/tools/:toolName/traces", requireScopeOnPrincipal("lens:read"), async (c) => {
+  app.get("/v1/analytics/tools/:toolName/traces", requireScopeOnPrincipal("observability:read"), async (c) => {
     const list = await repo.listTracesForTool(
       c.req.param("toolName"),
       undefined,
@@ -269,7 +269,7 @@ export function createApp(
     return c.json(traceListResponseSchema.parse(list), 200);
   });
 
-  app.get("/v1/analytics/cost", requireScopeOnPrincipal("lens:read"), async (c) => {
+  app.get("/v1/analytics/cost", requireScopeOnPrincipal("observability:read"), async (c) => {
     // Whitelist the period (fail-fast on anything but day/week, Rule 8); default day.
     const raw = c.req.query("period");
     if (raw !== undefined && raw !== "day" && raw !== "week") {
@@ -282,7 +282,7 @@ export function createApp(
     return c.json(costByPeriodResponseSchema.parse(result), 200);
   });
 
-  app.post("/v1/replay-sessions", requireScopeOnPrincipal("lens:write"), async (c) => {
+  app.post("/v1/replay-sessions", requireScopeOnPrincipal("observability:write"), async (c) => {
     // Record a replay-open event (M8 north-star). Fail-fast 400 on a missing
     // traceId (Rule 8); the UI calls this fire-and-forget so a 5xx never
     // degrades the replay UX (D3).
@@ -300,12 +300,12 @@ export function createApp(
     return c.json({ recorded: true }, 200);
   });
 
-  app.get("/v1/metrics/north-star", requireScopeOnPrincipal("lens:read"), async (c) => {
+  app.get("/v1/metrics/north-star", requireScopeOnPrincipal("observability:read"), async (c) => {
     const ns = await repo.aggregateNorthStar(getPrincipal(c).workspaceId);
     return c.json(northStarResponseSchema.parse(ns), 200);
   });
 
-  app.get("/v1/metrics/observability", requireScopeOnPrincipal("lens:read"), async (c) => {
+  app.get("/v1/metrics/observability", requireScopeOnPrincipal("observability:read"), async (c) => {
     // Validate the range at the boundary (fail-fast 400, Rule 8); default 24h.
     const raw = c.req.query("range");
     const parsed = observabilityRangeSchema.safeParse(raw ?? "24h");
@@ -319,7 +319,7 @@ export function createApp(
     return c.json(observabilityResponseSchema.parse(obs), 200);
   });
 
-  app.get("/v1/metrics/evaluators", requireScopeOnPrincipal("lens:read"), async (c) => {
+  app.get("/v1/metrics/evaluators", requireScopeOnPrincipal("observability:read"), async (c) => {
     // M26: per-evaluator aggregate (Online Evaluators cards). Range validated at the
     // boundary (Rule 8), same whitelist as observability; default 24h.
     const parsed = observabilityRangeSchema.safeParse(c.req.query("range") ?? "24h");
@@ -337,12 +337,12 @@ export function createApp(
     return c.json(summary, 200);
   });
 
-  app.get("/v1/sessions", requireScopeOnPrincipal("lens:read"), async (c) => {
+  app.get("/v1/sessions", requireScopeOnPrincipal("observability:read"), async (c) => {
     const list = await repo.listSessions(getPrincipal(c).workspaceId);
     return c.json(sessionListResponseSchema.parse(list), 200);
   });
 
-  app.get("/v1/sessions/:sessionId", requireScopeOnPrincipal("lens:read"), async (c) => {
+  app.get("/v1/sessions/:sessionId", requireScopeOnPrincipal("observability:read"), async (c) => {
     const detail = await repo.getSessionDetail(
       c.req.param("sessionId"),
       getPrincipal(c).workspaceId,
@@ -352,7 +352,7 @@ export function createApp(
       : c.json({ error: "not found" }, 404);
   });
 
-  app.get("/v1/traces/:traceId/tags", requireScopeOnPrincipal("lens:read"), async (c) => {
+  app.get("/v1/traces/:traceId/tags", requireScopeOnPrincipal("observability:read"), async (c) => {
     const tags = await repo.listTags(
       c.req.param("traceId"),
       getPrincipal(c).workspaceId,
@@ -360,7 +360,7 @@ export function createApp(
     return c.json(traceTagsResponseSchema.parse({ tags }), 200);
   });
 
-  app.post("/v1/traces/:traceId/tags", requireScopeOnPrincipal("lens:write"), async (c) => {
+  app.post("/v1/traces/:traceId/tags", requireScopeOnPrincipal("observability:write"), async (c) => {
     // Add a tag (M14). 400 on an invalid tag (Rule 8), 404 when the trace is
     // absent (D2 — you cannot tag what is not there); idempotent otherwise.
     let body: unknown;
@@ -381,7 +381,7 @@ export function createApp(
     return c.json(traceTagsResponseSchema.parse({ tags }), 200);
   });
 
-  app.delete("/v1/traces/:traceId/tags", requireScopeOnPrincipal("lens:delete"), async (c) => {
+  app.delete("/v1/traces/:traceId/tags", requireScopeOnPrincipal("observability:delete"), async (c) => {
     // Remove a tag (M14). The tag travels in a QUERY param (NOT a path segment)
     // so a slash-bearing free-form tag routes safely (EC-1). Idempotent (D2).
     const tag = normalizeTag(c.req.query("tag"));
@@ -395,7 +395,7 @@ export function createApp(
     return c.json(traceTagsResponseSchema.parse({ tags }), 200);
   });
 
-  app.get("/v1/traces/:traceId/annotations", requireScopeOnPrincipal("lens:read"), async (c) => {
+  app.get("/v1/traces/:traceId/annotations", requireScopeOnPrincipal("observability:read"), async (c) => {
     // M26b: a trace's annotations (trace-level + all spans'), newest-first.
     const annotations = await repo.listAnnotations(
       c.req.param("traceId"),
@@ -404,7 +404,7 @@ export function createApp(
     return c.json(annotationsResponseSchema.parse({ annotations }), 200);
   });
 
-  app.post("/v1/traces/:traceId/annotations", requireScopeOnPrincipal("lens:write"), async (c) => {
+  app.post("/v1/traces/:traceId/annotations", requireScopeOnPrincipal("observability:write"), async (c) => {
     // M26b: upsert a human annotation (👍/👎 + note) on a trace or span. 400 on an
     // empty annotation (no label AND no note, Rule 8), 404 when the trace is absent
     // (D2); idempotent upsert otherwise (latest wins). Returns the trace's annotations.
@@ -430,7 +430,7 @@ export function createApp(
     return c.json(annotationsResponseSchema.parse({ annotations }), 200);
   });
 
-  app.delete("/v1/traces/:traceId/annotations", requireScopeOnPrincipal("lens:delete"), async (c) => {
+  app.delete("/v1/traces/:traceId/annotations", requireScopeOnPrincipal("observability:delete"), async (c) => {
     // M26b: clear an annotation by its target+channel key. `spanId`/`name`/`kind`
     // travel in QUERY params (slash-safe, like the tag DELETE). Idempotent.
     const name = c.req.query("name") ?? DEFAULT_ANNOTATION_NAME;

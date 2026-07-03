@@ -49,7 +49,7 @@ function verifier(): AuthVerifier {
     workspaceId: "ws-audit",
     userId: "u-audit",
     role: "member",
-    scopes: ["lens:read", "lens:write", "lens:delete"],
+    scopes: ["observability:read", "observability:write", "observability:delete"],
   };
   return {
     resolvePrincipal: async () => principal,

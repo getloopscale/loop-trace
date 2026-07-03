@@ -17,13 +17,13 @@ import { getPrincipal, requireScopeOnPrincipal } from "../auth/middleware.js";
 import { datasetItemsAdded } from "../metrics.js";
 
 export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
-  app.get("/v1/datasets", requireScopeOnPrincipal("lens:read"), async (c) => {
+  app.get("/v1/datasets", requireScopeOnPrincipal("observability:read"), async (c) => {
     // M26d: all datasets with their item counts, newest-first.
     const datasets = await repo.listDatasets(getPrincipal(c).workspaceId);
     return c.json(datasetsResponseSchema.parse({ datasets }), 200);
   });
 
-  app.post("/v1/datasets", requireScopeOnPrincipal("lens:write"), async (c) => {
+  app.post("/v1/datasets", requireScopeOnPrincipal("observability:write"), async (c) => {
     // M26d: create-or-get a dataset by name (D1, idempotent). 400 on a blank name.
     let body: unknown;
     try {
@@ -39,7 +39,7 @@ export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
     return c.json(datasetSchema.parse(dataset), 200);
   });
 
-  app.get("/v1/datasets/:datasetId", requireScopeOnPrincipal("lens:read"), async (c) => {
+  app.get("/v1/datasets/:datasetId", requireScopeOnPrincipal("observability:read"), async (c) => {
     // M26d: a dataset + its items (snapshot input/output), or 404 if absent.
     const detail = await repo.getDataset(
       c.req.param("datasetId"),
@@ -50,7 +50,7 @@ export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
       : c.json({ error: "not found" }, 404);
   });
 
-  app.post("/v1/datasets/:datasetId/items", requireScopeOnPrincipal("lens:write"), async (c) => {
+  app.post("/v1/datasets/:datasetId/items", requireScopeOnPrincipal("observability:write"), async (c) => {
     // M26d: add a trace to a dataset (snapshot at add-time, D2). 400 on a missing
     // traceId, 404 when the dataset OR the trace is absent (D3); idempotent otherwise.
     let body: unknown;
@@ -73,7 +73,7 @@ export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
     return c.json(datasetDetailSchema.parse(detail), 200);
   });
 
-  app.delete("/v1/datasets/:datasetId/items/:traceId", requireScopeOnPrincipal("lens:delete"), async (c) => {
+  app.delete("/v1/datasets/:datasetId/items/:traceId", requireScopeOnPrincipal("observability:delete"), async (c) => {
     // M26d: remove an item by (dataset, trace). Idempotent. Returns the dataset (404
     // only if the dataset itself is absent — a missing item is a no-op).
     const datasetId = c.req.param("datasetId");

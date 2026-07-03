@@ -8,16 +8,16 @@ import type { CopilotApiDeps } from "./handlers/copilot.js";
  * M37 scope×verb contract matrix refresh — representative routes across every
  * post-M22 surface (datasets, evaluators, guards, agents, analytics, metrics,
  * sessions, copilot). The decisive row is `platform-admin-only`: it implies ONLY
- * `lens:admin`, so it is 403 on EVERY data verb (the data-plane half of CWE-441).
+ * `observability:admin`, so it is 403 on EVERY data verb (the data-plane half of CWE-441).
  */
 
 const TOKENS: Record<string, string[]> = {
   none: [], // (sent as no-credential below)
-  read: ["lens:read"],
-  write: ["lens:write"],
-  delete: ["lens:delete"],
-  full: ["lens:read", "lens:write", "lens:delete"],
-  platformAdmin: ["lens:platform-admin"],
+  read: ["observability:read"],
+  write: ["observability:write"],
+  delete: ["observability:delete"],
+  full: ["observability:read", "observability:write", "observability:delete"],
+  platformAdmin: ["observability:platform-admin"],
 };
 
 function verifier(): AuthVerifier {
@@ -152,7 +152,7 @@ const app = createApp(
 );
 
 type TokenClass = keyof typeof TOKENS;
-type ScopeName = "lens:read" | "lens:write" | "lens:delete";
+type ScopeName = "observability:read" | "observability:write" | "observability:delete";
 
 type MatrixCase = {
   readonly name: string;
@@ -168,13 +168,13 @@ const OTLP = JSON.stringify({
 const CASES: readonly MatrixCase[] = [
   {
     name: "traces-list",
-    requiredScope: "lens:read",
+    requiredScope: "observability:read",
     successStatus: 200,
     build: () => new Request("http://x/v1/traces"),
   },
   {
     name: "trace-ingest",
-    requiredScope: "lens:write",
+    requiredScope: "observability:write",
     successStatus: 200,
     build: () =>
       new Request("http://x/v1/traces", {
@@ -185,44 +185,44 @@ const CASES: readonly MatrixCase[] = [
   },
   {
     name: "tags-delete",
-    requiredScope: "lens:delete",
+    requiredScope: "observability:delete",
     successStatus: 200,
     build: () =>
       new Request("http://x/v1/traces/t1/tags?tag=x", { method: "DELETE" }),
   },
   {
     name: "agents-catalog",
-    requiredScope: "lens:read",
+    requiredScope: "observability:read",
     successStatus: 200,
     build: () => new Request("http://x/v1/agents"),
   },
   {
     name: "tool-analytics",
-    requiredScope: "lens:read",
+    requiredScope: "observability:read",
     successStatus: 200,
     build: () => new Request("http://x/v1/analytics/tools"),
   },
   {
     name: "observability-metrics",
-    requiredScope: "lens:read",
+    requiredScope: "observability:read",
     successStatus: 200,
     build: () => new Request("http://x/v1/metrics/observability?range=24h"),
   },
   {
     name: "sessions-list",
-    requiredScope: "lens:read",
+    requiredScope: "observability:read",
     successStatus: 200,
     build: () => new Request("http://x/v1/sessions"),
   },
   {
     name: "datasets-list",
-    requiredScope: "lens:read",
+    requiredScope: "observability:read",
     successStatus: 200,
     build: () => new Request("http://x/v1/datasets"),
   },
   {
     name: "datasets-create",
-    requiredScope: "lens:write",
+    requiredScope: "observability:write",
     successStatus: 200,
     build: () =>
       new Request("http://x/v1/datasets", {
@@ -233,20 +233,20 @@ const CASES: readonly MatrixCase[] = [
   },
   {
     name: "datasets-delete-item",
-    requiredScope: "lens:delete",
+    requiredScope: "observability:delete",
     successStatus: 200,
     build: () =>
       new Request("http://x/v1/datasets/d1/items/t1", { method: "DELETE" }),
   },
   {
     name: "evaluators-list",
-    requiredScope: "lens:read",
+    requiredScope: "observability:read",
     successStatus: 200,
     build: () => new Request("http://x/v1/evaluators"),
   },
   {
     name: "evaluators-create",
-    requiredScope: "lens:write",
+    requiredScope: "observability:write",
     successStatus: 200,
     build: () =>
       new Request("http://x/v1/evaluators", {
@@ -261,20 +261,20 @@ const CASES: readonly MatrixCase[] = [
   },
   {
     name: "evaluators-delete",
-    requiredScope: "lens:delete",
+    requiredScope: "observability:delete",
     successStatus: 204,
     build: () =>
       new Request("http://x/v1/evaluators/e1", { method: "DELETE" }),
   },
   {
     name: "guards-list",
-    requiredScope: "lens:read",
+    requiredScope: "observability:read",
     successStatus: 200,
     build: () => new Request("http://x/v1/guards"),
   },
   {
     name: "guards-create",
-    requiredScope: "lens:write",
+    requiredScope: "observability:write",
     successStatus: 200,
     build: () =>
       new Request("http://x/v1/guards", {
@@ -289,14 +289,14 @@ const CASES: readonly MatrixCase[] = [
   },
   {
     name: "guards-delete",
-    requiredScope: "lens:delete",
+    requiredScope: "observability:delete",
     successStatus: 204,
     build: () =>
       new Request("http://x/v1/guards/g1", { method: "DELETE" }),
   },
   {
     name: "copilot-ask",
-    requiredScope: "lens:read",
+    requiredScope: "observability:read",
     successStatus: 200,
     build: () =>
       new Request("http://x/v1/traces/t1/ask", {

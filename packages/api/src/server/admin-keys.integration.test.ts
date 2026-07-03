@@ -41,7 +41,7 @@ suite("M22 admin keys (integration)", () => {
   it("test_admin_mint_returns_secret_once_and_stores_only_hash", async () => {
     const res = await mint(BOOTSTRAP, {
       name: "tenant-acme",
-      scopes: ["lens:read", "lens:write", "lens:delete"],
+      scopes: ["observability:read", "observability:write", "observability:delete"],
       workspace_id: "ws-acme",
     });
     expect(res.status).toBe(200);
@@ -66,7 +66,7 @@ suite("M22 admin keys (integration)", () => {
     // while a canonical ISO datetime is accepted and the transactional mint commits.
     const loose = await mint(BOOTSTRAP, {
       name: "loose-exp",
-      scopes: ["lens:read"],
+      scopes: ["observability:read"],
       workspace_id: "ws-exp",
       expires_at: "Jan 1 2027",
     });
@@ -75,7 +75,7 @@ suite("M22 admin keys (integration)", () => {
 
     const ok = await mint(BOOTSTRAP, {
       name: "iso-exp",
-      scopes: ["lens:read"],
+      scopes: ["observability:read"],
       workspace_id: "ws-exp",
       expires_at: "2027-01-01T00:00:00Z",
     });
@@ -95,14 +95,14 @@ suite("M22 admin keys (integration)", () => {
     // Bootstrap holds platform-admin → mint a tenant key WITHOUT platform-admin.
     const tenant = await mint(BOOTSTRAP, {
       name: "tenant",
-      scopes: ["lens:read", "lens:write", "lens:admin"],
+      scopes: ["observability:read", "observability:write", "observability:admin"],
       workspace_id: "ws-t",
     });
     const tenantSecret = ((await tenant.json()) as { secret: string }).secret;
     // The tenant admin key (no platform-admin) tries to mint a platform-admin key → 403.
     const escalate = await mint(tenantSecret, {
       name: "escalation",
-      scopes: ["lens:platform-admin"],
+      scopes: ["observability:platform-admin"],
     });
     expect(escalate.status).toBe(403);
     expect(((await escalate.json()) as { code: string }).code).toBe(
@@ -113,14 +113,14 @@ suite("M22 admin keys (integration)", () => {
   it("test_admin_cross_workspace_mint_requires_platform_admin", async () => {
     const tenant = await mint(BOOTSTRAP, {
       name: "tenant",
-      scopes: ["lens:read", "lens:write", "lens:admin"],
+      scopes: ["observability:read", "observability:write", "observability:admin"],
       workspace_id: "ws-own",
     });
     const tenantSecret = ((await tenant.json()) as { secret: string }).secret;
     // tenant (no platform-admin) tries to mint into ANOTHER workspace → 403.
     const cross = await mint(tenantSecret, {
       name: "cross",
-      scopes: ["lens:read"],
+      scopes: ["observability:read"],
       workspace_id: "ws-other",
     });
     expect(cross.status).toBe(403);
@@ -132,7 +132,7 @@ suite("M22 admin keys (integration)", () => {
   it("test_admin_revoke_is_leak_guarded_404", async () => {
     // Mint into the bootstrap caller's own workspace (default) so the workspace-
     // scoped revoke matches (revoke is scoped to the caller's workspace).
-    const minted = await mint(BOOTSTRAP, { name: "k", scopes: ["lens:read"] });
+    const minted = await mint(BOOTSTRAP, { name: "k", scopes: ["observability:read"] });
     const id = ((await minted.json()) as { id: string }).id;
     // Revoking an unknown id → 404 (existence-leak guard).
     const unknown = await app.request("http://x/v1/admin/keys/apk-0000000000000000", {
