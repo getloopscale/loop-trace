@@ -108,7 +108,7 @@ export async function createKeyHandler(
     : [];
   if (scopesIn.length === 0 || scopesIn.some((s) => !VALID_SCOPES.has(s))) {
     return c.json(
-      { code: "INVALID_SCOPES", message: "scopes must be a non-empty subset of the lens:* scopes" },
+      { code: "INVALID_SCOPES", message: "scopes must be a non-empty subset of the observability:* scopes" },
       400,
     );
   }

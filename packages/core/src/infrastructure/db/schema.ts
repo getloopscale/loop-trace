@@ -351,7 +351,7 @@ export const workspaceUsers = pgTable(
 /**
  * M22 — per-tenant API keys (the data-plane half of the auth pattern). The key is
  * stored only as a SHA-256 hash (never the raw secret). `scopes` is jsonb holding
- * `lens:*` capabilities. `tenant_id` is the single-tenant-OSS isolation marker
+ * `observability:*` capabilities. `tenant_id` is the single-tenant-OSS isolation marker
  * (always `'self'` here). `workspace_id` binds the key to its tenant. Ported from
  * theo-memory migrations 0012/0016/0017.
  */

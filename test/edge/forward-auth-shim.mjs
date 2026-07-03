@@ -38,7 +38,7 @@ async function brokerKeyFor(tenant) {
     body: JSON.stringify({
       name: `broker-${tenant}`,
       workspace_id: tenant,
-      scopes: ["lens:read", "lens:write", "lens:delete"],
+      scopes: ["observability:read", "observability:write", "observability:delete"],
     }),
   });
   if (!res.ok) {

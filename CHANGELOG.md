@@ -22,6 +22,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Removed
 
 ### Fixed
+- **Hermetic edge e2e (`scripts/e2e-edge.sh`, invariant-6 proof) restored after the `observability:*` scope rename.** The rename updated the enforcement + mint validation but left the hermetic ForwardAuth broker shim (`test/edge/forward-auth-shim.mjs`) still minting `lens:read/write/delete` scopes, which the admin-keys mint endpoint now correctly rejects (`INVALID_SCOPES`) — the write/mint path failed `503 BROKER_UNAVAILABLE` while isolation + fail-closed still passed. Pointed the shim at `observability:read/write/delete`, and refreshed the now-stale `admin-keys.ts` error message + two doc comments (`schema.ts`, `api-key-verifier.ts`) that still said `lens:*`. `pnpm test:e2e:edge` now `EDGE_E2E_PASS` (all 6 assertions: cross-tenant isolation + fail-closed deny + both CWE-441 halves through a real Traefik ForwardAuth edge). Also validated the full production flow with **real Claude Code v2.1.187 telemetry** (interactive session → OTLP through the real `/v1/lens/traces` edge with a customer-issued `observability:*` key → per-tenant spans incl. `claude_code.llm_request`/`tool` rendered in the Observability dashboard).
 
 ### Security
 

@@ -2,7 +2,7 @@
  * ApiKeyAuthVerifier — the multi-tenant `theo_api_keys` verifier (M22). Ported
  * from the reference capability `theo-memory` (`auth/api-key-verifier.ts`) — see
  * `theo-data/README.md § 3.1`. The `theo_api_keys` table is generic (scopes is
- * jsonb), so it holds `lens:*` scopes with no shape change.
+ * jsonb), so it holds `observability:*` scopes with no shape change.
  *
  * Stripe-shape: (1) `theo_live_` prefix + length check BEFORE hashing;
  * (2) single-pass SHA-256 of the raw token (256-bit entropy → no bcrypt);
