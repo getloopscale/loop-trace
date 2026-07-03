@@ -13,7 +13,10 @@
   },
   "files": ["dist"],
   "scripts": {
-    "prepack": "tsc -b"
+    "prepack": "tsc -b",
+    "test": "pnpm --dir ../.. exec vitest run -c vitest.contract.config.ts packages/sdk/src",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src"
   },
   "engines": {
     "node": ">=20.0.0"

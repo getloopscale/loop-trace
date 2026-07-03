@@ -14,6 +14,11 @@
   "engines": {
     "node": ">=20.0.0"
   },
+  "scripts": {
+    "test": "pnpm --dir ../.. exec vitest run -c vitest.contract.config.ts packages/api/src",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src"
+  },
   "dependencies": {
     "@hono/node-server": "^1.14.4",
     "@opentelemetry/otlp-transformer": "~0.205.0",

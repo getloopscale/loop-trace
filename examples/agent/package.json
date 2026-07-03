@@ -8,6 +8,10 @@
   "engines": {
     "node": ">=20.0.0"
   },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint index.ts"
+  },
   "dependencies": {
     "@usetheo/lens-sdk": "workspace:*"
   }
