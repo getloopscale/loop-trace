@@ -568,6 +568,7 @@ export class DrizzleSpanRepository implements SpanRepository {
             : sql`${traces.updatedAt}`;
     const dir = opts.dir === "asc" ? sql`asc` : sql`desc`;
     const limit = opts.limit ?? 50;
+    const offset = opts.offset ?? 0; // M56 — export pagination
 
     // M18: derive the trace's representative model/kind/input/output from its
     // ROOT span (parent_span_id IS NULL, earliest) via a single correlated LATERAL
@@ -644,7 +645,8 @@ export class DrizzleSpanRepository implements SpanRepository {
       .leftJoinLateral(repr, sql`true`)
       .where(where)
       .orderBy(sql`${sortCol} ${dir} nulls last`, desc(traces.updatedAt))
-      .limit(limit);
+      .limit(limit)
+      .offset(offset);
     return { traces: rows.map(traceRowToItem) };
   }
 

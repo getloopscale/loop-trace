@@ -82,6 +82,12 @@ describe("listTracesOptionsSchema (M9)", () => {
     expect(() => listTracesOptionsSchema.parse({ limit: 0 })).toThrow();
   });
 
+  it("test_list_options_schema_accepts_offset (M56 export pagination)", () => {
+    expect(listTracesOptionsSchema.parse({ offset: "500" }).offset).toBe(500); // coerced from a query string
+    expect(listTracesOptionsSchema.parse({ offset: 0 }).offset).toBe(0);
+    expect(() => listTracesOptionsSchema.parse({ offset: -1 })).toThrow(); // negative rejected
+  });
+
   it("test_list_options_schema_empty_is_valid", () => {
     expect(listTracesOptionsSchema.parse({})).toEqual({});
   });

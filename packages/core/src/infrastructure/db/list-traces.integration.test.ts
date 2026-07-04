@@ -76,6 +76,17 @@ suite("listTraces filter/sort (integration, M9)", () => {
     expect(traces.map((t) => t.traceId)).toEqual(["t-err"]);
   });
 
+  it("test_list_traces_limit_offset_pages_disjointly (M56 export pagination)", async () => {
+    await seed(); // ≥ 3 traces
+    const page1 = await repo.listTraces({ limit: 2, offset: 0 });
+    const page2 = await repo.listTraces({ limit: 2, offset: 2 });
+    expect(page1.traces).toHaveLength(2);
+    expect(page2.traces.length).toBeGreaterThanOrEqual(1);
+    // the two pages do NOT overlap — offset advances the window (the export's contract).
+    const p1 = new Set(page1.traces.map((t) => t.traceId));
+    expect(page2.traces.every((t) => !p1.has(t.traceId))).toBe(true);
+  });
+
   it("test_list_traces_status_ok_includes_null_status", async () => {
     await seed();
     const { traces } = await repo.listTraces({ status: "ok" });

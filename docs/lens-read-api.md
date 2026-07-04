@@ -58,8 +58,9 @@ GET /v1/lens/traces?status=error&limit=500&offset=500
 ```
 
 Stop when a page returns fewer than 500 rows (that is the last page). The Theo dashboard's **Export**
-action does exactly this, bounded by a documented export cap with an explicit "N exported / cap
-reached" disclosure — it never silently truncates.
+action does exactly this, bounded by a documented **export cap of 5,000 rows** (10 pages of 500) with
+an explicit "Exported N traces / export cap reached — narrow filters" disclosure — it never silently
+truncates. Programmatic consumers page with `offset` up to whatever bound they choose.
 
 ### Response shape
 
@@ -93,9 +94,12 @@ same columns (formula-injection-safe + RFC-4180).
 
 ## Related endpoints
 
-- `GET /v1/traces/:id` — the reconstructed span tree for one trace.
-- `GET /v1/traces/:id/cost` — the per-trace cost summary.
-- `GET /v1/metrics/observability?range=` — time-series traffic / error-rate / latency / cost-by-model.
+Same per-tenant edge + auth (`theo_live_*` + `observability:read`); the `/v1/lens` prefix is the edge
+route (the theo-lens paths are `/v1/traces/:id`, etc.):
+
+- `GET /v1/lens/traces/:id` — the reconstructed span tree for one trace.
+- `GET /v1/lens/traces/:id/cost` — the per-trace cost summary.
+- `GET /v1/lens/metrics/observability?range=` — time-series traffic / error-rate / latency / cost-by-model.
 
 ## Dashboard equivalent (browser session)
 

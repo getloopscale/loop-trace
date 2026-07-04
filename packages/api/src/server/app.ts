@@ -195,6 +195,7 @@ export function createApp(
       orderBy: c.req.query("order_by"),
       dir: c.req.query("dir"),
       limit: c.req.query("limit"),
+      offset: c.req.query("offset"), // M56 — export pagination
       format: c.req.query("format"),
       tag: c.req.query("tag"),
       // M24: full-text search. Empty `?q=` → undefined (a cleared box is "no
