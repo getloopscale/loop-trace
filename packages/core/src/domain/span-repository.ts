@@ -88,6 +88,11 @@ export interface SpanRepository {
    * dataset OR the trace is absent (→ 404).
    */
   addDatasetItem(datasetId: string, traceId: string, workspaceId?: string): Promise<boolean>;
+  /**
+   * Add a SYNTHETIC dataset item (M55): input/output supplied directly (from a playground replay),
+   * with no source trace (trace_id NULL). Returns false if the dataset is absent (→ 404).
+   */
+  addSyntheticDatasetItem(datasetId: string, input: string, output: string, workspaceId?: string): Promise<boolean>;
   /** Remove a dataset item by (dataset, trace) (M26d, idempotent — no-op if absent). */
   removeDatasetItem(datasetId: string, traceId: string, workspaceId?: string): Promise<void>;
   /**

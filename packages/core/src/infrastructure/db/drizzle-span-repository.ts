@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { and, asc, desc, eq, getTableColumns, gte, inArray, isNull, lte, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
@@ -1398,6 +1399,33 @@ export class DrizzleSpanRepository implements SpanRepository {
           datasetItems.traceId,
         ],
       });
+    return true;
+  }
+
+  async addSyntheticDatasetItem(
+    datasetId: string,
+    input: string,
+    output: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<boolean> {
+    // M55: a synthetic item from a playground replay — input/output stored directly, sourced by a
+    // generated `replay-{uuid}` id (NOT a real trace) so the item stays addressable (view + remove by
+    // this id) and the unique index dedups correctly. Each save is a new example (fresh id). Returns
+    // false if the dataset is absent in the workspace (→ 404). No source trace to snapshot from.
+    if (!isUuid(datasetId)) return false;
+    const ds = await this.db
+      .select({ id: datasets.id })
+      .from(datasets)
+      .where(and(eq(datasets.id, datasetId), eq(datasets.workspaceId, workspaceId)))
+      .limit(1);
+    if (ds.length === 0) return false;
+    await this.db.insert(datasetItems).values({
+      workspaceId,
+      datasetId,
+      traceId: `replay-${randomUUID()}`,
+      inputSnapshot: input,
+      outputSnapshot: output,
+    });
     return true;
   }
 

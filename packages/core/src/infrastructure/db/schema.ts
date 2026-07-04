@@ -298,6 +298,9 @@ export const datasetItems = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     workspaceId: workspaceIdCol(),
     datasetId: uuid("dataset_id").notNull(),
+    // The source ref: a real trace_id for a trace-sourced item, OR a synthetic `replay-{uuid}` id for a
+    // playground-replay item (M55) whose input/output live in the snapshot columns. Always present, so
+    // the item stays addressable (view + remove by this id) and the unique index dedups correctly.
     traceId: text("trace_id").notNull(),
     inputSnapshot: text("input_snapshot"),
     outputSnapshot: text("output_snapshot"),

@@ -275,6 +275,14 @@ class StubSpanRepository implements SpanRepository {
     return true;
   }
 
+  async addSyntheticDatasetItem(datasetId: string, input: string, output: string): Promise<boolean> {
+    const d = this.dsDetail.get(datasetId);
+    if (d === undefined) return false;
+    d.items.unshift({ traceId: `replay-${this.dsSeq}-${d.items.length}`, inputSnapshot: input, outputSnapshot: output, createdAt: "2026-06-25T00:00:00.000Z" });
+    this.dsItemAddCount += 1;
+    return true;
+  }
+
   async removeDatasetItem(datasetId: string, traceId: string): Promise<void> {
     const d = this.dsDetail.get(datasetId);
     if (d) d.items = d.items.filter((i) => i.traceId !== traceId);
@@ -1011,8 +1019,19 @@ describe("createApp (contract, stub repo)", () => {
 
   it("test_post_dataset_item_missing_traceId_400", async () => {
     const ds = (await (await postJson("/v1/datasets", { name: "travel" })).json()) as Dataset;
-    expect((await postJson(`/v1/datasets/${ds.id}/items`, {})).status).toBe(400);
+    expect((await postJson(`/v1/datasets/${ds.id}/items`, {})).status).toBe(400); // neither traceId nor input
     expect(datasetItemsAdded.value).toBe(0); // no write on a 400
+  });
+
+  it("test_post_synthetic_dataset_item_adds_input_output (M55 playground replay)", async () => {
+    const ds = (await (await postJson("/v1/datasets", { name: "golden" })).json()) as Dataset;
+    // no traceId → a synthetic item carrying the replayed input/output directly.
+    const res = await postJson(`/v1/datasets/${ds.id}/items`, { input: "edited prompt", output: "replayed answer" });
+    expect(res.status).toBe(200);
+    const detail = (await res.json()) as DatasetDetail;
+    expect(detail.items[0]?.inputSnapshot).toBe("edited prompt");
+    expect(detail.items[0]?.outputSnapshot).toBe("replayed answer");
+    expect(detail.items[0]?.traceId).toMatch(/^replay-/); // synthetic source id, addressable
   });
 
   it("test_post_dataset_item_absent_dataset_404", async () => {

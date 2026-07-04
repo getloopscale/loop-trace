@@ -59,13 +59,25 @@ export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
     } catch {
       return c.json({ error: "invalid json body" }, 400);
     }
-    const traceId = (body as { traceId?: unknown })?.traceId;
-    if (typeof traceId !== "string" || traceId.length === 0) {
-      return c.json({ error: "traceId is required" }, 400);
-    }
     const datasetId = c.req.param("datasetId");
     const ws = getPrincipal(c).workspaceId;
-    const ok = await repo.addDatasetItem(datasetId, traceId, ws);
+    const b = body as { traceId?: unknown; input?: unknown; output?: unknown };
+    let ok: boolean;
+    if (typeof b.traceId === "string" && b.traceId.length > 0) {
+      // M26d: add an existing trace by reference (snapshot at add-time).
+      ok = await repo.addDatasetItem(datasetId, b.traceId, ws);
+    } else if (typeof b.input === "string") {
+      // M55: a synthetic item from a playground replay — input/output supplied directly, no source
+      // trace. `output` optional (a failed/empty replay may still be a curated negative example).
+      const output = typeof b.output === "string" ? b.output : "";
+      const MAX = 256 * 1024;
+      if (b.input.length > MAX || output.length > MAX) {
+        return c.json({ error: "input/output too large" }, 400);
+      }
+      ok = await repo.addSyntheticDatasetItem(datasetId, b.input, output, ws);
+    } else {
+      return c.json({ error: "traceId or input is required" }, 400);
+    }
     if (!ok) return c.json({ error: "not found" }, 404);
     datasetItemsAdded.add(1);
     const detail = await repo.getDataset(datasetId, ws);

@@ -57,4 +57,12 @@ describe("M55 openaiChatCompletionWithUsage (T1.1) — captures the provider usa
     await expect(openaiChatCompletionWithUsage(cfg, [], fetchReturning(503, {}))).rejects.toBeInstanceOf(ChatError);
     await expect(openaiChatCompletionWithUsage(cfg, [], fetchReturning(200, { choices: [] }))).rejects.toBeInstanceOf(ChatError);
   });
+
+  it("test_chat_completion_times_out (a stalled provider → ChatError, never a hang)", async () => {
+    // A fetch that rejects like an aborted request (the AbortSignal.timeout path) → ChatError.
+    const aborting = (async () => {
+      throw new DOMException("The operation was aborted.", "TimeoutError");
+    }) as unknown as typeof fetch;
+    await expect(openaiChatCompletionWithUsage(cfg, [], aborting)).rejects.toBeInstanceOf(ChatError);
+  });
 });

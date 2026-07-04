@@ -86,6 +86,28 @@ suite("datasets (integration, M26d)", () => {
     expect(await repo.addDatasetItem(ds.id, "ghost")).toBe(false);
   });
 
+  it("test_add_synthetic_item_stores_input_output_with_null_trace (M55 playground replay)", async () => {
+    const ds = await repo.createDataset("golden");
+    // a synthetic item — no source trace; input/output supplied directly, sourced by a replay- id.
+    expect(await repo.addSyntheticDatasetItem(ds.id, "edited prompt", "replayed answer")).toBe(true);
+    const detail = await repo.getDataset(ds.id);
+    expect(detail?.items).toHaveLength(1);
+    expect(detail?.items[0]?.traceId).toMatch(/^replay-/);
+    expect(detail?.items[0]).toMatchObject({
+      inputSnapshot: "edited prompt",
+      outputSnapshot: "replayed answer",
+    });
+    // two synthetic saves are DISTINCT examples (NULLs distinct in the unique index — no false dedup).
+    await repo.addSyntheticDatasetItem(ds.id, "prompt 2", "answer 2");
+    const { rows } = await pool.query("SELECT count(*)::int AS n FROM dataset_items WHERE dataset_id = $1", [ds.id]);
+    expect(rows[0].n).toBe(2);
+  });
+
+  it("test_add_synthetic_item_absent_dataset_false", async () => {
+    expect(await repo.addSyntheticDatasetItem("00000000-0000-0000-0000-000000000000", "i", "o")).toBe(false);
+    expect(await repo.addSyntheticDatasetItem("not-a-uuid", "i", "o")).toBe(false);
+  });
+
   it("test_list_datasets_with_item_counts", async () => {
     await repo.save([span({ spanId: "r1", traceId: "t1" }), span({ spanId: "r2", traceId: "t2" })]);
     const ds = await repo.createDataset("travel");

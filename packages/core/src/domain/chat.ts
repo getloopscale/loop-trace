@@ -32,6 +32,9 @@ export interface ChatConfig {
  * text answer AND the M55 replay's usage-capturing call). Pins temperature 0. Returns the parsed JSON
  * body or THROWS {@link ChatError} on any failure (fail-closed: network / non-2xx / non-JSON).
  */
+/** Bound every provider call so a stalled upstream cannot hang the request (billable-path safety). */
+const CHAT_TIMEOUT_MS = 30_000;
+
 async function requestChatCompletion(
   config: ChatConfig,
   messages: ChatMessage[],
@@ -48,6 +51,8 @@ async function requestChatCompletion(
           ...(config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {}),
         },
         body: JSON.stringify({ model: config.model, temperature: 0, messages }),
+        // A stalled provider aborts at the timeout → fetch rejects → ChatError (never a silent hang).
+        signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
       },
     );
   } catch (err) {
