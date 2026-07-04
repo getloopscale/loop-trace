@@ -203,6 +203,16 @@ export function createApp(
       // filter", not a 400). Parsed server-side by `parseSpanQuery` in the repo; flows
       // to BOTH the JSON list AND the CSV export (same filtered query).
       spanQuery: c.req.query("span_query") || undefined,
+      // M52: advanced filters — cost/token ranges + session (snake_case query keys →
+      // camelCase schema keys, mirroring order_by → orderBy). A bad numeric → z.coerce
+      // NaN → the strict schema fails → the 400 below (fail-fast at the boundary). An
+      // EMPTY value (`?min_cost_usd=`) → undefined → "no filter" (not `z.coerce("")===0`,
+      // which would add a spurious `>= 0` bound that drops NULL-cost traces).
+      minCostUsd: c.req.query("min_cost_usd") || undefined,
+      maxCostUsd: c.req.query("max_cost_usd") || undefined,
+      minTokens: c.req.query("min_tokens") || undefined,
+      maxTokens: c.req.query("max_tokens") || undefined,
+      sessionId: c.req.query("session_id") || undefined,
     });
     if (!parsed.success) {
       return c.json({ error: "invalid query parameters" }, 400);

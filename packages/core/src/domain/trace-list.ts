@@ -71,6 +71,13 @@ export const listTracesOptionsSchema = z
     // iff one span satisfies every clause. Free-form string (the parser, not zod, is
     // the grammar) — unparseable tokens are ignored, never a 400.
     spanQuery: z.string().min(1).optional(),
+    // M52: advanced filters — trace-level column ranges (cost_usd / total_tokens) + session_id.
+    // Coerced from query strings; a `0` bound is honored (the repo uses `!= null`, not truthy).
+    minCostUsd: z.coerce.number().nonnegative().optional(),
+    maxCostUsd: z.coerce.number().nonnegative().optional(),
+    minTokens: z.coerce.number().int().nonnegative().optional(),
+    maxTokens: z.coerce.number().int().nonnegative().optional(),
+    sessionId: z.string().min(1).optional(),
   })
   .strict();
 

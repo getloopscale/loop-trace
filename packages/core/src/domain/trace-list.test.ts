@@ -86,6 +86,27 @@ describe("listTracesOptionsSchema (M9)", () => {
     expect(listTracesOptionsSchema.parse({})).toEqual({});
   });
 
+  it("test_list_options_schema_coerces_cost_token_ranges (M52)", () => {
+    const parsed = listTracesOptionsSchema.parse({
+      minCostUsd: "1.5",
+      maxCostUsd: "10",
+      minTokens: "100",
+      maxTokens: "5000",
+      sessionId: "sess-abc",
+    });
+    expect(parsed.minCostUsd).toBe(1.5); // coerced from a query-string
+    expect(parsed.maxTokens).toBe(5000);
+    expect(parsed.sessionId).toBe("sess-abc");
+    expect(listTracesOptionsSchema.parse({ minCostUsd: "0" }).minCostUsd).toBe(0); // a 0 bound is valid
+  });
+
+  it("test_list_options_schema_rejects_bad_advanced_filters (M52)", () => {
+    expect(() => listTracesOptionsSchema.parse({ minCostUsd: "abc" })).toThrow(); // NaN
+    expect(() => listTracesOptionsSchema.parse({ minTokens: "-5" })).toThrow(); // nonnegative
+    expect(() => listTracesOptionsSchema.parse({ minTokens: "1.5" })).toThrow(); // int
+    expect(() => listTracesOptionsSchema.parse({ sessionId: "" })).toThrow(); // min(1)
+  });
+
   it("test_list_options_schema_accepts_span_query", () => {
     // M30: spanQuery is a free-form string (the parser, not zod, is the grammar).
     const parsed = listTracesOptionsSchema.parse({ spanQuery: "kind:llm status:error" });

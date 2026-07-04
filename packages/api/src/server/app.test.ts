@@ -644,6 +644,27 @@ describe("createApp (contract, stub repo)", () => {
     expect((await app.request("/v1/traces?limit=999999")).status).toBe(400);
   });
 
+  it("test_get_traces_forwards_advanced_filters_and_rejects_bad (M52)", async () => {
+    const res = await app.request(
+      "/v1/traces?min_cost_usd=0.1&max_cost_usd=5&min_tokens=100&max_tokens=9000&session_id=sess-x",
+    );
+    expect(res.status).toBe(200);
+    expect(repo.lastListOpts).toMatchObject({
+      minCostUsd: 0.1,
+      maxCostUsd: 5,
+      minTokens: 100,
+      maxTokens: 9000,
+      sessionId: "sess-x",
+    });
+    // a non-numeric range value fails at the boundary (fail-fast 400)
+    expect((await app.request("/v1/traces?min_cost_usd=abc")).status).toBe(400);
+    // an EMPTY numeric value is "no filter" (undefined), NOT a spurious `>= 0` bound (M52 review LOW)
+    const res2 = await app.request("/v1/traces?min_cost_usd=&max_tokens=");
+    expect(res2.status).toBe(200);
+    expect(repo.lastListOpts?.minCostUsd).toBeUndefined();
+    expect(repo.lastListOpts?.maxTokens).toBeUndefined();
+  });
+
   it("test_get_traces_passes_validated_opts_to_repo", async () => {
     const res = await app.request("/v1/traces?status=error&order_by=latency&dir=asc");
     expect(res.status).toBe(200);

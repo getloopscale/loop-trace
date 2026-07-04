@@ -471,6 +471,14 @@ export class DrizzleSpanRepository implements SpanRepository {
     const conds: (SQL | undefined)[] = [eq(traces.workspaceId, workspaceId)];
     if (opts.from) conds.push(gte(traces.updatedAt, new Date(opts.from)));
     if (opts.to) conds.push(lte(traces.updatedAt, new Date(opts.to)));
+    // M52: advanced trace-level filters (cost_usd / total_tokens ranges + session_id). All
+    // are `traces` columns (no span join). Use `!= null` so a legitimate `0` bound is honored;
+    // an inverted range (min > max) yields no rows (fail-soft, like the from/to window).
+    if (opts.minCostUsd != null) conds.push(gte(traces.costUsd, opts.minCostUsd));
+    if (opts.maxCostUsd != null) conds.push(lte(traces.costUsd, opts.maxCostUsd));
+    if (opts.minTokens != null) conds.push(gte(traces.totalTokens, opts.minTokens));
+    if (opts.maxTokens != null) conds.push(lte(traces.totalTokens, opts.maxTokens));
+    if (opts.sessionId) conds.push(eq(traces.sessionId, opts.sessionId));
     if (opts.status === "error") {
       // The status filter is coupled to the recompute's normalized vocabulary
       // ('ok'/'error'), the ONLY writer of traces.status_code. A trace ingested
