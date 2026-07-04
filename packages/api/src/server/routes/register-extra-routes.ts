@@ -20,10 +20,12 @@ import {
   guardBreachesHandler,
 } from "../handlers/evaluators.js";
 import { type CopilotApiDeps, askHandler } from "../handlers/copilot.js";
+import { type ReplayApiDeps, replayHandler } from "../handlers/replay.js";
 
 export interface ExtraRoutes {
   evaluators?: EvaluatorApiDeps | undefined;
   copilot?: CopilotApiDeps | undefined;
+  replay?: ReplayApiDeps | undefined;
 }
 
 export function registerExtraRoutes(app: Hono, opts: ExtraRoutes): void {
@@ -45,5 +47,12 @@ export function registerExtraRoutes(app: Hono, opts: ExtraRoutes): void {
   if (opts.copilot !== undefined) {
     const cp = opts.copilot;
     app.post("/v1/traces/:traceId/ask", requireScopeOnPrincipal("observability:read"), (c) => askHandler(c, cp));
+  }
+
+  // M55: span replay — an ephemeral provider call, never a store write (D3); read-augmentation like
+  // the copilot ask. The persist path (save-as-dataset) is a separate observability:write route.
+  if (opts.replay !== undefined) {
+    const rp = opts.replay;
+    app.post("/v1/traces/:traceId/replay", requireScopeOnPrincipal("observability:read"), (c) => replayHandler(c, rp));
   }
 }

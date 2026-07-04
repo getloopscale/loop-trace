@@ -4,6 +4,7 @@ import type { AuthVerifier, Principal, SpanRepository } from "@usetheo/lens-core
 import { createApp } from "./app.js";
 import type { EvaluatorApiDeps } from "./handlers/evaluators.js";
 import type { CopilotApiDeps } from "./handlers/copilot.js";
+import type { ReplayApiDeps } from "./handlers/replay.js";
 
 const EXPECTED_DATA_ROUTES = new Set([
   "DELETE /v1/datasets/:datasetId/items/:traceId",
@@ -41,6 +42,7 @@ const EXPECTED_DATA_ROUTES = new Set([
   "POST /v1/traces",
   "POST /v1/traces/:traceId/annotations",
   "POST /v1/traces/:traceId/ask",
+  "POST /v1/traces/:traceId/replay",
   "POST /v1/traces/:traceId/tags",
 ]);
 
@@ -97,12 +99,19 @@ function buildAuditApp() {
     limiter: { tryAcquire: () => true },
   } as unknown as CopilotApiDeps;
 
+  const replayDeps = {
+    spanRepo: repo,
+    chat: null,
+    limiter: { tryAcquire: () => true },
+  } as unknown as ReplayApiDeps;
+
   return createApp(
     repo,
     undefined,
     { verifier: verifier(), requireCredential: true },
     evaluatorDeps,
     copilotDeps,
+    replayDeps,
   );
 }
 
@@ -115,7 +124,7 @@ describe("M37 route guard enumeration", () => {
         .map((route) => `${route.method} ${route.path}`),
     );
     expect(liveRoutes).toEqual(EXPECTED_DATA_ROUTES);
-    expect(liveRoutes.size).toBe(36);
+    expect(liveRoutes.size).toBe(37);
   });
 
   it("asserts every mounted data route carries a per-verb scope middleware", () => {

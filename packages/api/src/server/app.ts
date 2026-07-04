@@ -36,6 +36,7 @@ import {
 } from "./handlers/admin-keys.js";
 import type { EvaluatorApiDeps } from "./handlers/evaluators.js";
 import type { CopilotApiDeps } from "./handlers/copilot.js";
+import type { ReplayApiDeps } from "./handlers/replay.js";
 import { registerExtraRoutes } from "./routes/register-extra-routes.js";
 import { registerDatasetRoutes } from "./routes/dataset-routes.js";
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
@@ -91,6 +92,7 @@ export function createApp(
   auth: AuthOptions = {},
   evaluators?: EvaluatorApiDeps,
   copilot?: CopilotApiDeps,
+  replay?: ReplayApiDeps,
 ): Hono {
   const app = new Hono();
 
@@ -464,7 +466,7 @@ export function createApp(
   // M26d dataset routes + M36 evaluators + M33 copilot routes (extracted to keep
   // app.ts ≤ 500 — M33 D5).
   registerDatasetRoutes(app, repo);
-  registerExtraRoutes(app, { evaluators, copilot });
+  registerExtraRoutes(app, { evaluators, copilot, replay });
 
   // Mount static UI serving LAST so the catch-all never shadows /v1/* (M7, D1).
   if (webDistDir !== undefined) {

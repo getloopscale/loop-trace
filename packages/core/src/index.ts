@@ -67,10 +67,15 @@ export {
 export {
   ChatError,
   openaiChatCompletion,
+  openaiChatCompletionWithUsage,
   OpenAICompatibleChat,
+  OpenAICompatibleReplay,
   type ChatClient,
+  type ChatCompletionWithUsage,
   type ChatConfig,
   type ChatMessage,
+  type ReplayClient,
+  type ReplayResult,
 } from "./domain/chat.js";
 export {
   buildCopilotPrompt,

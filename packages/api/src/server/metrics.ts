@@ -39,6 +39,12 @@ export const copilotAsksAnswered = counter();
 export const copilotAsksRateLimited = counter();
 export const copilotAsksUnavailable = counter();
 
+// M55 span-replay — a billable, abuse-prone provider call MUST be observable so a healthy replay
+// volume, a rate-limit spike, and a provider-outage spike are distinguishable (wiring-triad pillar c).
+export const replayRuns = counter();
+export const replayRateLimited = counter();
+export const replayUnavailable = counter();
+
 /** Structured ingest log line on stderr (stdout stays clean for piping). */
 export function logIngest(spans: number, evals = 0): void {
   console.error(

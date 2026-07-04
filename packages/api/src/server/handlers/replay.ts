@@ -1,0 +1,125 @@
+/**
+ * M55 — span-replay handler (`POST /v1/traces/:traceId/replay`). Re-runs an EDITED message list
+ * against the real provider server-side and returns output + tokens + latency. Reads the workspace
+ * from the Principal (never the body); `observability:read` scope is enforced at the route (D3 —
+ * mirrors the M33 copilot: an ephemeral provider call, never a store write). Fail-closed: no provider
+ * → 503; provider error → 502; rate-limited → 429; invalid body → 400 (error-handling.md). The trace
+ * is read ONLY to authorize (a foreign/missing trace → 404, no billable call); it is NEVER mutated
+ * (the M44 read-only-body invariant — the only persist path is save-as-dataset). The browser never
+ * holds a provider key; base_url/apiKey stay server config (no SSRF surface).
+ */
+import type { Context } from "hono";
+
+import {
+  ChatError,
+  type ChatMessage,
+  type RateLimiter,
+  type ReplayClient,
+  type SpanRepository,
+} from "@usetheo/lens-core";
+
+import { getPrincipal } from "../auth/middleware.js";
+import { replayRuns, replayRateLimited, replayUnavailable } from "../metrics.js";
+
+/** Deps the replay route needs (wired by the composition root — reuses the copilot provider config). */
+export interface ReplayApiDeps {
+  /** Read-only: authorizes the trace belongs to the caller's workspace (404 otherwise). Never written. */
+  spanRepo: SpanRepository;
+  /** null = no provider configured → the endpoint fails closed (503). */
+  chat: ReplayClient | null;
+  /** Per-workspace billable-abuse guard (429). */
+  limiter: RateLimiter;
+  /** Injected clock (ms) for the limiter + latency — defaults to Date.now. */
+  now?: () => number;
+}
+
+const ROLES = new Set(["system", "user", "assistant"]);
+const MAX_MESSAGES = 100;
+const MAX_TOTAL_BYTES = 256 * 1024; // 256 KiB across all message content
+const MAX_MODEL_LEN = 256;
+
+/** Validate + normalize the edited messages + optional model. Throws a code string on any violation. */
+function parseReplayBody(body: unknown): { messages: ChatMessage[]; model: string | undefined } {
+  const b = body as { messages?: unknown; model?: unknown };
+  if (!Array.isArray(b.messages) || b.messages.length === 0 || b.messages.length > MAX_MESSAGES) {
+    throw "INVALID_BODY";
+  }
+  let totalBytes = 0;
+  const messages: ChatMessage[] = [];
+  for (const m of b.messages) {
+    const mm = m as { role?: unknown; content?: unknown };
+    if (typeof mm.role !== "string" || !ROLES.has(mm.role) || typeof mm.content !== "string") {
+      throw "INVALID_BODY";
+    }
+    totalBytes += Buffer.byteLength(mm.content, "utf8");
+    if (totalBytes > MAX_TOTAL_BYTES) throw "INVALID_BODY";
+    messages.push({ role: mm.role as ChatMessage["role"], content: mm.content });
+  }
+  let model: string | undefined;
+  if (b.model !== undefined) {
+    if (typeof b.model !== "string" || b.model.length > MAX_MODEL_LEN) throw "INVALID_BODY";
+    const trimmed = b.model.trim();
+    model = trimmed === "" ? undefined : trimmed;
+  }
+  return { messages, model };
+}
+
+export async function replayHandler(c: Context, deps: ReplayApiDeps): Promise<Response> {
+  const ws = getPrincipal(c).workspaceId;
+  const clock = deps.now ?? Date.now;
+
+  // Rate-limit first (protects the billable endpoint before any work, D3).
+  if (!deps.limiter.tryAcquire(ws, clock())) {
+    replayRateLimited.add(1); // observable: an abuse/spike is visible at runtime (pillar c)
+    return c.json({ code: "RATE_LIMITED", message: "replay rate limit exceeded" }, 429);
+  }
+  // Fail-closed: no provider configured → disabled.
+  if (deps.chat === null) {
+    return c.json({ code: "REPLAY_DISABLED", message: "replay is not configured" }, 503);
+  }
+
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ code: "INVALID_BODY", message: "invalid json body" }, 400);
+  }
+
+  let parsed: { messages: ChatMessage[]; model: string | undefined };
+  try {
+    parsed = parseReplayBody(body);
+  } catch (code) {
+    return c.json({ code: typeof code === "string" ? code : "INVALID_BODY", message: "invalid replay body" }, 400);
+  }
+
+  // Authorize: the trace must belong to the caller's workspace. A foreign/missing trace → 404 and NO
+  // billable provider call. Read-only (never mutates the trace — M44 read-only body).
+  const traceId = c.req.param("traceId") ?? "";
+  const tree = await deps.spanRepo.getTraceTree(traceId, ws);
+  if (tree === null) {
+    return c.json({ code: "TRACE_NOT_FOUND", message: "trace not found" }, 404);
+  }
+
+  const t0 = clock();
+  try {
+    const result = await deps.chat.run(parsed.messages, parsed.model);
+    const latencyMs = Math.max(0, clock() - t0);
+    replayRuns.add(1); // observable: healthy replay volume (pillar c)
+    return c.json(
+      {
+        output: result.content,
+        promptTokens: result.promptTokens,
+        completionTokens: result.completionTokens,
+        totalTokens: result.totalTokens,
+        latencyMs,
+        model: result.model,
+      },
+      200,
+    );
+  } catch (err) {
+    // Fail-closed: surface the provider failure, never a fabricated/empty result.
+    replayUnavailable.add(1); // observable: a provider-outage spike is visible (pillar c)
+    const reason = err instanceof ChatError ? err.message : String(err);
+    return c.json({ code: "REPLAY_UNAVAILABLE", message: reason }, 502);
+  }
+}
