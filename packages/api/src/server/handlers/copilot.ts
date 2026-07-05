@@ -1,6 +1,6 @@
 /**
  * M33 — "Ask about this step" copilot handler (`POST /v1/traces/:traceId/ask`). Reads
- * the workspace from the Principal (never the body, M22 inv-3); `lens:read` scope is
+ * the workspace from the Principal (never the body, M22 inv-3); `observability:read` scope is
  * enforced at the route. Fail-closed (D2): no chat client → 503; chat error → 502;
  * never a fabricated answer. Per-workspace rate-limited (D3 → 429). Stateless (D4).
  */

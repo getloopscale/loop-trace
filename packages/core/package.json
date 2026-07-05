@@ -14,6 +14,11 @@
   "engines": {
     "node": ">=20.0.0"
   },
+  "scripts": {
+    "test": "pnpm --dir ../.. exec vitest run -c vitest.contract.config.ts packages/core/src",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src"
+  },
   "dependencies": {
     "drizzle-orm": "^0.45.0",
     "pg": "^8.13.0",

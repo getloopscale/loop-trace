@@ -61,7 +61,7 @@ export class BearerAuthVerifier implements AuthVerifier {
       workspaceId: DEFAULT_WORKSPACE_ID,
       userId: DEFAULT_OWNER_USER_ID,
       role: "owner",
-      scopes: ["lens:read", "lens:write", "lens:delete"],
+      scopes: ["observability:read", "observability:write", "observability:delete"],
     };
   }
 }

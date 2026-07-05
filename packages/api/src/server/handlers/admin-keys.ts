@@ -8,10 +8,10 @@
  *
  * Key format `theo_live_` + 32 random bytes (base64url); stored ONLY as a SHA-256
  * hash (the raw secret is returned ONCE on mint, never persisted). Gated upstream
- * by `requireScope('lens:admin')` (a `lens:platform-admin` key satisfies it via the
+ * by `requireScope('observability:admin')` (a `observability:platform-admin` key satisfies it via the
  * scope hierarchy). Anti-escalation (the CWE-441 mint guard):
- *   - minting `lens:platform-admin` requires the caller to already hold it (403);
- *   - targeting another workspace requires the caller to hold `lens:platform-admin` (403).
+ *   - minting `observability:platform-admin` requires the caller to already hold it (403);
+ *   - targeting another workspace requires the caller to hold `observability:platform-admin` (403).
  */
 import { createHash, randomBytes } from "node:crypto";
 
@@ -23,13 +23,13 @@ import type { AuthPool } from "../auth/api-key-verifier.js";
 
 const PREFIX = "theo_live_";
 const VALID_SCOPES = new Set([
-  "lens:read",
-  "lens:write",
-  "lens:delete",
-  "lens:admin",
-  "lens:platform-admin",
+  "observability:read",
+  "observability:write",
+  "observability:delete",
+  "observability:admin",
+  "observability:platform-admin",
 ]);
-const PRIVILEGED_MINT_SCOPES = new Set(["lens:platform-admin"]);
+const PRIVILEGED_MINT_SCOPES = new Set(["observability:platform-admin"]);
 const WORKSPACE_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const ID_RE = /^apk-[0-9a-f]{16}$/;
 /** Strict ISO-8601 datetime: date + T + time, optional fractional seconds, Z or ±hh:mm offset. */
@@ -59,7 +59,7 @@ async function resolveCaller(
     constantTimeEqual(token, bootstrapToken)
   ) {
     // Bootstrap token: implicit platform-admin in the default workspace.
-    return { workspaceId: "default", scopes: ["lens:platform-admin"] };
+    return { workspaceId: "default", scopes: ["observability:platform-admin"] };
   }
   const hash = createHash("sha256").update(token).digest("hex");
   const { rows } = await pool.query<{ workspace_id: string; scopes: unknown }>(
@@ -108,7 +108,7 @@ export async function createKeyHandler(
     : [];
   if (scopesIn.length === 0 || scopesIn.some((s) => !VALID_SCOPES.has(s))) {
     return c.json(
-      { code: "INVALID_SCOPES", message: "scopes must be a non-empty subset of the lens:* scopes" },
+      { code: "INVALID_SCOPES", message: "scopes must be a non-empty subset of the observability:* scopes" },
       400,
     );
   }
@@ -146,10 +146,10 @@ export async function createKeyHandler(
     }
     if (
       body.workspace_id !== caller.workspaceId &&
-      !scopeSatisfies(caller.scopes, "lens:platform-admin")
+      !scopeSatisfies(caller.scopes, "observability:platform-admin")
     ) {
       return c.json(
-        { code: "INSUFFICIENT_SCOPE_FOR_TARGET", message: "targeting another workspace requires lens:platform-admin" },
+        { code: "INSUFFICIENT_SCOPE_FOR_TARGET", message: "targeting another workspace requires observability:platform-admin" },
         403,
       );
     }

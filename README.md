@@ -154,6 +154,16 @@ pnpm test:e2e              # end-to-end against a composed stack
 pnpm --filter @usetheo/lens-web dev   # UI dev server (calls the API on :4318)
 ```
 
+## Platform integration
+
+Theo Lens is a **Level-2 (Model B) capability** behind the Theo unified edge at `/v1/lens` — a customer
+uses it multi-tenant with a single `theo_live_*` platform key; the edge mints a per-tenant key and Theo
+Lens enforces scope per verb (`observability:read`/`observability:write`/`observability:delete`). All six data-plane invariants are
+closed — see [`.claude/knowledge-base/adrs/0001-model-b-level-2-graduation.md`](./.claude/knowledge-base/adrs/0001-model-b-level-2-graduation.md)
+and [`ROADMAP-edge-integration.md`](./ROADMAP-edge-integration.md) (M37–M43). Multi-tenant UI is the
+central Theo dashboard via the `/v1/dashboard/lens/*` read BFF (the same-origin SPA in this repo stays
+single-tenant / local-dev).
+
 ## License
 
 Apache-2.0

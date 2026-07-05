@@ -69,8 +69,8 @@ suite("M36 evaluators routes (integration)", () => {
       undefined,
       {
         verifier: verifierFor({
-          ro: principal(["lens:read"], "ws-x"),
-          rw: principal(["lens:read", "lens:write", "lens:delete"], "ws-x"),
+          ro: principal(["observability:read"], "ws-x"),
+          rw: principal(["observability:read", "observability:write", "observability:delete"], "ws-x"),
         }),
         requireCredential: true,
       },

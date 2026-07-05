@@ -61,6 +61,9 @@ export const listTracesOptionsSchema = z
     orderBy: z.enum(["recent", "latency", "tokens", "cost"]).optional(),
     dir: z.enum(["asc", "desc"]).optional(),
     limit: z.coerce.number().int().min(1).max(LIST_TRACES_LIMIT_CAP).optional(),
+    // M56: pagination offset for the export (page by `limit` up to the export cap). Coerced from a
+    // query string; a `0` offset is valid; negative rejected.
+    offset: z.coerce.number().int().nonnegative().optional(),
     format: z.enum(["json", "csv"]).optional(),
     // M14: filter the list to executions carrying this tag (free-form string).
     tag: z.string().min(1).optional(),
@@ -71,6 +74,13 @@ export const listTracesOptionsSchema = z
     // iff one span satisfies every clause. Free-form string (the parser, not zod, is
     // the grammar) — unparseable tokens are ignored, never a 400.
     spanQuery: z.string().min(1).optional(),
+    // M52: advanced filters — trace-level column ranges (cost_usd / total_tokens) + session_id.
+    // Coerced from query strings; a `0` bound is honored (the repo uses `!= null`, not truthy).
+    minCostUsd: z.coerce.number().nonnegative().optional(),
+    maxCostUsd: z.coerce.number().nonnegative().optional(),
+    minTokens: z.coerce.number().int().nonnegative().optional(),
+    maxTokens: z.coerce.number().int().nonnegative().optional(),
+    sessionId: z.string().min(1).optional(),
   })
   .strict();
 

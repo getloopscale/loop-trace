@@ -298,6 +298,9 @@ export const datasetItems = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     workspaceId: workspaceIdCol(),
     datasetId: uuid("dataset_id").notNull(),
+    // The source ref: a real trace_id for a trace-sourced item, OR a synthetic `replay-{uuid}` id for a
+    // playground-replay item (M55) whose input/output live in the snapshot columns. Always present, so
+    // the item stays addressable (view + remove by this id) and the unique index dedups correctly.
     traceId: text("trace_id").notNull(),
     inputSnapshot: text("input_snapshot"),
     outputSnapshot: text("output_snapshot"),
@@ -351,7 +354,7 @@ export const workspaceUsers = pgTable(
 /**
  * M22 — per-tenant API keys (the data-plane half of the auth pattern). The key is
  * stored only as a SHA-256 hash (never the raw secret). `scopes` is jsonb holding
- * `lens:*` capabilities. `tenant_id` is the single-tenant-OSS isolation marker
+ * `observability:*` capabilities. `tenant_id` is the single-tenant-OSS isolation marker
  * (always `'self'` here). `workspace_id` binds the key to its tenant. Ported from
  * theo-memory migrations 0012/0016/0017.
  */

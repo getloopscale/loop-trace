@@ -62,7 +62,7 @@ export interface Principal {
   readonly userId: string | null;
   /** The member's role in this workspace (default-deny resolves to `'member'`). */
   readonly role: WorkspaceRole;
-  /** Granted capability scopes (e.g. `lens:read`, `lens:write`, `lens:delete`). */
+  /** Granted capability scopes (e.g. `observability:read`, `observability:write`, `observability:delete`). */
   readonly scopes: readonly string[];
 }
 

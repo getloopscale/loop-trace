@@ -33,7 +33,7 @@ const DEFAULT_PRINCIPAL: Principal = {
   workspaceId: DEFAULT_WORKSPACE_ID,
   userId: DEFAULT_OWNER_USER_ID,
   role: "owner",
-  scopes: ["lens:read", "lens:write", "lens:delete"],
+  scopes: ["observability:read", "observability:write", "observability:delete"],
 };
 
 /**
@@ -67,8 +67,8 @@ export function requireRole(min: WorkspaceRole): MiddlewareHandler {
 
 /**
  * Gate a data route on a required scope, checked against the Principal resolved by
- * {@link bearerAuth}. The data-plane half of CWE-441: because `lens:platform-admin`
- * implies ONLY `lens:admin` (key lifecycle), the gateway's provisioning credential
+ * {@link bearerAuth}. The data-plane half of CWE-441: because `observability:platform-admin`
+ * implies ONLY `observability:admin` (key lifecycle), the gateway's provisioning credential
  * is 403 on every data verb — least privilege (NIST AC-6).
  */
 export function requireScopeOnPrincipal(required: string): MiddlewareHandler {

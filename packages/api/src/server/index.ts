@@ -14,11 +14,13 @@ import {
   parseCopilotRpm,
   runSweep,
   OpenAICompatibleChat,
+  OpenAICompatibleReplay,
   RateLimiter,
   DEFAULT_WORKSPACE_ID,
   type EngineDeps,
   type JudgeClient,
   type ChatClient,
+  type ReplayClient,
 } from "@usetheo/lens-core";
 import type pg from "pg";
 
@@ -88,12 +90,18 @@ export async function bootstrap(
   const chat: ChatClient | null =
     judgeConfig !== null ? new OpenAICompatibleChat(judgeConfig) : null;
   const copilotLimiter = new RateLimiter(parseCopilotRpm(process.env));
+  // M55: span replay reuses the SAME provider config (D1) — usage-capturing client (or null →
+  // fail-closed 503); its own per-workspace rate limiter (the billable-abuse guard, D3).
+  const replayClient: ReplayClient | null =
+    judgeConfig !== null ? new OpenAICompatibleReplay(judgeConfig) : null;
+  const replayLimiter = new RateLimiter(parseCopilotRpm(process.env));
   const app = createApp(
     repo,
     webDistDir,
     authOptions,
     { repo: evaluatorRepo, engine },
     { spanRepo: repo, chat, limiter: copilotLimiter },
+    { spanRepo: repo, chat: replayClient, limiter: replayLimiter },
   );
 
   // M36: opt-in periodic evaluator sweep (default OFF, D5). v1 sweeps the `default`

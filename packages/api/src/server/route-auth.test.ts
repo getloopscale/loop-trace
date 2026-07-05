@@ -64,8 +64,8 @@ describe("M22 route auth (per-verb scope)", () => {
     const { repo } = repoStub();
     const app = createApp(repo, undefined, {
       verifier: verifierFor({
-        ro: principal(["lens:read"]),
-        rw: principal(["lens:read", "lens:write"]),
+        ro: principal(["observability:read"]),
+        rw: principal(["observability:read", "observability:write"]),
       }),
       requireCredential: true,
     });
@@ -78,10 +78,10 @@ describe("M22 route auth (per-verb scope)", () => {
   it("test_platform_admin_only_key_403_on_every_data_verb", async () => {
     const { repo } = repoStub();
     const app = createApp(repo, undefined, {
-      verifier: verifierFor({ pa: principal(["lens:platform-admin"]) }),
+      verifier: verifierFor({ pa: principal(["observability:platform-admin"]) }),
       requireCredential: true,
     });
-    // platform-admin implies ONLY lens:admin, never a data scope → 403 on write AND read
+    // platform-admin implies ONLY observability:admin, never a data scope → 403 on write AND read
     expect((await app.request(ingest("pa"))).status).toBe(403);
     const read = new Request("http://x/v1/traces", {
       headers: { authorization: "Bearer pa" },
@@ -92,7 +92,7 @@ describe("M22 route auth (per-verb scope)", () => {
   it("test_fail_closed_missing_credential_401_in_multitenant", async () => {
     const { repo } = repoStub();
     const app = createApp(repo, undefined, {
-      verifier: verifierFor({ rw: principal(["lens:read", "lens:write"]) }),
+      verifier: verifierFor({ rw: principal(["observability:read", "observability:write"]) }),
       requireCredential: true,
     });
     expect((await app.request(ingest(undefined))).status).toBe(401); // no key
@@ -102,7 +102,7 @@ describe("M22 route auth (per-verb scope)", () => {
   it("test_ingest_binds_principal_workspace_not_body", async () => {
     const { repo, lastSaveWorkspace } = repoStub();
     const app = createApp(repo, undefined, {
-      verifier: verifierFor({ rw: principal(["lens:write"], "ws-acme") }),
+      verifier: verifierFor({ rw: principal(["observability:write"], "ws-acme") }),
       requireCredential: true,
     });
     const res = await app.request(ingest("rw"));
@@ -148,7 +148,7 @@ describe("M22 route auth (per-verb scope)", () => {
     // proving bearerAuth precedes them and getPrincipal's default never authorizes.
     const { repo } = repoStub();
     const app = createApp(repo, undefined, {
-      verifier: verifierFor({ rw: principal(["lens:read", "lens:write", "lens:delete"]) }),
+      verifier: verifierFor({ rw: principal(["observability:read", "observability:write", "observability:delete"]) }),
       requireCredential: true,
     });
     const dataRoutes = [

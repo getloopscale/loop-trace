@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { and, asc, desc, eq, getTableColumns, gte, inArray, isNull, lte, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
@@ -471,6 +472,14 @@ export class DrizzleSpanRepository implements SpanRepository {
     const conds: (SQL | undefined)[] = [eq(traces.workspaceId, workspaceId)];
     if (opts.from) conds.push(gte(traces.updatedAt, new Date(opts.from)));
     if (opts.to) conds.push(lte(traces.updatedAt, new Date(opts.to)));
+    // M52: advanced trace-level filters (cost_usd / total_tokens ranges + session_id). All
+    // are `traces` columns (no span join). Use `!= null` so a legitimate `0` bound is honored;
+    // an inverted range (min > max) yields no rows (fail-soft, like the from/to window).
+    if (opts.minCostUsd != null) conds.push(gte(traces.costUsd, opts.minCostUsd));
+    if (opts.maxCostUsd != null) conds.push(lte(traces.costUsd, opts.maxCostUsd));
+    if (opts.minTokens != null) conds.push(gte(traces.totalTokens, opts.minTokens));
+    if (opts.maxTokens != null) conds.push(lte(traces.totalTokens, opts.maxTokens));
+    if (opts.sessionId) conds.push(eq(traces.sessionId, opts.sessionId));
     if (opts.status === "error") {
       // The status filter is coupled to the recompute's normalized vocabulary
       // ('ok'/'error'), the ONLY writer of traces.status_code. A trace ingested
@@ -559,6 +568,7 @@ export class DrizzleSpanRepository implements SpanRepository {
             : sql`${traces.updatedAt}`;
     const dir = opts.dir === "asc" ? sql`asc` : sql`desc`;
     const limit = opts.limit ?? 50;
+    const offset = opts.offset ?? 0; // M56 — export pagination
 
     // M18: derive the trace's representative model/kind/input/output from its
     // ROOT span (parent_span_id IS NULL, earliest) via a single correlated LATERAL
@@ -635,7 +645,8 @@ export class DrizzleSpanRepository implements SpanRepository {
       .leftJoinLateral(repr, sql`true`)
       .where(where)
       .orderBy(sql`${sortCol} ${dir} nulls last`, desc(traces.updatedAt))
-      .limit(limit);
+      .limit(limit)
+      .offset(offset);
     return { traces: rows.map(traceRowToItem) };
   }
 
@@ -1390,6 +1401,33 @@ export class DrizzleSpanRepository implements SpanRepository {
           datasetItems.traceId,
         ],
       });
+    return true;
+  }
+
+  async addSyntheticDatasetItem(
+    datasetId: string,
+    input: string,
+    output: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<boolean> {
+    // M55: a synthetic item from a playground replay — input/output stored directly, sourced by a
+    // generated `replay-{uuid}` id (NOT a real trace) so the item stays addressable (view + remove by
+    // this id) and the unique index dedups correctly. Each save is a new example (fresh id). Returns
+    // false if the dataset is absent in the workspace (→ 404). No source trace to snapshot from.
+    if (!isUuid(datasetId)) return false;
+    const ds = await this.db
+      .select({ id: datasets.id })
+      .from(datasets)
+      .where(and(eq(datasets.id, datasetId), eq(datasets.workspaceId, workspaceId)))
+      .limit(1);
+    if (ds.length === 0) return false;
+    await this.db.insert(datasetItems).values({
+      workspaceId,
+      datasetId,
+      traceId: `replay-${randomUUID()}`,
+      inputSnapshot: input,
+      outputSnapshot: output,
+    });
     return true;
   }
 

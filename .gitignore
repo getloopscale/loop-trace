@@ -29,6 +29,11 @@ knowledge-base/references/*/
 .claude/.compaction-snapshots/
 .claude/.mcp.json
 
+# Codex parity (.agents/) — symlinks whose targets are per-machine/gitignored
+# (would dangle in a fresh clone); the .agents/ mirror itself IS tracked.
+.agents/mcp.json
+.agents/settings.local.json
+
 # Logs / OS
 *.log
 .DS_Store

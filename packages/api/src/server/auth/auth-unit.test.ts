@@ -6,22 +6,22 @@ import { ApiKeyAuthVerifier, type AuthPool } from "./api-key-verifier.js";
 describe("scopeSatisfies (M22)", () => {
   it("test_scope_satisfies_platform_admin_implies_admin_only", () => {
     // platform-admin implies admin (key lifecycle) but NEVER a data scope.
-    expect(scopeSatisfies(["lens:platform-admin"], "lens:admin")).toBe(true);
-    expect(scopeSatisfies(["lens:platform-admin"], "lens:write")).toBe(false);
-    expect(scopeSatisfies(["lens:platform-admin"], "lens:read")).toBe(false);
-    expect(scopeSatisfies(["lens:platform-admin"], "lens:delete")).toBe(false);
+    expect(scopeSatisfies(["observability:platform-admin"], "observability:admin")).toBe(true);
+    expect(scopeSatisfies(["observability:platform-admin"], "observability:write")).toBe(false);
+    expect(scopeSatisfies(["observability:platform-admin"], "observability:read")).toBe(false);
+    expect(scopeSatisfies(["observability:platform-admin"], "observability:delete")).toBe(false);
   });
 
   it("test_scope_satisfies_broker_key_passes_its_verbs", () => {
-    const broker = ["lens:read", "lens:write", "lens:delete"];
-    expect(scopeSatisfies(broker, "lens:read")).toBe(true);
-    expect(scopeSatisfies(broker, "lens:write")).toBe(true);
-    expect(scopeSatisfies(broker, "lens:delete")).toBe(true);
-    expect(scopeSatisfies(broker, "lens:admin")).toBe(false);
+    const broker = ["observability:read", "observability:write", "observability:delete"];
+    expect(scopeSatisfies(broker, "observability:read")).toBe(true);
+    expect(scopeSatisfies(broker, "observability:write")).toBe(true);
+    expect(scopeSatisfies(broker, "observability:delete")).toBe(true);
+    expect(scopeSatisfies(broker, "observability:admin")).toBe(false);
   });
 
   it("test_scope_satisfies_empty_grants_nothing", () => {
-    expect(scopeSatisfies([], "lens:read")).toBe(false);
+    expect(scopeSatisfies([], "observability:read")).toBe(false);
   });
 });
 
@@ -45,7 +45,7 @@ describe("BearerAuthVerifier (M22)", () => {
       workspaceId: "default",
       userId: "default-owner",
       role: "owner",
-      scopes: ["lens:read", "lens:write", "lens:delete"],
+      scopes: ["observability:read", "observability:write", "observability:delete"],
     });
     expect(await v.resolvePrincipal("wrong")).toBeNull();
   });
@@ -79,7 +79,7 @@ describe("ApiKeyAuthVerifier (M22)", () => {
         {
           workspace_id: "ws-acme",
           user_id: "u-1",
-          scopes: ["lens:read", "lens:write"],
+          scopes: ["observability:read", "observability:write"],
           role: "admin",
         },
       ]),
@@ -89,7 +89,7 @@ describe("ApiKeyAuthVerifier (M22)", () => {
       workspaceId: "ws-acme",
       userId: "u-1",
       role: "admin",
-      scopes: ["lens:read", "lens:write"],
+      scopes: ["observability:read", "observability:write"],
     });
   });
 
@@ -104,13 +104,13 @@ describe("ApiKeyAuthVerifier (M22)", () => {
         {
           workspace_id: "ws-x",
           user_id: null,
-          scopes: '["lens:read"]', // pg surfaced jsonb as a string
+          scopes: '["observability:read"]', // pg surfaced jsonb as a string
           role: null, // no membership → default-deny 'member'
         },
       ]),
     );
     const p = await v.resolvePrincipal("theo_live_abcdefghijklmnop");
-    expect(p?.scopes).toEqual(["lens:read"]);
+    expect(p?.scopes).toEqual(["observability:read"]);
     expect(p?.role).toBe("member");
     expect(p?.userId).toBeNull();
   });

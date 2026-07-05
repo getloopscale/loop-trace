@@ -20,7 +20,8 @@ export const datasetSchema = z
 
 export type Dataset = z.infer<typeof datasetSchema>;
 
-/** One curated example: the source trace + its input/output snapshot at add-time. */
+/** One curated example. `traceId` is the source ref: a real trace, or a synthetic `replay-{uuid}`
+ *  for a playground-replay item (M55) whose input/output live in the snapshots. */
 export const datasetItemSchema = z
   .object({
     traceId: z.string(),

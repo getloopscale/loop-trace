@@ -101,9 +101,9 @@ suite("M33 copilot route (integration)", () => {
       undefined,
       {
         verifier: verifierFor({
-          ro: principal(["lens:read"], "ws-x"),
-          rw: principal(["lens:read", "lens:write"], "ws-x"),
-          wo: principal(["lens:write"], "ws-x"), // write-only: no lens:read → 403
+          ro: principal(["observability:read"], "ws-x"),
+          rw: principal(["observability:read", "observability:write"], "ws-x"),
+          wo: principal(["observability:write"], "ws-x"), // write-only: no observability:read → 403
         }),
         requireCredential: true,
       },

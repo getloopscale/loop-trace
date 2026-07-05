@@ -82,8 +82,35 @@ describe("listTracesOptionsSchema (M9)", () => {
     expect(() => listTracesOptionsSchema.parse({ limit: 0 })).toThrow();
   });
 
+  it("test_list_options_schema_accepts_offset (M56 export pagination)", () => {
+    expect(listTracesOptionsSchema.parse({ offset: "500" }).offset).toBe(500); // coerced from a query string
+    expect(listTracesOptionsSchema.parse({ offset: 0 }).offset).toBe(0);
+    expect(() => listTracesOptionsSchema.parse({ offset: -1 })).toThrow(); // negative rejected
+  });
+
   it("test_list_options_schema_empty_is_valid", () => {
     expect(listTracesOptionsSchema.parse({})).toEqual({});
+  });
+
+  it("test_list_options_schema_coerces_cost_token_ranges (M52)", () => {
+    const parsed = listTracesOptionsSchema.parse({
+      minCostUsd: "1.5",
+      maxCostUsd: "10",
+      minTokens: "100",
+      maxTokens: "5000",
+      sessionId: "sess-abc",
+    });
+    expect(parsed.minCostUsd).toBe(1.5); // coerced from a query-string
+    expect(parsed.maxTokens).toBe(5000);
+    expect(parsed.sessionId).toBe("sess-abc");
+    expect(listTracesOptionsSchema.parse({ minCostUsd: "0" }).minCostUsd).toBe(0); // a 0 bound is valid
+  });
+
+  it("test_list_options_schema_rejects_bad_advanced_filters (M52)", () => {
+    expect(() => listTracesOptionsSchema.parse({ minCostUsd: "abc" })).toThrow(); // NaN
+    expect(() => listTracesOptionsSchema.parse({ minTokens: "-5" })).toThrow(); // nonnegative
+    expect(() => listTracesOptionsSchema.parse({ minTokens: "1.5" })).toThrow(); // int
+    expect(() => listTracesOptionsSchema.parse({ sessionId: "" })).toThrow(); // min(1)
   });
 
   it("test_list_options_schema_accepts_span_query", () => {
