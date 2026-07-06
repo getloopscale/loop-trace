@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **New phase roadmap: `ROADMAP-sota-experience-v2.md` (M57–M62) — UX craft & experience parity.** Authored after the M50–M56 SOTA-experience phase from a two-axis gap analysis + a deep-research UX blueprint built by reading the cloned frontend source of the four SOTA peers (`knowledge-base/references/{laminar,langfuse,opik,phoenix}`, file:line-cited). Where M50–M56 closed *capability* gaps, this phase closes the *experience-quality* gap (an internal design critique scored the shipped dashboard's craft at 39/100). Milestones: M57 craft-system floor (formatting/timestamps/id+copy/accent discipline/states/a11y/kill-nag); M58 trace-detail reader-mode (Transcript) + waterfall polish + namespace-grouped PII-masked attributes (a surface no peer ships); M59 traces-list density + chip filters + nav IA; M60 KPI-tile+delta+trend analytics; M61 Ask copilot as a conversation thread; M62 playground side-by-side. Reuse-first on `@usetheo/ui` (the peers are the same shadcn/Radix/Tailwind family — composition + craft discipline, not a rewrite). Grounding artifacts: `knowledge-base/discoveries/2026-07-06-sota-gap-analysis-v2.md` + `knowledge-base/discoveries/blueprints/ux-improvement-blueprint.md`.
 
 ### Changed
 
