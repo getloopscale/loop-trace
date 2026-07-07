@@ -5,6 +5,7 @@ import { createApp } from "./app.js";
 import type { EvaluatorApiDeps } from "./handlers/evaluators.js";
 import type { CopilotApiDeps } from "./handlers/copilot.js";
 import type { ReplayApiDeps } from "./handlers/replay.js";
+import type { ExperimentApiDeps } from "./handlers/experiment.js";
 
 const EXPECTED_DATA_ROUTES = new Set([
   "DELETE /v1/datasets/:datasetId/items/:traceId",
@@ -20,6 +21,9 @@ const EXPECTED_DATA_ROUTES = new Set([
   "GET /v1/datasets/:datasetId",
   "GET /v1/evaluators",
   "GET /v1/evaluators/:id",
+  "GET /v1/experiment-runs",
+  "GET /v1/experiment-runs/:runId",
+  "GET /v1/experiment-runs/compare",
   "GET /v1/guards",
   "GET /v1/guards/:id/breaches",
   "GET /v1/labeling-queue",
@@ -39,6 +43,7 @@ const EXPECTED_DATA_ROUTES = new Set([
   "POST /v1/datasets/:datasetId/items",
   "POST /v1/evaluators",
   "POST /v1/evaluators/:id/run",
+  "POST /v1/experiment-runs",
   "POST /v1/guards",
   "POST /v1/labeling-queue/:itemId/resolve",
   "POST /v1/labeling-queue/export-as-dataset",
@@ -110,6 +115,13 @@ function buildAuditApp() {
     limiter: { tryAcquire: () => true },
   } as unknown as ReplayApiDeps;
 
+  const experimentDeps = {
+    spanRepo: repo,
+    evaluatorRepo: { listEvaluators: async () => [] },
+    chat: null,
+    limiter: { tryAcquire: () => true },
+  } as unknown as ExperimentApiDeps;
+
   return createApp(
     repo,
     undefined,
@@ -117,6 +129,7 @@ function buildAuditApp() {
     evaluatorDeps,
     copilotDeps,
     replayDeps,
+    experimentDeps,
   );
 }
 
@@ -129,7 +142,7 @@ describe("M37 route guard enumeration", () => {
         .map((route) => `${route.method} ${route.path}`),
     );
     expect(liveRoutes).toEqual(EXPECTED_DATA_ROUTES);
-    expect(liveRoutes.size).toBe(42);
+    expect(liveRoutes.size).toBe(46);
   });
 
   it("asserts every mounted data route carries a per-verb scope middleware", () => {

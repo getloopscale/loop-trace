@@ -95,6 +95,9 @@ export async function bootstrap(
   const replayClient: ReplayClient | null =
     judgeConfig !== null ? new OpenAICompatibleReplay(judgeConfig) : null;
   const replayLimiter = new RateLimiter(parseCopilotRpm(process.env));
+  // M64: the experiment-run route reuses the replay provider client + a dedicated limiter + the
+  // evaluator repo (rule-evaluator scoring). null client → the run fails closed (503).
+  const experimentLimiter = new RateLimiter(parseCopilotRpm(process.env));
   const app = createApp(
     repo,
     webDistDir,
@@ -102,6 +105,7 @@ export async function bootstrap(
     { repo: evaluatorRepo, engine },
     { spanRepo: repo, chat, limiter: copilotLimiter },
     { spanRepo: repo, chat: replayClient, limiter: replayLimiter },
+    { spanRepo: repo, evaluatorRepo, chat: replayClient, limiter: experimentLimiter },
   );
 
   // M36: opt-in periodic evaluator sweep (default OFF, D5). v1 sweeps the `default`

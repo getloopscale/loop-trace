@@ -49,6 +49,11 @@ export const copilotAsksUnavailable = counter();
 export const replayRuns = counter();
 export const replayRateLimited = counter();
 export const replayUnavailable = counter();
+// M64: experiment runs. Distinct counters so the experiment funnel is observable at runtime
+// (wiring-triad pillar c): runs started vs rows scored vs runs that failed closed.
+export const experimentRunsStarted = counter();
+export const experimentRowsScored = counter();
+export const experimentRunsUnavailable = counter();
 
 /** Structured ingest log line on stderr (stdout stays clean for piping). */
 export function logIngest(spans: number, evals = 0): void {

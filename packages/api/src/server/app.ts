@@ -40,6 +40,8 @@ import type { ReplayApiDeps } from "./handlers/replay.js";
 import { registerExtraRoutes } from "./routes/register-extra-routes.js";
 import { registerDatasetRoutes } from "./routes/dataset-routes.js";
 import { registerLabelingQueueRoutes } from "./routes/labeling-queue-routes.js";
+import { registerExperimentRoutes } from "./routes/experiment-routes.js";
+import type { ExperimentApiDeps } from "./handlers/experiment.js";
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
 import { OtlpParseError } from "../otlp/otlp-error.js";
 import { decodeOtlpBody } from "../otlp/decode-protobuf.js";
@@ -94,6 +96,7 @@ export function createApp(
   evaluators?: EvaluatorApiDeps,
   copilot?: CopilotApiDeps,
   replay?: ReplayApiDeps,
+  experiment?: ExperimentApiDeps,
 ): Hono {
   const app = new Hono();
 
@@ -470,6 +473,8 @@ export function createApp(
   registerDatasetRoutes(app, repo);
   registerLabelingQueueRoutes(app, repo);
   registerExtraRoutes(app, { evaluators, copilot, replay });
+  // M64 experiments — the run route reuses the replay provider client + limiter + the evaluator repo.
+  if (experiment !== undefined) registerExperimentRoutes(app, experiment);
 
   // Mount static UI serving LAST so the catch-all never shadows /v1/* (M7, D1).
   if (webDistDir !== undefined) {

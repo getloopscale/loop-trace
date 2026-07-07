@@ -3,6 +3,7 @@ import type { AuthVerifier, Principal, SpanRepository } from "@usetheo/lens-core
 import { createApp } from "./app.js";
 import type { EvaluatorApiDeps } from "./handlers/evaluators.js";
 import type { CopilotApiDeps } from "./handlers/copilot.js";
+import type { ExperimentApiDeps } from "./handlers/experiment.js";
 
 /**
  * M37 scope×verb contract matrix refresh — representative routes across every
@@ -153,12 +154,30 @@ const copilotDeps = {
   limiter: { tryAcquire: () => true },
 } as unknown as CopilotApiDeps;
 
+// M64 experiment deps — a 1-item dataset + a fast fake chat so a `write`-token run reaches 200.
+const experimentDeps = {
+  spanRepo: {
+    getDataset: async () => ({ id: "d1", name: "seed", createdAt: ISO_NOW, items: [{ traceId: "t1", inputSnapshot: "[]", outputSnapshot: "o", createdAt: ISO_NOW }] }),
+    createExperimentRun: async (run: { datasetId: string; name: string; variant: unknown; status: string; truncated: boolean; createdBy: string; items: unknown[] }) => ({
+      id: "run-1", datasetId: run.datasetId, name: run.name, variant: run.variant, status: run.status, truncated: run.truncated,
+      itemCount: run.items.length, passCount: 0, totalCostUsd: 0, createdBy: run.createdBy, createdAt: ISO_NOW, items: run.items,
+    }),
+    listExperimentRuns: async () => [],
+    getExperimentRun: async () => null,
+  },
+  evaluatorRepo: { listEvaluators: async () => [] },
+  chat: { run: async () => ({ content: "ok", promptTokens: 1, completionTokens: 1, totalTokens: 2, model: "m" }) },
+  limiter: { tryAcquire: () => true },
+} as unknown as ExperimentApiDeps;
+
 const app = createApp(
   repo,
   undefined,
   { verifier: verifier(), requireCredential: true },
   evaluatorDeps,
   copilotDeps,
+  undefined,
+  experimentDeps,
 );
 
 type TokenClass = keyof typeof TOKENS;
@@ -293,6 +312,36 @@ const CASES: readonly MatrixCase[] = [
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name: "golden-set" }),
       }),
+  },
+  // M64 experiment runs — write for create-run (billable), read for list/get/compare.
+  {
+    name: "experiment-run-create",
+    requiredScope: "observability:write",
+    successStatus: 200,
+    build: () =>
+      new Request("http://x/v1/experiment-runs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ datasetId: "d1", variant: { model: "m" } }),
+      }),
+  },
+  {
+    name: "experiment-run-list",
+    requiredScope: "observability:read",
+    successStatus: 200,
+    build: () => new Request("http://x/v1/experiment-runs"),
+  },
+  {
+    name: "experiment-run-compare",
+    requiredScope: "observability:read",
+    successStatus: 200,
+    build: () => new Request("http://x/v1/experiment-runs/compare?ids=a,b"),
+  },
+  {
+    name: "experiment-run-get",
+    requiredScope: "observability:read",
+    successStatus: 404,
+    build: () => new Request("http://x/v1/experiment-runs/00000000-0000-0000-0000-000000000000"),
   },
   {
     name: "evaluators-list",
