@@ -114,4 +114,36 @@ suite("labeling queue write-path (integration, M63)", () => {
     ]);
     expect((await repo.listLabelingQueue({}, WS_A)).items).toHaveLength(1);
   });
+
+  it("test_span_can_be_re_enqueued_after_resolve (partial-pending UNIQUE — ADR D1)", async () => {
+    // D1: the UNIQUE is partial WHERE status='pending', so a resolved span can be re-enqueued for a
+    // FRESH review cycle — a second pending row is created (not deduped against the resolved one).
+    await repo.save([span({ spanId: "s1", traceId: "t1" })], WS_A);
+    const first = await repo.enqueueLabelingItem("t1", "s1", "reviewer-a", WS_A);
+    await repo.resolveLabelingItem(first.id, normalizeLabelResolution({ label: "good" })!, "reviewer-a", WS_A);
+    const second = await repo.enqueueLabelingItem("t1", "s1", "reviewer-a", WS_A); // re-enqueue after resolve
+    expect(second.id).not.toBe(first.id); // a NEW pending item, not the stale resolved one
+    expect(second.status).toBe("pending");
+    // one pending + one resolved for the same span
+    expect((await repo.listLabelingQueue({ status: "pending" }, WS_A)).items).toHaveLength(1);
+    expect((await repo.listLabelingQueue({ status: "resolved" }, WS_A)).items).toHaveLength(1);
+  });
+
+  it("test_paged_list_is_bounded_and_workspace_scoped", async () => {
+    // Seed 3 spans for ws-A + 1 for ws-B; a page of size 2 returns 2 items, all ws-A, total 3.
+    for (const i of [1, 2, 3]) {
+      await repo.save([span({ spanId: `s${i}`, traceId: `t${i}` })], WS_A);
+      await repo.enqueueLabelingItem(`t${i}`, `s${i}`, "reviewer-a", WS_A);
+    }
+    await repo.save([span({ spanId: "sb", traceId: "tb" })], WS_B);
+    await repo.enqueueLabelingItem("tb", "sb", "reviewer-b", WS_B);
+
+    const page1 = await repo.listLabelingQueue({ page: 1, pageSize: 2 }, WS_A);
+    expect(page1.items).toHaveLength(2);
+    expect(page1.total).toBe(3); // ws-A total (ws-B's item excluded — workspace-scoped count)
+    const page2 = await repo.listLabelingQueue({ page: 2, pageSize: 2 }, WS_A);
+    expect(page2.items).toHaveLength(1);
+    // no ws-B item ever appears in a ws-A page
+    expect([...page1.items, ...page2.items].every((it) => it.traceId !== "tb")).toBe(true);
+  });
 });

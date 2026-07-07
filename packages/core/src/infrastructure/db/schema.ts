@@ -10,6 +10,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -323,9 +324,11 @@ export const datasetItems = pgTable(
 /**
  * M63: labeling-queue items. A span is enqueued for human review (`status = 'pending'`), a reviewer
  * resolves it with a label/score/note (`status = 'resolved'`), and resolved items export to a golden
- * dataset. `workspace_id`-scoped like every data row (theo-data invariant 2). The UNIQUE is
- * workspace-leading `(workspace_id, trace_id, span_id)` so enqueue is idempotent (ON CONFLICT DO
- * NOTHING, D1) and a span in two tenants never collides. `score` is double precision (clamped to
+ * dataset. `workspace_id`-scoped like every data row (theo-data invariant 2). The UNIQUE is a
+ * workspace-leading **partial** index `(workspace_id, trace_id, span_id) WHERE status = 'pending'`
+ * (D1) so at most ONE pending item exists per span per workspace (enqueue is idempotent while
+ * pending), yet a span **can** be re-enqueued after it is resolved (the resolved row leaves the
+ * partial index) and a span in two tenants never collides. `score` is double precision (clamped to
  * [0,1] in the domain); `resolution_version` records the payload schema (D3).
  */
 export const labelingQueueItems = pgTable(
@@ -346,9 +349,12 @@ export const labelingQueueItems = pgTable(
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   },
   (t) => [
-    // Workspace-leading dedup: one queue item per span per workspace; enqueue is idempotent (ON
-    // CONFLICT DO NOTHING) and a span in two tenants never collides (theo-data invariant 2).
-    unique("labeling_queue_items_workspace_trace_span_uq").on(t.workspaceId, t.traceId, t.spanId),
+    // D1: workspace-leading PARTIAL unique — one PENDING item per span per workspace. Enqueue is
+    // idempotent while pending; a resolved span leaves the index so it can be re-enqueued for a fresh
+    // review; a span in two tenants never collides (theo-data invariant 2).
+    uniqueIndex("labeling_queue_items_workspace_trace_span_pending_uq")
+      .on(t.workspaceId, t.traceId, t.spanId)
+      .where(sql`${t.status} = 'pending'`),
     index("labeling_queue_items_workspace_status_idx").on(t.workspaceId, t.status),
   ],
 );

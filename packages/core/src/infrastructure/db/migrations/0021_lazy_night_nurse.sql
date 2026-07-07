@@ -1,0 +1,2 @@
+ALTER TABLE "labeling_queue_items" DROP CONSTRAINT "labeling_queue_items_workspace_trace_span_uq";--> statement-breakpoint
+CREATE UNIQUE INDEX "labeling_queue_items_workspace_trace_span_pending_uq" ON "labeling_queue_items" USING btree ("workspace_id","trace_id","span_id") WHERE "labeling_queue_items"."status" = 'pending';

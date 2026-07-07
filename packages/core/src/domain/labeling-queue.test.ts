@@ -26,10 +26,20 @@ describe("M63 normalizeLabelResolution (pure + total)", () => {
   it("test_normalize_clamps_score_to_unit_interval_or_undefined", () => {
     expect(normalizeLabelResolution({ label: "x", score: 1.5 })?.score).toBe(1); // clamp high
     expect(normalizeLabelResolution({ label: "x", score: -0.5 })?.score).toBe(0); // clamp low
+    expect(normalizeLabelResolution({ label: "x", score: 0 })?.score).toBe(0); // boundary 0 (edge)
+    expect(normalizeLabelResolution({ label: "x", score: 1 })?.score).toBe(1); // boundary 1 (edge)
     expect(normalizeLabelResolution({ label: "x", score: 0.42 })?.score).toBe(0.42); // pass-through
     expect(normalizeLabelResolution({ label: "x", score: "abc" })?.score).toBeUndefined(); // non-number
     expect(normalizeLabelResolution({ label: "x", score: Number.NaN })?.score).toBeUndefined(); // NaN → undefined
+    expect(normalizeLabelResolution({ label: "x", score: Number.POSITIVE_INFINITY })?.score).toBeUndefined(); // Inf → undefined
     expect(normalizeLabelResolution({ label: "x" })?.score).toBeUndefined(); // absent
+  });
+
+  it("test_normalize_caps_note_and_label_length", () => {
+    const longNote = "n".repeat(5000);
+    expect(normalizeLabelResolution({ label: "x", note: longNote })?.note).toHaveLength(2000); // NOTE_MAX
+    const longLabel = "l".repeat(200);
+    expect(normalizeLabelResolution({ label: longLabel })?.label).toHaveLength(64); // LABEL_MAX
   });
 
   it("test_normalize_is_total_never_throws (adversarial input)", () => {

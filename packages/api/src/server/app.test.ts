@@ -19,6 +19,9 @@ import type {
   TraceCost,
   TraceListResponse,
   TraceTreeNode,
+  LabelingQueueItem,
+  LabelingQueuePage,
+  NormalizedResolution,
 } from "@usetheo/lens-core";
 
 import { createApp } from "./app.js";
@@ -31,6 +34,8 @@ import { encodeOtlpProtobuf } from "../otlp/__fixtures__/otlp-protobuf.js";
  * path (repo failure → 5xx, Rule 8) and the "no side-effect on rejection"
  * invariants that the real-DB integration suite cannot cheaply assert.
  */
+const ISO_NOW = "2026-07-07T00:00:00.000Z";
+
 class StubSpanRepository implements SpanRepository {
   readonly saveCalls: Span[][] = [];
   private readonly store = new Map<string, Span>();
@@ -292,6 +297,31 @@ class StubSpanRepository implements SpanRepository {
   agents: Agent[] = [];
   async aggregateAgents(): Promise<Agent[]> {
     return this.agents;
+  }
+
+  // M63 labeling-queue stub — an in-memory map so the route negative-cases (400/404) are exercised.
+  private readonly queue = new Map<string, LabelingQueueItem>();
+  async enqueueLabelingItem(traceId: string, spanId: string, createdBy: string): Promise<LabelingQueueItem> {
+    const id = `lq-${this.queue.size + 1}`;
+    const item: LabelingQueueItem = { id, traceId, spanId, status: "pending", createdBy, createdAt: ISO_NOW };
+    this.queue.set(id, item);
+    return item;
+  }
+  async listLabelingQueue(): Promise<LabelingQueuePage> {
+    const items = [...this.queue.values()];
+    return { items, total: items.length, page: 1, pageSize: 50 };
+  }
+  async getLabelingQueueItem(itemId: string): Promise<LabelingQueueItem | null> {
+    return this.queue.get(itemId) ?? null;
+  }
+  async resolveLabelingItem(itemId: string, resolution: NormalizedResolution): Promise<boolean> {
+    const item = this.queue.get(itemId);
+    if (!item) return false;
+    this.queue.set(itemId, { ...item, status: "resolved", label: resolution.label, resolvedAt: ISO_NOW });
+    return true;
+  }
+  async exportResolvedAsDataset(name: string): Promise<Dataset> {
+    return { id: "ds-export", name, createdAt: ISO_NOW, itemCount: 0 };
   }
 }
 
@@ -1257,5 +1287,60 @@ describe("createApp serves the UI when a web-dist dir is provided (M7)", () => {
     const app = createApp(new StubSpanRepository());
     const res = await app.request("/");
     expect(res.status).toBe(404);
+  });
+
+});
+
+// M63 labeling-queue route negative cases (400 malformed body before write; 404 foreign/missing item).
+// Self-contained apps (single-tenant default Principal holds all scopes → the handler is reached).
+describe("M63 labeling-queue route negative cases", () => {
+  const app = createApp(new StubSpanRepository());
+
+  it("test_enqueue_labeling_400_on_missing_spanId (no store write)", async () => {
+    for (const bad of [{}, { spanId: "" }, { spanId: 42 }]) {
+      const res = await app.request("/v1/traces/t1/enqueue-for-labeling", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(bad),
+      });
+      expect(res.status).toBe(400);
+    }
+    // non-JSON body → 400
+    const nonJson = await app.request("/v1/traces/t1/enqueue-for-labeling", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{not json",
+    });
+    expect(nonJson.status).toBe(400);
+  });
+
+  it("test_resolve_labeling_400_on_blank_label (no store write)", async () => {
+    const res = await app.request("/v1/labeling-queue/lq-1/resolve", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ note: "only a note, no label" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("test_get_and_resolve_missing_labeling_item_return_404", async () => {
+    // a valid-shaped but absent item id → 404 (never 500), on both the read and the write verb.
+    const get = await app.request("/v1/labeling-queue/00000000-0000-0000-0000-000000000000");
+    expect(get.status).toBe(404);
+    const resolve = await app.request("/v1/labeling-queue/00000000-0000-0000-0000-000000000000/resolve", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ label: "good" }),
+    });
+    expect(resolve.status).toBe(404);
+  });
+
+  it("test_export_labeling_400_on_blank_name", async () => {
+    const res = await app.request("/v1/labeling-queue/export-as-dataset", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "  " }),
+    });
+    expect(res.status).toBe(400);
   });
 });

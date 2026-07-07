@@ -1479,13 +1479,15 @@ export class DrizzleSpanRepository implements SpanRepository {
     createdBy: string,
     workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<LabelingQueueItem> {
-    // Idempotent create-or-get on the workspace-leading UNIQUE (D1). Insert-or-nothing, then read
-    // the row back (just-created or the pre-existing one) scoped to the workspace.
+    // Idempotent create-or-get on the workspace-leading PARTIAL unique (D1) — one PENDING item per
+    // span. Insert-or-nothing (conflict only on a still-pending row), then read back the PENDING row
+    // scoped to the workspace (a resolved row from an earlier review cycle is ignored).
     await this.db
       .insert(labelingQueueItems)
       .values({ traceId, spanId, createdBy, workspaceId })
       .onConflictDoNothing({
         target: [labelingQueueItems.workspaceId, labelingQueueItems.traceId, labelingQueueItems.spanId],
+        where: sql`${labelingQueueItems.status} = 'pending'`,
       });
     const rows = await this.db
       .select()
@@ -1495,8 +1497,10 @@ export class DrizzleSpanRepository implements SpanRepository {
           eq(labelingQueueItems.workspaceId, workspaceId),
           eq(labelingQueueItems.traceId, traceId),
           eq(labelingQueueItems.spanId, spanId),
+          eq(labelingQueueItems.status, "pending"),
         ),
       )
+      .orderBy(desc(labelingQueueItems.createdAt))
       .limit(1);
     return this.labelingItemRow(rows[0]!);
   }
