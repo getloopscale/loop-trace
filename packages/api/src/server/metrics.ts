@@ -31,6 +31,11 @@ export const annotationsWritten = counter();
 // M26d: dataset items added via the API. Distinct counter so curation volume is
 // observable at runtime (wiring-triad pillar c).
 export const datasetItemsAdded = counter();
+// M63: labeling-queue lifecycle. Distinct counters so the review funnel is observable at
+// runtime (wiring-triad pillar c): spans enqueued vs items resolved vs golden-dataset exports.
+export const labelingItemsEnqueued = counter();
+export const labelingItemsResolved = counter();
+export const labelingQueueExports = counter();
 // M33: "Ask about this step" copilot. Distinct counters so ops can see, at runtime,
 // answered asks vs the two fail-closed states — a rate-limited spike (abuse) and a
 // provider-unavailable spike (outage) are distinguishable from healthy usage

@@ -39,6 +39,7 @@ import type { CopilotApiDeps } from "./handlers/copilot.js";
 import type { ReplayApiDeps } from "./handlers/replay.js";
 import { registerExtraRoutes } from "./routes/register-extra-routes.js";
 import { registerDatasetRoutes } from "./routes/dataset-routes.js";
+import { registerLabelingQueueRoutes } from "./routes/labeling-queue-routes.js";
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
 import { OtlpParseError } from "../otlp/otlp-error.js";
 import { decodeOtlpBody } from "../otlp/decode-protobuf.js";
@@ -467,6 +468,7 @@ export function createApp(
   // M26d dataset routes + M36 evaluators + M33 copilot routes (extracted to keep
   // app.ts ≤ 500 — M33 D5).
   registerDatasetRoutes(app, repo);
+  registerLabelingQueueRoutes(app, repo);
   registerExtraRoutes(app, { evaluators, copilot, replay });
 
   // Mount static UI serving LAST so the catch-all never shadows /v1/* (M7, D1).

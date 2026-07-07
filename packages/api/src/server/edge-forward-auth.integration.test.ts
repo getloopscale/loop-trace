@@ -123,7 +123,7 @@ suite("M22 ForwardAuth edge contract (integration)", () => {
     });
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE spans, traces, sessions");
+    await pool.query("TRUNCATE spans, traces, sessions, labeling_queue_items");
   });
   afterAll(async () => {
     await pool.end();
@@ -158,6 +158,41 @@ suite("M22 ForwardAuth edge contract (integration)", () => {
 
     // A no-customer-key request is DENIED at the edge (the service is never called).
     const noKey = await viaEdge(new Request("http://x/v1/traces"));
+    expect(noKey.status).toBe(401);
+  });
+
+  it("test_labeling_queue_cross_tenant_isolation_through_edge (M63)", async () => {
+    // Tenant B ingests a span, then enqueues it for labeling — both through the edge.
+    expect(
+      (await viaEdge(new Request("http://x/v1/traces", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-customer-key": "cust_bob" },
+        body: OTLP("b-trace", "b-span", "bob canary"),
+      }))).status,
+    ).toBe(200);
+    const enqueue = await viaEdge(new Request("http://x/v1/traces/b-trace/enqueue-for-labeling", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-customer-key": "cust_bob" },
+      body: JSON.stringify({ spanId: "b-span" }),
+    }));
+    expect(enqueue.status).toBe(200);
+
+    // Tenant A lists the labeling queue through the edge → MUST NOT see Bob's item (cross-tenant deny).
+    const aList = await viaEdge(new Request("http://x/v1/labeling-queue", { headers: { "x-customer-key": "cust_alice" } }));
+    expect(aList.status).toBe(200);
+    expect(((await aList.json()) as { items: unknown[] }).items).toHaveLength(0);
+
+    // Tenant B lists → MUST see its own item (proves the path reaches data; A's empty result is isolation).
+    const bList = await viaEdge(new Request("http://x/v1/labeling-queue", { headers: { "x-customer-key": "cust_bob" } }));
+    const bItems = ((await bList.json()) as { items: { traceId: string }[] }).items;
+    expect(bItems.map((i) => i.traceId)).toContain("b-trace");
+
+    // A no-customer-key enqueue is DENIED at the edge (the billable write route is never reached).
+    const noKey = await viaEdge(new Request("http://x/v1/traces/b-trace/enqueue-for-labeling", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ spanId: "b-span" }),
+    }));
     expect(noKey.status).toBe(401);
   });
 

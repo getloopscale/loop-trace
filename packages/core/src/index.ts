@@ -140,6 +140,18 @@ export {
   type DatasetsResponse,
   type DatasetDetail,
 } from "./domain/dataset.js";
+// M63: labeling queues (human-in-the-loop review).
+export {
+  normalizeLabelResolution,
+  labelingQueueItemSchema,
+  labelingQueuePageSchema,
+  LABELING_QUEUE_STATUSES,
+  RESOLUTION_SCHEMA_VERSION,
+  type LabelingQueueItem,
+  type LabelingQueuePage,
+  type LabelingQueueStatus,
+  type NormalizedResolution,
+} from "./domain/labeling-queue.js";
 // M32: agents catalog (derived).
 export {
   classifyAgentHealth,

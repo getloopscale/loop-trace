@@ -93,6 +93,16 @@ const repo = {
   }),
   addDatasetItem: async () => true,
   removeDatasetItem: async () => undefined,
+  // M63 labeling-queue stubs (success shapes; the matrix asserts the SCOPE guard, not the store).
+  enqueueLabelingItem: async () => ({
+    id: "i1", traceId: "t1", spanId: "s1", status: "pending", createdBy: "u", createdAt: ISO_NOW,
+  }),
+  listLabelingQueue: async () => ({ items: [], total: 0, page: 1, pageSize: 50 }),
+  getLabelingQueueItem: async () => ({
+    id: "i1", traceId: "t1", spanId: "s1", status: "resolved", label: "good", createdBy: "u", createdAt: ISO_NOW,
+  }),
+  resolveLabelingItem: async () => true,
+  exportResolvedAsDataset: async () => ({ id: "d1", name: "golden", createdAt: ISO_NOW, itemCount: 0 }),
 } as unknown as SpanRepository;
 
 const evaluatorDeps = {
@@ -237,6 +247,52 @@ const CASES: readonly MatrixCase[] = [
     successStatus: 200,
     build: () =>
       new Request("http://x/v1/datasets/d1/items/t1", { method: "DELETE" }),
+  },
+  // M63 labeling queues — the CWE-441 second half: read for list/get, write for enqueue/resolve/export.
+  {
+    name: "labeling-queue-list",
+    requiredScope: "observability:read",
+    successStatus: 200,
+    build: () => new Request("http://x/v1/labeling-queue"),
+  },
+  {
+    name: "labeling-queue-get",
+    requiredScope: "observability:read",
+    successStatus: 200,
+    build: () => new Request("http://x/v1/labeling-queue/i1"),
+  },
+  {
+    name: "labeling-queue-enqueue",
+    requiredScope: "observability:write",
+    successStatus: 200,
+    build: () =>
+      new Request("http://x/v1/traces/t1/enqueue-for-labeling", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ spanId: "s1" }),
+      }),
+  },
+  {
+    name: "labeling-queue-resolve",
+    requiredScope: "observability:write",
+    successStatus: 200,
+    build: () =>
+      new Request("http://x/v1/labeling-queue/i1/resolve", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ label: "good", score: 0.9 }),
+      }),
+  },
+  {
+    name: "labeling-queue-export",
+    requiredScope: "observability:write",
+    successStatus: 200,
+    build: () =>
+      new Request("http://x/v1/labeling-queue/export-as-dataset", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "golden-set" }),
+      }),
   },
   {
     name: "evaluators-list",
