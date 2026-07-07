@@ -321,6 +321,39 @@ export const datasetItems = pgTable(
 );
 
 /**
+ * M63: labeling-queue items. A span is enqueued for human review (`status = 'pending'`), a reviewer
+ * resolves it with a label/score/note (`status = 'resolved'`), and resolved items export to a golden
+ * dataset. `workspace_id`-scoped like every data row (theo-data invariant 2). The UNIQUE is
+ * workspace-leading `(workspace_id, trace_id, span_id)` so enqueue is idempotent (ON CONFLICT DO
+ * NOTHING, D1) and a span in two tenants never collides. `score` is double precision (clamped to
+ * [0,1] in the domain); `resolution_version` records the payload schema (D3).
+ */
+export const labelingQueueItems = pgTable(
+  "labeling_queue_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceIdCol(),
+    traceId: text("trace_id").notNull(),
+    spanId: text("span_id").notNull(),
+    status: text("status").default("pending").notNull(),
+    label: text("label"),
+    score: doublePrecision("score"),
+    note: text("note"),
+    resolutionVersion: integer("resolution_version"),
+    createdBy: text("created_by").notNull(),
+    resolvedBy: text("resolved_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => [
+    // Workspace-leading dedup: one queue item per span per workspace; enqueue is idempotent (ON
+    // CONFLICT DO NOTHING) and a span in two tenants never collides (theo-data invariant 2).
+    unique("labeling_queue_items_workspace_trace_span_uq").on(t.workspaceId, t.traceId, t.spanId),
+    index("labeling_queue_items_workspace_status_idx").on(t.workspaceId, t.status),
+  ],
+);
+
+/**
  * M22 — the tenant boundary. Every `workspace_id` on a data row references a row
  * here (logically; FK enforced on `theo_api_keys` only to keep ingest hot-path
  * free). Seeded with a `default` workspace so single-tenant deployments work.

@@ -9,6 +9,12 @@ import type { PruneStats } from "./retention.js";
 import type { EvaluatorSummary } from "./evaluation.js";
 import type { Annotation, NormalizedAnnotation } from "./annotation.js";
 import type { Dataset, DatasetDetail } from "./dataset.js";
+import type {
+  LabelingQueueItem,
+  LabelingQueuePage,
+  LabelingQueueStatus,
+  NormalizedResolution,
+} from "./labeling-queue.js";
 import type { Agent } from "./agent-catalog.js";
 
 /** A span plus its reconstructed children — the trace tree node. */
@@ -95,6 +101,38 @@ export interface SpanRepository {
   addSyntheticDatasetItem(datasetId: string, input: string, output: string, workspaceId?: string): Promise<boolean>;
   /** Remove a dataset item by (dataset, trace) (M26d, idempotent — no-op if absent). */
   removeDatasetItem(datasetId: string, traceId: string, workspaceId?: string): Promise<void>;
+  /**
+   * Enqueue a span for human labeling (M63). Idempotent on (workspace, trace, span) — a second
+   * enqueue of the same span returns the existing item (ON CONFLICT DO NOTHING). Returns the item.
+   */
+  enqueueLabelingItem(
+    traceId: string,
+    spanId: string,
+    createdBy: string,
+    workspaceId?: string,
+  ): Promise<LabelingQueueItem>;
+  /** A workspace's labeling-queue items, newest-first, server-paginated + optionally status-filtered (M63). */
+  listLabelingQueue(
+    opts: { status?: LabelingQueueStatus; page?: number; pageSize?: number },
+    workspaceId?: string,
+  ): Promise<LabelingQueuePage>;
+  /** One labeling-queue item by id, or null if absent / another workspace (M63). */
+  getLabelingQueueItem(itemId: string, workspaceId?: string): Promise<LabelingQueueItem | null>;
+  /**
+   * Resolve a labeling-queue item (M63): write the label/score/note, stamp the resolver + version,
+   * flip `pending → resolved`. Returns false if the item is absent / another workspace (→ 404).
+   */
+  resolveLabelingItem(
+    itemId: string,
+    resolution: NormalizedResolution,
+    resolvedBy: string,
+    workspaceId?: string,
+  ): Promise<boolean>;
+  /**
+   * Export the workspace's RESOLVED queue items as a golden dataset (M63): create-or-get the named
+   * dataset (reuses M44) + add each resolved item's trace. `workspace_id` carried. Returns the dataset.
+   */
+  exportResolvedAsDataset(name: string, workspaceId?: string): Promise<Dataset>;
   /**
    * Agents catalog (M32): spans grouped by the `agent.name` attribute into per-agent
    * rows (latest-seen, run count, versions, tools, system prompt) with health flags.

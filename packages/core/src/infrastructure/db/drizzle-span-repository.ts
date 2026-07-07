@@ -16,6 +16,12 @@ import type {
   TraceListItem,
   TraceListResponse,
 } from "../../domain/trace-list.js";
+import type {
+  LabelingQueueItem,
+  LabelingQueuePage,
+  LabelingQueueStatus,
+  NormalizedResolution,
+} from "../../domain/labeling-queue.js";
 import { computeTraceCost, type PriceTable } from "../../domain/pricing.js";
 import { DEFAULT_PRICES } from "../../domain/default-prices.js";
 import type {
@@ -47,7 +53,7 @@ import {
 import type { PruneStats } from "../../domain/retention.js";
 import { parseSpanQuery, type SpanClause } from "../../domain/span-query.js";
 import type { EvaluatorSummary } from "../../domain/evaluation.js";
-import { spans, traces, sessions, replaySessions, traceTags, spanEvaluations, annotations, datasets, datasetItems } from "./schema.js";
+import { spans, traces, sessions, replaySessions, traceTags, spanEvaluations, annotations, datasets, datasetItems, labelingQueueItems } from "./schema.js";
 import {
   DEFAULT_ANNOTATOR_KIND,
   type Annotation,
@@ -1446,6 +1452,131 @@ export class DrizzleSpanRepository implements SpanRepository {
           eq(datasetItems.workspaceId, workspaceId),
         ),
       );
+  }
+
+  // ── M63 labeling queues ──────────────────────────────────────────────────────
+
+  /** Map a labeling_queue_items row to the API DTO (nullable columns → optional/undefined). */
+  private labelingItemRow(r: typeof labelingQueueItems.$inferSelect): LabelingQueueItem {
+    return {
+      id: r.id,
+      traceId: r.traceId,
+      spanId: r.spanId,
+      status: r.status as LabelingQueueStatus,
+      label: r.label ?? undefined,
+      score: r.score ?? undefined,
+      note: r.note ?? undefined,
+      createdBy: r.createdBy,
+      resolvedBy: r.resolvedBy ?? undefined,
+      createdAt: r.createdAt.toISOString(),
+      resolvedAt: r.resolvedAt?.toISOString(),
+    };
+  }
+
+  async enqueueLabelingItem(
+    traceId: string,
+    spanId: string,
+    createdBy: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<LabelingQueueItem> {
+    // Idempotent create-or-get on the workspace-leading UNIQUE (D1). Insert-or-nothing, then read
+    // the row back (just-created or the pre-existing one) scoped to the workspace.
+    await this.db
+      .insert(labelingQueueItems)
+      .values({ traceId, spanId, createdBy, workspaceId })
+      .onConflictDoNothing({
+        target: [labelingQueueItems.workspaceId, labelingQueueItems.traceId, labelingQueueItems.spanId],
+      });
+    const rows = await this.db
+      .select()
+      .from(labelingQueueItems)
+      .where(
+        and(
+          eq(labelingQueueItems.workspaceId, workspaceId),
+          eq(labelingQueueItems.traceId, traceId),
+          eq(labelingQueueItems.spanId, spanId),
+        ),
+      )
+      .limit(1);
+    return this.labelingItemRow(rows[0]!);
+  }
+
+  async listLabelingQueue(
+    opts: { status?: LabelingQueueStatus; page?: number; pageSize?: number },
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<LabelingQueuePage> {
+    // Whitelisted pagination (bounded page size) + always workspace-scoped (never leaks cross-tenant).
+    const page = Math.max(1, Math.floor(opts.page ?? 1));
+    const pageSize = Math.min(100, Math.max(1, Math.floor(opts.pageSize ?? 50)));
+    const where = opts.status
+      ? and(eq(labelingQueueItems.workspaceId, workspaceId), eq(labelingQueueItems.status, opts.status))
+      : eq(labelingQueueItems.workspaceId, workspaceId);
+    const totalRows = await this.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(labelingQueueItems)
+      .where(where);
+    const rows = await this.db
+      .select()
+      .from(labelingQueueItems)
+      .where(where)
+      .orderBy(desc(labelingQueueItems.createdAt))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize);
+    return { items: rows.map((r) => this.labelingItemRow(r)), total: totalRows[0]?.n ?? 0, page, pageSize };
+  }
+
+  async getLabelingQueueItem(
+    itemId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<LabelingQueueItem | null> {
+    if (!isUuid(itemId)) return null; // non-uuid path param → absent, not a 500
+    const rows = await this.db
+      .select()
+      .from(labelingQueueItems)
+      .where(and(eq(labelingQueueItems.id, itemId), eq(labelingQueueItems.workspaceId, workspaceId)))
+      .limit(1);
+    return rows[0] ? this.labelingItemRow(rows[0]) : null;
+  }
+
+  async resolveLabelingItem(
+    itemId: string,
+    resolution: NormalizedResolution,
+    resolvedBy: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<boolean> {
+    if (!isUuid(itemId)) return false; // non-uuid → absent (→ 404), never a 500
+    const updated = await this.db
+      .update(labelingQueueItems)
+      .set({
+        status: "resolved",
+        label: resolution.label,
+        score: resolution.score ?? null,
+        note: resolution.note ?? null,
+        resolutionVersion: resolution.schemaVersion,
+        resolvedBy,
+        resolvedAt: new Date(),
+      })
+      .where(and(eq(labelingQueueItems.id, itemId), eq(labelingQueueItems.workspaceId, workspaceId)))
+      .returning({ id: labelingQueueItems.id });
+    return updated.length > 0; // false when absent / another workspace (→ 404)
+  }
+
+  async exportResolvedAsDataset(
+    name: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<Dataset> {
+    // Reuse the M44 dataset store (D4): create-or-get the named dataset, then add each RESOLVED item's
+    // trace (idempotent). Every write is workspace-scoped — a golden dataset built from resolved reviews.
+    const dataset = await this.createDataset(name, workspaceId);
+    const resolved = await this.db
+      .select({ traceId: labelingQueueItems.traceId })
+      .from(labelingQueueItems)
+      .where(and(eq(labelingQueueItems.workspaceId, workspaceId), eq(labelingQueueItems.status, "resolved")));
+    for (const r of resolved) {
+      await this.addDatasetItem(dataset.id, r.traceId, workspaceId);
+    }
+    // Re-read for the up-to-date item count.
+    return (await this.listDatasets(workspaceId)).find((d) => d.id === dataset.id) ?? dataset;
   }
 
   async aggregateAgents(
