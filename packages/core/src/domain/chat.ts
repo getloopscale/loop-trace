@@ -39,6 +39,7 @@ async function requestChatCompletion(
   config: ChatConfig,
   messages: ChatMessage[],
   fetchImpl: typeof fetch,
+  responseSchema?: object,
 ): Promise<unknown> {
   let resp: Response;
   try {
@@ -50,7 +51,16 @@ async function requestChatCompletion(
           "content-type": "application/json",
           ...(config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {}),
         },
-        body: JSON.stringify({ model: config.model, temperature: 0, messages }),
+        body: JSON.stringify({
+          model: config.model,
+          temperature: 0,
+          messages,
+          // M62: optional structured output — forwarded as an OpenAI-compatible `response_format`
+          // json_schema (the provider enforces it). Absent schema → no field (identical to today).
+          ...(responseSchema
+            ? { response_format: { type: "json_schema", json_schema: { name: "variant_schema", schema: responseSchema } } }
+            : {}),
+        }),
         // A stalled provider aborts at the timeout → fetch rejects → ChatError (never a silent hang).
         signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
       },
@@ -96,6 +106,9 @@ export interface ChatCompletionWithUsage {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  /** M62: real provider cost (USD) when the provider reports `usage.cost` (e.g. OpenRouter). Additive —
+   *  a provider that omits it → undefined (the UI renders an em-dash; cost is NEVER computed/fabricated). */
+  costUsd?: number;
 }
 
 /**
@@ -108,16 +121,21 @@ export async function openaiChatCompletionWithUsage(
   config: ChatConfig,
   messages: ChatMessage[],
   fetchImpl: typeof fetch = fetch,
+  responseSchema?: object,
 ): Promise<ChatCompletionWithUsage> {
-  const body = await requestChatCompletion(config, messages, fetchImpl);
+  const body = await requestChatCompletion(config, messages, fetchImpl, responseSchema);
   const content = extractContent(body);
-  const usage = (body as { usage?: { prompt_tokens?: unknown; completion_tokens?: unknown; total_tokens?: unknown } })?.usage;
+  const usage = (body as { usage?: { prompt_tokens?: unknown; completion_tokens?: unknown; total_tokens?: unknown; cost?: unknown } })?.usage;
   const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+  // M62: cost is an ADDITIVE read — present only when the provider reports it (undefined otherwise,
+  // never 0/NaN). No request change was needed (probed: OpenRouter returns `usage.cost` by default).
+  const costUsd = typeof usage?.cost === "number" && Number.isFinite(usage.cost) ? usage.cost : undefined;
   return {
     content,
     promptTokens: num(usage?.prompt_tokens),
     completionTokens: num(usage?.completion_tokens),
     totalTokens: num(usage?.total_tokens),
+    ...(costUsd !== undefined ? { costUsd } : {}),
   };
 }
 
@@ -150,7 +168,7 @@ export interface ReplayResult extends ChatCompletionWithUsage {
  * output + usage. THROWS {@link ChatError} on any provider failure (fail-closed).
  */
 export interface ReplayClient {
-  run(messages: ChatMessage[], modelOverride?: string): Promise<ReplayResult>;
+  run(messages: ChatMessage[], modelOverride?: string, responseSchema?: object): Promise<ReplayResult>;
 }
 
 /** OpenAI-compatible {@link ReplayClient} over {@link openaiChatCompletionWithUsage}. */
@@ -160,11 +178,12 @@ export class OpenAICompatibleReplay implements ReplayClient {
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
-  async run(messages: ChatMessage[], modelOverride?: string): Promise<ReplayResult> {
+  async run(messages: ChatMessage[], modelOverride?: string, responseSchema?: object): Promise<ReplayResult> {
     // base_url/apiKey are ALWAYS the server config — only the model may be overridden (no SSRF: the
-    // client can never redirect the call to a different endpoint).
+    // client can never redirect the call to a different endpoint). M62: an optional response schema is
+    // forwarded as structured output (the provider enforces it).
     const model = modelOverride && modelOverride.trim() ? modelOverride.trim() : this.config.model;
-    const usage = await openaiChatCompletionWithUsage({ ...this.config, model }, messages, this.fetchImpl);
+    const usage = await openaiChatCompletionWithUsage({ ...this.config, model }, messages, this.fetchImpl, responseSchema);
     return { ...usage, model };
   }
 }

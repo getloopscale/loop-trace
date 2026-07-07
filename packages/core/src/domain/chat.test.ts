@@ -4,6 +4,7 @@ import {
   openaiChatCompletion,
   openaiChatCompletionWithUsage,
   OpenAICompatibleChat,
+  OpenAICompatibleReplay,
   ChatError,
   type ChatConfig,
 } from "./chat.js";
@@ -64,5 +65,64 @@ describe("M55 openaiChatCompletionWithUsage (T1.1) — captures the provider usa
       throw new DOMException("The operation was aborted.", "TimeoutError");
     }) as unknown as typeof fetch;
     await expect(openaiChatCompletionWithUsage(cfg, [], aborting)).rejects.toBeInstanceOf(ChatError);
+  });
+});
+
+// A fetch that records the request body it was called with (to assert response_format forwarding).
+function recordingFetch(): { impl: typeof fetch; body: () => Record<string, unknown> } {
+  let captured: Record<string, unknown> = {};
+  const impl = (async (_url: string, init?: RequestInit) => {
+    captured = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ choices: [{ message: { content: "ok" } }], usage: { total_tokens: 2 } }),
+    } as unknown as Response;
+  }) as unknown as typeof fetch;
+  return { impl, body: () => captured };
+}
+
+describe("M62 replay cost + structured output", () => {
+  it("test_usage_extraction_reads_cost_when_present", async () => {
+    const withCost = fetchReturning(200, {
+      choices: [{ message: { content: "hi" } }],
+      usage: { prompt_tokens: 9, completion_tokens: 3, total_tokens: 12, cost: 3.15e-6 },
+    });
+    const r = await openaiChatCompletionWithUsage(cfg, [{ role: "user", content: "q" }], withCost);
+    expect(r.costUsd).toBe(3.15e-6);
+  });
+
+  it("test_usage_extraction_costUsd_undefined_when_absent", async () => {
+    // usage present but without `cost` (a strict OpenAI provider) → undefined, never 0 / NaN.
+    const noCost = fetchReturning(200, {
+      choices: [{ message: { content: "hi" } }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    });
+    const r = await openaiChatCompletionWithUsage(cfg, [], noCost);
+    expect(r.costUsd).toBeUndefined();
+  });
+
+  it("test_chat_forwards_responseSchema_as_response_format", async () => {
+    const rec = recordingFetch();
+    const schema = { type: "object", properties: { answer: { type: "string" } } };
+    await openaiChatCompletionWithUsage(cfg, [{ role: "user", content: "q" }], rec.impl, schema);
+    const rf = rec.body()["response_format"] as { type?: string; json_schema?: { schema?: unknown } };
+    expect(rf?.type).toBe("json_schema");
+    expect(rf?.json_schema?.schema).toEqual(schema);
+  });
+
+  it("test_chat_omits_response_format_when_no_schema", async () => {
+    const rec = recordingFetch();
+    await openaiChatCompletionWithUsage(cfg, [{ role: "user", content: "q" }], rec.impl);
+    expect(rec.body()["response_format"]).toBeUndefined();
+  });
+
+  it("test_replay_run_threads_schema_and_returns_cost", async () => {
+    const rec = recordingFetch();
+    const replay = new OpenAICompatibleReplay(cfg, rec.impl);
+    const schema = { type: "object" };
+    const r = await replay.run([{ role: "user", content: "q" }], undefined, schema);
+    expect((rec.body()["response_format"] as { type?: string })?.type).toBe("json_schema");
+    expect(r.model).toBe("m");
   });
 });

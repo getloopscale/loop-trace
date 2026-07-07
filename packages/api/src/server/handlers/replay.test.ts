@@ -11,14 +11,16 @@ import {
 
 import { replayHandler, type ReplayApiDeps } from "./replay.js";
 
-// A ReplayClient stub — records the messages/model it was asked to run.
+// A ReplayClient stub — records the messages/model/schema it was asked to run.
 class FakeReplay implements ReplayClient {
   lastMessages: ChatMessage[] | null = null;
   lastModel: string | undefined = undefined;
+  lastSchema: object | undefined = undefined;
   constructor(private readonly result: ReplayResult) {}
-  async run(messages: ChatMessage[], model?: string): Promise<ReplayResult> {
+  async run(messages: ChatMessage[], model?: string, responseSchema?: object): Promise<ReplayResult> {
     this.lastMessages = messages;
     this.lastModel = model;
+    this.lastSchema = responseSchema;
     return { ...this.result, model: model ?? this.result.model };
   }
 }
@@ -32,7 +34,7 @@ class FailingReplay implements ReplayClient {
 // write method it will throw (undefined is not a function) — a structural proof of no-mutation.
 function fakeSpanRepo(present: Record<string, boolean>): SpanRepository {
   return {
-    getTraceTree: async (traceId: string, _ws: string) =>
+    getTraceTree: async (traceId: string) =>
       present[traceId] ? ({ spanId: "s0", traceId, name: "op", children: [] } as unknown) : null,
   } as unknown as SpanRepository;
 }
@@ -127,5 +129,38 @@ describe("M55 replayHandler", () => {
     // write method — the immutable-trace invariant (M44 read-only body).
     const res = await replayHandler(ctx({ body: { messages: [{ role: "user", content: "hi" }] } }), deps());
     expect(res.status).toBe(200);
+  });
+});
+
+describe("M62 replayHandler — cost surfacing + structured output", () => {
+  const WITH_COST: ReplayResult = { content: "o", promptTokens: 9, completionTokens: 3, totalTokens: 12, costUsd: 3.15e-6, model: "m" };
+
+  it("test_replay_response_includes_costUsd", async () => {
+    const res = await replayHandler(ctx({ body: { messages: [{ role: "user", content: "hi" }] } }), deps({ chat: new FakeReplay(WITH_COST) }));
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as Record<string, unknown>)["costUsd"]).toBe(3.15e-6);
+  });
+
+  it("test_replay_forwards_responseSchema_to_the_client", async () => {
+    const chat = new FakeReplay(RESULT);
+    const schema = { type: "object", properties: { answer: { type: "string" } } };
+    const res = await replayHandler(ctx({ body: { messages: [{ role: "user", content: "hi" }], responseSchema: schema } }), deps({ chat }));
+    expect(res.status).toBe(200);
+    expect(chat.lastSchema).toEqual(schema);
+  });
+
+  it("test_replay_omits_schema_when_absent", async () => {
+    const chat = new FakeReplay(RESULT);
+    await replayHandler(ctx({ body: { messages: [{ role: "user", content: "hi" }] } }), deps({ chat }));
+    expect(chat.lastSchema).toBeUndefined();
+  });
+
+  it("test_replay_400_when_responseSchema_is_not_an_object (no provider call)", async () => {
+    for (const bad of ["oops", 42, ["a"], null]) {
+      const chat = new FakeReplay(RESULT);
+      const res = await replayHandler(ctx({ body: { messages: [{ role: "user", content: "hi" }], responseSchema: bad } }), deps({ chat }));
+      expect(res.status).toBe(400);
+      expect(chat.lastMessages).toBeNull(); // rejected at the boundary, before any billable call
+    }
   });
 });
