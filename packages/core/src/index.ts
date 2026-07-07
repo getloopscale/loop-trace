@@ -152,6 +152,29 @@ export {
   type LabelingQueueStatus,
   type NormalizedResolution,
 } from "./domain/labeling-queue.js";
+// M64: experiments (regression-dataset-run + compare).
+export {
+  aggregateRun,
+  compareRuns,
+  experimentRunSchema,
+  experimentRunItemSchema,
+  runVariantSchema,
+  RUN_STATUSES,
+  type ExperimentRun,
+  type ExperimentRunItem,
+  type RunVariant,
+  type RunStatus,
+  type RunScore,
+  type RunAggregate,
+} from "./domain/experiment.js";
+export {
+  runExperiment,
+  MAX_RUN_ITEMS,
+  type RunInput,
+  type RunDeps,
+  type RunOutput,
+  type RunDatasetItem,
+} from "./domain/experiment-engine.js";
 // M32: agents catalog (derived).
 export {
   classifyAgentHealth,

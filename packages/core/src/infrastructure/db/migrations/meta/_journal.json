@@ -155,6 +155,13 @@
       "when": 1783440929770,
       "tag": "0021_lazy_night_nurse",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1783442784583,
+      "tag": "0022_narrow_the_anarchist",
+      "breakpoints": true
     }
   ]
 }

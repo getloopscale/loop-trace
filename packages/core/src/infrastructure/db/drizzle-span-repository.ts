@@ -22,6 +22,8 @@ import type {
   LabelingQueueStatus,
   NormalizedResolution,
 } from "../../domain/labeling-queue.js";
+import type { ExperimentRun, ExperimentRunItem, RunStatus, RunVariant } from "../../domain/experiment.js";
+import { aggregateRun } from "../../domain/experiment.js";
 import { computeTraceCost, type PriceTable } from "../../domain/pricing.js";
 import { DEFAULT_PRICES } from "../../domain/default-prices.js";
 import type {
@@ -53,7 +55,7 @@ import {
 import type { PruneStats } from "../../domain/retention.js";
 import { parseSpanQuery, type SpanClause } from "../../domain/span-query.js";
 import type { EvaluatorSummary } from "../../domain/evaluation.js";
-import { spans, traces, sessions, replaySessions, traceTags, spanEvaluations, annotations, datasets, datasetItems, labelingQueueItems } from "./schema.js";
+import { spans, traces, sessions, replaySessions, traceTags, spanEvaluations, annotations, datasets, datasetItems, labelingQueueItems, experimentRuns, experimentRunItems } from "./schema.js";
 import {
   DEFAULT_ANNOTATOR_KIND,
   type Annotation,
@@ -1581,6 +1583,130 @@ export class DrizzleSpanRepository implements SpanRepository {
     }
     // Re-read for the up-to-date item count.
     return (await this.listDatasets(workspaceId)).find((d) => d.id === dataset.id) ?? dataset;
+  }
+
+  // ── M64 experiment runs ──────────────────────────────────────────────────────
+
+  /** Map an experiment_runs row to the API DTO (nullable columns → optional/undefined). */
+  private experimentRunRow(r: typeof experimentRuns.$inferSelect, items?: ExperimentRunItem[]): ExperimentRun {
+    return {
+      id: r.id,
+      datasetId: r.datasetId,
+      name: r.name,
+      variant: r.variant as RunVariant,
+      status: r.status as RunStatus,
+      truncated: r.truncated,
+      itemCount: r.itemCount,
+      passCount: r.passCount,
+      avgScore: r.avgScore ?? undefined,
+      totalCostUsd: r.totalCostUsd,
+      createdBy: r.createdBy,
+      createdAt: r.createdAt.toISOString(),
+      ...(items ? { items } : {}),
+    };
+  }
+
+  private experimentItemRow(r: typeof experimentRunItems.$inferSelect): ExperimentRunItem {
+    return {
+      datasetItemTraceId: r.datasetItemTraceId,
+      inputSnapshot: r.inputSnapshot ?? undefined,
+      output: r.output ?? undefined,
+      promptTokens: r.promptTokens,
+      completionTokens: r.completionTokens,
+      totalTokens: r.totalTokens,
+      costUsd: r.costUsd ?? undefined,
+      latencyMs: r.latencyMs,
+      model: r.model,
+      scores: (r.scores as ExperimentRunItem["scores"]) ?? [],
+      error: r.error ?? undefined,
+    };
+  }
+
+  async createExperimentRun(
+    run: {
+      datasetId: string;
+      name: string;
+      variant: RunVariant;
+      status: RunStatus;
+      truncated: boolean;
+      createdBy: string;
+      items: ExperimentRunItem[];
+    },
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<ExperimentRun> {
+    // Compute aggregates from the engine's items (single source of truth) + persist run + items atomically.
+    const agg = aggregateRun(run.items);
+    const runId = await this.db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(experimentRuns)
+        .values({
+          workspaceId,
+          datasetId: run.datasetId,
+          name: run.name,
+          variant: run.variant,
+          status: run.status,
+          truncated: run.truncated,
+          itemCount: agg.itemCount,
+          passCount: agg.passCount,
+          avgScore: agg.avgScore ?? null,
+          totalCostUsd: agg.totalCostUsd,
+          createdBy: run.createdBy,
+        })
+        .returning({ id: experimentRuns.id });
+      const id = inserted[0]!.id;
+      if (run.items.length > 0) {
+        await tx.insert(experimentRunItems).values(
+          run.items.map((it) => ({
+            workspaceId,
+            runId: id,
+            datasetItemTraceId: it.datasetItemTraceId,
+            inputSnapshot: it.inputSnapshot ?? null,
+            output: it.output ?? null,
+            promptTokens: it.promptTokens,
+            completionTokens: it.completionTokens,
+            totalTokens: it.totalTokens,
+            costUsd: it.costUsd ?? null,
+            latencyMs: it.latencyMs,
+            model: it.model,
+            scores: it.scores,
+            error: it.error ?? null,
+          })),
+        );
+      }
+      return id;
+    });
+    return (await this.getExperimentRun(runId, workspaceId))!;
+  }
+
+  async listExperimentRuns(
+    datasetId: string | undefined,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<ExperimentRun[]> {
+    const where =
+      datasetId !== undefined
+        ? and(eq(experimentRuns.workspaceId, workspaceId), eq(experimentRuns.datasetId, datasetId))
+        : eq(experimentRuns.workspaceId, workspaceId);
+    const rows = await this.db.select().from(experimentRuns).where(where).orderBy(desc(experimentRuns.createdAt));
+    return rows.map((r) => this.experimentRunRow(r));
+  }
+
+  async getExperimentRun(
+    runId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<ExperimentRun | null> {
+    if (!isUuid(runId)) return null; // non-uuid path param → absent, not a 500
+    const runs = await this.db
+      .select()
+      .from(experimentRuns)
+      .where(and(eq(experimentRuns.id, runId), eq(experimentRuns.workspaceId, workspaceId)))
+      .limit(1);
+    if (!runs[0]) return null;
+    const items = await this.db
+      .select()
+      .from(experimentRunItems)
+      .where(and(eq(experimentRunItems.runId, runId), eq(experimentRunItems.workspaceId, workspaceId)))
+      .orderBy(asc(experimentRunItems.createdAt));
+    return this.experimentRunRow(runs[0], items.map((it) => this.experimentItemRow(it)));
   }
 
   async aggregateAgents(

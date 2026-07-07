@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   customType,
   doublePrecision,
   index,
@@ -356,6 +357,65 @@ export const labelingQueueItems = pgTable(
       .on(t.workspaceId, t.traceId, t.spanId)
       .where(sql`${t.status} = 'pending'`),
     index("labeling_queue_items_workspace_status_idx").on(t.workspaceId, t.status),
+  ],
+);
+
+/**
+ * M64: experiment runs. One execution of a dataset × a variant (model/prompt override) through the M33
+ * provider path — the run carries the variant config + the computed aggregates (item/pass counts, avg
+ * score, total cost). `workspace_id`-scoped like every data row (theo-data invariant 2). The `id` PK is
+ * globally unique; the workspace-leading index keeps per-tenant list queries fast.
+ */
+export const experimentRuns = pgTable(
+  "experiment_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceIdCol(),
+    datasetId: uuid("dataset_id").notNull(),
+    name: text("name").notNull(),
+    variant: jsonb("variant").notNull(),
+    status: text("status").default("completed").notNull(),
+    truncated: boolean("truncated").default(false).notNull(),
+    itemCount: integer("item_count").default(0).notNull(),
+    passCount: integer("pass_count").default(0).notNull(),
+    avgScore: doublePrecision("avg_score"),
+    totalCostUsd: doublePrecision("total_cost_usd").default(0).notNull(),
+    createdBy: text("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("experiment_runs_workspace_dataset_idx").on(t.workspaceId, t.datasetId),
+    index("experiment_runs_workspace_created_idx").on(t.workspaceId, t.createdAt),
+  ],
+);
+
+/**
+ * M64: experiment run items — one row per dataset item per run: the replayed output + usage/cost + the
+ * evaluator `scores` jsonb (reusing the M36 Verdict shape). `workspace_id`-leading UNIQUE `(workspace_id,
+ * run_id, dataset_item_trace_id)` dedups a row per (run, source trace) and never collides across tenants.
+ */
+export const experimentRunItems = pgTable(
+  "experiment_run_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceIdCol(),
+    runId: uuid("run_id").notNull(),
+    datasetItemTraceId: text("dataset_item_trace_id").notNull(),
+    inputSnapshot: text("input_snapshot"),
+    output: text("output"),
+    promptTokens: integer("prompt_tokens").default(0).notNull(),
+    completionTokens: integer("completion_tokens").default(0).notNull(),
+    totalTokens: integer("total_tokens").default(0).notNull(),
+    costUsd: doublePrecision("cost_usd"),
+    latencyMs: integer("latency_ms").default(0).notNull(),
+    model: text("model").default("").notNull(),
+    scores: jsonb("scores").notNull(),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    unique("experiment_run_items_workspace_run_trace_uq").on(t.workspaceId, t.runId, t.datasetItemTraceId),
+    index("experiment_run_items_run_idx").on(t.runId),
   ],
 );
 

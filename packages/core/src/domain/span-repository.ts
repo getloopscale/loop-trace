@@ -15,6 +15,8 @@ import type {
   LabelingQueueStatus,
   NormalizedResolution,
 } from "./labeling-queue.js";
+import type { ExperimentRun, ExperimentRunItem, RunVariant } from "./experiment.js";
+import type { RunStatus } from "./experiment.js";
 import type { Agent } from "./agent-catalog.js";
 
 /** A span plus its reconstructed children — the trace tree node. */
@@ -133,6 +135,26 @@ export interface SpanRepository {
    * dataset (reuses M44) + add each resolved item's trace. `workspace_id` carried. Returns the dataset.
    */
   exportResolvedAsDataset(name: string, workspaceId?: string): Promise<Dataset>;
+  /**
+   * Persist an experiment run + its items (M64). Atomic: the run row (aggregates) + all item rows
+   * (output/usage/scores jsonb) in one transaction. `workspace_id`-scoped. Returns the run with items.
+   */
+  createExperimentRun(
+    run: {
+      datasetId: string;
+      name: string;
+      variant: RunVariant;
+      status: RunStatus;
+      truncated: boolean;
+      createdBy: string;
+      items: ExperimentRunItem[];
+    },
+    workspaceId?: string,
+  ): Promise<ExperimentRun>;
+  /** A workspace's experiment runs (aggregates only, no items), newest-first (M64); empty when none. */
+  listExperimentRuns(datasetId: string | undefined, workspaceId?: string): Promise<ExperimentRun[]>;
+  /** One run + its items, or null if absent / another workspace (M64). */
+  getExperimentRun(runId: string, workspaceId?: string): Promise<ExperimentRun | null>;
   /**
    * Agents catalog (M32): spans grouped by the `agent.name` attribute into per-agent
    * rows (latest-seen, run count, versions, tools, system prompt) with health flags.
