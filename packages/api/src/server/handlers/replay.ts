@@ -37,6 +37,7 @@ const ROLES = new Set(["system", "user", "assistant"]);
 const MAX_MESSAGES = 100;
 const MAX_TOTAL_BYTES = 256 * 1024; // 256 KiB across all message content
 const MAX_MODEL_LEN = 256;
+const MAX_SCHEMA_BYTES = 32 * 1024; // 32 KiB for the optional structured-output schema (M62)
 
 /** True for a plain JSON object (a valid structured-output schema shape) — not array/null/primitive. */
 function isPlainObject(v: unknown): v is object {
@@ -73,9 +74,11 @@ function parseReplayBody(body: unknown): {
   }
   // M62: optional structured output — must be a plain JSON object (an OpenAI json_schema). A non-object
   // (string/array/number/null) is a client mistake → 400 before any billable call (error-handling.md).
+  // Bounded to MAX_SCHEMA_BYTES so a huge/deep schema cannot inflate the billable provider request.
   let responseSchema: object | undefined;
   if (b.responseSchema !== undefined) {
     if (!isPlainObject(b.responseSchema)) throw "INVALID_SCHEMA";
+    if (Buffer.byteLength(JSON.stringify(b.responseSchema), "utf8") > MAX_SCHEMA_BYTES) throw "INVALID_SCHEMA";
     responseSchema = b.responseSchema;
   }
   return { messages, model, responseSchema };

@@ -163,4 +163,32 @@ describe("M62 replayHandler — cost surfacing + structured output", () => {
       expect(chat.lastMessages).toBeNull(); // rejected at the boundary, before any billable call
     }
   });
+
+  it("test_replay_400_when_responseSchema_exceeds_size_budget (no provider call)", async () => {
+    // a schema whose JSON is > 32 KiB is rejected before the billable call (billable-abuse hardening).
+    const huge = { type: "object", properties: Object.fromEntries(Array.from({ length: 4000 }, (_, i) => [`p${i}`, { type: "string" }])) };
+    const chat = new FakeReplay(RESULT);
+    const res = await replayHandler(ctx({ body: { messages: [{ role: "user", content: "hi" }], responseSchema: huge } }), deps({ chat }));
+    expect(res.status).toBe(400);
+    expect(chat.lastMessages).toBeNull();
+  });
+
+  it("test_replay_authorizes_with_principal_workspace_not_the_body (tenant isolation)", async () => {
+    // The trace is authorized against the PRINCIPAL's workspace, never a body-supplied one.
+    const calls: Array<{ traceId: string; ws: string }> = [];
+    const recordingRepo = {
+      getTraceTree: async (traceId: string, ws: string) => {
+        calls.push({ traceId, ws });
+        return { spanId: "s0", traceId, name: "op", children: [] } as unknown;
+      },
+    } as unknown as SpanRepository;
+    // a hostile body tries to smuggle a different workspace — it MUST be ignored.
+    const res = await replayHandler(
+      ctx({ ws: "ws-A", traceId: "t1", body: { messages: [{ role: "user", content: "hi" }], workspaceId: "ws-EVIL" } }),
+      deps({ spanRepo: recordingRepo, chat: new FakeReplay(RESULT) }),
+    );
+    expect(res.status).toBe(200);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].ws).toBe("ws-A"); // from the Principal, never "ws-EVIL"
+  });
 });
