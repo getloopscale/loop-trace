@@ -49,6 +49,19 @@ const llmJudgeEvaluator = {
   createdAt: "2026-07-07T00:00:00Z",
 } as unknown as EvaluatorRecord;
 
+// A DISABLED rule evaluator — must NEVER score (honors the M36 enabled flag).
+const disabledRuleEvaluator = {
+  id: "e3",
+  name: "disabled-rule",
+  kind: "rule",
+  config: { predicate: "output:good" },
+  passLabel: "pass",
+  failLabel: "fail",
+  target: "",
+  enabled: false,
+  createdAt: "2026-07-07T00:00:00Z",
+} as unknown as EvaluatorRecord;
+
 function input(items: RunInput["items"], over: Partial<RunInput> = {}): RunInput {
   return {
     items,
@@ -97,6 +110,13 @@ describe("M64 runExperiment (DIP engine)", () => {
     const replay = fakeReplay({ output: "a good answer" });
     const out = await runExperiment(input([DS_ITEM], { evaluators: [ruleEvaluator, llmJudgeEvaluator] }), { replay });
     expect(out.items[0].scores.map((s) => s.name)).toEqual(["has-good"]); // only the rule evaluator
+  });
+
+  it("test_run_skips_disabled_rule_evaluators (honors the M36 enabled flag)", async () => {
+    // a DISABLED rule evaluator in the set must not score — else pass-counts corrupt.
+    const replay = fakeReplay({ output: "a good answer" });
+    const out = await runExperiment(input([DS_ITEM], { evaluators: [disabledRuleEvaluator, ruleEvaluator] }), { replay });
+    expect(out.items[0].scores.map((s) => s.name)).toEqual(["has-good"]); // only the ENABLED rule
   });
 
   it("test_run_applies_prompt_override_as_a_system_message", async () => {

@@ -28,7 +28,7 @@ const DATASET: DatasetDetail = {
 };
 
 const RULE_EVAL = {
-  id: "e1", name: "has-good", kind: "rule", config: { predicate: "output:good" }, passLabel: "pass", failLabel: "fail", createdAt: "2026-07-07T00:00:00Z",
+  id: "e1", name: "has-good", kind: "rule", config: { predicate: "output:good" }, passLabel: "pass", failLabel: "fail", enabled: true, createdAt: "2026-07-07T00:00:00Z",
 } as unknown as EvaluatorRecord;
 
 function fakeSpanRepo(over: { dataset?: DatasetDetail | null } = {}): SpanRepository {
@@ -37,7 +37,7 @@ function fakeSpanRepo(over: { dataset?: DatasetDetail | null } = {}): SpanReposi
     getDataset: async () => (over.dataset === undefined ? DATASET : over.dataset),
     createExperimentRun: async (run) => {
       const persisted: ExperimentRun = {
-        id: "run-1", datasetId: run.datasetId, name: run.name, variant: run.variant, status: run.status,
+        id: `run-${created.length + 1}`, datasetId: run.datasetId, name: run.name, variant: run.variant, status: run.status,
         truncated: run.truncated, itemCount: run.items.length, passCount: run.items.filter((i) => i.scores.some((s) => (s.score ?? 0) >= 0.5)).length,
         totalCostUsd: 0, createdBy: run.createdBy, createdAt: "2026-07-07T00:00:00Z", items: run.items,
       };
@@ -51,13 +51,17 @@ function fakeSpanRepo(over: { dataset?: DatasetDetail | null } = {}): SpanReposi
 
 const fakeEvaluatorRepo: EvaluatorRepository = { listEvaluators: async () => [RULE_EVAL] } as unknown as EvaluatorRepository;
 
-function fakeReplay(over: { throws?: boolean } = {}): ReplayClient {
-  return {
+/** A replay client that counts its calls — lets a test prove the fail-closed paths make NO billable call. */
+function fakeReplay(over: { throws?: boolean } = {}): ReplayClient & { calls: number } {
+  const client = {
+    calls: 0,
     async run(_m: ChatMessage[], model?: string): Promise<ReplayResult> {
+      client.calls += 1;
       if (over.throws) throw new ChatError("provider 502");
       return { content: "a good answer", promptTokens: 10, completionTokens: 5, totalTokens: 15, costUsd: 0.001, model: model ?? "m" };
     },
   };
+  return client;
 }
 
 function appWith(over: Partial<ExperimentApiDeps> = {}): ReturnType<typeof createApp> {
@@ -95,9 +99,11 @@ describe("M64 experiment-run route", () => {
 
   it("test_run_429_when_rate_limited (no provider call)", async () => {
     const limiter = new RateLimiter(1);
-    const app = appWith({ limiter });
+    const chat = fakeReplay();
+    const app = appWith({ limiter, chat });
     expect((await post(app, { datasetId: DATASET.id })).status).toBe(200);
     expect((await post(app, { datasetId: DATASET.id })).status).toBe(429);
+    expect(chat.calls).toBe(1); // the 429 request made NO billable provider call
   });
 
   it("test_run_400_on_missing_datasetId", async () => {
@@ -105,9 +111,30 @@ describe("M64 experiment-run route", () => {
     expect((await post(appWith(), { datasetId: 42 })).status).toBe(400);
   });
 
-  it("test_run_404_when_dataset_absent", async () => {
-    const res = await post(appWith({ spanRepo: fakeSpanRepo({ dataset: null }) }), { datasetId: DATASET.id });
+  it("test_run_404_when_dataset_absent (no provider call)", async () => {
+    const chat = fakeReplay();
+    const res = await post(appWith({ spanRepo: fakeSpanRepo({ dataset: null }), chat }), { datasetId: DATASET.id });
     expect(res.status).toBe(404);
+    expect(chat.calls).toBe(0); // a foreign/absent dataset never reaches the billable path
+  });
+
+  it("test_compare_returns_signed_aggregate_deltas", async () => {
+    // create two runs on the same fake repo, then compare them → the API returns the pure `compareRuns` deltas.
+    const spanRepo = fakeSpanRepo();
+    const app = appWith({ spanRepo });
+    await post(app, { datasetId: DATASET.id, name: "A" });
+    await post(app, { datasetId: DATASET.id, name: "B" });
+    const res = await app.request("/v1/experiment-runs/compare?ids=run-1,run-2");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { runs: ExperimentRun[]; deltas: { passRateDelta: number; totalCostDelta: number } | null };
+    expect(body.runs).toHaveLength(2);
+    expect(body.deltas).not.toBeNull();
+    expect(typeof body.deltas?.passRateDelta).toBe("number"); // the DoD3 aggregate delta is present
+  });
+
+  it("test_compare_400_when_fewer_than_two_ids", async () => {
+    const res = await appWith().request("/v1/experiment-runs/compare?ids=run-1");
+    expect(res.status).toBe(400);
   });
 
   it("test_run_partial_persists_on_per_item_provider_error", async () => {

@@ -81,6 +81,7 @@ function syntheticSpan(item: RunDatasetItem, output: string): Span {
 function scoreOutput(evaluators: EvaluatorRecord[], span: Span): RunScore[] {
   const scores: RunScore[] = [];
   for (const ev of evaluators) {
+    if (!ev.enabled) continue; // honor the M36 enabled flag (evaluator-engine.ts:136) — a disabled evaluator never scores
     if (ev.kind !== "rule") continue; // D2: only pure rule evaluators score in the M64 slice
     const verdict = evaluateRule(ev, span);
     scores.push({ name: ev.name, ...(verdict.score !== undefined ? { score: verdict.score } : {}), ...(verdict.label !== undefined ? { label: verdict.label } : {}) });

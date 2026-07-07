@@ -49,6 +49,12 @@ describe("M64 aggregateRun (pure)", () => {
     const a = aggregateRun([item({ costUsd: 0.005 }), item({ costUsd: undefined })]);
     expect(a.totalCostUsd).toBeCloseTo(0.005, 6); // absent cost contributes 0, never NaN
   });
+
+  it("test_aggregateRun_score_exactly_at_threshold_passes (0.5 boundary)", () => {
+    // a row whose mean score is EXACTLY 0.5 passes (>=), pinning the inclusive boundary.
+    const a = aggregateRun([item({ scores: [{ name: "acc", score: 0.5 }] })]);
+    expect(a.passCount).toBe(1);
+  });
 });
 
 describe("M64 compareRuns (pure)", () => {
@@ -58,9 +64,16 @@ describe("M64 compareRuns (pure)", () => {
   it("test_compareRuns_computes_signed_deltas", () => {
     const d = compareRuns(A, B);
     expect(d.passCountDelta).toBe(2); // A has 2 more passing rows
+    expect(d.passRateDelta).toBeCloseTo(3 / 3 - 1 / 3, 5); // pass-RATE delta (DoD3 aggregate): 1.0 − 0.333
     expect(d.avgScoreDelta).toBeCloseTo(0.5, 5);
     expect(d.totalCostDelta).toBeCloseTo(-0.003, 6); // A is cheaper
     expect(d.avgLatencyDelta).toBe(-50);
+  });
+
+  it("test_compareRuns_passRate_never_NaN_on_empty_run", () => {
+    const empty: RunAggregate = { itemCount: 0, passCount: 0, avgScore: undefined, totalCostUsd: 0, avgLatencyMs: undefined };
+    const d = compareRuns(empty, empty);
+    expect(d.passRateDelta).toBe(0); // 0-item runs → rate 0, delta 0 (never NaN)
   });
 
   it("test_compareRuns_null_delta_when_a_metric_absent (never fabricated)", () => {

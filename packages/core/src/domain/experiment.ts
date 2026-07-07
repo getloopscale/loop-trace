@@ -109,6 +109,8 @@ export function aggregateRun(items: ExperimentRunItem[]): RunAggregate {
 /** The signed run-to-run deltas (A minus B); a metric absent on either side yields a `null` delta. */
 export interface RunCompareDeltas {
   passCountDelta: number;
+  /** Pass-*rate* delta (passCount/itemCount, A minus B) — the DoD3 aggregate delta; 0-item runs contribute 0. */
+  passRateDelta: number;
   avgScoreDelta: number | null;
   totalCostDelta: number;
   avgLatencyDelta: number | null;
@@ -119,10 +121,16 @@ function signedDelta(a: number | undefined, b: number | undefined): number | nul
   return typeof a === "number" && typeof b === "number" ? a - b : null;
 }
 
-/** Compare two run aggregates (M64 D5). PURE. Counts + cost are always present; score/latency may be null. */
+/** A run's pass-rate (passing rows / rows), or 0 when the run has no items — never NaN. */
+function passRate(a: RunAggregate): number {
+  return a.itemCount > 0 ? a.passCount / a.itemCount : 0;
+}
+
+/** Compare two run aggregates (M64 D5). PURE. Counts + rate + cost are always present; score/latency may be null. */
 export function compareRuns(a: RunAggregate, b: RunAggregate): RunCompareDeltas {
   return {
     passCountDelta: a.passCount - b.passCount,
+    passRateDelta: passRate(a) - passRate(b),
     avgScoreDelta: signedDelta(a.avgScore, b.avgScore),
     totalCostDelta: a.totalCostUsd - b.totalCostUsd,
     avgLatencyDelta: signedDelta(a.avgLatencyMs, b.avgLatencyMs),

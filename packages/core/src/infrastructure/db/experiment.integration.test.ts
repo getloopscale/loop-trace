@@ -111,6 +111,12 @@ suite("experiment runs write-path (integration, M64)", () => {
     expect(deltas.passCountDelta).toBe(0);
   });
 
+  it("test_get_run_non_uuid_id_returns_null_not_error (isUuid guard)", async () => {
+    // a non-uuid runId must NOT reach the uuid column (PG would throw 22P02) — the guard returns null → 404.
+    expect(await repo.getExperimentRun("not-a-uuid", WS_A)).toBeNull();
+    expect(await repo.getExperimentRun("", WS_A)).toBeNull();
+  });
+
   it("test_concurrent_create_yields_two_distinct_runs", async () => {
     await Promise.all([repo.createExperimentRun(runInput({ name: "A" }), WS_A), repo.createExperimentRun(runInput({ name: "B" }), WS_A)]);
     expect(await repo.listExperimentRuns(undefined, WS_A)).toHaveLength(2); // distinct UUIDs, no dedup collision

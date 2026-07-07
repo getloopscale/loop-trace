@@ -11,6 +11,8 @@ import type { Context } from "hono";
 
 import {
   runExperiment,
+  aggregateRun,
+  compareRuns,
   MAX_RUN_ITEMS,
   type ReplayClient,
   type RateLimiter,
@@ -146,16 +148,24 @@ export async function getExperimentRunHandler(c: Context, deps: ExperimentApiDep
   return run ? c.json(run, 200) : c.json({ code: "RUN_NOT_FOUND", message: "run not found" }, 404);
 }
 
-/** Compare 2+ runs by id: returns the runs (with items) for the client to align + delta (pure `compareRuns`). */
+/**
+ * Compare 2+ runs by id: returns the runs (with items) for the client to align by source trace, plus the
+ * signed aggregate `deltas` of the first two (pure `compareRuns` over the re-derived per-run aggregates —
+ * the single source of truth `aggregateRun`). A foreign/absent id is silently dropped (workspace-scoped
+ * get returns null) so existence never leaks; `deltas` is null when fewer than two runs resolve.
+ */
 export async function compareExperimentRunsHandler(c: Context, deps: ExperimentApiDeps): Promise<Response> {
   const ws = getPrincipal(c).workspaceId;
   const ids = (c.req.query("ids") ?? "").split(",").map((s) => s.trim()).filter(Boolean).slice(0, 5);
   if (ids.length < 2) {
     return c.json({ code: "INVALID_BODY", message: "compare needs at least 2 run ids (?ids=a,b)" }, 400);
   }
-  const runs = (await Promise.all(ids.map((id) => deps.spanRepo.getExperimentRun(id, ws)))).filter((r) => r !== null);
-  // A foreign/absent id is silently dropped (workspace-scoped get returns null) — never leaks existence.
-  return c.json({ runs }, 200);
+  const runs = (await Promise.all(ids.map((id) => deps.spanRepo.getExperimentRun(id, ws)))).filter(
+    (r): r is NonNullable<typeof r> => r !== null,
+  );
+  const [a, b] = runs;
+  const deltas = a && b ? compareRuns(aggregateRun(a.items ?? []), aggregateRun(b.items ?? [])) : null;
+  return c.json({ runs, deltas }, 200);
 }
 
 export { MAX_RUN_ITEMS };
