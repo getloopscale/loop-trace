@@ -792,9 +792,11 @@ export class DrizzleSpanRepository implements SpanRepository {
       )
       .orderBy(desc(traces.updatedAt))
       .limit(limit);
-    // M81: the drill-down reuses the paginated DTO; it's a bounded single page (no offset), so total is
-    // the returned count and the window echoes the applied limit (offset 0).
-    return { traces: rows.map(traceRowToItem), total: rows.length, limit, offset: 0 };
+    // M81: the drill-down reuses the paginated DTO. Compute the REAL workspace-scoped total over the
+    // same predicate (not `rows.length`, which would under-report when matches exceed the limit).
+    const drillWhere = and(inArray(traces.traceId, callingTraceIds), eq(traces.workspaceId, workspaceId));
+    const totalRows = await this.db.select({ n: sql<number>`count(*)::int` }).from(traces).where(drillWhere);
+    return { traces: rows.map(traceRowToItem), total: totalRows[0]?.n ?? 0, limit, offset: 0 };
   }
 
   async recordReplaySession(
