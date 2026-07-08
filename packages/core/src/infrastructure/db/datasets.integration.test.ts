@@ -91,7 +91,7 @@ suite("datasets (integration, M26d)", () => {
     );
     const runId = runIns.rows[0].id as string;
     await pool.query(
-      "INSERT INTO experiment_run_items (workspace_id, run_id, dataset_item_trace_id) VALUES ($1,$2,'t1')",
+      "INSERT INTO experiment_run_items (workspace_id, run_id, dataset_item_trace_id, scores) VALUES ($1,$2,'t1','{}'::jsonb)",
       [DEFAULT_WORKSPACE_ID, runId],
     );
     // delete cascades everything

@@ -8,6 +8,7 @@ import pg from "pg";
 import type { Span } from "../../domain/span.js";
 import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
 import { NameConflictError, isUniqueViolation } from "../../domain/errors.js";
+import { isUuid } from "./uuid.js";
 import type {
   SpanRepository,
   TraceTreeNode,
@@ -197,12 +198,6 @@ interface EnrichedTraceRow {
  * routes pass path params verbatim, so an unknown/garbage id must read as "absent"
  * (null / false → 404), never a 500. Guard before any `eq(datasets.id, …)`.
  */
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-function isUuid(s: string): boolean {
-  return UUID_RE.test(s);
-}
-
 /** Truncate a span's input/output to a list-cell preview (≤120 chars), surrogate-safe (EC-3). */
 function preview(text: string): string {
   const chars = Array.from(text);

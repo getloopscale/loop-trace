@@ -10,6 +10,7 @@ import pg from "pg";
 
 import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
 import { NameConflictError, isUniqueViolation } from "../../domain/errors.js";
+import { isUuid } from "./uuid.js";
 import type { Evaluator, Guard, Verdict } from "../../domain/evaluator.js";
 import type {
   EvaluatorRepository,
@@ -100,6 +101,7 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
     id: string,
     workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<EvaluatorRecord | null> {
+    if (!isUuid(id)) return null; // non-uuid path param → absent, not a 500 (22P02) — Rule 8
     const rows = await this.db
       .select()
       .from(evaluators)
@@ -115,6 +117,7 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
   ): Promise<EvaluatorRecord | null> {
     // M82: a partial edit (rename / enable / config). Build the SET from provided fields only; a
     // (workspace_id, name) collision surfaces as a typed NameConflictError (route → 409, ADR-1).
+    if (!isUuid(id)) return null; // non-uuid path param → absent (404), not a 500 (22P02) — Rule 8
     const set: Record<string, unknown> = {};
     if (updates.name !== undefined) set.name = updates.name;
     if (updates.target !== undefined) set.target = updates.target;
@@ -142,6 +145,7 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
     id: string,
     workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<void> {
+    if (!isUuid(id)) return; // non-uuid path param → no-op (204 idempotent), not a 500 (22P02) — Rule 8
     // EC-4: cascade — drop the evaluator's guards in the SAME transaction so no
     // orphan guard survives (guards have no DB FK, like every table here).
     await this.db.transaction(async (tx) => {

@@ -71,6 +71,7 @@ suite("M36 evaluators routes (integration)", () => {
         verifier: verifierFor({
           ro: principal(["observability:read"], "ws-x"),
           rw: principal(["observability:read", "observability:write", "observability:delete"], "ws-x"),
+          rw2: principal(["observability:read", "observability:write", "observability:delete"], "ws-y"),
         }),
         requireCredential: true,
       },
@@ -194,5 +195,21 @@ suite("M36 evaluators routes (integration)", () => {
   it("M82 — PUT /evaluators/:id absent → 404", async () => {
     const put = await req("PUT", `/v1/evaluators/00000000-0000-0000-0000-000000000000`, "rw", { name: "x" });
     expect(put.status).toBe(404);
+  });
+
+  it("M82 — PUT /evaluators/:id with a non-uuid id → 404, never a 500 (review H-1)", async () => {
+    const put = await req("PUT", `/v1/evaluators/not-a-uuid`, "rw", { name: "x" });
+    expect(put.status).toBe(404); // garbage path param → absent, not a pg 22P02 → 500
+  });
+
+  it("M82 — PUT /evaluators/:id is workspace-scoped (ws-y cannot rename ws-x's evaluator)", async () => {
+    const created = await req("POST", "/v1/evaluators", "rw", { name: "owned", kind: "rule", config: { predicate: "status:error" } });
+    const id = ((await created.json()) as { id: string }).id;
+    // ws-y (rw2) attempts to rename ws-x's evaluator → not found in its scope → 404
+    const hijack = await req("PUT", `/v1/evaluators/${id}`, "rw2", { name: "hijacked" });
+    expect(hijack.status).toBe(404);
+    // ws-x's evaluator is untouched
+    const still = await req("GET", `/v1/evaluators/${id}`, "rw");
+    expect(((await still.json()) as { name: string }).name).toBe("owned");
   });
 });
