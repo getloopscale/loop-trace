@@ -104,6 +104,10 @@ export interface SpanRepository {
   addSyntheticDatasetItem(datasetId: string, input: string, output: string, workspaceId?: string): Promise<boolean>;
   /** Remove a dataset item by (dataset, trace) (M26d, idempotent — no-op if absent). */
   removeDatasetItem(datasetId: string, traceId: string, workspaceId?: string): Promise<void>;
+  /** M82: rename a dataset. Returns the updated dataset, null if absent; throws NameConflictError on a duplicate name. */
+  renameDataset(datasetId: string, newName: string, workspaceId?: string): Promise<Dataset | null>;
+  /** M82: delete a dataset + cascade its items and experiment runs (one tx). Idempotent; false if absent. */
+  deleteDataset(datasetId: string, workspaceId?: string): Promise<boolean>;
   /**
    * Enqueue a span for human labeling (M63). Idempotent on (workspace, trace, span) — a second
    * enqueue of the same span returns the existing item (ON CONFLICT DO NOTHING). Returns the item.

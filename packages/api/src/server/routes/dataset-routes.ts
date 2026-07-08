@@ -11,6 +11,7 @@ import {
   datasetSchema,
   datasetDetailSchema,
   normalizeDatasetName,
+  NameConflictError,
 } from "@usetheo/lens-core";
 
 import { getPrincipal, requireScopeOnPrincipal } from "../auth/middleware.js";
@@ -83,6 +84,33 @@ export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
     const detail = await repo.getDataset(datasetId, ws);
     // detail is non-null here (the dataset existed for the add to succeed).
     return c.json(datasetDetailSchema.parse(detail), 200);
+  });
+
+  app.put("/v1/datasets/:datasetId", requireScopeOnPrincipal("observability:write"), async (c) => {
+    // M82: rename a dataset. 400 on a blank name, 404 absent, 409 on a duplicate name (ADR-1).
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "invalid json body" }, 400);
+    }
+    const name = normalizeDatasetName((body as { name?: unknown })?.name);
+    if (name === null) {
+      return c.json({ error: "dataset name is required (1-120 chars after trim)" }, 400);
+    }
+    try {
+      const updated = await repo.renameDataset(c.req.param("datasetId"), name, getPrincipal(c).workspaceId);
+      return updated ? c.json(datasetSchema.parse(updated), 200) : c.json({ error: "not found" }, 404);
+    } catch (err) {
+      if (err instanceof NameConflictError) return c.json({ error: err.message }, 409);
+      throw err;
+    }
+  });
+
+  app.delete("/v1/datasets/:datasetId", requireScopeOnPrincipal("observability:delete"), async (c) => {
+    // M82: delete a dataset + cascade its items and experiment runs (ADR-2). Idempotent: absent → 404.
+    const ok = await repo.deleteDataset(c.req.param("datasetId"), getPrincipal(c).workspaceId);
+    return ok ? c.body(null, 204) : c.json({ error: "not found" }, 404);
   });
 
   app.delete("/v1/datasets/:datasetId/items/:traceId", requireScopeOnPrincipal("observability:delete"), async (c) => {

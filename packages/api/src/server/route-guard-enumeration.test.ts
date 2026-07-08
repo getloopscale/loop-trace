@@ -8,6 +8,7 @@ import type { ReplayApiDeps } from "./handlers/replay.js";
 import type { ExperimentApiDeps } from "./handlers/experiment.js";
 
 const EXPECTED_DATA_ROUTES = new Set([
+  "DELETE /v1/datasets/:datasetId",
   "DELETE /v1/datasets/:datasetId/items/:traceId",
   "DELETE /v1/evaluators/:id",
   "DELETE /v1/guards/:id",
@@ -42,6 +43,8 @@ const EXPECTED_DATA_ROUTES = new Set([
   "POST /v1/datasets",
   "POST /v1/datasets/:datasetId/items",
   "POST /v1/evaluators",
+  "PUT /v1/datasets/:datasetId",
+  "PUT /v1/evaluators/:id",
   "POST /v1/evaluators/:id/run",
   "POST /v1/experiment-runs",
   "POST /v1/guards",
@@ -142,7 +145,7 @@ describe("M37 route guard enumeration", () => {
         .map((route) => `${route.method} ${route.path}`),
     );
     expect(liveRoutes).toEqual(EXPECTED_DATA_ROUTES);
-    expect(liveRoutes.size).toBe(46);
+    expect(liveRoutes.size).toBe(49);
   });
 
   it("asserts every mounted data route carries a per-verb scope middleware", () => {

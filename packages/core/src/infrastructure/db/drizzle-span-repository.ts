@@ -7,6 +7,7 @@ import pg from "pg";
 
 import type { Span } from "../../domain/span.js";
 import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
+import { NameConflictError, isUniqueViolation } from "../../domain/errors.js";
 import type {
   SpanRepository,
   TraceTreeNode,
@@ -1475,6 +1476,86 @@ export class DrizzleSpanRepository implements SpanRepository {
           eq(datasetItems.workspaceId, workspaceId),
         ),
       );
+  }
+
+  async renameDataset(
+    datasetId: string,
+    newName: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<Dataset | null> {
+    if (!isUuid(datasetId)) return null; // non-uuid path param → absent, not a 500
+    // UPDATE the name (workspace-scoped); a collision with another dataset's name violates the
+    // (workspace_id, name) UNIQUE → surface as a typed NameConflictError (route maps to 409, M82 ADR-1).
+    let updated: { id: string }[];
+    try {
+      updated = await this.db
+        .update(datasets)
+        .set({ name: newName })
+        .where(and(eq(datasets.id, datasetId), eq(datasets.workspaceId, workspaceId)))
+        .returning({ id: datasets.id });
+    } catch (err) {
+      if (isUniqueViolation(err)) throw new NameConflictError("a dataset with that name already exists");
+      throw err;
+    }
+    if (updated.length === 0) return null; // absent (or another workspace's dataset)
+    // Read back the full DTO with itemCount (reuse the createDataset LEFT JOIN shape).
+    const rows = await this.db
+      .select({
+        id: datasets.id,
+        name: datasets.name,
+        createdAt: datasets.createdAt,
+        itemCount: sql<number>`count(${datasetItems.id})::int`.as("item_count"),
+      })
+      .from(datasets)
+      .leftJoin(
+        datasetItems,
+        and(eq(datasetItems.datasetId, datasets.id), eq(datasetItems.workspaceId, datasets.workspaceId)),
+      )
+      .where(and(eq(datasets.id, datasetId), eq(datasets.workspaceId, workspaceId)))
+      .groupBy(datasets.id, datasets.name, datasets.createdAt)
+      .limit(1);
+    return rows[0] ? this.datasetRow(rows[0]) : null;
+  }
+
+  async deleteDataset(
+    datasetId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<boolean> {
+    if (!isUuid(datasetId)) return false; // idempotent: a non-uuid id deletes nothing
+    const exists = await this.db
+      .select({ id: datasets.id })
+      .from(datasets)
+      .where(and(eq(datasets.id, datasetId), eq(datasets.workspaceId, workspaceId)))
+      .limit(1);
+    if (exists.length === 0) return false;
+    // M82 ADR-2: cascade everything derived from the dataset in ONE transaction (no orphans, no FK):
+    // the experiment runs' items → the experiment runs → the dataset items → the dataset. All workspace-scoped.
+    await this.db.transaction(async (tx) => {
+      const runIds = await tx
+        .select({ id: experimentRuns.id })
+        .from(experimentRuns)
+        .where(and(eq(experimentRuns.datasetId, datasetId), eq(experimentRuns.workspaceId, workspaceId)));
+      if (runIds.length > 0) {
+        await tx
+          .delete(experimentRunItems)
+          .where(
+            and(
+              inArray(experimentRunItems.runId, runIds.map((r) => r.id)),
+              eq(experimentRunItems.workspaceId, workspaceId),
+            ),
+          );
+      }
+      await tx
+        .delete(experimentRuns)
+        .where(and(eq(experimentRuns.datasetId, datasetId), eq(experimentRuns.workspaceId, workspaceId)));
+      await tx
+        .delete(datasetItems)
+        .where(and(eq(datasetItems.datasetId, datasetId), eq(datasetItems.workspaceId, workspaceId)));
+      await tx
+        .delete(datasets)
+        .where(and(eq(datasets.id, datasetId), eq(datasets.workspaceId, workspaceId)));
+    });
+    return true;
   }
 
   // ── M63 labeling queues ──────────────────────────────────────────────────────

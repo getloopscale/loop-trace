@@ -9,6 +9,7 @@ import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
 
 import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
+import { NameConflictError, isUniqueViolation } from "../../domain/errors.js";
 import type { Evaluator, Guard, Verdict } from "../../domain/evaluator.js";
 import type {
   EvaluatorRepository,
@@ -104,6 +105,36 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
       .from(evaluators)
       .where(and(eq(evaluators.id, id), eq(evaluators.workspaceId, workspaceId)))
       .limit(1);
+    return rows[0] ? toEvaluatorRecord(rows[0]) : null;
+  }
+
+  async updateEvaluator(
+    id: string,
+    updates: Partial<Evaluator>,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<EvaluatorRecord | null> {
+    // M82: a partial edit (rename / enable / config). Build the SET from provided fields only; a
+    // (workspace_id, name) collision surfaces as a typed NameConflictError (route → 409, ADR-1).
+    const set: Record<string, unknown> = {};
+    if (updates.name !== undefined) set.name = updates.name;
+    if (updates.target !== undefined) set.target = updates.target;
+    if ("config" in updates && updates.config !== undefined) set.config = updates.config;
+    if (updates.passLabel !== undefined) set.passLabel = updates.passLabel ?? null;
+    if (updates.failLabel !== undefined) set.failLabel = updates.failLabel ?? null;
+    if (updates.enabled !== undefined) set.enabled = updates.enabled ? 1 : 0;
+    if ("kind" in updates && updates.kind !== undefined) set.kind = updates.kind;
+    if (Object.keys(set).length === 0) return this.getEvaluator(id, workspaceId); // nothing to change
+    let rows: EvaluatorRow[];
+    try {
+      rows = await this.db
+        .update(evaluators)
+        .set(set)
+        .where(and(eq(evaluators.id, id), eq(evaluators.workspaceId, workspaceId)))
+        .returning();
+    } catch (err) {
+      if (isUniqueViolation(err)) throw new NameConflictError("an evaluator with that name already exists");
+      throw err;
+    }
     return rows[0] ? toEvaluatorRecord(rows[0]) : null;
   }
 

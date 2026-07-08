@@ -12,6 +12,7 @@ import {
   createEvaluatorHandler,
   listEvaluatorsHandler,
   getEvaluatorHandler,
+  updateEvaluatorHandler,
   deleteEvaluatorHandler,
   runEvaluatorHandler,
   createGuardHandler,
@@ -35,6 +36,7 @@ export function registerExtraRoutes(app: Hono, opts: ExtraRoutes): void {
     app.post("/v1/evaluators", requireScopeOnPrincipal("observability:write"), (c) => createEvaluatorHandler(c, ev));
     app.get("/v1/evaluators", requireScopeOnPrincipal("observability:read"), (c) => listEvaluatorsHandler(c, ev));
     app.get("/v1/evaluators/:id", requireScopeOnPrincipal("observability:read"), (c) => getEvaluatorHandler(c, ev));
+    app.put("/v1/evaluators/:id", requireScopeOnPrincipal("observability:write"), (c) => updateEvaluatorHandler(c, ev));
     app.delete("/v1/evaluators/:id", requireScopeOnPrincipal("observability:delete"), (c) => deleteEvaluatorHandler(c, ev));
     app.post("/v1/evaluators/:id/run", requireScopeOnPrincipal("observability:write"), (c) => runEvaluatorHandler(c, ev));
     app.post("/v1/guards", requireScopeOnPrincipal("observability:write"), (c) => createGuardHandler(c, ev));

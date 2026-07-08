@@ -167,4 +167,32 @@ suite("M36 evaluators routes (integration)", () => {
     expect(breaches.status).toBe(200);
     expect(((await breaches.json()) as { traceIds: string[] }).traceIds).toEqual([]);
   });
+
+  it("M82 — PUT /evaluators/:id renames (write scope) keeping id/kind/createdAt", async () => {
+    const created = await req("POST", "/v1/evaluators", "rw", { name: "orig", kind: "rule", config: { predicate: "status:error" } });
+    const rec = (await created.json()) as { id: string; createdAt: string };
+    // read-only principal → 403 on the write verb
+    const ro = await req("PUT", `/v1/evaluators/${rec.id}`, "ro", { name: "renamed" });
+    expect(ro.status).toBe(403);
+    const put = await req("PUT", `/v1/evaluators/${rec.id}`, "rw", { name: "renamed" });
+    expect(put.status).toBe(200);
+    const updated = (await put.json()) as { id: string; name: string; kind: string; createdAt: string };
+    expect(updated.name).toBe("renamed");
+    expect(updated.id).toBe(rec.id); // id preserved
+    expect(updated.kind).toBe("rule"); // kind preserved
+    expect(updated.createdAt).toBe(rec.createdAt); // createdAt preserved
+  });
+
+  it("M82 — PUT /evaluators/:id to an existing name conflicts (409)", async () => {
+    await req("POST", "/v1/evaluators", "rw", { name: "aaa", kind: "rule", config: { predicate: "status:error" } });
+    const b = await req("POST", "/v1/evaluators", "rw", { name: "bbb", kind: "rule", config: { predicate: "status:error" } });
+    const bId = ((await b.json()) as { id: string }).id;
+    const conflict = await req("PUT", `/v1/evaluators/${bId}`, "rw", { name: "aaa" });
+    expect(conflict.status).toBe(409); // duplicate name → typed 409, not a 500
+  });
+
+  it("M82 — PUT /evaluators/:id absent → 404", async () => {
+    const put = await req("PUT", `/v1/evaluators/00000000-0000-0000-0000-000000000000`, "rw", { name: "x" });
+    expect(put.status).toBe(404);
+  });
 });
