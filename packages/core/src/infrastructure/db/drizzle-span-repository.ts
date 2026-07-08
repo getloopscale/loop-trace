@@ -85,6 +85,17 @@ const ERROR_CODES_IN = sql`(${sql.join(
  * numeric kind, so `kind:` MUST derive from the same `gen_ai.*` / model / has-children
  * signals the UI uses, or the filter would not match what the operator sees.
  */
+// M85 (ADR 0002) — the derived agent name for the Agents catalog: the explicit `agent.name`
+// attribute, else the conservative structural rule (a `claude_code.%` span → the `claude_code`
+// structural agent). NULL for a non-agent span (excluded from the catalog). Explicit BEATS structural.
+// `alias` is the span table alias in the caller's scope (interpolated as a raw identifier — a fixed
+// internal literal, never user input, so no injection surface).
+const DERIVED_AGENT_NAME_SQL = (alias: string) => sql`CASE
+  WHEN ${sql.raw(alias)}.attributes->>'agent.name' IS NOT NULL THEN ${sql.raw(alias)}.attributes->>'agent.name'
+  WHEN ${sql.raw(alias)}.name ILIKE 'claude_code.%' THEN 'claude_code'
+  ELSE NULL
+END`;
+
 const DERIVED_SPAN_KIND_SQL = sql`CASE
   WHEN s.attributes->>'gen_ai.tool.name' IS NOT NULL OR s.attributes->>'gen_ai.operation.name' = 'execute_tool' THEN 'tool'
   WHEN s.attributes->>'gen_ai.operation.name' IN ('retrieve', 'search') THEN 'retriever'
@@ -1865,15 +1876,14 @@ export class DrizzleSpanRepository implements SpanRepository {
   async aggregateAgents(
     workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<Agent[]> {
-    // M32 (D1/D2): derive the catalog by GROUP BY `agent.name`. Only spans carrying
-    // that attribute are cataloged (a plain span is excluded). Correlated subqueries
-    // give the latest non-empty system prompt + the distinct tools across the agent's
-    // traces. Health is applied by the PURE classifier (D3) with the real clock here;
-    // the unit test owns the deterministic clock.
-    // Project agent_name as a plain column in a derived table FIRST, so the outer
-    // GROUP BY is on a column (not a jsonb expression) and the correlated subqueries
-    // can reference the grouped `base.agent_name` (Postgres rejects a jsonb expression
-    // referenced from a correlated subquery as "ungrouped", error 42803).
+    // M32 (D1/D2) + M85 (ADR 0002): derive the catalog by the DERIVED agent name — the explicit
+    // `agent.name` attribute OR the conservative structural rule (a `claude_code.%` span → the
+    // `claude_code` structural agent). A plain LLM/tool span (no agent.name, not claude_code.*) is
+    // still excluded. chain-kind is DELIBERATELY excluded (control-flow node, not a named agent —
+    // ADR 0002 risk-1). All correlated sub-derivations match against the SAME derived name.
+    // Project agent_name as a plain column in a derived table FIRST, so the outer GROUP BY is on a
+    // column (not a jsonb/CASE expression) and the correlated subqueries can reference the grouped
+    // `base.agent_name` (Postgres rejects an ungrouped expression in a correlated subquery, 42803).
     const res = await this.db.execute(sql`
       SELECT
         base.agent_name AS name,
@@ -1883,7 +1893,7 @@ export class DrizzleSpanRepository implements SpanRepository {
         array_remove(array_agg(DISTINCT base.agent_version), NULL) AS versions,
         (SELECT s3.attributes->>'agent.system_prompt'
            FROM spans s3
-          WHERE s3.attributes->>'agent.name' = base.agent_name
+          WHERE ${DERIVED_AGENT_NAME_SQL("s3")} = base.agent_name
             AND s3.workspace_id = ${workspaceId}
             AND nullif(btrim(s3.attributes->>'agent.system_prompt'), '') IS NOT NULL
           ORDER BY s3.ingested_at DESC
@@ -1893,16 +1903,16 @@ export class DrizzleSpanRepository implements SpanRepository {
           WHERE tl.tool_name IS NOT NULL
             AND tl.workspace_id = ${workspaceId}
             AND tl.parent_span_id IN (SELECT s2.span_id FROM spans s2
-                                       WHERE s2.attributes->>'agent.name' = base.agent_name
+                                       WHERE ${DERIVED_AGENT_NAME_SQL("s2")} = base.agent_name
                                          AND s2.workspace_id = ${workspaceId})
         ), ARRAY[]::text[]) AS tools
       FROM (
-        SELECT attributes->>'agent.name' AS agent_name,
+        SELECT ${DERIVED_AGENT_NAME_SQL("spans")} AS agent_name,
                attributes->>'agent.version' AS agent_version,
                trace_id,
                ingested_at
           FROM spans
-         WHERE attributes->>'agent.name' IS NOT NULL
+         WHERE ${DERIVED_AGENT_NAME_SQL("spans")} IS NOT NULL
            AND workspace_id = ${workspaceId}
       ) base
       GROUP BY base.agent_name

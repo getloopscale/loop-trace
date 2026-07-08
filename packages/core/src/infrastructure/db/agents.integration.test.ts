@@ -139,4 +139,55 @@ suite("agents catalog (integration, M32)", () => {
     expect(a?.versionCount).toBe(0);
     expect(a?.highChurn).toBe(false);
   });
+
+  // ── M85 (ADR 0002) — broadened structural derivation ────────────────────────
+
+  it("M85 — a claude_code.* span WITHOUT agent.name now surfaces the 'claude_code' structural agent", async () => {
+    await repo.save([
+      span({ spanId: "cc1", traceId: "t1", name: "claude_code.tool_use" }), // NO agent.name — structural
+      span({ spanId: "cc2", traceId: "t2", name: "claude_code.assistant" }),
+    ]);
+    const agents = await repo.aggregateAgents();
+    const cc = agents.find((a) => a.name === "claude_code");
+    expect(cc).toBeDefined();
+    expect(cc?.runCount).toBe(2); // 2 distinct traces collapse into ONE structural agent
+  });
+
+  it("M85 — a plain LLM span (no agent.name, not claude_code.*) is still EXCLUDED (no false positive)", async () => {
+    await repo.save([
+      span({ spanId: "cc1", traceId: "t1", name: "claude_code.turn" }),
+      span({ spanId: "plain", traceId: "t1", name: "ChatOpenAI", model: "gpt-4o" }), // plain LLM
+      span({ spanId: "chainish", traceId: "t1", name: "RunnableSequence" }), // a chain-ish name — NOT catalogued
+    ]);
+    const names = (await repo.aggregateAgents()).map((a) => a.name);
+    expect(names).toContain("claude_code");
+    expect(names).not.toContain("ChatOpenAI");
+    expect(names).not.toContain("RunnableSequence"); // chain-kind deliberately excluded (ADR 0002)
+  });
+
+  it("M85 — explicit agent.name BEATS the structural rule (a named claude_code.* span keeps its name)", async () => {
+    await repo.save([
+      span({ spanId: "n1", traceId: "t1", name: "claude_code.plan", attributes: { "agent.name": "planner" } }),
+    ]);
+    const names = (await repo.aggregateAgents()).map((a) => a.name);
+    expect(names).toContain("planner"); // the explicit name wins
+    expect(names).not.toContain("claude_code"); // not double-counted under the structural bucket
+  });
+
+  it("M85 — the structural agent aggregates the tools its claude_code.* spans call", async () => {
+    await repo.save([
+      span({ spanId: "cc1", traceId: "t1", name: "claude_code.turn" }),
+      span({ spanId: "tool1", traceId: "t1", parentSpanId: "cc1", name: "grep", toolName: "grep", attributes: { "gen_ai.tool.name": "grep" } }),
+    ]);
+    const cc = (await repo.aggregateAgents()).find((a) => a.name === "claude_code");
+    expect(cc?.tools).toEqual(["grep"]);
+  });
+
+  it("M85 — the agent.name path is unchanged when no structural spans exist (regression)", async () => {
+    await repo.save([
+      agentSpan("a1", "t1", "research_agent", "1.0.0"),
+      span({ spanId: "plain", traceId: "t1", name: "ChatOpenAI", model: "gpt-4o" }),
+    ]);
+    expect((await repo.aggregateAgents()).map((a) => a.name)).toEqual(["research_agent"]);
+  });
 });
