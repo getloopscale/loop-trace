@@ -114,6 +114,8 @@ export interface SpanRepository {
    * re-vote toggles the label instead of duplicating. Returns the persisted record.
    */
   recordAskFeedback(traceId: string, input: AskFeedbackInput, workspaceId?: string): Promise<CopilotFeedbackRecord>;
+  /** M83: retract feedback for a turn (the UI "clear"). Idempotent; false if there was no vote. */
+  deleteAskFeedback(traceId: string, turnId: string, workspaceId?: string): Promise<boolean>;
   /**
    * Enqueue a span for human labeling (M63). Idempotent on (workspace, trace, span) — a second
    * enqueue of the same span returns the existing item (ON CONFLICT DO NOTHING). Returns the item.

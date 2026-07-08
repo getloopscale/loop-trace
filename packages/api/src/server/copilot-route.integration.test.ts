@@ -310,4 +310,19 @@ suite("M33 copilot route (integration)", () => {
     const noTurn = await feedback(app, "t1", "rw", { label: "up" });
     expect(noTurn.status).toBe(400);
   });
+
+  it("M83 — DELETE feedback retracts the vote (204), requires write scope + turnId", async () => {
+    const app = makeApp({ chat: null });
+    await ingest(app, "t1", "s1");
+    await feedback(app, "t1", "rw", { turnId: "turn-1", label: "up" }); // record first
+    const del = (token: string, qs: string) =>
+      app.request(`http://x/v1/traces/t1/ask/feedback${qs}`, { method: "DELETE", headers: { authorization: `Bearer ${token}` } });
+    // read-only → 403
+    expect((await del("ro", "?turnId=turn-1")).status).toBe(403);
+    // missing turnId → 400
+    expect((await del("rw", "")).status).toBe(400);
+    // clear → 204, idempotent (a second clear is still 204)
+    expect((await del("rw", "?turnId=turn-1")).status).toBe(204);
+    expect((await del("rw", "?turnId=turn-1")).status).toBe(204);
+  });
 });

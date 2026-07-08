@@ -169,6 +169,13 @@
       "when": 1783543194447,
       "tag": "0023_fresh_sir_ram",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1783544077634,
+      "tag": "0024_classy_lyja",
+      "breakpoints": true
     }
   ]
 }

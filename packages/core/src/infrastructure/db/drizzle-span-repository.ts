@@ -1590,6 +1590,25 @@ export class DrizzleSpanRepository implements SpanRepository {
     };
   }
 
+  async deleteAskFeedback(
+    traceId: string,
+    turnId: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<boolean> {
+    // Retract the vote (the UI "clear"). Workspace-scoped; idempotent — no matching row → false.
+    const deleted = await this.db
+      .delete(copilotFeedback)
+      .where(
+        and(
+          eq(copilotFeedback.workspaceId, workspaceId),
+          eq(copilotFeedback.traceId, traceId),
+          eq(copilotFeedback.turnId, turnId),
+        ),
+      )
+      .returning({ id: copilotFeedback.id });
+    return deleted.length > 0;
+  }
+
   // ── M63 labeling queues ──────────────────────────────────────────────────────
 
   /** Map a labeling_queue_items row to the API DTO (nullable columns → optional/undefined). */

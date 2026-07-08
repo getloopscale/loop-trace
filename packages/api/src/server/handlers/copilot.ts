@@ -126,3 +126,20 @@ export async function askFeedbackHandler(c: Context, deps: CopilotApiDeps): Prom
   copilotFeedbackRecorded.add(1); // observable: feedback volume is visible at runtime (pillar c)
   return c.json(record, 200);
 }
+
+/**
+ * M83 — retract feedback on a turn (`DELETE /v1/traces/:traceId/ask/feedback?turnId=`,
+ * `observability:write`). The UI "clear" so the persisted store never diverges from the shown state
+ * (a cleared thumb has no stored vote). Idempotent (204 whether or not a row existed); `turnId` is
+ * required (400 when blank) so a bare DELETE cannot wipe a trace's whole feedback set.
+ */
+export async function deleteAskFeedbackHandler(c: Context, deps: CopilotApiDeps): Promise<Response> {
+  const ws = getPrincipal(c).workspaceId;
+  const turnId = (c.req.query("turnId") ?? "").trim();
+  if (turnId.length === 0) {
+    return c.json({ code: "INVALID_FEEDBACK", message: "turnId query param is required" }, 400);
+  }
+  const traceId = c.req.param("traceId") ?? "";
+  await deps.spanRepo.deleteAskFeedback(traceId, turnId, ws);
+  return c.body(null, 204);
+}

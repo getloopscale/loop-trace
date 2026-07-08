@@ -79,4 +79,23 @@ suite("copilot feedback (integration, M83)", () => {
     const rec = await repo.recordAskFeedback("t-real", { turnId: "turn-1", label: "up" });
     expect(rec.traceId).toBe("t-real");
   });
+
+  it("deleteAskFeedback retracts the vote (clear), idempotent + workspace-scoped", async () => {
+    await repo.recordAskFeedback("t1", { turnId: "turn-1", label: "up" }, "ws-A");
+    await repo.recordAskFeedback("t1", { turnId: "turn-1", label: "down" }, "ws-B");
+    // ws-A clears its vote → its row is gone; ws-B's is untouched (isolation)
+    expect(await repo.deleteAskFeedback("t1", "turn-1", "ws-A")).toBe(true);
+    const a = await pool.query("SELECT count(*)::int AS n FROM copilot_feedback WHERE workspace_id='ws-A'");
+    const b = await pool.query("SELECT count(*)::int AS n FROM copilot_feedback WHERE workspace_id='ws-B'");
+    expect(a.rows[0].n).toBe(0);
+    expect(b.rows[0].n).toBe(1); // ws-B's vote survives ws-A's clear
+    // idempotent: clearing again is a no-op false, not an error
+    expect(await repo.deleteAskFeedback("t1", "turn-1", "ws-A")).toBe(false);
+  });
+
+  it("the label CHECK constraint rejects an out-of-domain label (defense-in-depth)", async () => {
+    await expect(
+      pool.query("INSERT INTO copilot_feedback (workspace_id, trace_id, turn_id, label) VALUES ('ws-A','t1','turn-1','maybe')"),
+    ).rejects.toThrow(/copilot_feedback_label_ck|check constraint/i);
+  });
 });

@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   customType,
   doublePrecision,
   index,
@@ -293,6 +294,9 @@ export const copilotFeedback = pgTable(
   (t) => [
     unique("copilot_feedback_turn_uq").on(t.workspaceId, t.traceId, t.turnId),
     index("copilot_feedback_trace_id_idx").on(t.traceId),
+    // Defense-in-depth: the label is a 2-value enum enforced at the DB, not only at the app boundary
+    // — a future/other caller of recordAskFeedback cannot persist an out-of-domain label.
+    check("copilot_feedback_label_ck", sql`${t.label} in ('up','down')`),
   ],
 );
 
