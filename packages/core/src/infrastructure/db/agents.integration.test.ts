@@ -183,6 +183,16 @@ suite("agents catalog (integration, M32)", () => {
     expect(cc?.tools).toEqual(["grep"]);
   });
 
+  it("M85 — a near-miss name is NOT matched (exact prefix, no LIKE _ wildcard — review LOW)", async () => {
+    await repo.save([
+      span({ spanId: "nm1", traceId: "t1", name: "claudexcodex.turn" }), // underscores replaced — must NOT match
+      span({ spanId: "nm2", traceId: "t1", name: "claude_code" }), // no trailing dot — must NOT match (not a claude_code.* span)
+    ]);
+    const names = (await repo.aggregateAgents()).map((a) => a.name);
+    expect(names).not.toContain("claude_code"); // exact `claude_code.` prefix only — no wildcard false-positive
+    expect(names).toEqual([]);
+  });
+
   it("M85 — the agent.name path is unchanged when no structural spans exist (regression)", async () => {
     await repo.save([
       agentSpan("a1", "t1", "research_agent", "1.0.0"),

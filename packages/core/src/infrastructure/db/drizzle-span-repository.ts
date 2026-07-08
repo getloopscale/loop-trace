@@ -86,13 +86,15 @@ const ERROR_CODES_IN = sql`(${sql.join(
  * signals the UI uses, or the filter would not match what the operator sees.
  */
 // M85 (ADR 0002) — the derived agent name for the Agents catalog: the explicit `agent.name`
-// attribute, else the conservative structural rule (a `claude_code.%` span → the `claude_code`
-// structural agent). NULL for a non-agent span (excluded from the catalog). Explicit BEATS structural.
-// `alias` is the span table alias in the caller's scope (interpolated as a raw identifier — a fixed
-// internal literal, never user input, so no injection surface).
-const DERIVED_AGENT_NAME_SQL = (alias: string) => sql`CASE
+// attribute, else the conservative structural rule (a `claude_code.`-prefixed span → the
+// `claude_code` structural agent). NULL for a non-agent span (excluded from the catalog). Explicit
+// BEATS structural. `starts_with` is an EXACT prefix match — deliberately not `LIKE 'claude_code.%'`,
+// whose `_` are single-char wildcards (would false-match `claudeXcodeY.…`) and whose `%` is a
+// wildcard (review LOW). `alias` is a compile-time-enforced union of the three legal span-table
+// aliases (never user input — no injection surface, and no `sql.raw` variable can slip in).
+const DERIVED_AGENT_NAME_SQL = (alias: "s2" | "s3" | "spans") => sql`CASE
   WHEN ${sql.raw(alias)}.attributes->>'agent.name' IS NOT NULL THEN ${sql.raw(alias)}.attributes->>'agent.name'
-  WHEN ${sql.raw(alias)}.name ILIKE 'claude_code.%' THEN 'claude_code'
+  WHEN starts_with(${sql.raw(alias)}.name, 'claude_code.') THEN 'claude_code'
   ELSE NULL
 END`;
 
