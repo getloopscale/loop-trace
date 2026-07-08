@@ -35,7 +35,15 @@ export const traceListItemSchema = z
   .strict();
 
 export const traceListResponseSchema = z
-  .object({ traces: z.array(traceListItemSchema) })
+  .object({
+    traces: z.array(traceListItemSchema),
+    // M81 — server-side pagination: `total` is the workspace-scoped count over the current filter (the
+    // FULL count, not the page); `limit`/`offset` echo the APPLIED (post-clamp) window so the client
+    // renders an honest "Showing X–Y of N". Defaulted so an older engine response still parses.
+    total: z.number().int().nonnegative().default(0),
+    limit: z.number().int().nonnegative().default(0),
+    offset: z.number().int().nonnegative().default(0),
+  })
   .strict();
 
 export type TraceListItem = z.infer<typeof traceListItemSchema>;

@@ -87,6 +87,26 @@ suite("listTraces filter/sort (integration, M9)", () => {
     expect(page2.traces.every((t) => !p1.has(t.traceId))).toBe(true);
   });
 
+  it("test_list_traces_returns_total_stable_across_pages (M81)", async () => {
+    await seed(); // 6 traces in the default workspace
+    const page1 = await repo.listTraces({ limit: 2, offset: 0 });
+    const page2 = await repo.listTraces({ limit: 2, offset: 2 });
+    // the total is the FULL workspace count over the (empty) filter — not the page size — and is
+    // identical across pages of the same filter; the applied window is echoed back.
+    expect(page1.total).toBe(6);
+    expect(page2.total).toBe(6);
+    expect(page1.limit).toBe(2);
+    expect(page1.offset).toBe(0);
+    expect(page2.offset).toBe(2);
+  });
+
+  it("test_list_traces_total_honors_the_filter (M81)", async () => {
+    await seed();
+    const errs = await repo.listTraces({ status: "error" });
+    // total counts only the filtered set (1 error trace), never the whole table.
+    expect(errs.total).toBe(1);
+  });
+
   it("test_list_traces_status_ok_includes_null_status", async () => {
     await seed();
     const { traces } = await repo.listTraces({ status: "ok" });

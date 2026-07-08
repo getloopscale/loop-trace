@@ -60,8 +60,9 @@ export interface SpanRepository {
   aggregateObservability(range: ObservabilityRange, workspaceId?: string): Promise<ObservabilityResponse>;
   /** M26: per-evaluator aggregate (count, avg score, label distribution) within the range window. */
   aggregateEvaluators(range: ObservabilityRange, workspaceId?: string): Promise<EvaluatorSummary[]>;
-  /** Sessions newest-first with per-session scoped aggregates (M13). */
-  listSessions(workspaceId?: string): Promise<SessionListResponse>;
+  /** Sessions newest-first with per-session scoped aggregates (M13). M81: server-paginated (limit/offset)
+   *  with a workspace-scoped total. */
+  listSessions(workspaceId?: string, opts?: { limit?: number; offset?: number }): Promise<SessionListResponse>;
   /** One session's scoped aggregates + member traces (M13), or null if absent. */
   getSessionDetail(sessionId: string, workspaceId?: string): Promise<SessionDetailResponse | null>;
   /** Add a tag to a trace (M14, idempotent). Returns false if the trace is absent. */

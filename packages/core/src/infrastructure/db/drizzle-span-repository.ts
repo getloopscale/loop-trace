@@ -655,7 +655,13 @@ export class DrizzleSpanRepository implements SpanRepository {
       .orderBy(sql`${sortCol} ${dir} nulls last`, desc(traces.updatedAt))
       .limit(limit)
       .offset(offset);
-    return { traces: rows.map(traceRowToItem) };
+    // M81: the workspace-scoped total over the SAME `where` (no LATERAL/order needed for a count) —
+    // the labeling-queue two-query technique — so the client can render a pager. Echo the applied window.
+    const totalRows = await this.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(traces)
+      .where(where);
+    return { traces: rows.map(traceRowToItem), total: totalRows[0]?.n ?? 0, limit, offset };
   }
 
   async getTraceCost(
@@ -786,7 +792,9 @@ export class DrizzleSpanRepository implements SpanRepository {
       )
       .orderBy(desc(traces.updatedAt))
       .limit(limit);
-    return { traces: rows.map(traceRowToItem) };
+    // M81: the drill-down reuses the paginated DTO; it's a bounded single page (no offset), so total is
+    // the returned count and the window echoes the applied limit (offset 0).
+    return { traces: rows.map(traceRowToItem), total: rows.length, limit, offset: 0 };
   }
 
   async recordReplaySession(
@@ -952,7 +960,12 @@ export class DrizzleSpanRepository implements SpanRepository {
 
   async listSessions(
     workspaceId: string = DEFAULT_WORKSPACE_ID,
+    opts: { limit?: number; offset?: number } = {},
   ): Promise<SessionListResponse> {
+    // M81 — server-side pagination: clamp the window (default 50, cap 500 like traces) and expose a
+    // workspace-scoped total (count of SESSIONS, the GROUP BY grain). The BFF already forwards limit/offset.
+    const limit = Math.min(500, Math.max(1, Math.floor(opts.limit ?? 50)));
+    const offset = Math.max(0, Math.floor(opts.offset ?? 0));
     // One row per real session (only session.id-bearing traces — D3), with
     // scoped aggregates summed over the spans-derived traces table (D2). LEFT JOIN
     // so a session with zero member traces still lists (traceCount 0). Deterministic
@@ -990,6 +1003,7 @@ export class DrizzleSpanRepository implements SpanRepository {
       WHERE s.workspace_id = ${workspaceId}
       GROUP BY s.session_id, s.first_seen_at, s.last_seen_at
       ORDER BY s.last_seen_at DESC, s.session_id DESC
+      LIMIT ${limit} OFFSET ${offset}
     `);
     const rows = res.rows as unknown as {
       sessionId: string;
@@ -1020,7 +1034,12 @@ export class DrizzleSpanRepository implements SpanRepository {
       if (r.evaluationsCount > 0) item.evaluationsCount = r.evaluationsCount;
       return item;
     });
-    return { sessions: sessionsOut };
+    // M81: workspace-scoped total (one row per session — matches the GROUP BY grain).
+    const totalRes = await this.db.execute(
+      sql`SELECT count(*)::int AS n FROM sessions s WHERE s.workspace_id = ${workspaceId}`,
+    );
+    const total = (totalRes.rows[0] as { n: number } | undefined)?.n ?? 0;
+    return { sessions: sessionsOut, total, limit, offset };
   }
 
   async getSessionDetail(

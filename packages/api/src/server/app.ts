@@ -355,7 +355,14 @@ export function createApp(
   });
 
   app.get("/v1/sessions", requireScopeOnPrincipal("observability:read"), async (c) => {
-    const list = await repo.listSessions(getPrincipal(c).workspaceId);
+    // M81: server-side pagination — parse the (coerced) limit/offset the BFF forwards; the repo clamps
+    // and returns a workspace-scoped total. Invalid/absent params fall back to the repo defaults.
+    const limitRaw = Number.parseInt(c.req.query("limit") ?? "", 10);
+    const offsetRaw = Number.parseInt(c.req.query("offset") ?? "", 10);
+    const list = await repo.listSessions(getPrincipal(c).workspaceId, {
+      ...(Number.isFinite(limitRaw) ? { limit: limitRaw } : {}),
+      ...(Number.isFinite(offsetRaw) ? { offset: offsetRaw } : {}),
+    });
     return c.json(sessionListResponseSchema.parse(list), 200);
   });
 

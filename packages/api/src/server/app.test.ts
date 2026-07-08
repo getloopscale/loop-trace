@@ -543,7 +543,8 @@ describe("createApp (contract, stub repo)", () => {
   it("get_v1_traces_empty_returns_empty_list", async () => {
     const res = await app.request("/v1/traces");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ traces: [] });
+    // M81: the list response now carries the pagination envelope (total/limit/offset).
+    expect(await res.json()).toMatchObject({ traces: [], total: 0 });
   });
 
   it("get_v1_traces_rejects_leaked_column_at_boundary_with_5xx", async () => {
@@ -633,7 +634,8 @@ describe("createApp (contract, stub repo)", () => {
     expect(ok.status).toBe(200);
     expect((await ok.json()).traces[0].traceId).toBe("t1");
     const empty = await app.request("/v1/analytics/tools/unknown/traces");
-    expect(await empty.json()).toEqual({ traces: [] });
+    // M81: the list DTO now includes the pagination envelope (schema-defaulted for the empty case).
+    expect(await empty.json()).toMatchObject({ traces: [] });
   });
 
   it("tool_routes_return_5xx_on_repo_failure", async () => {
