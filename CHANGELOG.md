@@ -8,6 +8,20 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.40.0] - 2026-07-08
+
+### Added
 - **Agents catalog derivation broadened to structural Claude-Code agents (M85, theo-lens).** The Agents catalog previously derived agents **only** from the explicit `agent.name` span attribute, so a workspace whose traces are agentic-but-structural (Claude-Code sessions emitting `claude_code.*` spans **without** `agent.name`) saw an empty catalog (closes theo-lens#42, audit G-5). `aggregateAgents` now derives an agent from `agent.name` **OR** a conservative structural rule (`starts_with(name, 'claude_code.')` → the `claude_code` structural agent); a plain LLM/tool span is still excluded, and chain-kind is **deliberately not** an agent signal (a control-flow node ≠ a named agent — avoids false positives). Explicit `agent.name` **beats** the structural rule (a named `claude_code.*` span keeps its name). The change is **retroactive** for all tenants (the catalog is a derived read) — the deliberate product decision the M74 dashboard fix deferred, documented in **ADR 0002** (`knowledge-base/adrs/0002-broaden-agents-catalog-derivation.md`). Fixtures pin include (`claude_code.*` without `agent.name` appears), exclude (a plain LLM span + a chain-ish name do NOT), explicit-wins, structural tools, and the unchanged `agent.name` path. core+api suites green (583 unit + 13 agents integration); `tsc`/`eslint` clean. The dashboard Agents empty-state copy is updated to name the structural signal (theo-cloud).
 - **Copilot answer feedback (M83, theo-lens engine half).** A per-tenant thumbs up/down on one Ask-copilot answer, restoring the affordance M72 honestly removed until an endpoint existed (#181). Engine: a `copilot_feedback` table (migration `0023`, workspace-leading unique `(workspace_id, trace_id, turn_id)`) + `SpanRepository.recordAskFeedback` (UPSERT on the unique so a re-vote **toggles** the label up↔down in place, never a duplicate row; workspace-scoped so a same-`(trace,turn)` collision across tenants is two distinct rows). One route under per-verb scope (the **CWE-441 second half**): `POST /v1/traces/:traceId/ask/feedback` → `observability:write`. Feedback is **independent of the LLM provider** (it writes to the store, never calls the model — so it works even when the copilot is down); the body is validated at the boundary (`normalizeAskFeedback`: `turnId` 1-128 chars + `label ∈ {up,down}` → typed `400`), the trace must exist in the caller's workspace (`404`), and a runtime counter (`copilotFeedbackRecorded`) makes feedback volume observable (wiring pillar c). Keyed by the client-side `turnId` because the M33 ask is stateless/single-turn (documented granularity). A vote can be **retracted** via `DELETE /v1/traces/:traceId/ask/feedback?turnId=` (`observability:write`, idempotent `204`) so the UI "clear" persists and never diverges from the store (review fix). Defense-in-depth: a `CHECK (label IN ('up','down'))` DB constraint (migration `0024`) rejects an out-of-domain label even if a future caller bypasses the app boundary. core+api suites green (583 unit + 25 copilot-feedback integration); `tsc`/`eslint` clean. BFF proxy + dashboard thumbs land in the same milestone.
 - **Dataset & evaluator rename/delete verbs (M82, theo-lens engine half).** New management verbs so the dashboard can rename and delete curated datasets and online evaluators (previously create-only, no lifecycle). Engine: a typed `NameConflictError` domain error (`packages/core/src/domain/errors.ts`) + an `isUniqueViolation` helper that unwraps Drizzle's wrapped `pg` error (`.cause.code === "23505"`); `SpanRepository.renameDataset`/`deleteDataset` (UPDATE-returning with 409-on-duplicate; **application-level cascade** in a single transaction — experiment_run_items → experiment_runs → dataset_items → datasets, since the D3 convention keeps no Postgres FKs; both workspace-scoped + isUuid-guarded → null/false, never a 500); `EvaluatorRepository.updateEvaluator` (partial SET from provided fields, 409-on-duplicate). Three routes under per-verb `requireScopeOnPrincipal` (the **CWE-441 second half**): `PUT /v1/datasets/:datasetId` + `PUT /v1/evaluators/:id` → `observability:write` (bare `{name}` renames; a kind/config change re-validates the full create union, never a half-typed config; duplicate name → typed `409`); `DELETE /v1/datasets/:datasetId` → `observability:delete` (`204`/`404`, idempotent). Workspace is always the resolved Principal's, never the body. core+api suites green (578 unit + 25 dataset/evaluator integration); `tsc`/`eslint` clean. BFF proxies + dashboard UI land in the same milestone. Plan `.claude/knowledge-base/plans/m82-rename-delete-verbs-plan.md`.
@@ -31,6 +45,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - **Experiments — compare API now returns the aggregate deltas (M64 review).** `GET /v1/experiment-runs/compare` now returns a `deltas` object (the pure `compareRuns` over the first two runs' re-derived `aggregateRun`s) — wiring the previously-orphan `compareRuns` export and adding a `passRateDelta` (the DoD3 aggregate pass-*rate* delta). The dashboard compare view consumes it: aggregate pass-rate/avg-score/cost deltas + a per-row score-delta column (B vs A aligned by source trace), replacing the naive pass-*count*-of-first-two. Handler + domain tests added.
 
 ### Security
+
 
 ## [0.39.0] - 2026-07-05
 
