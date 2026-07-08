@@ -270,6 +270,33 @@ export const annotations = pgTable(
 );
 
 /**
+ * M83: copilot answer feedback. A per-tenant thumbs up/down on one Ask-copilot answer. The ask is
+ * stateless/single-turn (M33 D1/D4), so feedback is keyed by the CLIENT-side `turn_id` (the answer's
+ * ordinal id in the thread) under its trace — a re-vote UPSERTs the label (up↔down toggle), never a
+ * duplicate row. Workspace-leading unique so a `(trace, turn)` collision across tenants is two
+ * distinct rows, never a cross-tenant upsert (M22).
+ */
+export const copilotFeedback = pgTable(
+  "copilot_feedback",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceIdCol(),
+    traceId: text("trace_id").notNull(),
+    turnId: text("turn_id").notNull(),
+    spanId: text("span_id").default("").notNull(),
+    label: text("label").notNull(), // 'up' | 'down' (validated at the boundary)
+    question: text("question"),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    unique("copilot_feedback_turn_uq").on(t.workspaceId, t.traceId, t.turnId),
+    index("copilot_feedback_trace_id_idx").on(t.traceId),
+  ],
+);
+
+/**
  * M26d: curated datasets. A named set of example traces. `name` is UNIQUE so create
  * is idempotent "create-or-get" (D1). Distinct from the trace lifecycle — datasets +
  * their items are NEVER pruned (a curated example outlives its source trace, D2).

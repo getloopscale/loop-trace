@@ -43,6 +43,8 @@ export const labelingQueueExports = counter();
 export const copilotAsksAnswered = counter();
 export const copilotAsksRateLimited = counter();
 export const copilotAsksUnavailable = counter();
+// M83 — copilot answer feedback volume (thumbs up/down recorded) is observable at runtime (pillar c).
+export const copilotFeedbackRecorded = counter();
 
 // M55 span-replay — a billable, abuse-prone provider call MUST be observable so a healthy replay
 // volume, a rate-limit spike, and a provider-outage spike are distinguishable (wiring-triad pillar c).

@@ -260,4 +260,54 @@ suite("M33 copilot route (integration)", () => {
     const { answer } = (await res.json()) as { answer: string };
     expect(Buffer.byteLength(answer, "utf8")).toBe(32 * 1024);
   });
+
+  // ── M83 answer feedback ─────────────────────────────────────────────────────
+  const feedback = (app: ReturnType<typeof createApp>, traceId: string, token: string, body: unknown) =>
+    app.request(`http://x/v1/traces/${traceId}/ask/feedback`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+  it("M83 — feedback requires the WRITE scope (read-only → 403)", async () => {
+    const app = makeApp({ chat: new FakeChat("hi") });
+    await ingest(app, "t1", "s1");
+    const res = await feedback(app, "t1", "ro", { turnId: "turn-1", label: "up" }); // read-only token
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { code: string }).code).toBe("INSUFFICIENT_SCOPE");
+  });
+
+  it("M83 — records feedback with write scope AND is independent of the LLM (chat:null still works)", async () => {
+    const app = makeApp({ chat: null }); // provider DOWN — feedback must still persist (risk-2)
+    await ingest(app, "t1", "s1");
+    const res = await feedback(app, "t1", "rw", { turnId: "turn-1", label: "up", question: "why?" });
+    expect(res.status).toBe(200);
+    expect((await res.json()) as { label: string; turnId: string }).toMatchObject({ label: "up", turnId: "turn-1" });
+  });
+
+  it("M83 — a re-vote toggles the label (up→down), 200 both times", async () => {
+    const app = makeApp({ chat: null });
+    await ingest(app, "t1", "s1");
+    expect((await feedback(app, "t1", "rw", { turnId: "turn-1", label: "up" })).status).toBe(200);
+    const down = await feedback(app, "t1", "rw", { turnId: "turn-1", label: "down" });
+    expect(down.status).toBe(200);
+    expect(((await down.json()) as { label: string }).label).toBe("down");
+  });
+
+  it("M83 — 404 when the trace is absent (cannot attach feedback to a foreign/absent trace)", async () => {
+    const app = makeApp({ chat: null });
+    const res = await feedback(app, "ghost", "rw", { turnId: "turn-1", label: "up" });
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as { code: string }).code).toBe("TRACE_NOT_FOUND");
+  });
+
+  it("M83 — 400 on a bad label / missing turnId (typed, not a 500)", async () => {
+    const app = makeApp({ chat: null });
+    await ingest(app, "t1", "s1");
+    const bad = await feedback(app, "t1", "rw", { turnId: "turn-1", label: "meh" });
+    expect(bad.status).toBe(400);
+    expect(((await bad.json()) as { code: string }).code).toBe("INVALID_FEEDBACK");
+    const noTurn = await feedback(app, "t1", "rw", { label: "up" });
+    expect(noTurn.status).toBe(400);
+  });
 });

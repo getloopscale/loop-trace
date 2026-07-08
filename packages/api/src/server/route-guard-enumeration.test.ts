@@ -54,6 +54,7 @@ const EXPECTED_DATA_ROUTES = new Set([
   "POST /v1/traces",
   "POST /v1/traces/:traceId/annotations",
   "POST /v1/traces/:traceId/ask",
+  "POST /v1/traces/:traceId/ask/feedback",
   "POST /v1/traces/:traceId/enqueue-for-labeling",
   "POST /v1/traces/:traceId/replay",
   "POST /v1/traces/:traceId/tags",
@@ -145,7 +146,7 @@ describe("M37 route guard enumeration", () => {
         .map((route) => `${route.method} ${route.path}`),
     );
     expect(liveRoutes).toEqual(EXPECTED_DATA_ROUTES);
-    expect(liveRoutes.size).toBe(49);
+    expect(liveRoutes.size).toBe(50);
   });
 
   it("asserts every mounted data route carries a per-verb scope middleware", () => {

@@ -9,6 +9,7 @@ import type { Span } from "../../domain/span.js";
 import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
 import { NameConflictError, isUniqueViolation } from "../../domain/errors.js";
 import { isUuid } from "./uuid.js";
+import type { AskFeedbackInput, CopilotFeedbackRecord } from "../../domain/copilot-feedback.js";
 import type {
   SpanRepository,
   TraceTreeNode,
@@ -57,7 +58,7 @@ import {
 import type { PruneStats } from "../../domain/retention.js";
 import { parseSpanQuery, type SpanClause } from "../../domain/span-query.js";
 import type { EvaluatorSummary } from "../../domain/evaluation.js";
-import { spans, traces, sessions, replaySessions, traceTags, spanEvaluations, annotations, datasets, datasetItems, labelingQueueItems, experimentRuns, experimentRunItems } from "./schema.js";
+import { spans, traces, sessions, replaySessions, traceTags, spanEvaluations, annotations, datasets, datasetItems, labelingQueueItems, experimentRuns, experimentRunItems, copilotFeedback } from "./schema.js";
 import {
   DEFAULT_ANNOTATOR_KIND,
   type Annotation,
@@ -1551,6 +1552,42 @@ export class DrizzleSpanRepository implements SpanRepository {
         .where(and(eq(datasets.id, datasetId), eq(datasets.workspaceId, workspaceId)));
     });
     return true;
+  }
+
+  // ── M83 copilot answer feedback ──────────────────────────────────────────────
+
+  async recordAskFeedback(
+    traceId: string,
+    input: AskFeedbackInput,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<CopilotFeedbackRecord> {
+    // UPSERT on (workspace_id, trace_id, turn_id): a re-vote toggles the label (up↔down) in place,
+    // never a duplicate row. Workspace-leading unique keeps a same-turn collision tenant-isolated.
+    const rows = await this.db
+      .insert(copilotFeedback)
+      .values({
+        workspaceId,
+        traceId,
+        turnId: input.turnId,
+        spanId: input.spanId ?? "",
+        label: input.label,
+        question: input.question ?? null,
+      })
+      .onConflictDoUpdate({
+        target: [copilotFeedback.workspaceId, copilotFeedback.traceId, copilotFeedback.turnId],
+        set: { label: input.label, question: input.question ?? null, updatedAt: new Date() },
+      })
+      .returning();
+    const r = rows[0]!;
+    return {
+      id: r.id,
+      traceId: r.traceId,
+      turnId: r.turnId,
+      label: r.label as CopilotFeedbackRecord["label"],
+      updatedAt: r.updatedAt.toISOString(),
+      ...(r.spanId ? { spanId: r.spanId } : {}),
+      ...(r.question != null ? { question: r.question } : {}),
+    };
   }
 
   // ── M63 labeling queues ──────────────────────────────────────────────────────

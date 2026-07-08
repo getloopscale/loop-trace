@@ -18,6 +18,7 @@ import type {
 import type { ExperimentRun, ExperimentRunItem, RunVariant } from "./experiment.js";
 import type { RunStatus } from "./experiment.js";
 import type { Agent } from "./agent-catalog.js";
+import type { AskFeedbackInput, CopilotFeedbackRecord } from "./copilot-feedback.js";
 
 /** A span plus its reconstructed children — the trace tree node. */
 export interface TraceTreeNode extends Span {
@@ -108,6 +109,11 @@ export interface SpanRepository {
   renameDataset(datasetId: string, newName: string, workspaceId?: string): Promise<Dataset | null>;
   /** M82: delete a dataset + cascade its items and experiment runs (one tx). Idempotent; false if absent. */
   deleteDataset(datasetId: string, workspaceId?: string): Promise<boolean>;
+  /**
+   * M83: record copilot answer feedback (thumbs up/down). UPSERTs on (workspace, trace, turnId) so a
+   * re-vote toggles the label instead of duplicating. Returns the persisted record.
+   */
+  recordAskFeedback(traceId: string, input: AskFeedbackInput, workspaceId?: string): Promise<CopilotFeedbackRecord>;
   /**
    * Enqueue a span for human labeling (M63). Idempotent on (workspace, trace, span) — a second
    * enqueue of the same span returns the existing item (ON CONFLICT DO NOTHING). Returns the item.

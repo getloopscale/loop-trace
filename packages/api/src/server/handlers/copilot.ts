@@ -12,6 +12,8 @@ import {
   capAnswer,
   CopilotError,
   ChatError,
+  normalizeAskFeedback,
+  InvalidFeedbackError,
   type ChatClient,
   type SpanRepository,
   type RateLimiter,
@@ -22,6 +24,7 @@ import {
   copilotAsksAnswered,
   copilotAsksRateLimited,
   copilotAsksUnavailable,
+  copilotFeedbackRecorded,
 } from "../metrics.js";
 
 /** Deps the copilot route needs (wired by the composition root). */
@@ -90,4 +93,36 @@ export async function askHandler(c: Context, deps: CopilotApiDeps): Promise<Resp
     const reason = err instanceof ChatError ? err.message : String(err);
     return c.json({ code: "COPILOT_UNAVAILABLE", message: reason }, 502);
   }
+}
+
+/**
+ * M83 — record a thumbs up/down on one copilot answer (`POST /v1/traces/:traceId/ask/feedback`,
+ * `observability:write`). Independent of the LLM provider (risk-2: works even when the copilot is
+ * down — it writes to the store, never calls the model). Workspace from the Principal; the body is
+ * validated at the boundary (turnId + label) → typed 400 on garbage. The trace must exist in the
+ * caller's workspace (404) so feedback cannot be attached to a foreign/absent trace.
+ */
+export async function askFeedbackHandler(c: Context, deps: CopilotApiDeps): Promise<Response> {
+  const ws = getPrincipal(c).workspaceId;
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    return c.json({ code: "INVALID_BODY", message: "invalid json body" }, 400);
+  }
+  let input;
+  try {
+    input = normalizeAskFeedback(raw); // EC: turnId + label ∈ {up,down}
+  } catch (err) {
+    if (err instanceof InvalidFeedbackError) return c.json({ code: err.code, message: err.message }, 400);
+    throw err;
+  }
+  const traceId = c.req.param("traceId") ?? "";
+  const tree = await deps.spanRepo.getTraceTree(traceId, ws);
+  if (tree === null) {
+    return c.json({ code: "TRACE_NOT_FOUND", message: "trace not found" }, 404);
+  }
+  const record = await deps.spanRepo.recordAskFeedback(traceId, input, ws);
+  copilotFeedbackRecorded.add(1); // observable: feedback volume is visible at runtime (pillar c)
+  return c.json(record, 200);
 }

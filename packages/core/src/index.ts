@@ -141,6 +141,14 @@ export {
   type DatasetsResponse,
   type DatasetDetail,
 } from "./domain/dataset.js";
+// M83: copilot answer feedback.
+export {
+  normalizeAskFeedback,
+  InvalidFeedbackError,
+  type FeedbackLabel,
+  type AskFeedbackInput,
+  type CopilotFeedbackRecord,
+} from "./domain/copilot-feedback.js";
 // M63: labeling queues (human-in-the-loop review).
 export {
   normalizeLabelResolution,

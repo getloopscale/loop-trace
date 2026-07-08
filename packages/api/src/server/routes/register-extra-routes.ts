@@ -20,7 +20,7 @@ import {
   deleteGuardHandler,
   guardBreachesHandler,
 } from "../handlers/evaluators.js";
-import { type CopilotApiDeps, askHandler } from "../handlers/copilot.js";
+import { type CopilotApiDeps, askHandler, askFeedbackHandler } from "../handlers/copilot.js";
 import { type ReplayApiDeps, replayHandler } from "../handlers/replay.js";
 
 export interface ExtraRoutes {
@@ -49,6 +49,8 @@ export function registerExtraRoutes(app: Hono, opts: ExtraRoutes): void {
   if (opts.copilot !== undefined) {
     const cp = opts.copilot;
     app.post("/v1/traces/:traceId/ask", requireScopeOnPrincipal("observability:read"), (c) => askHandler(c, cp));
+    // M83: record thumbs feedback on an answer — a WRITE (persists per-tenant), independent of the LLM.
+    app.post("/v1/traces/:traceId/ask/feedback", requireScopeOnPrincipal("observability:write"), (c) => askFeedbackHandler(c, cp));
   }
 
   // M55: span replay — an ephemeral provider call, never a store write (D3); read-augmentation like
