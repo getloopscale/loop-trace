@@ -42,9 +42,13 @@ export {
   extractEvaluations,
   evaluatorSummarySchema,
   evaluatorsResponseSchema,
+  scoreBucketSchema,
+  scoresResponseSchema,
   type SpanEvaluation,
   type EvaluatorSummary,
   type EvaluatorsResponse,
+  type ScoreBucket,
+  type ScoresResponse,
 } from "./domain/evaluation.js";
 // M36: online evaluators (compute/write path) — types + pure rule/guard engines.
 export {

@@ -57,7 +57,7 @@ import {
 } from "../../domain/session.js";
 import type { PruneStats } from "../../domain/retention.js";
 import { parseSpanQuery, type SpanClause } from "../../domain/span-query.js";
-import type { EvaluatorSummary } from "../../domain/evaluation.js";
+import type { EvaluatorSummary, ScoreBucket } from "../../domain/evaluation.js";
 import { spans, traces, sessions, replaySessions, traceTags, spanEvaluations, annotations, datasets, datasetItems, labelingQueueItems, experimentRuns, experimentRunItems, copilotFeedback } from "./schema.js";
 import {
   DEFAULT_ANNOTATOR_KIND,
@@ -968,6 +968,61 @@ export class DrizzleSpanRepository implements SpanRepository {
         labels: labelsByName.get(r.name) ?? {},
       }),
     );
+  }
+
+  async aggregateScoresOverTime(
+    range: ObservabilityRange,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<ScoreBucket[]> {
+    // M90: per-evaluator score aggregation bucketed over time — the M26 aggregate
+    // (avg score + label distribution) with a `date_trunc` time axis added. The time
+    // axis is the joined trace's updated_at (span_evaluations has no own timestamp),
+    // windowed + truncated by the RANGE_BUCKETS whitelist (sql.raw of a hardcoded
+    // constant, NEVER the request string). Only buckets with ≥ 1 sample are emitted —
+    // an empty period is a gap, never a fabricated zero (M89 data-honesty).
+    const { interval, trunc } = RANGE_BUCKETS[range];
+    const window = sql.raw(`interval '${interval}'`);
+    const bucket = sql.raw(`date_trunc('${trunc}', t.updated_at)`);
+    // numeric: per (bucket, evaluator) — sample count + mean score (avg ignores NULL scores).
+    const summaryRes = await this.db.execute(sql`
+      SELECT ${bucket} AS bucket,
+             se.name AS name,
+             count(*)::int AS "sampleCount",
+             avg(se.score) AS "avgScore"
+      FROM span_evaluations se
+      JOIN traces t ON t.trace_id = se.trace_id AND t.workspace_id = se.workspace_id
+      WHERE t.updated_at >= now() - ${window} AND se.workspace_id = ${workspaceId}
+      GROUP BY bucket, se.name
+      ORDER BY bucket ASC, se.name ASC
+    `);
+    // label distribution per (bucket, evaluator) — NULL labels excluded.
+    const labelRes = await this.db.execute(sql`
+      SELECT ${bucket} AS bucket, se.name AS name, se.label AS label, count(*)::int AS count
+      FROM span_evaluations se
+      JOIN traces t ON t.trace_id = se.trace_id AND t.workspace_id = se.workspace_id
+      WHERE t.updated_at >= now() - ${window} AND se.label IS NOT NULL AND se.workspace_id = ${workspaceId}
+      GROUP BY bucket, se.name, se.label
+    `);
+    // key a (bucket, evaluator) cell by "isoBucket|name" so labels attach to the right bucket.
+    const labelsByCell = new Map<string, Record<string, number>>();
+    for (const r of labelRes.rows as { bucket: Date | string; name: string; label: string; count: number }[]) {
+      const key = `${isoTimestamp(r.bucket)}|${r.name}`;
+      const m = labelsByCell.get(key) ?? {};
+      m[r.label] = Number(r.count);
+      labelsByCell.set(key, m);
+    }
+    return (
+      summaryRes.rows as { bucket: Date | string; name: string; sampleCount: number; avgScore: number | null }[]
+    ).map((r) => {
+      const periodStart = isoTimestamp(r.bucket);
+      return {
+        periodStart,
+        name: r.name,
+        sampleCount: Number(r.sampleCount),
+        ...(r.avgScore != null ? { avgScore: round3(Number(r.avgScore)) } : {}),
+        labels: labelsByCell.get(`${periodStart}|${r.name}`) ?? {},
+      };
+    });
   }
 
   async listSessions(

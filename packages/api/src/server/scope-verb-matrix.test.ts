@@ -71,6 +71,7 @@ const repo = {
     tokensByModel: [],
   }),
   aggregateEvaluators: async () => [],
+  aggregateScoresOverTime: async () => [],
   listSessions: async () => ({ sessions: [] }),
   getSessionDetail: async () => null,
   listTags: async () => [],
@@ -236,6 +237,12 @@ const CASES: readonly MatrixCase[] = [
     requiredScope: "observability:read",
     successStatus: 200,
     build: () => new Request("http://x/v1/metrics/observability?range=24h"),
+  },
+  {
+    name: "scores-over-time",
+    requiredScope: "observability:read",
+    successStatus: 200,
+    build: () => new Request("http://x/v1/metrics/scores?range=24h"),
   },
   {
     name: "sessions-list",

@@ -180,6 +180,14 @@ suite("M22 cross-tenant isolation (integration)", () => {
     const evB = await repo.aggregateEvaluators("30d", WS_B);
     expect(evA.find((e) => e.name === "quality")?.avgScore).toBeCloseTo(0.9);
     expect(evB.find((e) => e.name === "quality")?.avgScore).toBeCloseTo(0.1);
+
+    // aggregateScoresOverTime (M90) — same JOIN-scope isolation: A's time-bucketed
+    // "quality" mean is 0.9, B's is 0.1, never averaged across the shared trace id.
+    const scA = await repo.aggregateScoresOverTime("30d", WS_A);
+    const scB = await repo.aggregateScoresOverTime("30d", WS_B);
+    expect(scA.filter((s) => s.name === "quality")).not.toHaveLength(0);
+    expect(scA.find((s) => s.name === "quality")?.avgScore).toBeCloseTo(0.9);
+    expect(scB.find((s) => s.name === "quality")?.avgScore).toBeCloseTo(0.1);
   });
 
   it("test_tags_annotations_datasets_isolate", async () => {

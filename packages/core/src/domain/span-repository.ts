@@ -6,7 +6,7 @@ import type { NorthStarResponse } from "./north-star.js";
 import type { ObservabilityRange, ObservabilityResponse } from "./observability.js";
 import type { SessionListResponse, SessionDetailResponse } from "./session.js";
 import type { PruneStats } from "./retention.js";
-import type { EvaluatorSummary } from "./evaluation.js";
+import type { EvaluatorSummary, ScoreBucket } from "./evaluation.js";
 import type { Annotation, NormalizedAnnotation } from "./annotation.js";
 import type { Dataset, DatasetDetail } from "./dataset.js";
 import type {
@@ -61,6 +61,9 @@ export interface SpanRepository {
   aggregateObservability(range: ObservabilityRange, workspaceId?: string): Promise<ObservabilityResponse>;
   /** M26: per-evaluator aggregate (count, avg score, label distribution) within the range window. */
   aggregateEvaluators(range: ObservabilityRange, workspaceId?: string): Promise<EvaluatorSummary[]>;
+  /** M90: per-evaluator score aggregation bucketed over time (mean + label counts per period).
+   *  Only buckets with ≥ 1 sample are returned (no fabricated zero period). */
+  aggregateScoresOverTime(range: ObservabilityRange, workspaceId?: string): Promise<ScoreBucket[]>;
   /** Sessions newest-first with per-session scoped aggregates (M13). M81: server-paginated (limit/offset)
    *  with a workspace-scoped total. */
   listSessions(workspaceId?: string, opts?: { limit?: number; offset?: number }): Promise<SessionListResponse>;

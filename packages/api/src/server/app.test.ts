@@ -8,6 +8,7 @@ import type {
   CostByPeriodResponse,
   CostPeriod,
   EvaluatorSummary,
+  ScoreBucket,
   ListTracesOptions,
   NorthStarResponse,
   ObservabilityResponse,
@@ -153,6 +154,18 @@ class StubSpanRepository implements SpanRepository {
   ): Promise<EvaluatorSummary[]> {
     this.lastEvaluatorsRange = range;
     return this.evaluators;
+  }
+
+  // M90: score aggregation over time stub.
+  lastScoresRange: ObservabilityResponse["range"] | null = null;
+  scoreBuckets: ScoreBucket[] = [
+    { periodStart: "2026-07-08T00:00:00.000Z", name: "hallucination", sampleCount: 3, avgScore: 0.3, labels: { factual: 3 } },
+  ];
+  async aggregateScoresOverTime(
+    range: ObservabilityResponse["range"],
+  ): Promise<ScoreBucket[]> {
+    this.lastScoresRange = range;
+    return this.scoreBuckets;
   }
 
   sessionList: SessionListResponse = { sessions: [] };
@@ -912,6 +925,47 @@ describe("createApp (contract, stub repo)", () => {
     };
     expect(
       (await createApp(leaky).request("/v1/metrics/evaluators")).status,
+    ).toBeGreaterThanOrEqual(500);
+  });
+
+  // M90 — score aggregation over time route
+  it("test_get_scores_returns_time_bucketed_shape", async () => {
+    repo.scoreBuckets = [
+      { periodStart: "2026-07-08T00:00:00.000Z", name: "hallucination", sampleCount: 3, avgScore: 0.21, labels: { factual: 3 } },
+      { periodStart: "2026-07-08T01:00:00.000Z", name: "tone", sampleCount: 2, labels: { warm: 2 } },
+    ];
+    const res = await app.request("/v1/metrics/scores?range=7d");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { range: string; scores: ScoreBucket[] };
+    expect(body.range).toBe("7d");
+    expect(body.scores).toHaveLength(2);
+    expect(body.scores[0]?.name).toBe("hallucination");
+    expect(body.scores[0]?.avgScore).toBe(0.21);
+    expect(body.scores[1]?.avgScore).toBeUndefined(); // categorical-only bucket
+    expect(repo.lastScoresRange).toBe("7d"); // validated range passed through
+  });
+
+  it("test_get_scores_rejects_bad_range_with_400", async () => {
+    expect((await app.request("/v1/metrics/scores?range=banana")).status).toBe(400);
+  });
+
+  it("test_get_scores_defaults_range_to_24h", async () => {
+    await app.request("/v1/metrics/scores");
+    expect(repo.lastScoresRange).toBe("24h");
+  });
+
+  it("test_scores_route_rejects_leaked_column_at_boundary_with_5xx", async () => {
+    const leaky: SpanRepository = {
+      ...repo,
+      save: repo.save.bind(repo),
+      getBySpanId: repo.getBySpanId.bind(repo),
+      getTraceTree: repo.getTraceTree.bind(repo),
+      listTraces: repo.listTraces.bind(repo),
+      aggregateScoresOverTime: async () =>
+        [{ periodStart: "x", name: "y", sampleCount: 1, labels: {}, span_id: "leak" }] as never,
+    };
+    expect(
+      (await createApp(leaky).request("/v1/metrics/scores")).status,
     ).toBeGreaterThanOrEqual(500);
   });
 

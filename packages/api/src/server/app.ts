@@ -11,6 +11,7 @@ import {
   observabilityRangeSchema,
   observabilityResponseSchema,
   evaluatorsResponseSchema,
+  scoresResponseSchema,
   sessionListResponseSchema,
   sessionDetailResponseSchema,
   traceTagsResponseSchema,
@@ -347,6 +348,24 @@ export function createApp(
     // is enforced at runtime, uniform with every other read route (F-api-1).
     const summary = evaluatorsResponseSchema.parse({
       evaluators: await repo.aggregateEvaluators(
+        parsed.data,
+        getPrincipal(c).workspaceId,
+      ),
+    });
+    return c.json(summary, 200);
+  });
+
+  app.get("/v1/metrics/scores", requireScopeOnPrincipal("observability:read"), async (c) => {
+    // M90: per-evaluator score aggregation over time. Range validated at the boundary
+    // (Rule 8), same whitelist as observability; default 24h. Parsed through the strict
+    // DTO so the no-column-leak invariant holds at runtime (F-api-1).
+    const parsed = observabilityRangeSchema.safeParse(c.req.query("range") ?? "24h");
+    if (!parsed.success) {
+      return c.json({ error: "invalid range (use 1h|24h|7d|30d)" }, 400);
+    }
+    const summary = scoresResponseSchema.parse({
+      range: parsed.data,
+      scores: await repo.aggregateScoresOverTime(
         parsed.data,
         getPrincipal(c).workspaceId,
       ),
