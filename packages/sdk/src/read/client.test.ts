@@ -433,26 +433,65 @@ describe("LensReadClient — write surface (M107)", () => {
     expect(methodOf(fetchFn)).toBe("DELETE");
   });
 
-  it("retries a write on a 503 but NOT on a network reject (conservative, M107 ADR-3)", async () => {
+  it("retries an idempotent write on BOTH a 503 and a network reject (M108 — idempotency-justified)", async () => {
     // 503 (server-signaled) → retried then succeeds.
     const f503 = seqFetch([status(503), ok({ id: "d1", name: "s" })]);
     const c1 = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: f503, sleep: async () => {} });
     await c1.createDataset({ name: "s" });
     expect(f503).toHaveBeenCalledTimes(2);
 
-    // network reject on a non-idempotent POST → NOT retried (ambiguous), single call, typed throw.
+    // network reject on an idempotent write → RETRIED then succeeds (safe — the engine de-dups).
     const fNet = seqFetch([new TypeError("boom"), ok({ id: "d1", name: "s" })]);
     const c2 = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fNet, sleep: async () => {} });
-    await expect(c2.createDataset({ name: "s" })).rejects.toMatchObject({ code: "NETWORK_ERROR" });
-    expect(fNet).toHaveBeenCalledTimes(1);
+    await c2.createDataset({ name: "s" });
+    expect(fNet).toHaveBeenCalledTimes(2);
   });
 
+  it("caps an idempotent write's network retries then throws NETWORK_ERROR (M108)", async () => {
+    const fNet = seqFetch([new TypeError("x"), new TypeError("x"), new TypeError("x")]);
+    const client = new LensReadClient({
+      baseUrl: BASE,
+      apiKey: KEY,
+      fetch: fNet,
+      maxRetries: 2,
+      sleep: async () => {},
+    });
+    await expect(client.deleteDataset("d1")).rejects.toMatchObject({ code: "NETWORK_ERROR", status: 0 });
+    expect(fNet).toHaveBeenCalledTimes(3);
+  });
+
+  // Typed mutation-error matrix (M108) — every write failure class → a LensApiError to switch on.
   it("maps a 409 NAME_CONFLICT to a typed LensApiError", async () => {
     const fetchFn = mockFetch(undefined, { status: 409, text: '{"code":"NAME_CONFLICT","message":"taken"}' });
     const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
     await expect(client.updateDataset("d1", { name: "dup" })).rejects.toMatchObject({
       status: 409,
       code: "NAME_CONFLICT",
+    });
+  });
+
+  it("maps a 400 INVALID_BODY on a write to a typed LensApiError (bare message, no details)", async () => {
+    const fetchFn = mockFetch(undefined, {
+      status: 400,
+      text: '{"code":"INVALID_BODY","message":"annotation requires a label or a note"}',
+    });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const err = await client.annotateTrace("tr1", {}).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(LensApiError);
+    expect((err as LensApiError).status).toBe(400);
+    expect((err as LensApiError).code).toBe("INVALID_BODY");
+    expect((err as LensApiError).details).toBeUndefined();
+  });
+
+  it("maps a 404 NOT_FOUND on a write (missing target) to a typed LensApiError", async () => {
+    const fetchFn = mockFetch(undefined, { status: 404, text: '{"code":"NOT_FOUND","message":"not found"}' });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await expect(client.addDatasetItem("missing", { traceId: "t1" })).rejects.toMatchObject({
+      status: 404,
+      code: "NOT_FOUND",
     });
   });
 });

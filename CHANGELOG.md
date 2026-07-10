@@ -9,7 +9,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Roadmap v12 opened: `ROADMAP-sota-experience-v12.md` — the typed write SDK, M107–M110 (write-client core → mutation correctness/idempotency → hermetic write↔read contract proof → write quickstart/examples)
-- `@usetheo/lens-sdk`: 9 typed curation **write** methods on `LensReadClient` — `createDataset`/`updateDataset`/`deleteDataset`/`addDatasetItem`/`removeDatasetItem` + `annotateTrace`/`deleteAnnotations`/`tagTrace`/`untagTrace`. Responses generated from new engine OpenAPI components (`DatasetDetail`, `TraceTagsResponse`, `AnnotationsResponse`); request bodies are typed interfaces; a generalized transport handles method+body + 204-void deletes, with a conservative write-retry (server-signaled transient only — a non-idempotent create is never re-applied on an ambiguous timeout) (M107)
+- `@usetheo/lens-sdk`: 9 typed curation **write** methods on `LensReadClient` — `createDataset`/`updateDataset`/`deleteDataset`/`addDatasetItem`/`removeDatasetItem` + `annotateTrace`/`deleteAnnotations`/`tagTrace`/`untagTrace`. Responses generated from new engine OpenAPI components (`DatasetDetail`, `TraceTagsResponse`, `AnnotationsResponse`); request bodies are typed interfaces; a generalized transport handles method+body + 204-void deletes (M107)
+- `@usetheo/lens-sdk`: writes are now network-retryable (bounded backoff on a network reject / timeout, not just a server-signaled 5xx) — safe because every write route is idempotent server-side (dataset create-or-get, item/tag `ON CONFLICT DO NOTHING`, annotation upsert, inherent DELETE); every mutation failure (`400 INVALID_BODY` / `404 NOT_FOUND` / `409 NAME_CONFLICT`) maps to a typed `LensApiError` a caller switches on (M108)
 
 ### Changed
 

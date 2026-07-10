@@ -247,27 +247,29 @@ export class LensReadClient {
     return this.request<Capabilities>("/v1");
   }
 
-  // ─── Write surface (M107) — curate datasets + annotate/tag traces. ───
-  // Writes pass `retryNetwork: false` (M107 conservative default — a non-idempotent create is never
-  // re-applied on an ambiguous timeout); M108 loosens this for provably-idempotent verbs.
+  // ─── Write surface (M107/M108) — curate datasets + annotate/tag traces. ───
+  // Every write below passes `retryNetwork: true`: the engine makes each route IDEMPOTENT server-side
+  // (dataset create-or-get + item/tag `ON CONFLICT DO NOTHING`, annotation upsert, inherent DELETE, PUT
+  // rename), so retrying an ambiguous network/timeout is safe — no double-apply (M108, verified in the
+  // M107 review). INVARIANT: a future NON-idempotent write MUST pass `retryNetwork: false`.
 
   /** `POST /v1/datasets` — create (or idempotently get) a dataset by name. */
   createDataset(body: CreateDatasetBody): Promise<Dataset> {
-    return this.send<Dataset>("POST", "/v1/datasets", { body, retryNetwork: false });
+    return this.send<Dataset>("POST", "/v1/datasets", { body, retryNetwork: true });
   }
 
   /** `PUT /v1/datasets/{id}` — rename a dataset (409 `NAME_CONFLICT` if the name is taken). */
   updateDataset(datasetId: string, body: UpdateDatasetBody): Promise<Dataset> {
     return this.send<Dataset>("PUT", `/v1/datasets/${encodeURIComponent(datasetId)}`, {
       body,
-      retryNetwork: false,
+      retryNetwork: true,
     });
   }
 
   /** `DELETE /v1/datasets/{id}` — delete a dataset (204 → void). */
   deleteDataset(datasetId: string): Promise<void> {
     return this.send<void>("DELETE", `/v1/datasets/${encodeURIComponent(datasetId)}`, {
-      retryNetwork: false,
+      retryNetwork: true,
     });
   }
 
@@ -275,7 +277,7 @@ export class LensReadClient {
   addDatasetItem(datasetId: string, body: AddDatasetItemBody): Promise<DatasetDetail> {
     return this.send<DatasetDetail>("POST", `/v1/datasets/${encodeURIComponent(datasetId)}/items`, {
       body,
-      retryNetwork: false,
+      retryNetwork: true,
     });
   }
 
@@ -284,7 +286,7 @@ export class LensReadClient {
     return this.send<DatasetDetail>(
       "DELETE",
       `/v1/datasets/${encodeURIComponent(datasetId)}/items/${encodeURIComponent(traceId)}`,
-      { retryNetwork: false },
+      { retryNetwork: true },
     );
   }
 
@@ -293,7 +295,7 @@ export class LensReadClient {
     return this.send<AnnotationsResponse>(
       "POST",
       `/v1/traces/${encodeURIComponent(traceId)}/annotations`,
-      { body, retryNetwork: false },
+      { body, retryNetwork: true },
     );
   }
 
@@ -302,7 +304,7 @@ export class LensReadClient {
     return this.send<AnnotationsResponse>(
       "DELETE",
       `/v1/traces/${encodeURIComponent(traceId)}/annotations`,
-      { retryNetwork: false },
+      { retryNetwork: true },
     );
   }
 
@@ -310,7 +312,7 @@ export class LensReadClient {
   tagTrace(traceId: string, body: TagBody): Promise<TraceTagsResponse> {
     return this.send<TraceTagsResponse>("POST", `/v1/traces/${encodeURIComponent(traceId)}/tags`, {
       body,
-      retryNetwork: false,
+      retryNetwork: true,
     });
   }
 
@@ -319,7 +321,7 @@ export class LensReadClient {
     return this.send<TraceTagsResponse>(
       "DELETE",
       `/v1/traces/${encodeURIComponent(traceId)}/tags`,
-      { query: { tag }, retryNetwork: false },
+      { query: { tag }, retryNetwork: true },
     );
   }
 }
