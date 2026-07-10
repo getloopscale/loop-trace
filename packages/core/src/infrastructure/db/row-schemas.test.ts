@@ -53,6 +53,15 @@ const cases: Array<{ ctx: string; schema: Parameters<typeof rowsAs>[1]; validRow
   },
 ];
 
+/** The date-bearing schemas whose timestamps come from a RAW `db.execute` — node-pg returns those as
+ *  STRINGS, so the schema MUST accept `string` too. This guards the exact over-strictness bug M100 hit
+ *  (a bare `z.date()` regression) in the fast tier, not only via the real-pg integration suite. */
+const stringTimestampCases: Array<{ ctx: string; schema: Parameters<typeof rowsAs>[1]; row: Record<string, unknown> }> = [
+  { ctx: "listSessions", schema: sessionListRowSchema, row: { sessionId: "s", firstSeenAt: "2026-01-01T00:00:00.000Z", lastSeenAt: "2026-01-02T00:00:00.000Z", traceCount: 1, costUsd: 0, totalTokens: 0, errorCount: 0, evaluationsCount: 0, firstMessageRaw: null } },
+  { ctx: "observability.traffic", schema: trafficRowSchema, row: { bucket: "2026-01-01T00:00:00.000Z", traceCount: 1, errorCount: 0 } },
+  { ctx: "aggregateAgents", schema: agentRowSchema, row: { name: "a", first_seen: "2026-01-01T00:00:00.000Z", last_seen: "2026-01-02T00:00:00.000Z", run_count: 1, versions: null, system_prompt: null, tools: null } },
+];
+
 describe("M100 raw row schemas — loud failure on a renamed/omitted column", () => {
   it.each(cases)("$ctx accepts a valid row but throws when '$dropped' is renamed away", ({ ctx, schema, validRow, dropped }) => {
     // valid row passes
@@ -63,5 +72,9 @@ describe("M100 raw row schemas — loud failure on a renamed/omitted column", ()
     expect(() => rowsAs({ rows: [broken] }, schema, ctx)).toThrowError(
       new RegExp(`rowsAs\\(${ctx.replace(/\./g, "\\.")}\\): row 0 failed SQL→DTO validation at "${dropped}"`),
     );
+  });
+
+  it.each(stringTimestampCases)("$ctx accepts STRING timestamps (raw db.execute returns them as strings)", ({ ctx, schema, row }) => {
+    expect(() => rowsAs({ rows: [row] }, schema, ctx)).not.toThrow();
   });
 });
