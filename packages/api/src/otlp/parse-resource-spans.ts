@@ -71,13 +71,28 @@ function sessionIdOf(
   return typeof v === "string" && v.length > 0 ? v : undefined;
 }
 
+/** The OTLP partial-success outcome of parsing a batch — valid spans + how many were rejected.
+ *  Mirrors the OTLP `ExportTracePartialSuccess` contract (rejected_spans + error_message). */
+export interface ParseResourceSpansResult {
+  spans: Span[];
+  /** Number of spans that failed validation and were dropped (0 = full success). */
+  rejected: number;
+  /** The first per-span validation error (for the OTLP `error_message`); undefined when rejected=0. */
+  firstError?: string;
+}
+
 /**
- * Map an OTLP/JSON envelope (`resourceSpans[].scopeSpans[].spans[]`) to validated
- * domain {@link Span}s. Fail-fast: a malformed span throws {@link OtlpParseError}
- * (M0 rejects the whole batch; M1 may switch to OTLP partialSuccess semantics).
+ * Map an OTLP/JSON envelope (`resourceSpans[].scopeSpans[].spans[]`) to validated domain {@link Span}s,
+ * **totally** per span (M93): a malformed span is DROPPED and counted (never throws), so one bad span
+ * does not reject a whole batch. The caller reports `rejected`/`firstError` as OTLP partial-success.
+ * Envelope-shape leniency is unchanged (a non-array `resourceSpans` yields zero spans); the hard
+ * trust-boundary 400 lives upstream in `decodeOtlpBody` (an undecodable body). See
+ * `references/laminar/app-server/proto/opentelemetry/trace_service.proto:46-75`.
  */
-export function parseResourceSpans(envelope: unknown): Span[] {
+export function parseResourceSpansPartial(envelope: unknown): ParseResourceSpansResult {
   const out: Span[] = [];
+  let rejected = 0;
+  let firstError: string | undefined;
   const resourceSpans = asArray(
     (envelope as { resourceSpans?: unknown } | null)?.resourceSpans,
   );
@@ -154,11 +169,27 @@ export function parseResourceSpans(envelope: unknown): Span[] {
         };
         const parsed = spanSchema.safeParse(candidate);
         if (!parsed.success) {
-          throw new OtlpParseError(`invalid OTLP span: ${parsed.error.message}`);
+          // M93 — total per span: drop + count the malformed span (partial-success), never throw.
+          rejected += 1;
+          firstError ??= `invalid OTLP span: ${parsed.error.message}`;
+          continue;
         }
         out.push(parsed.data);
       }
     }
   }
-  return out;
+  return { spans: out, rejected, ...(firstError !== undefined ? { firstError } : {}) };
+}
+
+/**
+ * Strict variant: throws {@link OtlpParseError} if ANY span is malformed (the pre-M93 behavior).
+ * Retained for the seed/demo/SDK-contract callers that treat a bad fixture as a hard failure; the
+ * OTLP ingest route uses {@link parseResourceSpansPartial} for per-span durability.
+ */
+export function parseResourceSpans(envelope: unknown): Span[] {
+  const { spans, rejected, firstError } = parseResourceSpansPartial(envelope);
+  if (rejected > 0) {
+    throw new OtlpParseError(firstError ?? "invalid OTLP span");
+  }
+  return spans;
 }

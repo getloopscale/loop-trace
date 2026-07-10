@@ -21,6 +21,11 @@ function counter() {
 
 export const spansIngested = counter();
 export const tracesIngested = counter();
+// M93: spans dropped at ingest for failing validation (OTLP partial-success). A distinct counter so
+// "producer sending malformed spans" is visible at runtime, never a silent drop (data-honesty).
+export const spansRejected = counter();
+// M93: ingest requests shed by the per-workspace backpressure limiter (429).
+export const ingestRateLimited = counter();
 // M26: online-eval results extracted from `eval.*` span attributes at ingest. A
 // distinct counter so "no evals on the Evals page" is distinguishable at runtime
 // from "evals arrived but extraction dropped them" (wiring-triad pillar c).

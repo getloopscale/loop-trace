@@ -45,14 +45,32 @@ import { registerDatasetRoutes } from "./routes/dataset-routes.js";
 import { registerLabelingQueueRoutes } from "./routes/labeling-queue-routes.js";
 import { registerExperimentRoutes } from "./routes/experiment-routes.js";
 import type { ExperimentApiDeps } from "./handlers/experiment.js";
-import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
-import { OtlpParseError } from "../otlp/otlp-error.js";
+import type { RateLimiter } from "@usetheo/lens-core";
+
+/**
+ * M93 — OTLP ingest hardening deps (all optional; a test app without them keeps the pre-M93 behavior
+ * minus the size caps, which default). `limiter` sheds a runaway per-workspace producer with 429;
+ * the byte caps bound the raw body (413 via bodyLimit) + the decompressed body (413, gzip-bomb).
+ */
+export interface IngestApiDeps {
+  limiter?: RateLimiter;
+  maxBodyBytes?: number;
+  maxDecompressedBytes?: number;
+  /** Injected clock for the limiter window (defaults to Date.now) — deterministic tests. */
+  now?: () => number;
+}
+import { bodyLimit } from "hono/body-limit";
+import { DEFAULT_MAX_INGEST_BYTES } from "@usetheo/lens-core";
+import { parseResourceSpansPartial } from "../otlp/parse-resource-spans.js";
+import { OtlpParseError, OtlpTooLargeError } from "../otlp/otlp-error.js";
 import { decodeOtlpBody } from "../otlp/decode-protobuf.js";
 import {
   spansIngested,
   tracesIngested,
   evaluationsExtracted,
   annotationsWritten,
+  spansRejected,
+  ingestRateLimited,
   logIngest,
 } from "./metrics.js";
 import { mountStatic } from "./static.js";
@@ -100,6 +118,7 @@ export function createApp(
   copilot?: CopilotApiDeps,
   replay?: ReplayApiDeps,
   experiment?: ExperimentApiDeps,
+  ingest?: IngestApiDeps,
 ): Hono {
   const app = new Hono();
 
@@ -148,48 +167,78 @@ export function createApp(
     return dataBearer(c, next);
   });
 
-  app.post("/v1/traces", requireScopeOnPrincipal("observability:write"), async (c) => {
-    const contentType = (c.req.header("content-type") ?? "").toLowerCase();
-    if (
-      !contentType.includes("application/json") &&
-      !contentType.includes("application/x-protobuf")
-    ) {
-      return c.json(
-        { error: "unsupported content-type (use application/json or application/x-protobuf)" },
-        415,
-      );
-    }
+  app.post(
+    "/v1/traces",
+    // M93 — bound the RAW body BEFORE it is buffered (OOM guard): bodyLimit aborts the stream at the
+    // cap and returns a typed 413. Runs before the scope guard so an oversized body is shed early.
+    bodyLimit({
+      maxSize: ingest?.maxBodyBytes ?? DEFAULT_MAX_INGEST_BYTES,
+      onError: (c) =>
+        c.json(
+          { code: "PAYLOAD_TOO_LARGE", message: "OTLP body exceeds the ingest size limit" },
+          413,
+        ),
+    }),
+    requireScopeOnPrincipal("observability:write"),
+    async (c) => {
+      const contentType = (c.req.header("content-type") ?? "").toLowerCase();
+      if (
+        !contentType.includes("application/json") &&
+        !contentType.includes("application/x-protobuf")
+      ) {
+        return c.json(
+          { code: "UNSUPPORTED_MEDIA_TYPE", message: "use application/json or application/x-protobuf" },
+          415,
+        );
+      }
 
-    const raw = Buffer.from(await c.req.arrayBuffer());
+      // M93 — per-workspace ingest backpressure: shed a runaway producer with 429 (before the pool
+      // saturates) rather than a whole-server stall. Workspace resolved from the Principal.
+      const ws = getPrincipal(c).workspaceId;
+      if (ingest?.limiter && !ingest.limiter.tryAcquire(ws, (ingest.now ?? Date.now)())) {
+        ingestRateLimited.add(1);
+        return c.json({ code: "RATE_LIMITED", message: "ingest rate limit exceeded for this workspace" }, 429);
+      }
 
-    let envelope: unknown;
-    try {
-      envelope = decodeOtlpBody(raw, contentType, c.req.header("content-encoding"));
-    } catch (err) {
-      if (err instanceof OtlpParseError) return c.json({ error: err.message }, 400);
-      throw err;
-    }
+      const raw = Buffer.from(await c.req.arrayBuffer());
 
-    let toSave;
-    try {
-      toSave = parseResourceSpans(envelope);
-    } catch (err) {
-      if (err instanceof OtlpParseError) return c.json({ error: err.message }, 400);
-      throw err;
-    }
+      let envelope: unknown;
+      try {
+        envelope = decodeOtlpBody(raw, contentType, c.req.header("content-encoding"), {
+          ...(ingest?.maxDecompressedBytes !== undefined
+            ? { maxDecompressedBytes: ingest.maxDecompressedBytes }
+            : {}),
+        });
+      } catch (err) {
+        // A gzip-bomb (decompresses past the bound) → 413; a corrupt/undecodable envelope → 400.
+        if (err instanceof OtlpTooLargeError)
+          return c.json({ code: "PAYLOAD_TOO_LARGE", message: err.message }, 413);
+        if (err instanceof OtlpParseError)
+          return c.json({ code: "INVALID_OTLP", message: err.message }, 400);
+        throw err;
+      }
 
-    if (toSave.length === 0) {
-      return c.json({}, 200);
-    }
+      // M93 — total per span: valid spans are saved, malformed ones are dropped + counted (OTLP
+      // partial-success). The undecodable-envelope 400 is already enforced above (decodeOtlpBody).
+      const { spans: toSave, rejected, firstError } = parseResourceSpansPartial(envelope);
 
-    await repo.save(toSave, getPrincipal(c).workspaceId);
-    spansIngested.add(toSave.length);
-    tracesIngested.add(new Set(toSave.map((s) => s.traceId)).size);
-    const evals = toSave.reduce((n, s) => n + (s.evaluations?.length ?? 0), 0);
-    evaluationsExtracted.add(evals);
-    logIngest(toSave.length, evals);
-    return c.json({ partialSuccess: {} }, 200);
-  });
+      if (toSave.length > 0) {
+        await repo.save(toSave, ws);
+        spansIngested.add(toSave.length);
+        tracesIngested.add(new Set(toSave.map((s) => s.traceId)).size);
+        const evals = toSave.reduce((n, s) => n + (s.evaluations?.length ?? 0), 0);
+        evaluationsExtracted.add(evals);
+        logIngest(toSave.length, evals);
+      }
+      if (rejected > 0) {
+        spansRejected.add(rejected);
+        // OTLP ExportTracePartialSuccess: rejected_spans + a human-facing error_message.
+        return c.json({ partialSuccess: { rejectedSpans: rejected, errorMessage: firstError } }, 200);
+      }
+      // Full success — an empty partial_success is equivalent to "not present" per the OTLP contract.
+      return c.json({ partialSuccess: {} }, 200);
+    },
+  );
 
   app.get("/v1/traces", requireScopeOnPrincipal("observability:read"), async (c) => {
     // M9: whitelisted filter/sort/export. Validate query params at the boundary

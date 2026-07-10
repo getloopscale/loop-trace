@@ -12,6 +12,9 @@ import {
   parseBackfillMax,
   parseEvalSweepHours,
   parseCopilotRpm,
+  parseIngestRpm,
+  parseMaxIngestBytes,
+  parseMaxDecompressedBytes,
   runSweep,
   OpenAICompatibleChat,
   OpenAICompatibleReplay,
@@ -98,6 +101,14 @@ export async function bootstrap(
   // M64: the experiment-run route reuses the replay provider client + a dedicated limiter + the
   // evaluator repo (rule-evaluator scoring). null client → the run fails closed (503).
   const experimentLimiter = new RateLimiter(parseCopilotRpm(process.env));
+  // M93: OTLP ingest backpressure — a dedicated, higher-rpm per-workspace limiter (ingest is the
+  // high-volume write path) so a runaway producer sheds with 429 before the pool exhausts.
+  const ingestLimiter = new RateLimiter(parseIngestRpm(process.env));
+  const ingestDeps = {
+    limiter: ingestLimiter,
+    maxBodyBytes: parseMaxIngestBytes(process.env),
+    maxDecompressedBytes: parseMaxDecompressedBytes(process.env),
+  };
   const app = createApp(
     repo,
     webDistDir,
@@ -106,6 +117,7 @@ export async function bootstrap(
     { spanRepo: repo, chat, limiter: copilotLimiter },
     { spanRepo: repo, chat: replayClient, limiter: replayLimiter },
     { spanRepo: repo, evaluatorRepo, chat: replayClient, limiter: experimentLimiter },
+    ingestDeps,
   );
 
   // M36: opt-in periodic evaluator sweep (default OFF, D5). v1 sweeps the `default`

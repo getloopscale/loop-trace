@@ -109,8 +109,14 @@ export {
   parseEvalSweepHours,
   parseBackfillMax,
   parseCopilotRpm,
+  parseIngestRpm,
+  parseMaxIngestBytes,
+  parseMaxDecompressedBytes,
   DEFAULT_EVAL_BACKFILL_MAX,
   DEFAULT_COPILOT_RPM,
+  DEFAULT_INGEST_RPM,
+  DEFAULT_MAX_INGEST_BYTES,
+  DEFAULT_MAX_DECOMPRESSED_BYTES,
 } from "./domain/evaluator-config.js";
 export {
   runEvaluator,

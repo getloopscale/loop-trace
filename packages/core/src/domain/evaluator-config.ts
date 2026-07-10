@@ -50,3 +50,33 @@ export function parseCopilotRpm(env: NodeJS.ProcessEnv = process.env): number {
   const n = Number(raw);
   return Number.isInteger(n) && n > 0 ? n : DEFAULT_COPILOT_RPM;
 }
+
+/** M93: OTLP ingest per-workspace requests/minute (backpressure). Far higher than copilot — ingest
+ *  is the high-volume write path; a runaway producer sheds with 429 before pool exhaustion.
+ *  Invalid/unset → default 600; never ≤ 0. */
+export const DEFAULT_INGEST_RPM = 600;
+export function parseIngestRpm(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env["THEOLENS_INGEST_RPM"];
+  if (raw === undefined) return DEFAULT_INGEST_RPM;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : DEFAULT_INGEST_RPM;
+}
+
+/** M93: cap on the RAW ingest body (bytes) — bodyLimit 413s past this before buffering. Default 4 MiB. */
+export const DEFAULT_MAX_INGEST_BYTES = 4 * 1024 * 1024;
+export function parseMaxIngestBytes(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env["THEOLENS_MAX_INGEST_BYTES"];
+  if (raw === undefined) return DEFAULT_MAX_INGEST_BYTES;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : DEFAULT_MAX_INGEST_BYTES;
+}
+
+/** M93: cap on the DECOMPRESSED ingest body (bytes) — a gzip-bomb past this 413s. Default 16 MiB
+ *  (above the raw cap since gzip legitimately inflates). */
+export const DEFAULT_MAX_DECOMPRESSED_BYTES = 16 * 1024 * 1024;
+export function parseMaxDecompressedBytes(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env["THEOLENS_MAX_DECOMPRESSED_BYTES"];
+  if (raw === undefined) return DEFAULT_MAX_DECOMPRESSED_BYTES;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : DEFAULT_MAX_DECOMPRESSED_BYTES;
+}

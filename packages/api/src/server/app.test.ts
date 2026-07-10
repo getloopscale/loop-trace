@@ -28,7 +28,7 @@ import type {
 } from "@usetheo/lens-core";
 
 import { createApp } from "./app.js";
-import { spansIngested, tracesIngested, evaluationsExtracted, annotationsWritten, datasetItemsAdded } from "./metrics.js";
+import { spansIngested, tracesIngested, evaluationsExtracted, annotationsWritten, datasetItemsAdded, spansRejected, ingestRateLimited } from "./metrics.js";
 import { encodeOtlpProtobuf } from "../otlp/__fixtures__/otlp-protobuf.js";
 
 /**
@@ -503,6 +503,30 @@ describe("createApp (contract, stub repo)", () => {
     expect(res.status).toBe(415);
   });
 
+  // M93 — per-span partial-success: a mixed good/bad batch persists the good spans + reports rejected.
+  it("M93_post_mixed_batch_persists_good_and_reports_rejected_200", async () => {
+    const good = { ...rawSpan, spanId: "m-good", traceId: "m-t" };
+    const bad = { ...rawSpan, spanId: "", traceId: "m-t" }; // empty spanId fails spanSchema
+    const res = await post(
+      JSON.stringify({ resourceSpans: [{ scopeSpans: [{ spans: [good, bad] }] }] }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { partialSuccess: { rejectedSpans?: number; errorMessage?: string } };
+    expect(body.partialSuccess.rejectedSpans).toBe(1);
+    expect(body.partialSuccess.errorMessage).toMatch(/invalid OTLP span/i);
+    // the GOOD span was persisted (not dropped with the batch); the metric counts only saved spans
+    expect(repo.saveCalls).toHaveLength(1);
+    expect(spansIngested.value).toBe(1);
+    expect(spansRejected.value).toBe(1);
+    expect(await repo.getBySpanId("m-good")).not.toBeNull();
+  });
+
+  it("M93_post_all_valid_reports_empty_partial_success", async () => {
+    const res = await post(tracesEnvelope(rawSpan));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { partialSuccess: Record<string, unknown> };
+    expect(body.partialSuccess).toEqual({}); // OTLP: empty == full success
+  });
   it("get_trace_tree_returns_reconstructed_tree", async () => {
     await post(
       JSON.stringify({
@@ -1459,5 +1483,75 @@ describe("M63 labeling-queue route negative cases", () => {
       body: JSON.stringify({ name: "  " }),
     });
     expect(res.status).toBe(400);
+  });
+});
+
+// M93 — ingest-hardening deps (body cap, gzip-bomb bound, per-workspace limiter) need a
+// custom-configured app, so this block builds its own createApp with tuned ingest deps.
+describe("M93 ingest durability & backpressure", () => {
+  let repo: StubSpanRepository;
+  beforeEach(() => {
+    repo = new StubSpanRepository();
+    spansIngested.reset();
+    spansRejected.reset();
+    ingestRateLimited.reset();
+  });
+
+  const envelope = (span: Record<string, unknown>) =>
+    JSON.stringify({ resourceSpans: [{ scopeSpans: [{ spans: [span] }] }] });
+  const okSpan = { spanId: "d-a1", traceId: "d-t1", name: "op", startTimeUnixNano: "1", endTimeUnixNano: "2" };
+
+  it("post_body_over_cap_returns_413", async () => {
+    const app = createApp(repo, undefined, {}, undefined, undefined, undefined, undefined, {
+      maxBodyBytes: 64, // tiny cap
+    });
+    const big = envelope({ ...okSpan, name: "x".repeat(500) }); // > 64 bytes
+    const res = await app.request("/v1/traces", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: big,
+    });
+    expect(res.status).toBe(413);
+    expect(((await res.json()) as { code: string }).code).toBe("PAYLOAD_TOO_LARGE");
+    expect(repo.saveCalls).toHaveLength(0);
+  });
+
+  it("post_gzip_bomb_over_decompressed_cap_returns_413", async () => {
+    const app = createApp(repo, undefined, {}, undefined, undefined, undefined, undefined, {
+      maxDecompressedBytes: 128,
+    });
+    const { gzipSync } = await import("node:zlib");
+    const bomb = gzipSync(Buffer.from(envelope({ ...okSpan, name: "y".repeat(4096) }))); // inflates > 128
+    const res = await app.request("/v1/traces", {
+      method: "POST",
+      headers: { "content-type": "application/json", "content-encoding": "gzip" },
+      body: bomb,
+    });
+    expect(res.status).toBe(413);
+    expect(repo.saveCalls).toHaveLength(0);
+  });
+
+  it("post_ingest_flood_past_window_returns_429_per_workspace", async () => {
+    const { RateLimiter } = await import("@usetheo/lens-core");
+    let now = 1_000_000;
+    const app = createApp(repo, undefined, {}, undefined, undefined, undefined, undefined, {
+      limiter: new RateLimiter(2), // 2 per window
+      now: () => now,
+    });
+    const send = () =>
+      app.request("/v1/traces", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: envelope(okSpan),
+      });
+    expect((await send()).status).toBe(200);
+    expect((await send()).status).toBe(200);
+    const third = await send(); // 3rd in the window → shed
+    expect(third.status).toBe(429);
+    expect(((await third.json()) as { code: string }).code).toBe("RATE_LIMITED");
+    expect(ingestRateLimited.value).toBe(1);
+    // a NEW window (advance the clock) resets the allowance
+    now += 60_001;
+    expect((await send()).status).toBe(200);
   });
 });
