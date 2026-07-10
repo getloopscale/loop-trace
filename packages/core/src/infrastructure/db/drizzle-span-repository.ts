@@ -38,9 +38,10 @@ import { round3, ERROR_STATUS_CODES, type ToolStatsResponse } from "../../domain
 import { parsePoolConfig, type PoolConfig } from "../../domain/evaluator-config.js";
 import {
   shapeNorthStarBuckets,
-  type BucketRow,
+  bucketRowSchema,
   type NorthStarResponse,
 } from "../../domain/north-star.js";
+import { rowsAs } from "../../domain/sql-rows.js";
 import {
   shapeObservability,
   RANGE_BUCKETS,
@@ -868,9 +869,11 @@ export class DrizzleSpanRepository implements SpanRepository {
       ORDER BY bucket DESC
     `);
     return {
-      tracesPerDay: shapeNorthStarBuckets(tracesRes.rows as unknown as BucketRow[]),
+      // M97 (B-L1) — validate the raw bucket rows at the SQL→DTO boundary; a renamed
+      // `date_trunc`/`count` alias now throws loudly here instead of shaping `undefined`.
+      tracesPerDay: shapeNorthStarBuckets(rowsAs(tracesRes, bucketRowSchema, "northStar.tracesPerDay")),
       replaySessionsPerWeek: shapeNorthStarBuckets(
-        sessionsRes.rows as unknown as BucketRow[],
+        rowsAs(sessionsRes, bucketRowSchema, "northStar.replaySessionsPerWeek"),
       ),
     };
   }
