@@ -41,22 +41,24 @@ function stats(xs) {
   return { mean, std };
 }
 
-async function seed(pool, spanRepo, n) {
+async function seed(pool, n) {
   await pool.query("TRUNCATE spans, traces, sessions, evaluators, guards, span_evaluations");
   // Bulk-seed via raw SQL so the seed cost does not dominate wall-clock. Rows are spread across
-  // WORKSPACES tenants ('ws-'||(g % WORKSPACES)) and updatedAt over 30 days — the realistic
-  // production shape. The queried workspace holds ~1/WORKSPACES of the rows, so the composite's
-  // workspace_id prefix is the difference between seeking one tenant vs scanning all tenants' rows.
+  // WORKSPACES tenants ('ws-'||(g % WORKSPACES)); every row's time falls within the last 24h so the
+  // 24h query window captures the full seeded set — this ISOLATES the variable under test: the
+  // workspace_id selectivity (~1/WORKSPACES). The queried tenant holds ~1/WORKSPACES of the rows, so
+  // the composite's workspace_id prefix is the difference between seeking one tenant vs scanning all
+  // tenants' recent rows and discarding WORKSPACES-1 of every WORKSPACES.
   await pool.query(
-    `INSERT INTO traces (workspace_id, trace_id, name, updated_at, status_code, total_tokens, cost_usd)
-     SELECT 'ws-'||(g % $2), 't'||g, 'op', now() - (g % 2592000) * interval '1 second',
+    `INSERT INTO traces (workspace_id, trace_id, session_id, name, updated_at, status_code, total_tokens, cost_usd)
+     SELECT 'ws-'||(g % $2), 't'||g, 'sess'||g, 'op', now() - (g % 86400) * interval '1 second',
             CASE WHEN g % 2 = 0 THEN 'ok' ELSE 'error' END, g % 1000, (g % 100)::numeric / 100
      FROM generate_series(1, $1) g`,
     [n, WORKSPACES],
   );
   await pool.query(
     `INSERT INTO spans (workspace_id, span_id, trace_id, name, start_time_unix_nano, end_time_unix_nano, ingested_at)
-     SELECT 'ws-'||(g % $2), 's'||g, 't'||g, 'op', '1700000000000000000', '1700000000100000000', now() - (g % 2592000) * interval '1 second'
+     SELECT 'ws-'||(g % $2), 's'||g, 't'||g, 'op', '1700000000000000000', '1700000000100000000', now() - (g % 86400) * interval '1 second'
      FROM generate_series(1, $1) g`,
     [n, WORKSPACES],
   );
@@ -65,7 +67,17 @@ async function seed(pool, spanRepo, n) {
      SELECT 'ws-'||(g % $2), 's'||g, 't'||g, 'q' FROM generate_series(1, $1) g`,
     [n, WORKSPACES],
   );
-  await pool.query("ANALYZE traces, spans, span_evaluations");
+  // Sessions must be seeded too (listSessions reads FROM sessions) — same multi-tenant spread, and
+  // trace.session_id above links each trace to its session so the LEFT JOIN + per-session subqueries
+  // exercise real correlated data, not an empty table.
+  await pool.query(
+    `INSERT INTO sessions (workspace_id, session_id, first_seen_at, last_seen_at)
+     SELECT 'ws-'||(g % $2), 'sess'||g, now() - (g % 86400) * interval '1 second',
+            now() - (g % 86400) * interval '1 second'
+     FROM generate_series(1, $1) g`,
+    [n, WORKSPACES],
+  );
+  await pool.query("ANALYZE traces, spans, span_evaluations, sessions");
 }
 
 async function dropIndexes(pool) {
@@ -121,7 +133,7 @@ async function main() {
   await migrateLatest(pool);
   console.log(`# M95 query-layer benchmark — ${RUNS} runs/query, scales ${SCALES.join("/")} (N/2N/4N)\n`);
   for (const n of SCALES) {
-    await seed(pool, repo, n);
+    await seed(pool, n);
 
     await dropIndexes(pool);
     const before = await measure(repo);
