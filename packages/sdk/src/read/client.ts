@@ -160,10 +160,11 @@ export class LensReadClient {
   }
 
   /**
-   * The shared transport seam for every method. Retries a transient failure with bounded backoff;
-   * `retryNetwork` gates whether a network reject / timeout abort is retried — GET + idempotent
-   * writes pass `true`, a non-idempotent write passes `false` so an ambiguous timeout is never
-   * silently re-applied (M107 ADR-3; M108 tunes the per-verb flag).
+   * The shared transport seam for every method. Retries a transient failure with bounded backoff.
+   * A server-signaled transient (408/429/5xx) is retried for ALL methods; `retryNetwork` additionally
+   * gates whether a NETWORK reject / timeout abort is retried — GET + idempotent writes pass `true`, a
+   * non-idempotent write (e.g. a synthetic dataset item) passes `false` so an ambiguous timeout is
+   * never silently re-applied.
    */
   private async send<T>(
     method: string,
@@ -248,10 +249,11 @@ export class LensReadClient {
   }
 
   // ─── Write surface (M107/M108) — curate datasets + annotate/tag traces. ───
-  // Every write below passes `retryNetwork: true`: the engine makes each route IDEMPOTENT server-side
-  // (dataset create-or-get + item/tag `ON CONFLICT DO NOTHING`, annotation upsert, inherent DELETE, PUT
-  // rename), so retrying an ambiguous network/timeout is safe — no double-apply (M108, verified in the
-  // M107 review). INVARIANT: a future NON-idempotent write MUST pass `retryNetwork: false`.
+  // These writes pass `retryNetwork: true` because the engine makes them IDEMPOTENT server-side
+  // (dataset create-or-get + traceId-item/tag `ON CONFLICT DO NOTHING`, annotation upsert, inherent
+  // DELETE, PUT rename), so retrying an ambiguous network/timeout is safe — no double-apply (M108).
+  // EXCEPTION: `addDatasetItem` with a synthetic `input` (no `traceId`) is NOT idempotent — see its
+  // doc; it passes `retryNetwork:false`. INVARIANT: a NON-idempotent write MUST pass `retryNetwork:false`.
 
   /** `POST /v1/datasets` — create (or idempotently get) a dataset by name. */
   createDataset(body: CreateDatasetBody): Promise<Dataset> {
@@ -273,11 +275,19 @@ export class LensReadClient {
     });
   }
 
-  /** `POST /v1/datasets/{id}/items` — add a captured trace and/or a synthetic input/output pair. */
+  /**
+   * `POST /v1/datasets/{id}/items` — add a captured trace and/or a synthetic input/output pair.
+   *
+   * Idempotency is body-dependent (mirrors the engine's dispatch): a `traceId` item is idempotent
+   * (`ON CONFLICT DO NOTHING`) → network-retryable; a SYNTHETIC item (`input`, no `traceId`) is NOT —
+   * the engine mints a fresh `replay-<uuid>` per call, so a lost-response retry would double-insert.
+   * The synthetic path therefore passes `retryNetwork:false` (a network/timeout is surfaced, not retried).
+   */
   addDatasetItem(datasetId: string, body: AddDatasetItemBody): Promise<DatasetDetail> {
+    const idempotent = typeof body.traceId === "string" && body.traceId.length > 0;
     return this.send<DatasetDetail>("POST", `/v1/datasets/${encodeURIComponent(datasetId)}/items`, {
       body,
-      retryNetwork: true,
+      retryNetwork: idempotent,
     });
   }
 

@@ -447,6 +447,22 @@ describe("LensReadClient — write surface (M107)", () => {
     expect(fNet).toHaveBeenCalledTimes(2);
   });
 
+  it("addDatasetItem retries a network reject for a traceId item (idempotent path)", async () => {
+    const fNet = seqFetch([new TypeError("boom"), ok({ id: "d1", name: "s", items: [] })]);
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fNet, sleep: async () => {} });
+    await client.addDatasetItem("d1", { traceId: "t1" });
+    expect(fNet).toHaveBeenCalledTimes(2);
+  });
+
+  it("addDatasetItem does NOT retry a network reject for a synthetic item (not idempotent — no double-insert)", async () => {
+    const fNet = seqFetch([new TypeError("boom"), ok({ id: "d1", name: "s", items: [] })]);
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fNet, sleep: async () => {} });
+    await expect(client.addDatasetItem("d1", { input: "prompt", output: "resp" })).rejects.toMatchObject({
+      code: "NETWORK_ERROR",
+    });
+    expect(fNet).toHaveBeenCalledTimes(1);
+  });
+
   it("caps an idempotent write's network retries then throws NETWORK_ERROR (M108)", async () => {
     const fNet = seqFetch([new TypeError("x"), new TypeError("x"), new TypeError("x")]);
     const client = new LensReadClient({
