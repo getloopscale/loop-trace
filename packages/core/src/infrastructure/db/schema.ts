@@ -96,8 +96,17 @@ export const spans = pgTable(
     index("spans_model_idx").on(t.model),
     // Backs the M11 time-windowed span scans (tokens-by-model over a range).
     index("spans_ingested_at_idx").on(t.ingestedAt),
+    // M95: composite (workspace_id, ingested_at) — serves the tenant filter AND the time range in ONE
+    // scan (the single-column indexes served only one). Backs aggregateObservability tokens-by-model,
+    // aggregateToolStats, and the facet-discovery recent-window scan.
+    index("spans_workspace_ingested_idx").on(t.workspaceId, t.ingestedAt),
     // M24: backs the full-text `search_tsv @@ websearch_to_tsquery(...)` filter.
     index("spans_search_tsv_gin_idx").using("gin", t.searchTsv),
+    // M95 NOTE: a jsonb GIN on `attributes` was evaluated and DROPPED — it accelerates `@>`
+    // containment, NOT the M92 `attributes ->> key = value` predicate (empirically `EXPLAIN`-proven:
+    // the `->>=` filter Seq-Scans regardless of the GIN). The `spans_workspace_ingested_idx` composite
+    // narrows the scan window for the attr/facet filters instead; a true attr-value index would require
+    // rewriting M92 to `@>` (a numeric-vs-string semantic change) — deferred to its own milestone.
   ],
 );
 
@@ -129,6 +138,9 @@ export const traces = pgTable(
     index("traces_session_id_idx").on(t.sessionId),
     // Backs the day/week cost aggregation (M5 risk #2 — period GROUP BY date_trunc(updated_at)).
     index("traces_updated_at_idx").on(t.updatedAt),
+    // M95: composite (workspace_id, updated_at) — one-scan tenant filter + time range/sort for
+    // aggregateObservability (traffic/latency), aggregateCostByPeriod, aggregateNorthStar, listTraces.
+    index("traces_workspace_updated_idx").on(t.workspaceId, t.updatedAt),
     // Backs the M9 status filter (ok/error).
     index("traces_status_code_idx").on(t.statusCode),
   ],
@@ -151,6 +163,9 @@ export const sessions = pgTable(
     primaryKey({ columns: [t.workspaceId, t.sessionId] }),
     index("sessions_workspace_id_idx").on(t.workspaceId),
     index("sessions_last_seen_at_idx").on(t.lastSeenAt),
+    // M95: composite (workspace_id, last_seen_at) — one-scan tenant filter + newest-first ORDER BY
+    // for listSessions (server-paginated).
+    index("sessions_workspace_last_seen_idx").on(t.workspaceId, t.lastSeenAt),
   ],
 );
 
@@ -229,6 +244,9 @@ export const spanEvaluations = pgTable(
     ),
     index("span_evaluations_name_idx").on(t.name),
     index("span_evaluations_trace_id_idx").on(t.traceId),
+    // M95: composite (workspace_id, trace_id) — makes the listTraces per-row eval-count correlated
+    // subquery (`WHERE se.workspace_id = $ AND se.trace_id = $`) INDEX-ONLY (was heap-hitting; B-H3).
+    index("span_evaluations_workspace_trace_idx").on(t.workspaceId, t.traceId),
   ],
 );
 

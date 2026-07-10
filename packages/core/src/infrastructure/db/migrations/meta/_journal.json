@@ -176,6 +176,13 @@
       "when": 1783544077634,
       "tag": "0024_classy_lyja",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1783675413140,
+      "tag": "0025_redundant_bishop",
+      "breakpoints": true
     }
   ]
 }
