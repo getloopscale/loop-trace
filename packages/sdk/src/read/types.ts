@@ -201,11 +201,15 @@ export interface AskFeedbackBody {
   turnId: string;
   label: FeedbackLabel;
 }
-/** The stored copilot-feedback record. */
+/** The stored copilot-feedback record (mirrors the engine's `CopilotFeedbackRecord`). */
 export interface CopilotFeedbackRecord {
+  id: string;
   traceId: string;
   turnId: string;
+  spanId?: string;
   label: FeedbackLabel;
+  question?: string;
+  updatedAt: string;
 }
 
 /**

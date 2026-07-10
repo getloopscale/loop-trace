@@ -617,7 +617,7 @@ describe("LensReadClient — labeling queue + ask-feedback (M112)", () => {
   });
 
   it("submitAskFeedback POSTs {turnId,label} (upsert → network-retryable)", async () => {
-    const fetchFn = mockFetch({ traceId: "tr1", turnId: "turn-1", label: "up" });
+    const fetchFn = mockFetch({ id: "fb1", traceId: "tr1", turnId: "turn-1", label: "up", updatedAt: "t" });
     const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
     const rec = await client.submitAskFeedback("tr1", { turnId: "turn-1", label: "up" });
     expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/traces/tr1/ask/feedback");
