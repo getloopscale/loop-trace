@@ -42,6 +42,19 @@ try {
 Your `theo_live_*` key resolves your workspace at the edge — you never pass a workspace/tenant
 parameter. The client sends `Authorization: Bearer <apiKey>` on every request.
 
+### Reaching Lens through the unified edge
+
+If your `theo_live_*` key reaches Lens through the Theo **unified edge** (where the capability lives
+under `/v1/lens/*`), set `basePath` so the client composes the right URLs:
+
+```ts
+const client = new LensReadClient({
+  baseUrl: "https://api.usetheo.dev",
+  apiKey: process.env.LENS_API_KEY,
+  basePath: "/v1/lens", // default is "/v1" (talking to the engine directly)
+});
+```
+
 ## Read methods
 
 | Method | Route | Returns |

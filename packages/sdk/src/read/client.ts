@@ -61,6 +61,13 @@ export interface LensReadClientOptions {
   baseUrl: string;
   /** A `theo_live_*` per-tenant key. Sent as `Authorization: Bearer <apiKey>`. */
   apiKey: string;
+  /**
+   * The API version root the routes live under (default `/v1` — talking to the engine directly).
+   * A customer whose `theo_live_*` key reaches the capability through the **unified edge** sets this to
+   * the capability prefix (e.g. `/v1/lens`); the edge rewrites `/v1/lens/*` → `/v1/*` upstream. The SDK
+   * swaps the `/v1` root of every route for this value (see #49).
+   */
+  basePath?: string;
   /** Injected transport (defaults to `globalThis.fetch`) — the seam unit tests drive. */
   fetch?: typeof fetch;
   /** Max retry attempts for a transient failure (default 2 → up to 3 total tries). */
@@ -97,6 +104,7 @@ function retryAfterMs(res: Response): number | undefined {
 
 export class LensReadClient {
   private readonly baseUrl: string;
+  private readonly basePath: string;
   private readonly apiKey: string;
   private readonly fetchImpl: typeof fetch;
   private readonly maxRetries: number;
@@ -116,6 +124,12 @@ export class LensReadClient {
     } catch {
       throw new Error(`LensReadClient: baseUrl is not an absolute URL: ${options.baseUrl}`);
     }
+    // The version root every route hangs off (default /v1). Must be absolute (start with `/`); a
+    // trailing slash is stripped so `${basePath}${rest}` never doubles.
+    this.basePath = (options.basePath ?? "/v1").replace(/\/+$/, "");
+    if (!this.basePath.startsWith("/")) {
+      throw new Error(`LensReadClient: basePath must start with "/": ${options.basePath}`);
+    }
     this.apiKey = options.apiKey;
     this.fetchImpl = options.fetch ?? globalThis.fetch;
     if (typeof this.fetchImpl !== "function") {
@@ -128,7 +142,11 @@ export class LensReadClient {
   }
 
   private buildUrl(path: string, query?: Query): string {
-    const url = new URL(`${this.baseUrl}${path}`);
+    // Every method's `path` is engine-relative (`/v1/...`); swap the `/v1` root for `basePath` so an
+    // edge consumer (basePath `/v1/lens`) composes `/v1/lens/...` (the edge rewrites it back to `/v1/...`).
+    // Default basePath `/v1` makes this a no-op (direct-to-engine). Closes #49.
+    const routed = this.basePath === "/v1" ? path : path.replace(/^\/v1(?=\/|$)/, this.basePath);
+    const url = new URL(`${this.baseUrl}${routed}`);
     if (query) {
       for (const [key, value] of Object.entries(query)) {
         if (value !== undefined) url.searchParams.set(key, String(value));

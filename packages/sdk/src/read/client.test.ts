@@ -93,6 +93,39 @@ describe("LensReadClient — transport (T2.1)", () => {
     await client.toolStats();
     expect(calledUrl(fetchFn)).toBe(`${BASE}/api/v1/analytics/tools`);
   });
+
+  // #49 — reach the capability through the unified edge by swapping the /v1 root for a basePath.
+  it("basePath /v1/lens routes a read through the edge prefix", async () => {
+    const fetchFn = mockFetch({ traces: [], total: 0, limit: 0, offset: 0 });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, basePath: "/v1/lens", fetch: fetchFn });
+    await client.listTraces();
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/lens/traces");
+  });
+
+  it("basePath /v1/lens routes a nested path + a write correctly (no double /v1)", async () => {
+    const fetchFn = mockFetch({ id: "d1", name: "s" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, basePath: "/v1/lens", fetch: fetchFn });
+    await client.createDataset({ name: "s" });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/lens/datasets");
+  });
+
+  it("basePath /v1/lens maps the discovery root /v1 → /v1/lens", async () => {
+    const fetchFn = mockFetch({ service: "theo-lens", version: "x", capability: "observability", openapi: "/openapi.json", docs: "/openapi.json" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, basePath: "/v1/lens", fetch: fetchFn });
+    await client.capabilities();
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/lens");
+  });
+
+  it("default basePath is /v1 (direct-to-engine, unchanged behavior)", async () => {
+    const fetchFn = mockFetch({ tools: [] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.toolStats();
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/analytics/tools");
+  });
+
+  it("rejects a basePath that does not start with /", () => {
+    expect(() => new LensReadClient({ baseUrl: BASE, apiKey: KEY, basePath: "v1/lens" })).toThrow(/basePath/);
+  });
 });
 
 describe("LensReadClient — the 7 typed read methods (T2.2)", () => {
