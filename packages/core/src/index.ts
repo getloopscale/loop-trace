@@ -56,6 +56,7 @@ export {
   type SpanAttributeKey,
   type SpanAttributeValue,
 } from "./domain/span-facets.js";
+export { isValidAttrKey, parseSpanQuery, type SpanClause, type SpanQuery } from "./domain/span-query.js";
 // M36: online evaluators (compute/write path) — types + pure rule/guard engines.
 export {
   EVALUATOR_KINDS,

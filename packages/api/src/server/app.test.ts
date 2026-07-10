@@ -1008,6 +1008,14 @@ describe("createApp (contract, stub repo)", () => {
     expect(repo.lastFacetKey).toBe("gen_ai.request.temperature"); // the key reached the repo (bound path)
   });
 
+  it("test_get_span_attributes_rejects_malformed_key_with_400", async () => {
+    // an oversized/hostile key is rejected at the boundary before reaching SQL (defense-in-depth).
+    expect((await app.request("/v1/metrics/span-attributes?key=" + encodeURIComponent("a".repeat(200)))).status).toBe(400);
+    expect((await app.request("/v1/metrics/span-attributes?key=" + encodeURIComponent("bad key!"))).status).toBe(400);
+    // a well-shaped key still succeeds
+    expect((await app.request("/v1/metrics/span-attributes?key=gen_ai.request.temperature")).status).toBe(200);
+  });
+
   it("test_span_attributes_route_rejects_leaked_column_at_boundary_with_5xx", async () => {
     const leaky: SpanRepository = {
       ...repo,

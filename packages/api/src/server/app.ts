@@ -13,6 +13,7 @@ import {
   evaluatorsResponseSchema,
   scoresResponseSchema,
   spanFacetsResponseSchema,
+  isValidAttrKey,
   sessionListResponseSchema,
   sessionDetailResponseSchema,
   traceTagsResponseSchema,
@@ -379,6 +380,11 @@ export function createApp(
     // distinct values for that key. The key is bound as a jsonb path (injection-safe). Strict DTO.
     const ws = getPrincipal(c).workspaceId;
     const key = c.req.query("key");
+    // Shape-validate the key at the boundary (fail-fast 400, Rule 8) — reject an oversized/hostile key
+    // before it reaches SQL (it is bound regardless, but this caps abuse; same shape as the DSL clause).
+    if (key !== undefined && key.length > 0 && !isValidAttrKey(key)) {
+      return c.json({ error: "invalid attribute key" }, 400);
+    }
     const body =
       key !== undefined && key.length > 0
         ? { mode: "values" as const, key, values: await repo.discoverSpanAttributeValues(key, ws) }

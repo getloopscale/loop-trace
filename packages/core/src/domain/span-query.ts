@@ -47,6 +47,13 @@ const STATUS_VALUES = ["ok", "error"] as const;
 // it is NOT the injection guard (the key is bound as a jsonb path — see spanClauseSql).
 const ATTR_KEY_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
+/** M92 — is `key` a well-shaped attribute key? Shared by the DSL parser AND the facet-values route
+ *  boundary so a hostile/oversized key is rejected before it reaches SQL (defense-in-depth; the key
+ *  is bound as a jsonb path regardless). */
+export function isValidAttrKey(key: string): boolean {
+  return ATTR_KEY_RE.test(key);
+}
+
 // A token is either a quoted clause (`field:"a b c"`) or a bare run of non-space.
 // The quoted alternative is tried first so spaces inside quotes don't split a token.
 const TOKEN_RE = /\w+:"[^"]*"|\S+/g;
@@ -92,7 +99,7 @@ export function parseSpanQuery(input: string): SpanQuery {
       const eq = value.indexOf("=");
       const key = eq > 0 ? value.slice(0, eq) : "";
       const attrValue = eq > 0 ? value.slice(eq + 1) : "";
-      if (ATTR_KEY_RE.test(key) && attrValue.length > 0) {
+      if (isValidAttrKey(key) && attrValue.length > 0) {
         clauses.push({ field: "attr", key, value: attrValue });
       } else {
         ignored.push(token);
