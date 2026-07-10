@@ -170,6 +170,11 @@ export function parseResourceSpansPartial(envelope: unknown): ParseResourceSpans
         const parsed = spanSchema.safeParse(candidate);
         if (!parsed.success) {
           // M93 — total per span: drop + count the malformed span (partial-success), never throw.
+          // `error.message` is surfaced to the client as the OTLP `error_message`. It reports the
+          // field path + constraint + type — NOT the received value — for `spanSchema`'s current
+          // string/number/regex/record fields (no enum/literal). If a future `enum`/`literal` field
+          // is added, Zod's `invalid_enum_value`/`invalid_literal` echoes the input value → sanitize
+          // the message here before it leaves the boundary (no attacker input / PII in the response).
           rejected += 1;
           firstError ??= `invalid OTLP span: ${parsed.error.message}`;
           continue;
