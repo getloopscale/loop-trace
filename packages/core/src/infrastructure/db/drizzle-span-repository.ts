@@ -93,6 +93,13 @@ const ERROR_CODES_IN = sql`(${sql.join(
 )})`;
 
 /**
+ * M97 (B-M2) — the clamped span-latency-in-ms expression, shared by every latency percentile.
+ * A negative duration (clock skew) clamps to 0; nanos → ms via 1e6. One place to change the
+ * semantics; embedded into raw `sql` templates via `sql.raw`.
+ */
+const LATENCY_MS_EXPR = "greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6)";
+
+/**
  * SQL fragment computing a span's SEMANTIC kind on alias `s` — mirrors the UI's
  * `deriveKindFromSignals` precedence (tool > retriever > embedding > llm >
  * chain[has children] > unknown). M30 ADR D3: the stored `spans.kind` is the OTLP
@@ -762,10 +769,10 @@ export class DrizzleSpanRepository implements SpanRepository {
              count(*)::int AS call_count,
              count(*) FILTER (WHERE status_code IN (${sql.raw(errorList)}))::int AS error_count,
              percentile_cont(0.5) WITHIN GROUP (
-               ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6)
+               ORDER BY ${sql.raw(LATENCY_MS_EXPR)}
              )::double precision AS p50,
              percentile_cont(0.95) WITHIN GROUP (
-               ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6)
+               ORDER BY ${sql.raw(LATENCY_MS_EXPR)}
              )::double precision AS p95
       FROM spans
       WHERE tool_name IS NOT NULL AND ingested_at >= now() - interval '90 days' AND workspace_id = ${workspaceId}
@@ -905,10 +912,10 @@ export class DrizzleSpanRepository implements SpanRepository {
     // not error the cast nor count as a spurious 0ms); skew clamped via greatest.
     const latencyRes = await this.db.execute(sql`
       SELECT date_trunc(${trunc}, updated_at) AS bucket,
-             percentile_cont(0.5)  WITHIN GROUP (ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6))::double precision AS p50,
-             percentile_cont(0.75) WITHIN GROUP (ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6))::double precision AS p75,
-             percentile_cont(0.95) WITHIN GROUP (ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6))::double precision AS p95,
-             percentile_cont(0.99) WITHIN GROUP (ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6))::double precision AS p99
+             percentile_cont(0.5)  WITHIN GROUP (ORDER BY ${sql.raw(LATENCY_MS_EXPR)})::double precision AS p50,
+             percentile_cont(0.75) WITHIN GROUP (ORDER BY ${sql.raw(LATENCY_MS_EXPR)})::double precision AS p75,
+             percentile_cont(0.95) WITHIN GROUP (ORDER BY ${sql.raw(LATENCY_MS_EXPR)})::double precision AS p95,
+             percentile_cont(0.99) WITHIN GROUP (ORDER BY ${sql.raw(LATENCY_MS_EXPR)})::double precision AS p99
       FROM traces
       WHERE updated_at >= now() - ${sql.raw(`interval '${interval}'`)} AND workspace_id = ${workspaceId}
         AND start_time_unix_nano ~ '^\\d+$' AND end_time_unix_nano ~ '^\\d+$'
@@ -1209,9 +1216,9 @@ export class DrizzleSpanRepository implements SpanRepository {
              coalesce(sum(cost_usd), 0)::double precision AS "costUsd",
              coalesce(sum(total_tokens), 0)::int AS "totalTokens",
              count(*) FILTER (WHERE status_code = 'error')::int AS "errorCount",
-             percentile_cont(0.5) WITHIN GROUP (ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6))
+             percentile_cont(0.5) WITHIN GROUP (ORDER BY ${sql.raw(LATENCY_MS_EXPR)})
                FILTER (WHERE start_time_unix_nano ~ '^\\d+$' AND end_time_unix_nano ~ '^\\d+$')::double precision AS p50,
-             percentile_cont(0.95) WITHIN GROUP (ORDER BY greatest(0, (end_time_unix_nano::numeric - start_time_unix_nano::numeric) / 1e6))
+             percentile_cont(0.95) WITHIN GROUP (ORDER BY ${sql.raw(LATENCY_MS_EXPR)})
                FILTER (WHERE start_time_unix_nano ~ '^\\d+$' AND end_time_unix_nano ~ '^\\d+$')::double precision AS p95
       FROM traces
       WHERE session_id = ${sessionId} AND workspace_id = ${workspaceId}
