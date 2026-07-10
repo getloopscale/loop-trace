@@ -223,6 +223,33 @@ describe("LensReadClient — resilient transport (M104)", () => {
     expect(delays).toEqual([2000]);
   });
 
+  it("falls back to exp-backoff for a 429 WITHOUT a Retry-After header", async () => {
+    const fetchFn = seqFetch([status(429), ok({ tools: [] })]);
+    const delays: number[] = [];
+    const client = new LensReadClient({
+      baseUrl: BASE,
+      apiKey: KEY,
+      fetch: fetchFn,
+      sleep: async (ms) => void delays.push(ms),
+      random: NO_JITTER,
+    });
+    await client.toolStats();
+    expect(delays).toEqual([500]);
+  });
+
+  it("retries a timeout abort then succeeds (timeout is in the retryable set)", async () => {
+    const fetchFn = seqFetch([new DOMException("aborted", "AbortError"), ok({ tools: [] })]);
+    const client = new LensReadClient({
+      baseUrl: BASE,
+      apiKey: KEY,
+      fetch: fetchFn,
+      maxRetries: 1,
+      sleep: async () => {},
+    });
+    await client.toolStats();
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
   it("caps retries at maxRetries then throws the typed error (maxRetries+1 calls)", async () => {
     const fetchFn = seqFetch([status(503), status(503), status(503), status(503)]);
     const client = new LensReadClient({
