@@ -99,6 +99,31 @@ Idempotent writes (create-or-get, tag/traceId-item, upsert annotation, deletes) 
 transient network failure; a synthetic `addDatasetItem({ input, output })` is not (a lost response
 would double-insert) — it surfaces the error for you to decide.
 
+## Advanced — evaluators, labeling, experiments
+
+The client also drives the online-eval + labeling + experiment surface. Create an evaluator and run it:
+
+```ts
+const evaluator = await client.createEvaluator({
+  name: "errors",
+  kind: "rule",
+  config: { predicate: "status:error" },
+});
+const result = await client.runEvaluator(evaluator.id, { limit: 100 });
+```
+
+| Group | Methods |
+|---|---|
+| Evaluators | `createEvaluator` · `updateEvaluator` · `deleteEvaluator` · `runEvaluator` |
+| Guards | `createGuard` · `deleteGuard` |
+| Labeling queue | `enqueueForLabeling` · `resolveLabelingItem` · `exportLabelingAsDataset` |
+| Copilot feedback | `submitAskFeedback` · `deleteAskFeedback` |
+| Experiments / replay | `createExperimentRun` · `replaySpan` · `createReplaySession` |
+
+**Billing note:** `runEvaluator` (for an `llm_judge`), `createExperimentRun`, and `replaySpan` re-execute
+against your LLM provider (real cost). These are **never auto-retried** on a network/timeout — the client
+surfaces the error so a lost response can never double-run / double-bill.
+
 ## Discovery
 
 ```ts

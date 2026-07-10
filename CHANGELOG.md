@@ -12,6 +12,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - `@usetheo/lens-sdk`: 6 typed evaluator + guard write methods — `createEvaluator`/`updateEvaluator`/`deleteEvaluator`/`runEvaluator` + `createGuard`/`deleteGuard`. Accurately hand-typed (the engine returns TS-typed records with no Zod response schema; the M114 contract test is the drift guard); CRUD is network-retryable (idempotent upsert/PUT/DELETE) while `runEvaluator` is NOT (scoring is billable for `llm_judge` — never double-scored on a lost response) (M111)
 - `@usetheo/lens-sdk`: 5 typed labeling-queue + copilot-feedback methods — `enqueueForLabeling`/`resolveLabelingItem`/`exportLabelingAsDataset` + `submitAskFeedback`/`deleteAskFeedback`. Idempotent writes (enqueue `ON CONFLICT`, feedback upsert, feedback-delete) are network-retryable; the state-transition/export writes (`resolve`, `export`) pass a conservative non-retry (never re-apply an ambiguous network failure) (M112)
 - `@usetheo/lens-sdk`: 3 typed experiment + replay methods — `createExperimentRun`/`replaySpan`/`createReplaySession`. All launch billable provider work → NON-idempotent (`retryNetwork:false`), so a lost-response never re-runs / re-bills (the M108/M94 double-bill class) (M113)
+- `@usetheo/lens-sdk`: advanced-write hermetic contract test (evaluator CRUD + guard + a real rule `runEvaluator` + labeling enqueue→resolve + ask-feedback, against the real engine + Postgres), a `README § Advanced` section (doc-smoke-tested), and a runnable `manage-evaluator.ts` example (M114)
 
 ### Changed
 
