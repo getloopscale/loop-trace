@@ -488,12 +488,27 @@ describe("createApp (contract, stub repo)", () => {
     const doc = (await (await app.request("/openapi.json")).json()) as {
       paths: Record<string, Record<string, unknown>>;
     };
-    const excluded = new Set(["/health", "/ready", "/openapi.json", "/v1", "/version", "/*"]);
+    const isExcluded = (p: string) =>
+      ["/health", "/ready", "/openapi.json", "/v1", "/version", "/*"].includes(p) ||
+      p.startsWith("/v1/admin");
     const mounted = app.routes
-      .filter((r) => r.method !== "ALL" && r.method !== "HEAD" && !excluded.has(r.path))
+      .filter((r) => r.method !== "ALL" && r.method !== "HEAD" && !isExcluded(r.path))
       .map((r) => ({ method: r.method.toLowerCase(), path: r.path.replace(/:([A-Za-z0-9_]+)/g, "{$1}") }));
     const missing = mounted.filter((m) => !doc.paths[m.path]?.[m.method]);
     expect(missing).toEqual([]);
+  });
+
+  it("m96_openapi_never_exposes_admin_key_lifecycle_routes (least privilege)", async () => {
+    // build the app WITH a pool so the /v1/admin/keys lifecycle routes are actually mounted, then
+    // prove they are absent from the unauthenticated public spec (info-disclosure guard).
+    const withAdmin = createApp(repo, undefined, { pool: {} as never });
+    const mountsAdmin = withAdmin.routes.some((r) => r.path.startsWith("/v1/admin"));
+    expect(mountsAdmin).toBe(true); // precondition — the routes ARE mounted in this config
+    const doc = (await (await withAdmin.request("/openapi.json")).json()) as {
+      paths: Record<string, unknown>;
+    };
+    const adminPaths = Object.keys(doc.paths).filter((p) => p.startsWith("/v1/admin"));
+    expect(adminPaths).toEqual([]);
   });
 
   it("m96_v1_index_and_version_are_served", async () => {

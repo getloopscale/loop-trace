@@ -573,7 +573,7 @@ export function createApp(
     const ann = normalizeAnnotation(body);
     if (ann === null) {
       return c.json(
-        { error: "annotation requires a label or a note" },
+        apiError("INVALID_BODY", "annotation requires a label or a note"),
         400,
       );
     }

@@ -13,12 +13,15 @@ const ROUTE_FILES = [
   "./routes/dataset-routes.ts",
   "./routes/labeling-queue-routes.ts",
   "./handlers/replay.ts",
+  "./handlers/evaluators.ts",
 ];
 
 describe("M96 error-envelope contract", () => {
   it.each(ROUTE_FILES)("%s emits no bare-string { error: … } response", (rel) => {
     const src = readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
-    const bare = src.match(/c\.json\(\{\s*error:/g) ?? [];
+    // Whitespace/newline-tolerant after `c.json(` so a multi-line `c.json(\n  { error: … })`
+    // cannot slip past the guard (the exact blind spot that let one site survive M96 phase 1).
+    const bare = src.match(/c\.json\(\s*\{\s*error\s*:/g) ?? [];
     expect(bare).toEqual([]);
   });
 });

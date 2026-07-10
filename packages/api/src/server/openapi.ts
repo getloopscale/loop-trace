@@ -73,6 +73,16 @@ function toOpenApiPath(honoPath: string): { path: string; params: string[] } {
 /** Routes that are not part of the documented public data surface. */
 const EXCLUDED = new Set(["/health", "/ready", "/openapi.json", "/v1", "/version", "/*"]);
 
+/**
+ * A route excluded from the PUBLIC spec. Beyond the infra/discovery set, the admin key-lifecycle
+ * surface (`/v1/admin/*`) is deliberately kept out of the unauthenticated `/openapi.json` — it is a
+ * platform-admin (Model B broker) surface, not part of a customer client, and publishing the
+ * mint/revoke routes to anonymous clients is needless reconnaissance exposure (least privilege).
+ */
+function isExcluded(path: string): boolean {
+  return EXCLUDED.has(path) || path.startsWith("/v1/admin");
+}
+
 export interface MountedRoute {
   method: string;
   path: string;
@@ -98,7 +108,7 @@ export function buildOpenApiDocument(routes: MountedRoute[], version = "dev"): R
   const paths: Record<string, Record<string, unknown>> = {};
   for (const r of routes) {
     if (r.method === "ALL" || r.method === "HEAD") continue;
-    if (EXCLUDED.has(r.path)) continue;
+    if (isExcluded(r.path)) continue;
     const key = `${r.method} ${r.path}`;
     if (seen.has(key)) continue;
     seen.add(key);
