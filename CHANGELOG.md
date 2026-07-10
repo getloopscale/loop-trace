@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Roadmap v12 opened: `ROADMAP-sota-experience-v12.md` — the typed write SDK, M107–M110 (write-client core → mutation correctness/idempotency → hermetic write↔read contract proof → write quickstart/examples)
 
 ### Changed
 
