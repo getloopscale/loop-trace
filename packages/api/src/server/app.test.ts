@@ -1548,10 +1548,55 @@ describe("M93 ingest durability & backpressure", () => {
     expect((await send()).status).toBe(200);
     const third = await send(); // 3rd in the window → shed
     expect(third.status).toBe(429);
-    expect(((await third.json()) as { code: string }).code).toBe("RATE_LIMITED");
+    expect(((await third.clone().json()) as { code: string }).code).toBe("RATE_LIMITED");
+    // M94 — the 429 advises Retry-After (seconds until the window resets)
+    expect(Number(third.headers.get("Retry-After"))).toBeGreaterThanOrEqual(1);
     expect(ingestRateLimited.value).toBe(1);
     // a NEW window (advance the clock) resets the allowance
     now += 60_001;
     expect((await send()).status).toBe(200);
+  });
+});
+
+// M94 — liveness/readiness probes
+describe("M94 health & readiness probes", () => {
+  it("GET /health is 200 with no dependency check (pure liveness)", async () => {
+    const app = createApp(new StubSpanRepository()); // no health dep at all
+    const res = await app.request("/health");
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { status: string }).status).toBe("ok");
+  });
+
+  it("GET /health reports the version when provided", async () => {
+    const app = createApp(new StubSpanRepository(), undefined, {}, undefined, undefined, undefined, undefined, undefined, { version: "9.9.9" });
+    const body = (await (await app.request("/health")).json()) as { version: string };
+    expect(body.version).toBe("9.9.9");
+  });
+
+  it("GET /ready is 200 when the DB probe succeeds", async () => {
+    const app = createApp(new StubSpanRepository(), undefined, {}, undefined, undefined, undefined, undefined, undefined, {
+      pingDb: async () => {},
+    });
+    const res = await app.request("/ready");
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { status: string }).status).toBe("ready");
+  });
+
+  it("GET /ready is 503 when the DB probe throws (fail-closed, LB drains the node)", async () => {
+    const app = createApp(new StubSpanRepository(), undefined, {}, undefined, undefined, undefined, undefined, undefined, {
+      pingDb: async () => {
+        throw new Error("connection refused");
+      },
+    });
+    const res = await app.request("/ready");
+    expect(res.status).toBe(503);
+    expect(((await res.json()) as { status: string }).status).toBe("unavailable");
+  });
+
+  it("both probes are reachable WITHOUT a bearer (unauthenticated)", async () => {
+    // requireCredential=true would 401 any /v1 route; the probes must still answer.
+    const app = createApp(new StubSpanRepository(), undefined, { requireCredential: true }, undefined, undefined, undefined, undefined, undefined, { pingDb: async () => {} });
+    expect((await app.request("/health")).status).toBe(200);
+    expect((await app.request("/ready")).status).toBe(200);
   });
 });

@@ -80,3 +80,67 @@ export function parseMaxDecompressedBytes(env: NodeJS.ProcessEnv = process.env):
   const n = Number(raw);
   return Number.isInteger(n) && n > 0 ? n : DEFAULT_MAX_DECOMPRESSED_BYTES;
 }
+
+/** Read a positive-integer env var; an unset/invalid/≤0 value falls back to `def` (never breaks
+ *  boot on a fat-fingered env — fail-safe, `error-handling.md`). Shared by the M94 resilience config. */
+function positiveIntEnv(env: NodeJS.ProcessEnv, key: string, def: number): number {
+  const raw = env[key];
+  if (raw === undefined) return def;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : def;
+}
+
+/** M94: node-pg Pool resilience config. A stuck query aborts at `statement_timeout` (freeing the
+ *  connection); `max` bounds the pool; connect/idle timeouts prevent hangs. All env-tunable. */
+export interface PoolConfig {
+  max: number;
+  connectionTimeoutMillis: number;
+  idleTimeoutMillis: number;
+  statement_timeout: number;
+  query_timeout: number;
+}
+export const DEFAULT_POOL_CONFIG: PoolConfig = {
+  max: 10,
+  connectionTimeoutMillis: 5_000,
+  idleTimeoutMillis: 30_000,
+  statement_timeout: 30_000,
+  query_timeout: 30_000,
+};
+export function parsePoolConfig(env: NodeJS.ProcessEnv = process.env): PoolConfig {
+  return {
+    max: positiveIntEnv(env, "THEOLENS_PG_POOL_MAX", DEFAULT_POOL_CONFIG.max),
+    connectionTimeoutMillis: positiveIntEnv(env, "THEOLENS_PG_CONNECT_TIMEOUT_MS", DEFAULT_POOL_CONFIG.connectionTimeoutMillis),
+    idleTimeoutMillis: positiveIntEnv(env, "THEOLENS_PG_IDLE_TIMEOUT_MS", DEFAULT_POOL_CONFIG.idleTimeoutMillis),
+    statement_timeout: positiveIntEnv(env, "THEOLENS_PG_STATEMENT_TIMEOUT_MS", DEFAULT_POOL_CONFIG.statement_timeout),
+    query_timeout: positiveIntEnv(env, "THEOLENS_PG_QUERY_TIMEOUT_MS", DEFAULT_POOL_CONFIG.query_timeout),
+  };
+}
+
+/** M94: server-level HTTP request timeout (ms). A DB-blocked route 503s at this ceiling instead of
+ *  hanging a socket. Default 30s. */
+export const DEFAULT_HTTP_REQUEST_TIMEOUT_MS = 30_000;
+export function parseHttpRequestTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  return positiveIntEnv(env, "THEOLENS_HTTP_REQUEST_TIMEOUT_MS", DEFAULT_HTTP_REQUEST_TIMEOUT_MS);
+}
+
+/** M94: graceful-shutdown drain deadline (ms) — how long SIGTERM awaits in-flight requests before a
+ *  forced close. Default 10s. */
+export const DEFAULT_SHUTDOWN_DRAIN_MS = 10_000;
+export function parseShutdownDrainMs(env: NodeJS.ProcessEnv = process.env): number {
+  return positiveIntEnv(env, "THEOLENS_SHUTDOWN_DRAIN_MS", DEFAULT_SHUTDOWN_DRAIN_MS);
+}
+
+/** M94: provider-call retry policy. A transient failure (429/5xx/timeout) is retried up to
+ *  `maxAttempts` (total, incl. the first) with exponential backoff from `baseDelayMs`; a fatal 4xx is
+ *  never retried. Default 2 attempts / 250ms base. */
+export interface ProviderRetryConfig {
+  maxAttempts: number;
+  baseDelayMs: number;
+}
+export const DEFAULT_PROVIDER_RETRY: ProviderRetryConfig = { maxAttempts: 2, baseDelayMs: 250 };
+export function parseProviderRetry(env: NodeJS.ProcessEnv = process.env): ProviderRetryConfig {
+  return {
+    maxAttempts: positiveIntEnv(env, "THEOLENS_PROVIDER_MAX_ATTEMPTS", DEFAULT_PROVIDER_RETRY.maxAttempts),
+    baseDelayMs: positiveIntEnv(env, "THEOLENS_PROVIDER_RETRY_BASE_MS", DEFAULT_PROVIDER_RETRY.baseDelayMs),
+  };
+}

@@ -70,7 +70,9 @@ export async function createExperimentRunHandler(c: Context, deps: ExperimentApi
   const clock = deps.now ?? Date.now;
 
   // Rate-limit first (protects the billable endpoint before any work — one run = one acquire).
-  if (!deps.limiter.tryAcquire(ws, clock())) {
+  const rlNow = clock();
+  if (!deps.limiter.tryAcquire(ws, rlNow)) {
+    c.header("Retry-After", String(deps.limiter.retryAfterSeconds(ws, rlNow))); // M94
     return c.json({ code: "RATE_LIMITED", message: "experiment-run rate limit exceeded" }, 429);
   }
   if (deps.chat === null) {

@@ -22,11 +22,12 @@ describe("M33 openaiChatCompletion (T1.1)", () => {
     expect(await openaiChatCompletion(cfg, [{ role: "user", content: "hi" }], content("hello"))).toBe("hello");
   });
   it("test_chat_throws_on_non_2xx", async () => {
-    await expect(openaiChatCompletion(cfg, [], fetchReturning(503, {}))).rejects.toBeInstanceOf(ChatError);
+    // 503 is retryable → after exhausting attempts it still throws (no-op sleep keeps the test fast)
+    await expect(openaiChatCompletion(cfg, [], fetchReturning(503, {}), { sleep: async () => {} })).rejects.toBeInstanceOf(ChatError);
   });
   it("test_chat_throws_on_network_error", async () => {
     const failing = (async () => { throw new Error("ECONNRESET"); }) as unknown as typeof fetch;
-    await expect(openaiChatCompletion(cfg, [], failing)).rejects.toBeInstanceOf(ChatError);
+    await expect(openaiChatCompletion(cfg, [], failing, { sleep: async () => {} })).rejects.toBeInstanceOf(ChatError);
   });
   it("test_chat_throws_on_missing_content", async () => {
     await expect(openaiChatCompletion(cfg, [], fetchReturning(200, { choices: [] }))).rejects.toBeInstanceOf(ChatError);
@@ -34,6 +35,73 @@ describe("M33 openaiChatCompletion (T1.1)", () => {
   it("test_chat_client_ask_delegates", async () => {
     const c = new OpenAICompatibleChat(cfg, content("answer"));
     expect(await c.ask([{ role: "user", content: "q" }])).toBe("answer");
+  });
+});
+
+describe("M94 provider retry & classification", () => {
+  // a fetchImpl that returns a scripted sequence of responses (one per call).
+  function fetchSequence(steps: Array<{ status: number; body?: unknown; headers?: Record<string, string> }>): {
+    fetch: typeof fetch;
+    calls: () => number;
+  } {
+    let i = 0;
+    const fn = (async () => {
+      const step = steps[Math.min(i, steps.length - 1)];
+      i += 1;
+      return {
+        ok: step.status >= 200 && step.status < 300,
+        status: step.status,
+        headers: { get: (k: string) => step.headers?.[k.toLowerCase()] ?? null },
+        json: async () => step.body ?? {},
+      } as unknown as Response;
+    }) as unknown as typeof fetch;
+    return { fetch: fn, calls: () => i };
+  }
+
+  it("retries a transient 503 then succeeds on the retry", async () => {
+    const seq = fetchSequence([
+      { status: 503 },
+      { status: 200, body: { choices: [{ message: { content: "recovered" } }] } },
+    ]);
+    const out = await openaiChatCompletion(cfg, [], seq.fetch, { sleep: async () => {} });
+    expect(out).toBe("recovered");
+    expect(seq.calls()).toBe(2); // one retry
+  });
+
+  it("does NOT retry a fatal 400 — fails fast after ONE call", async () => {
+    const seq = fetchSequence([{ status: 400 }, { status: 200, body: { choices: [{ message: { content: "x" } }] } }]);
+    await expect(openaiChatCompletion(cfg, [], seq.fetch, { sleep: async () => {} })).rejects.toBeInstanceOf(ChatError);
+    expect(seq.calls()).toBe(1); // no retry on a fatal 4xx
+  });
+
+  it("retries a network error then fails after maxAttempts", async () => {
+    let calls = 0;
+    const failing = (async () => {
+      calls += 1;
+      throw new Error("ECONNRESET");
+    }) as unknown as typeof fetch;
+    await expect(
+      openaiChatCompletion(cfg, [], failing, { retry: { maxAttempts: 3, baseDelayMs: 1 }, sleep: async () => {} }),
+    ).rejects.toBeInstanceOf(ChatError);
+    expect(calls).toBe(3); // ran maxAttempts times
+  });
+
+  it("honors Retry-After on a 429 (the backoff waits at least the advised seconds)", async () => {
+    const seq = fetchSequence([
+      { status: 429, headers: { "retry-after": "2" } },
+      { status: 200, body: { choices: [{ message: { content: "ok" } }] } },
+    ]);
+    const slept: number[] = [];
+    await openaiChatCompletion(cfg, [], seq.fetch, { sleep: async (ms) => void slept.push(ms) });
+    expect(slept[0]).toBeGreaterThanOrEqual(2000); // >= Retry-After: 2s
+  });
+
+  it("a single attempt (maxAttempts=1) never retries", async () => {
+    const seq = fetchSequence([{ status: 503 }]);
+    await expect(
+      openaiChatCompletion(cfg, [], seq.fetch, { retry: { maxAttempts: 1, baseDelayMs: 1 }, sleep: async () => {} }),
+    ).rejects.toBeInstanceOf(ChatError);
+    expect(seq.calls()).toBe(1);
   });
 });
 

@@ -59,6 +59,12 @@ export interface IngestApiDeps {
   /** Injected clock for the limiter window (defaults to Date.now) — deterministic tests. */
   now?: () => number;
 }
+
+/** M94 — liveness/readiness probe deps. `pingDb` runs a bounded `SELECT 1`; it throwing → /ready 503. */
+export interface HealthApiDeps {
+  version?: string;
+  pingDb?: () => Promise<void>;
+}
 import { bodyLimit } from "hono/body-limit";
 import { DEFAULT_MAX_INGEST_BYTES } from "@usetheo/lens-core";
 import { parseResourceSpansPartial } from "../otlp/parse-resource-spans.js";
@@ -119,6 +125,7 @@ export function createApp(
   replay?: ReplayApiDeps,
   experiment?: ExperimentApiDeps,
   ingest?: IngestApiDeps,
+  health?: HealthApiDeps,
 ): Hono {
   const app = new Hono();
 
@@ -135,6 +142,19 @@ export function createApp(
       }),
     );
     return c.json({ error: "internal error" }, 500);
+  });
+
+  // M94 — k8s/edge probes, UNAUTHENTICATED and mounted before the /v1 bearer. `/health` is pure
+  // liveness (no dependency — a DB outage must NOT fail liveness, else a recoverable pod is killed);
+  // `/ready` runs a DB probe (SELECT 1) and 503s when the DB is unreachable so the LB drains the node.
+  app.get("/health", (c) => c.json({ status: "ok", version: health?.version ?? "unknown" }, 200));
+  app.get("/ready", async (c) => {
+    try {
+      await health?.pingDb?.();
+      return c.json({ status: "ready" }, 200);
+    } catch {
+      return c.json({ status: "unavailable" }, 503);
+    }
   });
 
   // M22 admin surface (the Model B broker mints per-tenant keys here). Gated by
@@ -195,9 +215,13 @@ export function createApp(
       // M93 — per-workspace ingest backpressure: shed a runaway producer with 429 (before the pool
       // saturates) rather than a whole-server stall. Workspace resolved from the Principal.
       const ws = getPrincipal(c).workspaceId;
-      if (ingest?.limiter && !ingest.limiter.tryAcquire(ws, (ingest.now ?? Date.now)())) {
-        ingestRateLimited.add(1);
-        return c.json({ code: "RATE_LIMITED", message: "ingest rate limit exceeded for this workspace" }, 429);
+      if (ingest?.limiter) {
+        const nowMs = (ingest.now ?? Date.now)();
+        if (!ingest.limiter.tryAcquire(ws, nowMs)) {
+          ingestRateLimited.add(1);
+          c.header("Retry-After", String(ingest.limiter.retryAfterSeconds(ws, nowMs))); // M94
+          return c.json({ code: "RATE_LIMITED", message: "ingest rate limit exceeded for this workspace" }, 429);
+        }
       }
 
       const raw = Buffer.from(await c.req.arrayBuffer());

@@ -35,6 +35,7 @@ import type {
   TraceCost,
 } from "../../domain/cost.js";
 import { round3, ERROR_STATUS_CODES, type ToolStatsResponse } from "../../domain/tool-stats.js";
+import { parsePoolConfig, type PoolConfig } from "../../domain/evaluator-config.js";
 import {
   shapeNorthStarBuckets,
   type BucketRow,
@@ -68,9 +69,21 @@ import {
 import type { Dataset, DatasetDetail } from "../../domain/dataset.js";
 import { shapeAgent, type Agent, type RawAgent } from "../../domain/agent-catalog.js";
 
-/** Build a pg connection pool for the given Postgres URI. */
-export function createPool(connectionString: string): pg.Pool {
-  return new pg.Pool({ connectionString });
+/** Build a pg connection pool for the given Postgres URI. M94: the pool carries resilience config
+ *  (max + connect/idle/statement/query timeouts) so a stuck query self-aborts and frees its
+ *  connection, and a burst cannot exhaust DB connections. Defaults from `parsePoolConfig` (env-tunable). */
+export function createPool(connectionString: string, config: PoolConfig = parsePoolConfig()): pg.Pool {
+  const pool = new pg.Pool({ connectionString, ...config });
+  // M94 — an idle-client error (e.g. Postgres restarts / the network drops) emits a pool `error`
+  // event; WITHOUT a handler, node-pg re-throws it as an uncaught exception and CRASHES the process.
+  // We log it and let the pool evict the dead client — so a DB outage degrades to /ready 503 with the
+  // process ALIVE (the whole point of the readiness probe), never a crash. (Caught by the M94 live-smoke.)
+  pool.on("error", (err) => {
+    console.error(
+      JSON.stringify({ level: "error", msg: "pg pool idle-client error (non-fatal)", error: err.message }),
+    );
+  });
+  return pool;
 }
 
 /** `s.status_code IN ('2','ERROR',…)` fragment (M30 — same error vocabulary as the trace aggregate). */

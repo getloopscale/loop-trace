@@ -44,6 +44,7 @@ export async function askHandler(c: Context, deps: CopilotApiDeps): Promise<Resp
   // Rate-limit first (protects the whole endpoint, D3).
   if (!deps.limiter.tryAcquire(ws, nowMs)) {
     copilotAsksRateLimited.add(1); // observable: an abuse/spike is visible at runtime (pillar c)
+    c.header("Retry-After", String(deps.limiter.retryAfterSeconds(ws, nowMs))); // M94
     return c.json({ code: "RATE_LIMITED", message: "copilot rate limit exceeded" }, 429);
   }
   // Fail-closed: no provider configured → disabled (D2).

@@ -20,6 +20,16 @@ describe("M33 RateLimiter (T2.2)", () => {
     expect(rl.tryAcquire("b", 0)).toBe(true); // b independent of a
     expect(rl.tryAcquire("a", 0)).toBe(false);
   });
+
+  // M94 — Retry-After: seconds until the current window resets (for the 429 header)
+  it("M94_retryAfterSeconds_reports_seconds_until_window_resets", () => {
+    const rl = new RateLimiter(1, 60_000);
+    rl.tryAcquire("ws", 0); // window starts at t=0, resets at t=60_000
+    expect(rl.retryAfterSeconds("ws", 0)).toBe(60); // full window ahead
+    expect(rl.retryAfterSeconds("ws", 59_500)).toBe(1); // ceil(500ms) = 1s, never 0
+    // an unknown workspace (no window) → 0 (nothing to wait for)
+    expect(rl.retryAfterSeconds("never", 0)).toBe(0);
+  });
   it("test_concurrent_acquire_grants_exactly_rpm", async () => {
     // EC-7: K concurrent acquires at one instant grant exactly rpm (atomic counter).
     const rl = new RateLimiter(3, 60_000);

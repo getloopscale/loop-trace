@@ -52,6 +52,7 @@ function ctx(opts: { traceId?: string; body?: unknown; rawBody?: string; ws?: st
         return opts.body;
       },
     },
+    header: () => {}, // M94 — the real Hono context exposes `c.header`; the 429 path sets Retry-After
     json: (obj: unknown, status = 200) =>
       new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json" } }),
   } as unknown as Context;

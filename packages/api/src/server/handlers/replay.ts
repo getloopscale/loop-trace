@@ -89,8 +89,10 @@ export async function replayHandler(c: Context, deps: ReplayApiDeps): Promise<Re
   const clock = deps.now ?? Date.now;
 
   // Rate-limit first (protects the billable endpoint before any work, D3).
-  if (!deps.limiter.tryAcquire(ws, clock())) {
+  const rlNow = clock();
+  if (!deps.limiter.tryAcquire(ws, rlNow)) {
     replayRateLimited.add(1); // observable: an abuse/spike is visible at runtime (pillar c)
+    c.header("Retry-After", String(deps.limiter.retryAfterSeconds(ws, rlNow))); // M94
     return c.json({ code: "RATE_LIMITED", message: "replay rate limit exceeded" }, 429);
   }
   // Fail-closed: no provider configured → disabled.

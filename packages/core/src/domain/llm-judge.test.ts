@@ -10,6 +10,11 @@ import {
   parseJudgeConfig,
   parseEvalSweepHours,
   parseBackfillMax,
+  parsePoolConfig,
+  parseHttpRequestTimeoutMs,
+  parseShutdownDrainMs,
+  parseProviderRetry,
+  DEFAULT_POOL_CONFIG,
 } from "./evaluator-config.js";
 
 const cfg: JudgeConfig = { baseUrl: "http://judge", apiKey: "k", model: "m" };
@@ -100,5 +105,34 @@ describe("M36 evaluator-config (T4.1)", () => {
     expect(parseBackfillMax({})).toBe(500);
     expect(parseBackfillMax({ THEOLENS_EVAL_BACKFILL_MAX: "0" })).toBe(500);
     expect(parseBackfillMax({ THEOLENS_EVAL_BACKFILL_MAX: "100" })).toBe(100);
+  });
+});
+
+describe("M94 resilience config", () => {
+  it("parsePoolConfig defaults + env override + invalid fallback", () => {
+    expect(parsePoolConfig({})).toEqual(DEFAULT_POOL_CONFIG);
+    expect(parsePoolConfig({ THEOLENS_PG_POOL_MAX: "25" }).max).toBe(25);
+    expect(parsePoolConfig({ THEOLENS_PG_STATEMENT_TIMEOUT_MS: "5000" }).statement_timeout).toBe(5000);
+    // invalid (0/negative/NaN) → default, never breaks the pool
+    expect(parsePoolConfig({ THEOLENS_PG_POOL_MAX: "0" }).max).toBe(DEFAULT_POOL_CONFIG.max);
+    expect(parsePoolConfig({ THEOLENS_PG_POOL_MAX: "-1" }).max).toBe(DEFAULT_POOL_CONFIG.max);
+    expect(parsePoolConfig({ THEOLENS_PG_CONNECT_TIMEOUT_MS: "bad" }).connectionTimeoutMillis).toBe(
+      DEFAULT_POOL_CONFIG.connectionTimeoutMillis,
+    );
+  });
+
+  it("parseHttpRequestTimeoutMs + parseShutdownDrainMs default + override", () => {
+    expect(parseHttpRequestTimeoutMs({})).toBe(30_000);
+    expect(parseHttpRequestTimeoutMs({ THEOLENS_HTTP_REQUEST_TIMEOUT_MS: "10000" })).toBe(10_000);
+    expect(parseHttpRequestTimeoutMs({ THEOLENS_HTTP_REQUEST_TIMEOUT_MS: "0" })).toBe(30_000);
+    expect(parseShutdownDrainMs({})).toBe(10_000);
+    expect(parseShutdownDrainMs({ THEOLENS_SHUTDOWN_DRAIN_MS: "3000" })).toBe(3_000);
+  });
+
+  it("parseProviderRetry default (2 attempts) + override + invalid fallback", () => {
+    expect(parseProviderRetry({})).toEqual({ maxAttempts: 2, baseDelayMs: 250 });
+    expect(parseProviderRetry({ THEOLENS_PROVIDER_MAX_ATTEMPTS: "3" }).maxAttempts).toBe(3);
+    // never < 1 attempt (an invalid value keeps the default; the call always runs once)
+    expect(parseProviderRetry({ THEOLENS_PROVIDER_MAX_ATTEMPTS: "0" }).maxAttempts).toBe(2);
   });
 });

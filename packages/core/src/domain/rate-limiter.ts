@@ -46,6 +46,17 @@ export class RateLimiter {
     }
   }
 
+  /**
+   * M94 — seconds until this workspace's current window resets, for the `Retry-After` 429 header.
+   * `ceil` so a sub-second remainder rounds up to 1 (never advise 0). An unknown/expired window → 0.
+   */
+  retryAfterSeconds(workspaceId: string, nowMs: number): number {
+    const w = this.windows.get(workspaceId);
+    if (w === undefined) return 0;
+    const remainingMs = w.start + this.windowMs - nowMs;
+    return remainingMs <= 0 ? 0 : Math.ceil(remainingMs / 1000);
+  }
+
   /** Number of tracked windows — exposed so the memory bound is assertable in tests. */
   get size(): number {
     return this.windows.size;

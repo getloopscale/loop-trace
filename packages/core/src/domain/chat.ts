@@ -7,12 +7,34 @@
  * content throws {@link ChatError} — never a fabricated answer.
  */
 
+import { parseProviderRetry, type ProviderRetryConfig } from "./evaluator-config.js";
+
 /** Typed error for any chat failure — fail-closed, never a silent answer. */
 export class ChatError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ChatError";
   }
+}
+
+/** M94 — retry/backoff injection point (test-injectable clock; env-configured policy in production). */
+export interface RequestOpts {
+  retry?: ProviderRetryConfig;
+  sleep?: (ms: number) => Promise<void>;
+}
+
+const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Parse a `Retry-After` header (integer seconds) to ms; a missing/invalid value → 0. */
+function retryAfterMs(header: string | null | undefined): number {
+  if (header == null) return 0;
+  const s = Number(header);
+  return Number.isFinite(s) && s > 0 ? s * 1000 : 0;
+}
+
+/** Exponential backoff with jitter (ms) for attempt N (1-based): base·2^(N-1) + [0,base). */
+function backoffMs(attempt: number, baseMs: number): number {
+  return baseMs * 2 ** (attempt - 1) + Math.floor(Math.random() * baseMs);
 }
 
 export interface ChatMessage {
@@ -40,42 +62,65 @@ async function requestChatCompletion(
   messages: ChatMessage[],
   fetchImpl: typeof fetch,
   responseSchema?: object,
+  opts?: RequestOpts,
 ): Promise<unknown> {
-  let resp: Response;
-  try {
-    resp = await fetchImpl(
-      `${config.baseUrl.replace(/\/$/, "")}/chat/completions`,
-      {
+  // M94 — a transient failure (network / timeout / 429 / 5xx) is retried with bounded backoff
+  // (honoring Retry-After); a fatal 4xx≠429 fails fast (error-handling.md §2). Policy is env-tunable
+  // (parseProviderRetry); the sleep is injectable for deterministic tests.
+  const retry = opts?.retry ?? parseProviderRetry();
+  const sleep = opts?.sleep ?? realSleep;
+  const maxAttempts = Math.max(1, retry.maxAttempts);
+  const body = JSON.stringify({
+    model: config.model,
+    temperature: 0,
+    messages,
+    // M62: optional structured output — forwarded as an OpenAI-compatible `response_format`
+    // json_schema (the provider enforces it). Absent schema → no field (identical to today).
+    ...(responseSchema
+      ? { response_format: { type: "json_schema", json_schema: { name: "variant_schema", schema: responseSchema } } }
+      : {}),
+  });
+
+  let lastError = new ChatError("chat request exhausted retries");
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let resp: Response;
+    try {
+      resp = await fetchImpl(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
           ...(config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {}),
         },
-        body: JSON.stringify({
-          model: config.model,
-          temperature: 0,
-          messages,
-          // M62: optional structured output — forwarded as an OpenAI-compatible `response_format`
-          // json_schema (the provider enforces it). Absent schema → no field (identical to today).
-          ...(responseSchema
-            ? { response_format: { type: "json_schema", json_schema: { name: "variant_schema", schema: responseSchema } } }
-            : {}),
-        }),
-        // A stalled provider aborts at the timeout → fetch rejects → ChatError (never a silent hang).
+        body,
+        // A stalled provider aborts at the timeout → fetch rejects → retry/ChatError (never a silent hang).
         signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
-      },
-    );
-  } catch (err) {
-    throw new ChatError(`chat request failed: ${String(err)}`);
+      });
+    } catch (err) {
+      // Network / timeout (AbortError) — retryable.
+      lastError = new ChatError(`chat request failed: ${String(err)}`);
+      if (attempt < maxAttempts) {
+        await sleep(backoffMs(attempt, retry.baseDelayMs));
+        continue;
+      }
+      throw lastError;
+    }
+    if (resp.ok) {
+      try {
+        return await resp.json();
+      } catch {
+        throw new ChatError("chat response was not JSON");
+      }
+    }
+    // Non-2xx: 429 + 5xx are recoverable (retry with backoff, honoring Retry-After); 4xx≠429 is fatal.
+    const recoverable = resp.status === 429 || resp.status >= 500;
+    if (!recoverable || attempt >= maxAttempts) {
+      throw new ChatError(`chat endpoint returned ${resp.status}`);
+    }
+    lastError = new ChatError(`chat endpoint returned ${resp.status}`);
+    const advised = retryAfterMs(resp.headers?.get?.("retry-after"));
+    await sleep(Math.max(advised, backoffMs(attempt, retry.baseDelayMs)));
   }
-  if (!resp.ok) {
-    throw new ChatError(`chat endpoint returned ${resp.status}`);
-  }
-  try {
-    return await resp.json();
-  } catch {
-    throw new ChatError("chat response was not JSON");
-  }
+  throw lastError;
 }
 
 /** Extract the required assistant text or THROW (content is mandatory for both callers). */
@@ -96,8 +141,9 @@ export async function openaiChatCompletion(
   config: ChatConfig,
   messages: ChatMessage[],
   fetchImpl: typeof fetch = fetch,
+  opts?: RequestOpts,
 ): Promise<string> {
-  return extractContent(await requestChatCompletion(config, messages, fetchImpl));
+  return extractContent(await requestChatCompletion(config, messages, fetchImpl, undefined, opts));
 }
 
 /** Result of a usage-capturing chat call (M55 replay). Tokens come from the provider, never computed. */
@@ -122,8 +168,9 @@ export async function openaiChatCompletionWithUsage(
   messages: ChatMessage[],
   fetchImpl: typeof fetch = fetch,
   responseSchema?: object,
+  opts?: RequestOpts,
 ): Promise<ChatCompletionWithUsage> {
-  const body = await requestChatCompletion(config, messages, fetchImpl, responseSchema);
+  const body = await requestChatCompletion(config, messages, fetchImpl, responseSchema, opts);
   const content = extractContent(body);
   const usage = (body as { usage?: { prompt_tokens?: unknown; completion_tokens?: unknown; total_tokens?: unknown; cost?: unknown } })?.usage;
   const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);

@@ -9,6 +9,7 @@ import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
 
 import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
+import { parsePoolConfig } from "../../domain/evaluator-config.js";
 import { NameConflictError, isUniqueViolation } from "../../domain/errors.js";
 import { isUuid } from "./uuid.js";
 import type { Evaluator, Guard, Verdict } from "../../domain/evaluator.js";
@@ -280,7 +281,12 @@ export function createEvaluatorRepository(connectionString: string): {
   repo: DrizzleEvaluatorRepository;
   pool: pg.Pool;
 } {
-  const pool = new pg.Pool({ connectionString });
+  // M94: same pool resilience config as the span pool (max + timeouts) + the non-fatal idle-error
+  // handler (an unhandled pool `error` crashes the process on a DB outage).
+  const pool = new pg.Pool({ connectionString, ...parsePoolConfig() });
+  pool.on("error", (err) => {
+    console.error(JSON.stringify({ level: "error", msg: "pg pool idle-client error (non-fatal)", error: err.message }));
+  });
   return { repo: new DrizzleEvaluatorRepository(drizzle(pool)), pool };
 }
 
