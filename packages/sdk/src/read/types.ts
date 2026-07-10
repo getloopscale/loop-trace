@@ -93,6 +93,207 @@ export interface TagBody {
 }
 
 /**
+ * Evaluators + guards (M111). Hand-written: the engine returns TS-typed records (`EvaluatorRecord`,
+ * `GuardRecord`) with no Zod response schema, so there is nothing to generate; the M114 hermetic
+ * contract test proves each type against the real engine.
+ */
+/** A `rule` evaluator's config — a span-predicate string. */
+export interface RuleConfig {
+  predicate: string;
+}
+/** An `llm_judge` evaluator's config — a judge prompt + the pinned model. */
+export interface JudgeConfig {
+  prompt: string;
+  model: string;
+}
+interface EvaluatorCommon {
+  name: string;
+  target?: string;
+  passLabel?: string;
+  failLabel?: string;
+  enabled?: boolean;
+}
+/** The create body — discriminated on `kind`. */
+export type CreateEvaluatorBody = EvaluatorCommon &
+  ({ kind: "rule"; config: RuleConfig } | { kind: "llm_judge"; config: JudgeConfig });
+/**
+ * A stored evaluator: the create shape + server-assigned fields. `target`/`enabled` are REQUIRED here
+ * (the engine always emits them with defaults applied) even though they are optional in the create body.
+ */
+export type EvaluatorRecord = CreateEvaluatorBody & {
+  id: string;
+  createdAt: string;
+  target: string;
+  enabled: boolean;
+};
+/** A partial evaluator update (any subset; `kind`+`config` must be provided together). */
+export interface EvaluatorUpdateBody {
+  name?: string;
+  target?: string;
+  passLabel?: string;
+  failLabel?: string;
+  enabled?: boolean;
+  kind?: "rule" | "llm_judge";
+  config?: RuleConfig | JudgeConfig;
+}
+/** The comparison a guard applies to an evaluator's verdict. */
+export type GuardOperator = "lt" | "lte" | "gt" | "gte" | "eq" | "label_eq";
+/** Create a flag-only guard over an evaluator's verdict. */
+export interface GuardBody {
+  evaluatorId: string;
+  operator: GuardOperator;
+  threshold?: number;
+  labelValue?: string;
+  enabled?: boolean;
+}
+/** A stored guard (`enabled` is always emitted by the engine). */
+export type GuardRecord = GuardBody & { id: string; createdAt: string; enabled: boolean };
+/** Options for {@link LensReadClient.runEvaluator} — scope the run to specific traces / a limit. */
+export interface RunEvaluatorBody {
+  traceIds?: string[];
+  limit?: number;
+}
+/** The outcome of a `runEvaluator` — how many span verdicts were written / skipped. */
+export interface RunResult {
+  evaluator: string;
+  written: number;
+  skipped: number;
+  truncated: boolean;
+  errors: { spanId: string; reason: string }[];
+}
+
+/**
+ * Labeling queue + copilot ask-feedback (M112). Hand-written (same rationale as M111 — the M114
+ * contract test is the drift guard).
+ */
+/** A labeling-queue item. */
+export interface LabelingQueueItem {
+  id: string;
+  traceId: string;
+  spanId: string;
+  status: "pending" | "resolved";
+  label?: string;
+  score?: number;
+  note?: string;
+  createdBy: string;
+  resolvedBy?: string;
+  createdAt: string;
+  resolvedAt?: string;
+}
+/** Enqueue a span for human review. */
+export interface EnqueueLabelingBody {
+  spanId: string;
+}
+/** Resolve a labeling-queue item — a non-empty `label` is required. */
+export interface ResolveLabelingBody {
+  label: string;
+  score?: number;
+  note?: string;
+}
+/** Export the resolved labeling items as a golden dataset (by name). */
+export interface ExportLabelingBody {
+  name: string;
+}
+/** A copilot ask-feedback vote. */
+export type FeedbackLabel = "up" | "down";
+/** Submit thumbs-up/down feedback on a copilot answer turn. */
+export interface AskFeedbackBody {
+  turnId: string;
+  label: FeedbackLabel;
+}
+/** The stored copilot-feedback record (mirrors the engine's `CopilotFeedbackRecord`). */
+export interface CopilotFeedbackRecord {
+  id: string;
+  traceId: string;
+  turnId: string;
+  spanId?: string;
+  label: FeedbackLabel;
+  question?: string;
+  updatedAt: string;
+}
+
+/**
+ * Experiment runs + span replay (M113). Hand-written (M111 rationale). These launch billable provider
+ * work → the SDK methods are NON-idempotent (`retryNetwork:false`).
+ */
+/** A run variant — override the model and/or the prompt. */
+export interface RunVariant {
+  model?: string;
+  promptOverride?: string;
+}
+/** Launch an experiment run of a dataset × a variant. */
+export interface CreateExperimentRunBody {
+  datasetId: string;
+  name: string;
+  variant: RunVariant;
+}
+/** One evaluator score on a run item (mirrors the engine's `runScoreSchema`). */
+export interface RunScore {
+  name: string;
+  score?: number;
+  label?: string;
+  explanation?: string;
+}
+/** One experiment-run item — the replayed output + usage + scores (or an error state). */
+export interface ExperimentRunItem {
+  datasetItemTraceId: string;
+  inputSnapshot?: string;
+  output?: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  costUsd?: number;
+  latencyMs: number;
+  model: string;
+  scores: RunScore[];
+  error?: string;
+}
+/** An experiment run + its aggregate scorecard. */
+export interface ExperimentRun {
+  id: string;
+  datasetId: string;
+  name: string;
+  variant: RunVariant;
+  status: "completed" | "partial" | "failed";
+  truncated: boolean;
+  itemCount: number;
+  passCount: number;
+  avgScore?: number;
+  totalCostUsd: number;
+  createdBy: string;
+  createdAt: string;
+  items?: ExperimentRunItem[];
+}
+/** A single chat message for a span replay. */
+export interface ReplayMessage {
+  role: string;
+  content: string;
+}
+/** Re-execute an edited message list against the provider, optionally overriding the model. */
+export interface ReplaySpanBody {
+  messages: ReplayMessage[];
+  model?: string;
+}
+/** The replay output + usage (the engine's replay handler renames `content`→`output` at the boundary). */
+export interface ReplayResult {
+  output: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  latencyMs: number;
+  costUsd?: number;
+  model: string;
+}
+/** Record a replay-open event (analytics). */
+export interface ReplaySessionBody {
+  traceId: string;
+}
+/** The ack for a recorded replay-open event. */
+export interface ReplaySessionAck {
+  recorded: boolean;
+}
+
+/**
  * The `GET /v1` discovery document — service identity + the machine-contract pointer. Hand-written:
  * `/v1` is intentionally excluded from `/openapi.json` (a discovery/infra route, not a data route),
  * so there is no generated component to alias.

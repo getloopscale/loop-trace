@@ -511,3 +511,165 @@ describe("LensReadClient — write surface (M107)", () => {
     });
   });
 });
+
+describe("LensReadClient — evaluators + guards (M111)", () => {
+  it("createEvaluator POSTs the union body to /v1/evaluators", async () => {
+    const fetchFn = mockFetch({ id: "ev1", name: "quality", kind: "rule", config: { predicate: "status:error" }, createdAt: "t" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const rec = await client.createEvaluator({ name: "quality", kind: "rule", config: { predicate: "status:error" } });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/evaluators");
+    expect(methodOf(fetchFn)).toBe("POST");
+    expect(bodyOf(fetchFn)).toEqual({ name: "quality", kind: "rule", config: { predicate: "status:error" } });
+    expect(rec.id).toBe("ev1");
+  });
+
+  it("updateEvaluator PUTs to /v1/evaluators/{id}", async () => {
+    const fetchFn = mockFetch({ id: "ev1", name: "quality", kind: "rule", config: { predicate: "x" }, createdAt: "t", enabled: false });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.updateEvaluator("ev1", { enabled: false });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/evaluators/ev1");
+    expect(methodOf(fetchFn)).toBe("PUT");
+    expect(bodyOf(fetchFn)).toEqual({ enabled: false });
+  });
+
+  it("deleteEvaluator DELETEs /v1/evaluators/{id} (204 → void)", async () => {
+    const fetchFn = mockFetch(undefined, { status: 204, text: "" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.deleteEvaluator("ev1");
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/evaluators/ev1");
+    expect(methodOf(fetchFn)).toBe("DELETE");
+  });
+
+  it("runEvaluator POSTs to /v1/evaluators/{id}/run and returns a RunResult", async () => {
+    const fetchFn = mockFetch({ evaluator: "quality", written: 5, skipped: 0, truncated: false, errors: [] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const res = await client.runEvaluator("ev1", { limit: 10 });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/evaluators/ev1/run");
+    expect(methodOf(fetchFn)).toBe("POST");
+    expect(bodyOf(fetchFn)).toEqual({ limit: 10 });
+    expect(res.written).toBe(5);
+  });
+
+  it("runEvaluator does NOT retry a network reject (non-idempotent — no double-scoring)", async () => {
+    const fNet = seqFetch([new TypeError("boom"), ok({ evaluator: "q", written: 1, skipped: 0, truncated: false, errors: [] })]);
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fNet, sleep: async () => {} });
+    await expect(client.runEvaluator("ev1")).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    expect(fNet).toHaveBeenCalledTimes(1);
+  });
+
+  it("createGuard POSTs to /v1/guards and returns a GuardRecord", async () => {
+    const fetchFn = mockFetch({ id: "g1", evaluatorId: "ev1", operator: "gte", threshold: 0.8, createdAt: "t" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const g = await client.createGuard({ evaluatorId: "ev1", operator: "gte", threshold: 0.8 });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/guards");
+    expect(methodOf(fetchFn)).toBe("POST");
+    expect(g.id).toBe("g1");
+  });
+
+  it("deleteGuard DELETEs /v1/guards/{id} (204 → void)", async () => {
+    const fetchFn = mockFetch(undefined, { status: 204, text: "" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.deleteGuard("g1");
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/guards/g1");
+    expect(methodOf(fetchFn)).toBe("DELETE");
+  });
+
+  it("maps a 400 INVALID_EVALUATOR (with details) to a typed LensApiError", async () => {
+    const fetchFn = mockFetch(undefined, {
+      status: 400,
+      text: '{"code":"INVALID_EVALUATOR","message":"invalid evaluator","details":[{"field":"config.predicate","issue":"required"}]}',
+    });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const err = await client
+      .createEvaluator({ name: "x", kind: "rule", config: { predicate: "" } })
+      .then(() => null, (e: unknown) => e);
+    expect(err).toBeInstanceOf(LensApiError);
+    expect((err as LensApiError).code).toBe("INVALID_EVALUATOR");
+    expect((err as LensApiError).details?.[0]?.field).toBe("config.predicate");
+  });
+});
+
+describe("LensReadClient — labeling queue + ask-feedback (M112)", () => {
+  it("enqueueForLabeling POSTs {spanId} to the enqueue route", async () => {
+    const fetchFn = mockFetch({ id: "lq1", traceId: "tr1", spanId: "sp1", status: "pending", createdBy: "u", createdAt: "t" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const item = await client.enqueueForLabeling("tr1", { spanId: "sp1" });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/traces/tr1/enqueue-for-labeling");
+    expect(methodOf(fetchFn)).toBe("POST");
+    expect(bodyOf(fetchFn)).toEqual({ spanId: "sp1" });
+    expect(item.status).toBe("pending");
+  });
+
+  it("resolveLabelingItem POSTs the label and does NOT retry a network reject (conservative)", async () => {
+    const fNet = seqFetch([new TypeError("boom"), ok({ id: "lq1", traceId: "tr1", spanId: "sp1", status: "resolved", createdBy: "u", createdAt: "t" })]);
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fNet, sleep: async () => {} });
+    await expect(client.resolveLabelingItem("lq1", { label: "good" })).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    expect(fNet).toHaveBeenCalledTimes(1);
+    expect(new URL(calledUrl(fNet)).pathname).toBe("/v1/labeling-queue/lq1/resolve");
+  });
+
+  it("exportLabelingAsDataset POSTs {name} and does NOT retry a network reject (conservative)", async () => {
+    const fNet = seqFetch([new TypeError("boom"), ok({ id: "d1", name: "golden" })]);
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fNet, sleep: async () => {} });
+    await expect(client.exportLabelingAsDataset({ name: "golden" })).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    expect(fNet).toHaveBeenCalledTimes(1);
+    expect(new URL(calledUrl(fNet)).pathname).toBe("/v1/labeling-queue/export-as-dataset");
+  });
+
+  it("submitAskFeedback POSTs {turnId,label} (upsert → network-retryable)", async () => {
+    const fetchFn = mockFetch({ id: "fb1", traceId: "tr1", turnId: "turn-1", label: "up", updatedAt: "t" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const rec = await client.submitAskFeedback("tr1", { turnId: "turn-1", label: "up" });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/traces/tr1/ask/feedback");
+    expect(methodOf(fetchFn)).toBe("POST");
+    expect(bodyOf(fetchFn)).toEqual({ turnId: "turn-1", label: "up" });
+    expect(rec.label).toBe("up");
+  });
+
+  it("deleteAskFeedback DELETEs with turnId as a query param (204 → void)", async () => {
+    const fetchFn = mockFetch(undefined, { status: 204, text: "" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.deleteAskFeedback("tr1", "turn-1");
+    const url = new URL(calledUrl(fetchFn));
+    expect(url.pathname).toBe("/v1/traces/tr1/ask/feedback");
+    expect(url.searchParams.get("turnId")).toBe("turn-1");
+    expect(methodOf(fetchFn)).toBe("DELETE");
+  });
+});
+
+describe("LensReadClient — experiment runs + replay (M113, billable non-idempotent)", () => {
+  it("createExperimentRun POSTs to /v1/experiment-runs and returns an ExperimentRun", async () => {
+    const fetchFn = mockFetch({ id: "run1", datasetId: "d1", name: "exp", variant: { model: "gpt-4" }, status: "completed", truncated: false, itemCount: 3, passCount: 2, totalCostUsd: 0.01, createdBy: "u", createdAt: "t" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const run = await client.createExperimentRun({ datasetId: "d1", name: "exp", variant: { model: "gpt-4" } });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/experiment-runs");
+    expect(methodOf(fetchFn)).toBe("POST");
+    expect(run.id).toBe("run1");
+    expect(run.passCount).toBe(2);
+  });
+
+  it("createExperimentRun does NOT retry a network reject (billable — no double-run)", async () => {
+    const fNet = seqFetch([new TypeError("boom"), ok({ id: "run1", datasetId: "d1", name: "e", variant: {}, status: "completed", truncated: false, itemCount: 0, passCount: 0, totalCostUsd: 0, createdBy: "u", createdAt: "t" })]);
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fNet, sleep: async () => {} });
+    await expect(client.createExperimentRun({ datasetId: "d1", name: "e", variant: {} })).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    expect(fNet).toHaveBeenCalledTimes(1);
+  });
+
+  it("replaySpan POSTs the messages and does NOT retry a network reject (billable)", async () => {
+    const fNet = seqFetch([new TypeError("boom"), ok({ output: "hi", promptTokens: 1, completionTokens: 1, totalTokens: 2, latencyMs: 12, model: "gpt-4" })]);
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fNet, sleep: async () => {} });
+    await expect(client.replaySpan("tr1", { messages: [{ role: "user", content: "hi" }] })).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    expect(fNet).toHaveBeenCalledTimes(1);
+    expect(new URL(calledUrl(fNet)).pathname).toBe("/v1/traces/tr1/replay");
+  });
+
+  it("createReplaySession POSTs {traceId} and returns the ack (not retried)", async () => {
+    const fetchFn = mockFetch({ recorded: true });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const ack = await client.createReplaySession({ traceId: "tr1" });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/replay-sessions");
+    expect(methodOf(fetchFn)).toBe("POST");
+    expect(bodyOf(fetchFn)).toEqual({ traceId: "tr1" });
+    expect(ack.recorded).toBe(true);
+  });
+});

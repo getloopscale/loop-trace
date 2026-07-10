@@ -17,17 +17,36 @@ import type {
   AddDatasetItemBody,
   AnnotateBody,
   AnnotationsResponse,
+  AskFeedbackBody,
   Capabilities,
+  CopilotFeedbackRecord,
   CostByPeriodOptions,
   CostByPeriodResponse,
   CreateDatasetBody,
+  CreateEvaluatorBody,
+  CreateExperimentRunBody,
   Dataset,
   DatasetDetail,
   DatasetsResponse,
+  EnqueueLabelingBody,
+  EvaluatorRecord,
+  EvaluatorUpdateBody,
+  ExperimentRun,
+  ExportLabelingBody,
+  GuardBody,
+  GuardRecord,
+  LabelingQueueItem,
   ListSessionsOptions,
   ListTracesOptions,
   ObservabilityOptions,
   ObservabilityResponse,
+  ReplaySessionAck,
+  ReplaySessionBody,
+  ReplaySpanBody,
+  ReplayResult,
+  ResolveLabelingBody,
+  RunEvaluatorBody,
+  RunResult,
   SessionListResponse,
   Span,
   TagBody,
@@ -333,5 +352,128 @@ export class LensReadClient {
       `/v1/traces/${encodeURIComponent(traceId)}/tags`,
       { query: { tag }, retryNetwork: true },
     );
+  }
+
+  // ─── Advanced write surface (M111) — evaluators + guards. ───
+  // CRUD is idempotent server-side (create/guard upsert on (ws,name); PUT/DELETE inherent) → retryable.
+  // EXCEPTION: `runEvaluator` scores spans (billable for llm_judge) → `retryNetwork:false` (M108 lesson).
+
+  /** `POST /v1/evaluators` — create (or upsert-by-name) an evaluator. */
+  createEvaluator(body: CreateEvaluatorBody): Promise<EvaluatorRecord> {
+    return this.send<EvaluatorRecord>("POST", "/v1/evaluators", { body, retryNetwork: true });
+  }
+
+  /** `PUT /v1/evaluators/{id}` — update an evaluator (409 `NAME_CONFLICT` if the name is taken). */
+  updateEvaluator(id: string, body: EvaluatorUpdateBody): Promise<EvaluatorRecord> {
+    return this.send<EvaluatorRecord>("PUT", `/v1/evaluators/${encodeURIComponent(id)}`, {
+      body,
+      retryNetwork: true,
+    });
+  }
+
+  /** `DELETE /v1/evaluators/{id}` — delete an evaluator. */
+  deleteEvaluator(id: string): Promise<void> {
+    return this.send<void>("DELETE", `/v1/evaluators/${encodeURIComponent(id)}`, {
+      retryNetwork: true,
+    });
+  }
+
+  /**
+   * `POST /v1/evaluators/{id}/run` — score spans with an evaluator. NON-idempotent (each run writes
+   * fresh verdicts, billable for `llm_judge`) → NOT network-retried, so a lost response never
+   * double-scores (M108 lesson).
+   */
+  runEvaluator(id: string, body: RunEvaluatorBody = {}): Promise<RunResult> {
+    return this.send<RunResult>("POST", `/v1/evaluators/${encodeURIComponent(id)}/run`, {
+      body,
+      retryNetwork: false,
+    });
+  }
+
+  /** `POST /v1/guards` — create (or upsert) a guard over an evaluator's verdict. */
+  createGuard(body: GuardBody): Promise<GuardRecord> {
+    return this.send<GuardRecord>("POST", "/v1/guards", { body, retryNetwork: true });
+  }
+
+  /** `DELETE /v1/guards/{id}` — delete a guard. */
+  deleteGuard(id: string): Promise<void> {
+    return this.send<void>("DELETE", `/v1/guards/${encodeURIComponent(id)}`, { retryNetwork: true });
+  }
+
+  // ─── Labeling queue + copilot ask-feedback (M112). ───
+
+  /** `POST /v1/traces/{traceId}/enqueue-for-labeling` — queue a span for human review (idempotent). */
+  enqueueForLabeling(traceId: string, body: EnqueueLabelingBody): Promise<LabelingQueueItem> {
+    return this.send<LabelingQueueItem>(
+      "POST",
+      `/v1/traces/${encodeURIComponent(traceId)}/enqueue-for-labeling`,
+      { body, retryNetwork: true },
+    );
+  }
+
+  /**
+   * `POST /v1/labeling-queue/{itemId}/resolve` — resolve a queue item with a label.
+   * Conservative `retryNetwork:false` (a resolve is a state transition whose idempotency under
+   * concurrent resolution is not verified here — never auto-retry an ambiguous network failure).
+   */
+  resolveLabelingItem(itemId: string, body: ResolveLabelingBody): Promise<LabelingQueueItem> {
+    return this.send<LabelingQueueItem>(
+      "POST",
+      `/v1/labeling-queue/${encodeURIComponent(itemId)}/resolve`,
+      { body, retryNetwork: false },
+    );
+  }
+
+  /**
+   * `POST /v1/labeling-queue/export-as-dataset` — export resolved items as a golden dataset.
+   * Conservative `retryNetwork:false` (it creates + populates a dataset — the create-class risk).
+   */
+  exportLabelingAsDataset(body: ExportLabelingBody): Promise<Dataset> {
+    return this.send<Dataset>("POST", "/v1/labeling-queue/export-as-dataset", {
+      body,
+      retryNetwork: false,
+    });
+  }
+
+  /** `POST /v1/traces/{traceId}/ask/feedback` — thumbs up/down on a copilot turn (upsert, idempotent). */
+  submitAskFeedback(traceId: string, body: AskFeedbackBody): Promise<CopilotFeedbackRecord> {
+    return this.send<CopilotFeedbackRecord>(
+      "POST",
+      `/v1/traces/${encodeURIComponent(traceId)}/ask/feedback`,
+      { body, retryNetwork: true },
+    );
+  }
+
+  /** `DELETE /v1/traces/{traceId}/ask/feedback?turnId=` — retract a copilot-turn vote (204, idempotent). */
+  deleteAskFeedback(traceId: string, turnId: string): Promise<void> {
+    return this.send<void>("DELETE", `/v1/traces/${encodeURIComponent(traceId)}/ask/feedback`, {
+      query: { turnId },
+      retryNetwork: true,
+    });
+  }
+
+  // ─── Experiment runs + span replay (M113). ───
+  // All THREE launch billable provider work → NON-idempotent → `retryNetwork:false`: a lost-response
+  // retry would re-run/re-bill (the M108/M94 double-bill class). Never auto-retried.
+
+  /** `POST /v1/experiment-runs` — launch a dataset × variant experiment run (billable, not retried). */
+  createExperimentRun(body: CreateExperimentRunBody): Promise<ExperimentRun> {
+    return this.send<ExperimentRun>("POST", "/v1/experiment-runs", { body, retryNetwork: false });
+  }
+
+  /** `POST /v1/traces/{traceId}/replay` — re-execute an edited message list (billable, not retried). */
+  replaySpan(traceId: string, body: ReplaySpanBody): Promise<ReplayResult> {
+    return this.send<ReplayResult>("POST", `/v1/traces/${encodeURIComponent(traceId)}/replay`, {
+      body,
+      retryNetwork: false,
+    });
+  }
+
+  /** `POST /v1/replay-sessions` — record a replay-open event (not retried — avoid double-counting). */
+  createReplaySession(body: ReplaySessionBody): Promise<ReplaySessionAck> {
+    return this.send<ReplaySessionAck>("POST", "/v1/replay-sessions", {
+      body,
+      retryNetwork: false,
+    });
   }
 }
