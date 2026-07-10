@@ -636,3 +636,40 @@ describe("LensReadClient — labeling queue + ask-feedback (M112)", () => {
     expect(methodOf(fetchFn)).toBe("DELETE");
   });
 });
+
+describe("LensReadClient — experiment runs + replay (M113, billable non-idempotent)", () => {
+  it("createExperimentRun POSTs to /v1/experiment-runs and returns an ExperimentRun", async () => {
+    const fetchFn = mockFetch({ id: "run1", datasetId: "d1", name: "exp", variant: { model: "gpt-4" }, status: "completed", truncated: false, itemCount: 3, passCount: 2, totalCostUsd: 0.01, createdBy: "u", createdAt: "t" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const run = await client.createExperimentRun({ datasetId: "d1", name: "exp", variant: { model: "gpt-4" } });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/experiment-runs");
+    expect(methodOf(fetchFn)).toBe("POST");
+    expect(run.id).toBe("run1");
+    expect(run.passCount).toBe(2);
+  });
+
+  it("createExperimentRun does NOT retry a network reject (billable — no double-run)", async () => {
+    const fNet = seqFetch([new TypeError("boom"), ok({ id: "run1", datasetId: "d1", name: "e", variant: {}, status: "completed", truncated: false, itemCount: 0, passCount: 0, totalCostUsd: 0, createdBy: "u", createdAt: "t" })]);
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fNet, sleep: async () => {} });
+    await expect(client.createExperimentRun({ datasetId: "d1", name: "e", variant: {} })).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    expect(fNet).toHaveBeenCalledTimes(1);
+  });
+
+  it("replaySpan POSTs the messages and does NOT retry a network reject (billable)", async () => {
+    const fNet = seqFetch([new TypeError("boom"), ok({ content: "hi", promptTokens: 1, completionTokens: 1, totalTokens: 2, model: "gpt-4" })]);
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fNet, sleep: async () => {} });
+    await expect(client.replaySpan("tr1", { messages: [{ role: "user", content: "hi" }] })).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    expect(fNet).toHaveBeenCalledTimes(1);
+    expect(new URL(calledUrl(fNet)).pathname).toBe("/v1/traces/tr1/replay");
+  });
+
+  it("createReplaySession POSTs {traceId} and returns the ack (not retried)", async () => {
+    const fetchFn = mockFetch({ recorded: true });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const ack = await client.createReplaySession({ traceId: "tr1" });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/replay-sessions");
+    expect(methodOf(fetchFn)).toBe("POST");
+    expect(bodyOf(fetchFn)).toEqual({ traceId: "tr1" });
+    expect(ack.recorded).toBe(true);
+  });
+});

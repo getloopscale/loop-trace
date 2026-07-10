@@ -213,6 +213,84 @@ export interface CopilotFeedbackRecord {
 }
 
 /**
+ * Experiment runs + span replay (M113). Hand-written (M111 rationale). These launch billable provider
+ * work → the SDK methods are NON-idempotent (`retryNetwork:false`).
+ */
+/** A run variant — override the model and/or the prompt. */
+export interface RunVariant {
+  model?: string;
+  promptOverride?: string;
+}
+/** Launch an experiment run of a dataset × a variant. */
+export interface CreateExperimentRunBody {
+  datasetId: string;
+  name: string;
+  variant: RunVariant;
+}
+/** One evaluator score on a run item. */
+export interface RunScore {
+  evaluator: string;
+  label?: string;
+  score?: number;
+}
+/** One experiment-run item — the replayed output + usage + scores. */
+export interface ExperimentRunItem {
+  datasetItemTraceId: string;
+  inputSnapshot?: string;
+  output?: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  costUsd?: number;
+  latencyMs: number;
+  model: string;
+  scores: RunScore[];
+}
+/** An experiment run + its aggregate scorecard. */
+export interface ExperimentRun {
+  id: string;
+  datasetId: string;
+  name: string;
+  variant: RunVariant;
+  status: "completed" | "partial" | "failed";
+  truncated: boolean;
+  itemCount: number;
+  passCount: number;
+  avgScore?: number;
+  totalCostUsd: number;
+  createdBy: string;
+  createdAt: string;
+  items?: ExperimentRunItem[];
+}
+/** A single chat message for a span replay. */
+export interface ReplayMessage {
+  role: string;
+  content: string;
+}
+/** Re-execute an edited message list against the provider, optionally overriding the model. */
+export interface ReplaySpanBody {
+  messages: ReplayMessage[];
+  model?: string;
+}
+/** The replay output + usage. */
+export interface ReplayResult {
+  content: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  costUsd?: number;
+  model: string;
+}
+/** Record a replay-open event (analytics). */
+export interface ReplaySessionBody {
+  traceId: string;
+}
+/** The ack for a recorded replay-open event. */
+export interface ReplaySessionAck {
+  recorded: boolean;
+}
+
+/**
  * The `GET /v1` discovery document — service identity + the machine-contract pointer. Hand-written:
  * `/v1` is intentionally excluded from `/openapi.json` (a discovery/infra route, not a data route),
  * so there is no generated component to alias.

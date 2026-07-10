@@ -24,12 +24,14 @@ import type {
   CostByPeriodResponse,
   CreateDatasetBody,
   CreateEvaluatorBody,
+  CreateExperimentRunBody,
   Dataset,
   DatasetDetail,
   DatasetsResponse,
   EnqueueLabelingBody,
   EvaluatorRecord,
   EvaluatorUpdateBody,
+  ExperimentRun,
   ExportLabelingBody,
   GuardBody,
   GuardRecord,
@@ -38,6 +40,10 @@ import type {
   ListTracesOptions,
   ObservabilityOptions,
   ObservabilityResponse,
+  ReplaySessionAck,
+  ReplaySessionBody,
+  ReplaySpanBody,
+  ReplayResult,
   ResolveLabelingBody,
   RunEvaluatorBody,
   RunResult,
@@ -443,6 +449,31 @@ export class LensReadClient {
     return this.send<void>("DELETE", `/v1/traces/${encodeURIComponent(traceId)}/ask/feedback`, {
       query: { turnId },
       retryNetwork: true,
+    });
+  }
+
+  // ─── Experiment runs + span replay (M113). ───
+  // All THREE launch billable provider work → NON-idempotent → `retryNetwork:false`: a lost-response
+  // retry would re-run/re-bill (the M108/M94 double-bill class). Never auto-retried.
+
+  /** `POST /v1/experiment-runs` — launch a dataset × variant experiment run (billable, not retried). */
+  createExperimentRun(body: CreateExperimentRunBody): Promise<ExperimentRun> {
+    return this.send<ExperimentRun>("POST", "/v1/experiment-runs", { body, retryNetwork: false });
+  }
+
+  /** `POST /v1/traces/{traceId}/replay` — re-execute an edited message list (billable, not retried). */
+  replaySpan(traceId: string, body: ReplaySpanBody): Promise<ReplayResult> {
+    return this.send<ReplayResult>("POST", `/v1/traces/${encodeURIComponent(traceId)}/replay`, {
+      body,
+      retryNetwork: false,
+    });
+  }
+
+  /** `POST /v1/replay-sessions` — record a replay-open event (not retried — avoid double-counting). */
+  createReplaySession(body: ReplaySessionBody): Promise<ReplaySessionAck> {
+    return this.send<ReplaySessionAck>("POST", "/v1/replay-sessions", {
+      body,
+      retryNetwork: false,
     });
   }
 }
