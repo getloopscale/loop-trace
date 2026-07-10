@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **New phase roadmap: `ROADMAP-sota-experience-v10.md` (M99–M102) — Debt Paydown & Consistency (no new features).** v9 shipped the hardest, highest-risk part of each code-health item and left the mechanical remainder as tested-pattern follow-ups; v10 finishes them, behavior-preserving. **M99** completes the M97 god-file split — extract the six roles still in the facade (TraceRead / Aggregate / Session / Annotation / CopilotFeedback / Retention) into per-role files so the adapter becomes a thin delegation facade; **M100** finishes the `rowsAs` typed SQL→DTO boundary rollout (the 6 remaining `as unknown as` aggregate casts get a Zod row schema each — a renamed column fails loudly everywhere); **M101** closes the advisory-check TOCTOU windows (dataset/labeling existence-then-write + prune concurrency → atomic, race-tested, with an ADR on real-FK-vs-app-cascade); **M102** sweeps the v9 review LOW caveats (sanitize `zodFieldErrors` input reflection, memoize `/openapi.json`, route `evaluators.ts` through `apiError`, decide the M95 single-column-index supersession via ADR+EXPLAIN, per-file test-DB isolation). Grounded in the concrete v9 review reports + the code state they cite. Ranked M99>M100>M101>M102; each an independent CYCLE. Out of scope: the external SDK read-client (a feature, not debt), `spans` partitioning, a distributed limiter, any visual redesign.
 
 ### Changed
 
