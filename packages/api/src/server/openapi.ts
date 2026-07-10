@@ -103,7 +103,8 @@ export function buildOpenApiDocument(routes: MountedRoute[], version = "dev"): R
   const cacheKey = `${version}\n${routes.map((r) => `${r.method} ${r.path}`).join("\n")}`;
   const cached = docCache.get(cacheKey);
   if (cached) return cached;
-  const doc = generateOpenApiDocument(routes, version);
+  // Freeze the cached doc so a future caller mutating the shared object can never poison the cache.
+  const doc = Object.freeze(generateOpenApiDocument(routes, version));
   docCache.set(cacheKey, doc);
   return doc;
 }
