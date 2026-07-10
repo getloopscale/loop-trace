@@ -12,7 +12,7 @@ import type { Dataset, DatasetDetail } from "../../domain/dataset.js";
 import { NameConflictError, isUniqueViolation } from "../../domain/errors.js";
 import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
 import { isoTimestamp } from "../../domain/session.js";
-import { datasetItems, datasets, experimentRunItems, experimentRuns, spans, traces } from "./schema.js";
+import { datasetItems, datasets, experimentRunItems, experimentRuns, spans } from "./schema.js";
 import { isUuid } from "./uuid.js";
 
 function datasetRow(r: { id: string; name: string; createdAt: Date; itemCount: number }): Dataset {
@@ -114,23 +114,15 @@ export async function addDatasetItem(
   traceId: string,
   workspaceId: string = DEFAULT_WORKSPACE_ID,
 ): Promise<boolean> {
-  // D2/D3: snapshot the trace's root input/output AT ADD-TIME (durable past prune),
-  // idempotent on (dataset, trace). Returns false if the dataset OR the trace is
-  // absent in the workspace (→ 404) — advisory checks, like addTag/upsertAnnotation.
+  // D2/D3: snapshot the trace's root input/output AT ADD-TIME (durable past prune), idempotent on
+  // (dataset, trace). Returns false if the dataset OR the trace is absent in the workspace (→ 404).
+  // M101 (B-L3) — the dataset-exists guard + the insert are ONE atomic statement (a CTE), closing the
+  // TOCTOU window where a concurrent deleteDataset between a separate SELECT and INSERT would leave an
+  // orphan item. The `guard` CTE requires BOTH the dataset and the trace to exist; the insert reads
+  // `FROM guard`, so it runs only when they do; the trailing `SELECT ok FROM guard` distinguishes
+  // "absent" (0 rows → false) from an ON-CONFLICT no-op on an existing item (1 row → true, idempotent).
   if (!isUuid(datasetId)) return false;
-  const ds = await db
-    .select({ id: datasets.id })
-    .from(datasets)
-    .where(and(eq(datasets.id, datasetId), eq(datasets.workspaceId, workspaceId)))
-    .limit(1);
-  if (ds.length === 0) return false;
-  const tr = await db
-    .select({ traceId: traces.traceId })
-    .from(traces)
-    .where(and(eq(traces.traceId, traceId), eq(traces.workspaceId, workspaceId)))
-    .limit(1);
-  if (tr.length === 0) return false;
-  // The root span (earliest, parent_span_id IS NULL) carries the trace's I/O.
+  // The root span (earliest, parent_span_id IS NULL) carries the trace's I/O snapshot values.
   const root = await db
     .select({ input: spans.inputValue, output: spans.outputValue })
     .from(spans)
@@ -138,17 +130,21 @@ export async function addDatasetItem(
     .orderBy(asc(sql`${spans.startTimeUnixNano}::numeric`))
     .limit(1);
   const snap = root[0];
-  await db
-    .insert(datasetItems)
-    .values({
-      workspaceId,
-      datasetId,
-      traceId,
-      inputSnapshot: snap?.input ?? null,
-      outputSnapshot: snap?.output ?? null,
-    })
-    .onConflictDoNothing({ target: [datasetItems.workspaceId, datasetItems.datasetId, datasetItems.traceId] });
-  return true;
+  const res = await db.execute(sql`
+    WITH guard AS (
+      SELECT 1 AS ok
+      WHERE EXISTS (SELECT 1 FROM datasets WHERE id = ${datasetId} AND workspace_id = ${workspaceId})
+        AND EXISTS (SELECT 1 FROM traces WHERE trace_id = ${traceId} AND workspace_id = ${workspaceId})
+    ),
+    ins AS (
+      INSERT INTO dataset_items (workspace_id, dataset_id, trace_id, input_snapshot, output_snapshot)
+      SELECT ${workspaceId}, ${datasetId}, ${traceId}, ${snap?.input ?? null}, ${snap?.output ?? null}
+      FROM guard
+      ON CONFLICT (workspace_id, dataset_id, trace_id) DO NOTHING
+    )
+    SELECT ok FROM guard
+  `);
+  return res.rows.length > 0;
 }
 
 export async function addSyntheticDatasetItem(
@@ -163,20 +159,19 @@ export async function addSyntheticDatasetItem(
   // this id) and the unique index dedups correctly. Each save is a new example (fresh id). Returns
   // false if the dataset is absent in the workspace (→ 404). No source trace to snapshot from.
   if (!isUuid(datasetId)) return false;
-  const ds = await db
-    .select({ id: datasets.id })
-    .from(datasets)
-    .where(and(eq(datasets.id, datasetId), eq(datasets.workspaceId, workspaceId)))
-    .limit(1);
-  if (ds.length === 0) return false;
-  await db.insert(datasetItems).values({
-    workspaceId,
-    datasetId,
-    traceId: `replay-${randomUUID()}`,
-    inputSnapshot: input,
-    outputSnapshot: output,
-  });
-  return true;
+  // M101 (B-L3) — dataset-exists guard + insert in ONE atomic CTE (no TOCTOU orphan window). The item
+  // carries a fresh `replay-{uuid}` id (never a conflict), so `RETURNING` tells us a row was inserted
+  // iff the dataset existed at statement time.
+  const res = await db.execute(sql`
+    WITH guard AS (
+      SELECT 1 WHERE EXISTS (SELECT 1 FROM datasets WHERE id = ${datasetId} AND workspace_id = ${workspaceId})
+    )
+    INSERT INTO dataset_items (workspace_id, dataset_id, trace_id, input_snapshot, output_snapshot)
+    SELECT ${workspaceId}, ${datasetId}, ${`replay-${randomUUID()}`}, ${input}, ${output}
+    FROM guard
+    RETURNING trace_id
+  `);
+  return res.rows.length > 0;
 }
 
 export async function removeDatasetItem(

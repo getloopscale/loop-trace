@@ -108,6 +108,31 @@ suite("datasets (integration, M26d)", () => {
     expect(await repo.deleteDataset("not-a-uuid")).toBe(false);
   });
 
+  it("M101 — addDatasetItem to a deleted dataset never leaves an orphan (atomic guard)", async () => {
+    await repo.save([span({ spanId: "r1", traceId: "t1", inputValue: "v" })]);
+    const ds = await repo.createDataset("golden");
+
+    // Deterministic: after the dataset is gone, an add returns false and inserts nothing (the CTE
+    // guard sees no dataset) — the sequential proof that the guard actually gates the insert.
+    expect(await repo.deleteDataset(ds.id)).toBe(true);
+    expect(await repo.addDatasetItem(ds.id, "t1")).toBe(false);
+    const after = await pool.query("SELECT count(*)::int AS n FROM dataset_items WHERE dataset_id=$1", [ds.id]);
+    expect(after.rows[0].n).toBe(0);
+
+    // Race-aware invariant: run a concurrent delete + add on a fresh dataset. Regardless of which
+    // commits first, the no-orphan invariant MUST hold — either the add's guard finds no dataset (no
+    // insert), or it inserts and the delete's cascade removes it. The old check-then-write had a
+    // window where the add's separate SELECT saw the dataset, the delete cascaded, and the insert then
+    // orphaned a row; the single-statement CTE closes it. This invariant is TRUE for any ordering, so
+    // the test is deterministic, not flaky.
+    const ds2 = await repo.createDataset("golden-2");
+    await repo.addDatasetItem(ds2.id, "t1");
+    await Promise.all([repo.deleteDataset(ds2.id), repo.addDatasetItem(ds2.id, "t1")]);
+    expect(await repo.getDataset(ds2.id)).toBeNull(); // dataset gone
+    const orphans = await pool.query("SELECT count(*)::int AS n FROM dataset_items WHERE dataset_id=$1", [ds2.id]);
+    expect(orphans.rows[0].n).toBe(0); // NO orphan item survives the concurrent delete
+  });
+
   it("M82 — deleteDataset is workspace-scoped (cannot delete another tenant's dataset)", async () => {
     const a = await repo.createDataset("shared", "ws-A");
     expect(await repo.deleteDataset(a.id, "ws-B")).toBe(false); // ws-B cannot delete ws-A's
