@@ -2,8 +2,10 @@ packages:
   - "packages/*"
   - "examples/*"
 allowBuilds:
+  cpu-features: set this to true or false
   esbuild: true
   protobufjs: true
+  ssh2: set this to true or false
 # Force the patched esbuild across the tree — clears GHSA-67mh-4wv8-2f99
 # (esbuild dev-server CORS, MEDIUM) pulled transitively via @esbuild-kit/core-utils.
 # pnpm 11 reads overrides from here, not from package.json#pnpm.overrides.
