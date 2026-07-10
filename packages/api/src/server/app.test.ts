@@ -511,6 +511,14 @@ describe("createApp (contract, stub repo)", () => {
     expect(adminPaths).toEqual([]);
   });
 
+  it("m102_openapi_document_is_memoized (same routes+version -> same object, no rebuild)", async () => {
+    const { buildOpenApiDocument } = await import("./openapi.js");
+    const routes = [{ method: "GET", path: "/v1/traces" }];
+    const a = buildOpenApiDocument(routes, "9.9.9-memo");
+    const b = buildOpenApiDocument(routes, "9.9.9-memo");
+    expect(a).toBe(b); // cached — a second call returns the SAME object, not a rebuilt one
+  });
+
   it("m96_v1_index_and_version_are_served", async () => {
     const v1 = await app.request("/v1");
     expect(v1.status).toBe(200);

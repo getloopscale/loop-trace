@@ -43,4 +43,14 @@ describe("zodFieldErrors", () => {
     if (root.success) throw new Error("expected failure");
     expect(zodFieldErrors(root.error)[0]?.field).toBe("<root>");
   });
+
+  it("M102 — never reflects raw user input (a hostile enum value is not echoed)", () => {
+    const r = z.object({ tier: z.enum(["gold", "silver"]) }).safeParse({ tier: "<script>alert(1)</script>" });
+    if (r.success) throw new Error("expected failure");
+    const fields = zodFieldErrors(r.error);
+    expect(fields[0]?.field).toBe("tier");
+    // the issue names the allowed SCHEMA options, NOT the received hostile value
+    expect(fields[0]?.issue).toBe("expected one of: gold, silver");
+    expect(fields[0]?.issue).not.toContain("<script>");
+  });
 });
