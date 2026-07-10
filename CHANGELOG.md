@@ -19,6 +19,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [0.47.1] - 2026-07-10
+
+### Changed
+- Dev/process: the single `/dogfood` skill now RUNS the live multi-surface dogfood (a new `run`/`full` mode exercising API, SDK direct + through the edge, edge data-API, UI, MCP, copilot/provider) in addition to auditing recorded evidence — with a reusable `surface-probe.mjs` and a golden-rule surface-coverage soft cap. Institutionalizes the through-the-edge check that surfaced #49 (internal tooling; no product API change)
+
 ## [0.47.0] - 2026-07-10
 
 ### Added
