@@ -100,6 +100,11 @@ export async function save(
           CASE WHEN bool_or(status_code IN (${sql.raw(errorList)})) THEN 'error' ELSE 'ok' END,
           now()
         FROM spans WHERE trace_id = ${traceId} AND workspace_id = ${workspaceId}
+        -- #52: guard against a phantom rollup. When the span INSERT above was skipped by
+        -- ON CONFLICT (workspace_id, span_id) DO NOTHING (a span_id re-ingested under a new
+        -- trace_id), zero spans match here; without this HAVING the aggregate still yields one
+        -- all-NULL row and would insert a spans-less traces row that 404s on GET /v1/traces/:id.
+        HAVING count(*) > 0
         ON CONFLICT (workspace_id, trace_id) DO UPDATE SET
           session_id = excluded.session_id,
           name = excluded.name,

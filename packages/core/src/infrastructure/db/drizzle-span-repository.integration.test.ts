@@ -62,6 +62,23 @@ suite("DrizzleSpanRepository (integration)", () => {
     expect(rows[0]?.n).toBe("1");
   });
 
+  it("repo_save_does_not_create_a_phantom_trace_row_for_a_reused_spanId_under_a_new_traceId", async () => {
+    // Regression for #52: a span_id is globally unique per workspace and deduped on
+    // (workspace_id, span_id). Re-ingesting the SAME span_id under a NEW trace_id must NOT
+    // create a `traces` rollup row for that new trace (the recompute runs over zero matching
+    // spans, so no phantom row should be written).
+    await repo.save([span({ spanId: "dup", traceId: "t1" })]);
+    await repo.save([span({ spanId: "dup", traceId: "t2" })]);
+    const t2 = await pool.query<{ n: string }>(
+      "SELECT count(*)::text n FROM traces WHERE trace_id='t2'",
+    );
+    expect(t2.rows[0]?.n).toBe("0"); // no phantom rollup
+    const t1 = await pool.query<{ n: string }>(
+      "SELECT count(*)::text n FROM traces WHERE trace_id='t1'",
+    );
+    expect(t1.rows[0]?.n).toBe("1"); // the real trace is unaffected
+  });
+
   it("repo_persists_enriched_span_columns", async () => {
     const s = span({
       spanId: "a1",

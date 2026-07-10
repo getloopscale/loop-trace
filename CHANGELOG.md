@@ -20,6 +20,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Removed
 
 ### Fixed
+- Ingest: re-ingesting an existing `span_id` under a new `trace_id` no longer creates a phantom `traces` rollup row (0 spans, NULL start-time) that returned 404 on `GET /v1/traces/:id`; the rollup recompute now skips the empty-span case (`HAVING count(*) > 0`). (#52)
 
 ### Security
 
