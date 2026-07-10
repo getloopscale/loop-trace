@@ -511,3 +511,80 @@ describe("LensReadClient — write surface (M107)", () => {
     });
   });
 });
+
+describe("LensReadClient — evaluators + guards (M111)", () => {
+  it("createEvaluator POSTs the union body to /v1/evaluators", async () => {
+    const fetchFn = mockFetch({ id: "ev1", name: "quality", kind: "rule", config: { predicate: "status:error" }, createdAt: "t" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const rec = await client.createEvaluator({ name: "quality", kind: "rule", config: { predicate: "status:error" } });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/evaluators");
+    expect(methodOf(fetchFn)).toBe("POST");
+    expect(bodyOf(fetchFn)).toEqual({ name: "quality", kind: "rule", config: { predicate: "status:error" } });
+    expect(rec.id).toBe("ev1");
+  });
+
+  it("updateEvaluator PUTs to /v1/evaluators/{id}", async () => {
+    const fetchFn = mockFetch({ id: "ev1", name: "quality", kind: "rule", config: { predicate: "x" }, createdAt: "t", enabled: false });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.updateEvaluator("ev1", { enabled: false });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/evaluators/ev1");
+    expect(methodOf(fetchFn)).toBe("PUT");
+    expect(bodyOf(fetchFn)).toEqual({ enabled: false });
+  });
+
+  it("deleteEvaluator DELETEs /v1/evaluators/{id}", async () => {
+    const fetchFn = mockFetch({ ok: true });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.deleteEvaluator("ev1");
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/evaluators/ev1");
+    expect(methodOf(fetchFn)).toBe("DELETE");
+  });
+
+  it("runEvaluator POSTs to /v1/evaluators/{id}/run and returns a RunResult", async () => {
+    const fetchFn = mockFetch({ evaluator: "quality", written: 5, skipped: 0, truncated: false, errors: [] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const res = await client.runEvaluator("ev1", { limit: 10 });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/evaluators/ev1/run");
+    expect(methodOf(fetchFn)).toBe("POST");
+    expect(bodyOf(fetchFn)).toEqual({ limit: 10 });
+    expect(res.written).toBe(5);
+  });
+
+  it("runEvaluator does NOT retry a network reject (non-idempotent — no double-scoring)", async () => {
+    const fNet = seqFetch([new TypeError("boom"), ok({ evaluator: "q", written: 1, skipped: 0, truncated: false, errors: [] })]);
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fNet, sleep: async () => {} });
+    await expect(client.runEvaluator("ev1")).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    expect(fNet).toHaveBeenCalledTimes(1);
+  });
+
+  it("createGuard POSTs to /v1/guards and returns a GuardRecord", async () => {
+    const fetchFn = mockFetch({ id: "g1", evaluatorId: "ev1", operator: "gte", threshold: 0.8, createdAt: "t" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const g = await client.createGuard({ evaluatorId: "ev1", operator: "gte", threshold: 0.8 });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/guards");
+    expect(methodOf(fetchFn)).toBe("POST");
+    expect(g.id).toBe("g1");
+  });
+
+  it("deleteGuard DELETEs /v1/guards/{id}", async () => {
+    const fetchFn = mockFetch({ ok: true });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.deleteGuard("g1");
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/guards/g1");
+    expect(methodOf(fetchFn)).toBe("DELETE");
+  });
+
+  it("maps a 400 INVALID_EVALUATOR (with details) to a typed LensApiError", async () => {
+    const fetchFn = mockFetch(undefined, {
+      status: 400,
+      text: '{"code":"INVALID_EVALUATOR","message":"invalid evaluator","details":[{"field":"config.predicate","issue":"required"}]}',
+    });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const err = await client
+      .createEvaluator({ name: "x", kind: "rule", config: { predicate: "" } })
+      .then(() => null, (e: unknown) => e);
+    expect(err).toBeInstanceOf(LensApiError);
+    expect((err as LensApiError).code).toBe("INVALID_EVALUATOR");
+    expect((err as LensApiError).details?.[0]?.field).toBe("config.predicate");
+  });
+});

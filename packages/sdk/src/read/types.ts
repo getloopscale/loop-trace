@@ -93,6 +93,68 @@ export interface TagBody {
 }
 
 /**
+ * Evaluators + guards (M111). Hand-written: the engine returns TS-typed records (`EvaluatorRecord`,
+ * `GuardRecord`) with no Zod response schema, so there is nothing to generate; the M114 hermetic
+ * contract test proves each type against the real engine.
+ */
+/** A `rule` evaluator's config — a span-predicate string. */
+export interface RuleConfig {
+  predicate: string;
+}
+/** An `llm_judge` evaluator's config — a judge prompt + the pinned model. */
+export interface JudgeConfig {
+  prompt: string;
+  model: string;
+}
+interface EvaluatorCommon {
+  name: string;
+  target?: string;
+  passLabel?: string;
+  failLabel?: string;
+  enabled?: boolean;
+}
+/** The create body — discriminated on `kind`. */
+export type CreateEvaluatorBody = EvaluatorCommon &
+  ({ kind: "rule"; config: RuleConfig } | { kind: "llm_judge"; config: JudgeConfig });
+/** A stored evaluator (the create shape + server-assigned `id`/`createdAt`). */
+export type EvaluatorRecord = CreateEvaluatorBody & { id: string; createdAt: string };
+/** A partial evaluator update (any subset; `kind`+`config` must be provided together). */
+export interface EvaluatorUpdateBody {
+  name?: string;
+  target?: string;
+  passLabel?: string;
+  failLabel?: string;
+  enabled?: boolean;
+  kind?: "rule" | "llm_judge";
+  config?: RuleConfig | JudgeConfig;
+}
+/** The comparison a guard applies to an evaluator's verdict. */
+export type GuardOperator = "lt" | "lte" | "gt" | "gte" | "eq" | "label_eq";
+/** Create a flag-only guard over an evaluator's verdict. */
+export interface GuardBody {
+  evaluatorId: string;
+  operator: GuardOperator;
+  threshold?: number;
+  labelValue?: string;
+  enabled?: boolean;
+}
+/** A stored guard. */
+export type GuardRecord = GuardBody & { id: string; createdAt: string };
+/** Options for {@link LensReadClient.runEvaluator} — scope the run to specific traces / a limit. */
+export interface RunEvaluatorBody {
+  traceIds?: string[];
+  limit?: number;
+}
+/** The outcome of a `runEvaluator` — how many span verdicts were written / skipped. */
+export interface RunResult {
+  evaluator: string;
+  written: number;
+  skipped: number;
+  truncated: boolean;
+  errors: { spanId: string; reason: string }[];
+}
+
+/**
  * The `GET /v1` discovery document — service identity + the machine-contract pointer. Hand-written:
  * `/v1` is intentionally excluded from `/openapi.json` (a discovery/infra route, not a data route),
  * so there is no generated component to alias.

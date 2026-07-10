@@ -9,6 +9,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Roadmap v13 opened: `ROADMAP-sota-experience-v13.md` — the advanced write SDK, M111–M114 (evaluators + guards → labeling queue + ask/feedback → experiment runs + replay → contract tests + quickstart)
+- `@usetheo/lens-sdk`: 6 typed evaluator + guard write methods — `createEvaluator`/`updateEvaluator`/`deleteEvaluator`/`runEvaluator` + `createGuard`/`deleteGuard`. Accurately hand-typed (the engine returns TS-typed records with no Zod response schema; the M114 contract test is the drift guard); CRUD is network-retryable (idempotent upsert/PUT/DELETE) while `runEvaluator` is NOT (scoring is billable for `llm_judge` — never double-scored on a lost response) (M111)
 
 ### Changed
 

@@ -21,13 +21,20 @@ import type {
   CostByPeriodOptions,
   CostByPeriodResponse,
   CreateDatasetBody,
+  CreateEvaluatorBody,
   Dataset,
   DatasetDetail,
   DatasetsResponse,
+  EvaluatorRecord,
+  EvaluatorUpdateBody,
+  GuardBody,
+  GuardRecord,
   ListSessionsOptions,
   ListTracesOptions,
   ObservabilityOptions,
   ObservabilityResponse,
+  RunEvaluatorBody,
+  RunResult,
   SessionListResponse,
   Span,
   TagBody,
@@ -333,5 +340,51 @@ export class LensReadClient {
       `/v1/traces/${encodeURIComponent(traceId)}/tags`,
       { query: { tag }, retryNetwork: true },
     );
+  }
+
+  // ─── Advanced write surface (M111) — evaluators + guards. ───
+  // CRUD is idempotent server-side (create/guard upsert on (ws,name); PUT/DELETE inherent) → retryable.
+  // EXCEPTION: `runEvaluator` scores spans (billable for llm_judge) → `retryNetwork:false` (M108 lesson).
+
+  /** `POST /v1/evaluators` — create (or upsert-by-name) an evaluator. */
+  createEvaluator(body: CreateEvaluatorBody): Promise<EvaluatorRecord> {
+    return this.send<EvaluatorRecord>("POST", "/v1/evaluators", { body, retryNetwork: true });
+  }
+
+  /** `PUT /v1/evaluators/{id}` — update an evaluator (409 `NAME_CONFLICT` if the name is taken). */
+  updateEvaluator(id: string, body: EvaluatorUpdateBody): Promise<EvaluatorRecord> {
+    return this.send<EvaluatorRecord>("PUT", `/v1/evaluators/${encodeURIComponent(id)}`, {
+      body,
+      retryNetwork: true,
+    });
+  }
+
+  /** `DELETE /v1/evaluators/{id}` — delete an evaluator. */
+  deleteEvaluator(id: string): Promise<void> {
+    return this.send<void>("DELETE", `/v1/evaluators/${encodeURIComponent(id)}`, {
+      retryNetwork: true,
+    });
+  }
+
+  /**
+   * `POST /v1/evaluators/{id}/run` — score spans with an evaluator. NON-idempotent (each run writes
+   * fresh verdicts, billable for `llm_judge`) → NOT network-retried, so a lost response never
+   * double-scores (M108 lesson).
+   */
+  runEvaluator(id: string, body: RunEvaluatorBody = {}): Promise<RunResult> {
+    return this.send<RunResult>("POST", `/v1/evaluators/${encodeURIComponent(id)}/run`, {
+      body,
+      retryNetwork: false,
+    });
+  }
+
+  /** `POST /v1/guards` — create (or upsert) a guard over an evaluator's verdict. */
+  createGuard(body: GuardBody): Promise<GuardRecord> {
+    return this.send<GuardRecord>("POST", "/v1/guards", { body, retryNetwork: true });
+  }
+
+  /** `DELETE /v1/guards/{id}` — delete a guard. */
+  deleteGuard(id: string): Promise<void> {
+    return this.send<void>("DELETE", `/v1/guards/${encodeURIComponent(id)}`, { retryNetwork: true });
   }
 }
