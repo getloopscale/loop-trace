@@ -11,7 +11,9 @@ import {
 } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 import {
+  annotationsResponseSchema,
   costByPeriodResponseSchema,
+  datasetDetailSchema,
   datasetSchema,
   datasetsResponseSchema,
   observabilityResponseSchema,
@@ -19,6 +21,7 @@ import {
   spanSchema,
   toolStatsResponseSchema,
   traceListResponseSchema,
+  traceTagsResponseSchema,
 } from "@usetheo/lens-core";
 
 extendZodWithOpenApi(z);
@@ -47,6 +50,9 @@ function namedSchemas(): Record<string, z.ZodTypeAny> {
     ToolStatsResponse: toolStatsResponseSchema,
     Dataset: datasetSchema,
     DatasetsResponse: datasetsResponseSchema,
+    DatasetDetail: datasetDetailSchema,
+    TraceTagsResponse: traceTagsResponseSchema,
+    AnnotationsResponse: annotationsResponseSchema,
   };
 }
 
@@ -59,6 +65,15 @@ const RESPONSE_FOR_ROUTE: Record<string, string> = {
   "GET /v1/analytics/cost": "CostByPeriodResponse",
   "GET /v1/analytics/tools": "ToolStatsResponse",
   "GET /v1/datasets": "DatasetsResponse",
+  // M107 — write surface 2xx response components (request bodies are hand-written in the SDK).
+  "POST /v1/datasets": "Dataset",
+  "PUT /v1/datasets/:datasetId": "Dataset",
+  "POST /v1/datasets/:datasetId/items": "DatasetDetail",
+  "DELETE /v1/datasets/:datasetId/items/:traceId": "DatasetDetail",
+  "POST /v1/traces/:traceId/tags": "TraceTagsResponse",
+  "DELETE /v1/traces/:traceId/tags": "TraceTagsResponse",
+  "POST /v1/traces/:traceId/annotations": "AnnotationsResponse",
+  "DELETE /v1/traces/:traceId/annotations": "AnnotationsResponse",
 };
 
 const HONO_PARAM = /:([A-Za-z0-9_]+)/g;

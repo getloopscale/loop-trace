@@ -30,6 +30,12 @@ export type ToolStatsResponse = Schemas["ToolStatsResponse"];
 export type Dataset = Schemas["Dataset"];
 /** `GET /v1/datasets` — the workspace's datasets, wrapped as `{ datasets: Dataset[] }`. */
 export type DatasetsResponse = Schemas["DatasetsResponse"];
+/** A dataset + its items (the detail view returned by item add/remove). */
+export type DatasetDetail = Schemas["DatasetDetail"];
+/** `{ tags: string[] }` — a trace's tags after a tag/untag write. */
+export type TraceTagsResponse = Schemas["TraceTagsResponse"];
+/** `{ annotations: [...] }` — a trace's annotations after an annotate/delete write. */
+export type AnnotationsResponse = Schemas["AnnotationsResponse"];
 
 /** Options for {@link LensReadClient.listTraces} — map to snake_case query params. */
 export interface ListTracesOptions {
@@ -55,6 +61,35 @@ export interface ObservabilityOptions {
 /** The aggregation period for cost analytics. */
 export interface CostByPeriodOptions {
   period?: string;
+}
+
+/**
+ * Request bodies for the write surface (M107). Hand-written (small, 1-3 fields) — the v11 split:
+ * responses are generated from the OpenAPI, request bodies are typed interfaces here. The M109
+ * hermetic contract test proves each body is accepted by the real engine.
+ */
+/** Create a dataset by name (idempotent create-or-get). */
+export interface CreateDatasetBody {
+  name: string;
+}
+/** Rename a dataset. */
+export interface UpdateDatasetBody {
+  name: string;
+}
+/** Add an item to a dataset - a captured trace (`traceId`) and/or a synthetic `input`/`output` pair. */
+export interface AddDatasetItemBody {
+  traceId?: string;
+  input?: string;
+  output?: string;
+}
+/** Annotate a trace - at least one of `label` / `note` is required by the engine. */
+export interface AnnotateBody {
+  label?: string;
+  note?: string;
+}
+/** Tag a trace with a single tag (1-64 chars). */
+export interface TagBody {
+  tag: string;
 }
 
 /**

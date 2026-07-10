@@ -19,6 +19,15 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [0.45.0] - 2026-07-10
+
+### Added
+- Roadmap v12 opened: `ROADMAP-sota-experience-v12.md` — the typed write SDK, M107–M110 (write-client core → mutation correctness/idempotency → hermetic write↔read contract proof → write quickstart/examples)
+- `@usetheo/lens-sdk`: 9 typed curation **write** methods on `LensReadClient` — `createDataset`/`updateDataset`/`deleteDataset`/`addDatasetItem`/`removeDatasetItem` + `annotateTrace`/`deleteAnnotations`/`tagTrace`/`untagTrace`. Responses generated from new engine OpenAPI components (`DatasetDetail`, `TraceTagsResponse`, `AnnotationsResponse`); request bodies are typed interfaces; a generalized transport handles method+body + 204-void deletes (M107)
+- `@usetheo/lens-sdk`: idempotent writes are now network-retryable (bounded backoff on a network reject / timeout, not just a server-signaled 5xx) — safe because those write routes are idempotent server-side (dataset create-or-get, traceId-item/tag `ON CONFLICT DO NOTHING`, annotation upsert, inherent DELETE). The one non-idempotent path — `addDatasetItem` with a synthetic `input` (the engine mints a fresh id per call) — is NOT network-retried, so a lost-response never double-inserts. Every mutation failure (`400 INVALID_BODY` / `404 NOT_FOUND` / `409 NAME_CONFLICT`) maps to a typed `LensApiError` a caller switches on (M108)
+- `@usetheo/lens-sdk`: hermetic write↔read contract test — drives every write method against the real engine app + Postgres and asserts the mutation is observable (create→list, add/remove item, annotate/tag round-trips, create-idempotency, synthetic-item, real 404 envelope) (M109)
+- `@usetheo/lens-sdk`: write quickstart — a `README.md § Write` curate-your-data flow (doc-smoke-tested) + a write-methods table + runnable env-gated `examples/` (`curate-dataset.ts`, `annotate-trace.ts`) (M110)
+
 ## [0.44.0] - 2026-07-10
 
 ### Added

@@ -70,6 +70,35 @@ backoff that honors `Retry-After`; a fatal `4xx` fails fast. Tune with `maxRetri
 const client = new LensReadClient({ baseUrl, apiKey, maxRetries: 3, timeoutMs: 10_000 });
 ```
 
+## Write — curate your data
+
+The same client mutates your data: create and update datasets, add/remove trace items, and
+annotate / tag traces. Curate a regression set from a trace:
+
+```ts
+const dataset = await client.createDataset({ name: "regressions" });
+const detail = await client.addDatasetItem(dataset.id, { traceId: "trace-123" });
+const annotated = await client.annotateTrace("trace-123", { label: "regression", note: "wrong tool call" });
+```
+
+### Write methods
+
+| Method | Route | Returns |
+|---|---|---|
+| `createDataset({ name })` | `POST /v1/datasets` | the dataset (idempotent create-or-get) |
+| `updateDataset(id, { name })` | `PUT /v1/datasets/{id}` | the renamed dataset |
+| `deleteDataset(id)` | `DELETE /v1/datasets/{id}` | `void` |
+| `addDatasetItem(id, { traceId })` or `{ input, output }` | `POST /v1/datasets/{id}/items` | the dataset detail |
+| `removeDatasetItem(id, traceId)` | `DELETE /v1/datasets/{id}/items/{traceId}` | the dataset detail |
+| `annotateTrace(traceId, { label?, note? })` | `POST /v1/traces/{id}/annotations` | the annotations |
+| `deleteAnnotations(traceId)` | `DELETE /v1/traces/{id}/annotations` | the annotations |
+| `tagTrace(traceId, { tag })` | `POST /v1/traces/{id}/tags` | the tags |
+| `untagTrace(traceId, tag)` | `DELETE /v1/traces/{id}/tags` | the tags |
+
+Idempotent writes (create-or-get, tag/traceId-item, upsert annotation, deletes) are retried on a
+transient network failure; a synthetic `addDatasetItem({ input, output })` is not (a lost response
+would double-insert) — it surfaces the error for you to decide.
+
 ## Discovery
 
 ```ts
