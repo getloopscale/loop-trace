@@ -588,3 +588,51 @@ describe("LensReadClient — evaluators + guards (M111)", () => {
     expect((err as LensApiError).details?.[0]?.field).toBe("config.predicate");
   });
 });
+
+describe("LensReadClient — labeling queue + ask-feedback (M112)", () => {
+  it("enqueueForLabeling POSTs {spanId} to the enqueue route", async () => {
+    const fetchFn = mockFetch({ id: "lq1", traceId: "tr1", spanId: "sp1", status: "pending", createdBy: "u", createdAt: "t" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const item = await client.enqueueForLabeling("tr1", { spanId: "sp1" });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/traces/tr1/enqueue-for-labeling");
+    expect(methodOf(fetchFn)).toBe("POST");
+    expect(bodyOf(fetchFn)).toEqual({ spanId: "sp1" });
+    expect(item.status).toBe("pending");
+  });
+
+  it("resolveLabelingItem POSTs the label and does NOT retry a network reject (conservative)", async () => {
+    const fNet = seqFetch([new TypeError("boom"), ok({ id: "lq1", traceId: "tr1", spanId: "sp1", status: "resolved", createdBy: "u", createdAt: "t" })]);
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fNet, sleep: async () => {} });
+    await expect(client.resolveLabelingItem("lq1", { label: "good" })).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    expect(fNet).toHaveBeenCalledTimes(1);
+    expect(new URL(calledUrl(fNet)).pathname).toBe("/v1/labeling-queue/lq1/resolve");
+  });
+
+  it("exportLabelingAsDataset POSTs {name} and does NOT retry a network reject (conservative)", async () => {
+    const fNet = seqFetch([new TypeError("boom"), ok({ id: "d1", name: "golden" })]);
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fNet, sleep: async () => {} });
+    await expect(client.exportLabelingAsDataset({ name: "golden" })).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    expect(fNet).toHaveBeenCalledTimes(1);
+    expect(new URL(calledUrl(fNet)).pathname).toBe("/v1/labeling-queue/export-as-dataset");
+  });
+
+  it("submitAskFeedback POSTs {turnId,label} (upsert → network-retryable)", async () => {
+    const fetchFn = mockFetch({ traceId: "tr1", turnId: "turn-1", label: "up" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const rec = await client.submitAskFeedback("tr1", { turnId: "turn-1", label: "up" });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/traces/tr1/ask/feedback");
+    expect(methodOf(fetchFn)).toBe("POST");
+    expect(bodyOf(fetchFn)).toEqual({ turnId: "turn-1", label: "up" });
+    expect(rec.label).toBe("up");
+  });
+
+  it("deleteAskFeedback DELETEs with turnId as a query param (204 → void)", async () => {
+    const fetchFn = mockFetch(undefined, { status: 204, text: "" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.deleteAskFeedback("tr1", "turn-1");
+    const url = new URL(calledUrl(fetchFn));
+    expect(url.pathname).toBe("/v1/traces/tr1/ask/feedback");
+    expect(url.searchParams.get("turnId")).toBe("turn-1");
+    expect(methodOf(fetchFn)).toBe("DELETE");
+  });
+});

@@ -17,7 +17,9 @@ import type {
   AddDatasetItemBody,
   AnnotateBody,
   AnnotationsResponse,
+  AskFeedbackBody,
   Capabilities,
+  CopilotFeedbackRecord,
   CostByPeriodOptions,
   CostByPeriodResponse,
   CreateDatasetBody,
@@ -25,14 +27,18 @@ import type {
   Dataset,
   DatasetDetail,
   DatasetsResponse,
+  EnqueueLabelingBody,
   EvaluatorRecord,
   EvaluatorUpdateBody,
+  ExportLabelingBody,
   GuardBody,
   GuardRecord,
+  LabelingQueueItem,
   ListSessionsOptions,
   ListTracesOptions,
   ObservabilityOptions,
   ObservabilityResponse,
+  ResolveLabelingBody,
   RunEvaluatorBody,
   RunResult,
   SessionListResponse,
@@ -386,5 +392,57 @@ export class LensReadClient {
   /** `DELETE /v1/guards/{id}` — delete a guard. */
   deleteGuard(id: string): Promise<void> {
     return this.send<void>("DELETE", `/v1/guards/${encodeURIComponent(id)}`, { retryNetwork: true });
+  }
+
+  // ─── Labeling queue + copilot ask-feedback (M112). ───
+
+  /** `POST /v1/traces/{traceId}/enqueue-for-labeling` — queue a span for human review (idempotent). */
+  enqueueForLabeling(traceId: string, body: EnqueueLabelingBody): Promise<LabelingQueueItem> {
+    return this.send<LabelingQueueItem>(
+      "POST",
+      `/v1/traces/${encodeURIComponent(traceId)}/enqueue-for-labeling`,
+      { body, retryNetwork: true },
+    );
+  }
+
+  /**
+   * `POST /v1/labeling-queue/{itemId}/resolve` — resolve a queue item with a label.
+   * Conservative `retryNetwork:false` (a resolve is a state transition whose idempotency under
+   * concurrent resolution is not verified here — never auto-retry an ambiguous network failure).
+   */
+  resolveLabelingItem(itemId: string, body: ResolveLabelingBody): Promise<LabelingQueueItem> {
+    return this.send<LabelingQueueItem>(
+      "POST",
+      `/v1/labeling-queue/${encodeURIComponent(itemId)}/resolve`,
+      { body, retryNetwork: false },
+    );
+  }
+
+  /**
+   * `POST /v1/labeling-queue/export-as-dataset` — export resolved items as a golden dataset.
+   * Conservative `retryNetwork:false` (it creates + populates a dataset — the create-class risk).
+   */
+  exportLabelingAsDataset(body: ExportLabelingBody): Promise<Dataset> {
+    return this.send<Dataset>("POST", "/v1/labeling-queue/export-as-dataset", {
+      body,
+      retryNetwork: false,
+    });
+  }
+
+  /** `POST /v1/traces/{traceId}/ask/feedback` — thumbs up/down on a copilot turn (upsert, idempotent). */
+  submitAskFeedback(traceId: string, body: AskFeedbackBody): Promise<CopilotFeedbackRecord> {
+    return this.send<CopilotFeedbackRecord>(
+      "POST",
+      `/v1/traces/${encodeURIComponent(traceId)}/ask/feedback`,
+      { body, retryNetwork: true },
+    );
+  }
+
+  /** `DELETE /v1/traces/{traceId}/ask/feedback?turnId=` — retract a copilot-turn vote (204, idempotent). */
+  deleteAskFeedback(traceId: string, turnId: string): Promise<void> {
+    return this.send<void>("DELETE", `/v1/traces/${encodeURIComponent(traceId)}/ask/feedback`, {
+      query: { turnId },
+      retryNetwork: true,
+    });
   }
 }

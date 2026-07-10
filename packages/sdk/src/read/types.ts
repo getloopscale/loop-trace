@@ -163,6 +163,52 @@ export interface RunResult {
 }
 
 /**
+ * Labeling queue + copilot ask-feedback (M112). Hand-written (same rationale as M111 — the M114
+ * contract test is the drift guard).
+ */
+/** A labeling-queue item. */
+export interface LabelingQueueItem {
+  id: string;
+  traceId: string;
+  spanId: string;
+  status: "pending" | "resolved";
+  label?: string;
+  score?: number;
+  note?: string;
+  createdBy: string;
+  resolvedBy?: string;
+  createdAt: string;
+  resolvedAt?: string;
+}
+/** Enqueue a span for human review. */
+export interface EnqueueLabelingBody {
+  spanId: string;
+}
+/** Resolve a labeling-queue item — a non-empty `label` is required. */
+export interface ResolveLabelingBody {
+  label: string;
+  score?: number;
+  note?: string;
+}
+/** Export the resolved labeling items as a golden dataset (by name). */
+export interface ExportLabelingBody {
+  name: string;
+}
+/** A copilot ask-feedback vote. */
+export type FeedbackLabel = "up" | "down";
+/** Submit thumbs-up/down feedback on a copilot answer turn. */
+export interface AskFeedbackBody {
+  turnId: string;
+  label: FeedbackLabel;
+}
+/** The stored copilot-feedback record. */
+export interface CopilotFeedbackRecord {
+  traceId: string;
+  turnId: string;
+  label: FeedbackLabel;
+}
+
+/**
  * The `GET /v1` discovery document — service identity + the machine-contract pointer. Hand-written:
  * `/v1` is intentionally excluded from `/openapi.json` (a discovery/infra route, not a data route),
  * so there is no generated component to alias.

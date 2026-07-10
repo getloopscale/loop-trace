@@ -42,4 +42,11 @@ export type {
   GuardRecord,
   RunEvaluatorBody,
   RunResult,
+  LabelingQueueItem,
+  EnqueueLabelingBody,
+  ResolveLabelingBody,
+  ExportLabelingBody,
+  FeedbackLabel,
+  AskFeedbackBody,
+  CopilotFeedbackRecord,
 } from "./read/types.js";
