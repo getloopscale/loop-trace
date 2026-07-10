@@ -68,6 +68,28 @@ describe("LensReadClient — transport (T2.1)", () => {
     const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
     await expect(client.toolStats()).rejects.toThrow(/JSON/i);
   });
+
+  it("sends a 0-valued query param (0 is not undefined — must not be dropped)", async () => {
+    const fetchFn = mockFetch({ traces: [], total: 0, limit: 0, offset: 0 });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.listTraces({ offset: 0, limit: 0 });
+    const url = new URL(calledUrl(fetchFn));
+    expect(url.searchParams.get("offset")).toBe("0");
+    expect(url.searchParams.get("limit")).toBe("0");
+  });
+
+  it("fails fast at construction on a relative baseUrl (fail-clear, not a raw TypeError later)", () => {
+    expect(() => new LensReadClient({ baseUrl: "lens.example.com", apiKey: KEY })).toThrow(
+      /absolute URL/i,
+    );
+  });
+
+  it("preserves a base path in baseUrl when appending the route", async () => {
+    const fetchFn = mockFetch({ tools: [] });
+    const client = new LensReadClient({ baseUrl: `${BASE}/api/`, apiKey: KEY, fetch: fetchFn });
+    await client.toolStats();
+    expect(calledUrl(fetchFn)).toBe(`${BASE}/api/v1/analytics/tools`);
+  });
 });
 
 describe("LensReadClient — the 7 typed read methods (T2.2)", () => {
@@ -90,12 +112,13 @@ describe("LensReadClient — the 7 typed read methods (T2.2)", () => {
   });
 
   it("observability sends range and hits /v1/metrics/observability", async () => {
-    const fetchFn = mockFetch({ series: [] });
+    const fetchFn = mockFetch({ range: "7d", traffic: [], latency: [], tokensByModel: [] });
     const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
-    await client.observability({ range: "7d" });
+    const res = await client.observability({ range: "7d" });
     const url = new URL(calledUrl(fetchFn));
     expect(url.pathname).toBe("/v1/metrics/observability");
     expect(url.searchParams.get("range")).toBe("7d");
+    expect(res.range).toBe("7d");
   });
 
   it("listSessions sends limit/offset and hits /v1/sessions", async () => {
@@ -109,12 +132,13 @@ describe("LensReadClient — the 7 typed read methods (T2.2)", () => {
   });
 
   it("costByPeriod sends period and hits /v1/analytics/cost", async () => {
-    const fetchFn = mockFetch({ periods: [] });
+    const fetchFn = mockFetch({ period: "day", buckets: [] });
     const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
-    await client.costByPeriod({ period: "day" });
+    const res = await client.costByPeriod({ period: "day" });
     const url = new URL(calledUrl(fetchFn));
     expect(url.pathname).toBe("/v1/analytics/cost");
     expect(url.searchParams.get("period")).toBe("day");
+    expect(res.period).toBe("day");
   });
 
   it("toolStats hits /v1/analytics/tools with no query", async () => {

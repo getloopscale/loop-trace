@@ -47,6 +47,13 @@ export class LensReadClient {
     if (!options.apiKey) throw new Error("LensReadClient: apiKey is required");
     // Strip trailing slashes so a base path in baseUrl is preserved when the route path is appended.
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
+    // Fail-fast at construction (fail-clear, error-handling.md) rather than a raw TypeError from the
+    // URL parser on the first request when baseUrl is relative / has no scheme.
+    try {
+      new URL(this.baseUrl);
+    } catch {
+      throw new Error(`LensReadClient: baseUrl is not an absolute URL: ${options.baseUrl}`);
+    }
     this.apiKey = options.apiKey;
     this.fetchImpl = options.fetch ?? globalThis.fetch;
     if (typeof this.fetchImpl !== "function") {
