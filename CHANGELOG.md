@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Roadmap v11 opened: `ROADMAP-sota-experience-v11.md` — External DX (typed read SDK), M103–M106 (SDK read-client core → typed errors/resilience → contract proof + publish → quickstart/samples)
 
 ### Changed
 
