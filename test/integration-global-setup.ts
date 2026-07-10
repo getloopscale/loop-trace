@@ -15,7 +15,6 @@ export async function setup(): Promise<void> {
   container = await new PostgreSqlContainer("postgres:16-alpine").start();
   // Every worker process forks AFTER globalSetup, inheriting this env var.
   process.env["THEOLENS_PG_URI"] = container.getConnectionUri();
-  process.env["THEOLENS_PG_URI_TESTCONTAINER"] = "1"; // marker so teardown knows we own it
 }
 
 export async function teardown(): Promise<void> {

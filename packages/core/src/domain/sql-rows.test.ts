@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 
+import { bucketRowSchema as bucketSchema } from "./north-star.js";
 import { rowsAs } from "./sql-rows.js";
-
-const bucketSchema = z.object({ bucket: z.union([z.date(), z.string()]), count: z.number() });
 
 describe("rowsAs", () => {
   it("returns the typed rows when every row matches the schema", () => {
