@@ -119,6 +119,55 @@ suite("listTraces span-query DSL (integration, M30)", () => {
     expect(await ids("name:VectorStoreRetriever")).toEqual(["t-ret"]);
   });
 
+  it("M92 — attr:key=value filters by an arbitrary instrumented attribute", async () => {
+    await repo.save([
+      span({ spanId: "hot", traceId: "t-hot", attributes: { "gen_ai.request.temperature": "0.7", tier: "gold" } }),
+      span({ spanId: "cold", traceId: "t-cold", attributes: { "gen_ai.request.temperature": "0.0", tier: "silver" } }),
+    ]);
+    // an arbitrary dotted key
+    expect(await ids("attr:gen_ai.request.temperature=0.7")).toEqual(["t-hot"]);
+    // a different arbitrary key + value
+    expect(await ids("attr:tier=silver")).toEqual(["t-cold"]);
+    // absent key → no trace (not a fabricated match)
+    expect(await ids("attr:nonexistent=x")).toEqual([]);
+    // composes with a typed clause (span-scoped AND on the same span)
+    await repo.save([span({ spanId: "gm", traceId: "t-gm", model: "gpt-4o", attributes: { tier: "gold" } })]);
+    expect(await ids("model:gpt-4o attr:tier=gold")).toEqual(["t-gm"]);
+  });
+
+  it("M92 — facet discovery lists top attribute keys and top values for a key (workspace-scoped)", async () => {
+    await repo.save([
+      span({ spanId: "f1", traceId: "t-f1", attributes: { tier: "gold", region: "us" } }),
+      span({ spanId: "f2", traceId: "t-f2", attributes: { tier: "gold", region: "eu" } }),
+      span({ spanId: "f3", traceId: "t-f3", attributes: { tier: "silver" } }),
+    ]);
+    // keys mode: `tier` appears 3×, `region` 2× → ranked by frequency
+    const keys = await repo.discoverSpanAttributeKeys();
+    const byKey = Object.fromEntries(keys.map((k) => [k.key, k.count]));
+    expect(byKey["tier"]).toBe(3);
+    expect(byKey["region"]).toBe(2);
+    expect(keys[0]!.key).toBe("tier"); // most frequent first
+    // values mode for `tier`: gold ×2, silver ×1
+    const values = await repo.discoverSpanAttributeValues("tier");
+    expect(Object.fromEntries(values.map((v) => [v.value, v.count]))).toEqual({ gold: 2, silver: 1 });
+    // a hostile/valid-shape key is bound as a jsonb path — no error, no rows
+    expect(await repo.discoverSpanAttributeValues("nonexistent")).toEqual([]);
+  });
+
+  it("M92 — the attribute VALUE is bound, never interpolated (SQL-injection inert)", async () => {
+    // Two spans exist. A classic injection payload as the VALUE — if it were interpolated
+    // (`... ->> 'tier' = '' OR '1'='1'`) it would match EVERY span. Bound, it is a literal that
+    // no span holds → zero traces. The empty result IS the proof the value is parameterized.
+    await repo.save([
+      span({ spanId: "a", traceId: "t-a", attributes: { tier: "gold" } }),
+      span({ spanId: "b", traceId: "t-b", attributes: { tier: "silver" } }),
+    ]);
+    expect(await ids(`attr:"tier=' OR '1'='1"`)).toEqual([]); // NOT ["t-a","t-b"]
+    // a valid-shape but unusual key is bound as a jsonb path (arbitrary key works, no error)
+    await repo.save([span({ spanId: "c", traceId: "t-c", attributes: { "x.y-z_1": "v" } })]);
+    expect(await ids("attr:x.y-z_1=v")).toEqual(["t-c"]);
+  });
+
   it("test_span_query_garbage_returns_unfiltered", async () => {
     await seedKinds();
     // a query with no VALID clauses (all ignored) adds no condition → lists everything

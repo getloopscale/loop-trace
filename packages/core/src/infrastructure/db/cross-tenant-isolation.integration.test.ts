@@ -379,6 +379,13 @@ suite("M22 cross-tenant isolation (integration)", () => {
     const nsB = await repo.aggregateNorthStar(WS_B);
     expect(nsA.tracesPerDay.reduce((s, b) => s + b.count, 0)).toBeGreaterThan(0);
     expect(nsB.tracesPerDay.reduce((s, b) => s + b.count, 0)).toBe(0);
+
+    // M92 facet discovery isolates: A's span carries a custom attribute; B sees no keys/values.
+    await repo.save([span({ spanId: "a2", traceId: "ta2", attributes: { tier: "gold" } })], WS_A);
+    expect((await repo.discoverSpanAttributeKeys(WS_A)).some((k) => k.key === "tier")).toBe(true);
+    expect((await repo.discoverSpanAttributeKeys(WS_B)).some((k) => k.key === "tier")).toBe(false);
+    expect(await repo.discoverSpanAttributeValues("tier", WS_A)).toEqual([{ value: "gold", count: 1 }]);
+    expect(await repo.discoverSpanAttributeValues("tier", WS_B)).toEqual([]);
   });
 
   it("test_single_tenant_default_behaves_as_pre_m22", async () => {

@@ -72,6 +72,8 @@ const repo = {
   }),
   aggregateEvaluators: async () => [],
   aggregateScoresOverTime: async () => [],
+  discoverSpanAttributeKeys: async () => [],
+  discoverSpanAttributeValues: async () => [],
   listSessions: async () => ({ sessions: [] }),
   getSessionDetail: async () => null,
   listTags: async () => [],
@@ -243,6 +245,12 @@ const CASES: readonly MatrixCase[] = [
     requiredScope: "observability:read",
     successStatus: 200,
     build: () => new Request("http://x/v1/metrics/scores?range=24h"),
+  },
+  {
+    name: "span-attribute-facets",
+    requiredScope: "observability:read",
+    successStatus: 200,
+    build: () => new Request("http://x/v1/metrics/span-attributes"),
   },
   {
     name: "sessions-list",

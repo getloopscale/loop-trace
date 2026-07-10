@@ -106,6 +106,19 @@ describe("M36 rule engine (T3.1)", () => {
     expect(evaluateRule(ruleEv("kind:chain"), parent, false).score).toBe(0);
   });
 
+  it("M92 — an attr:key=value clause matches a span's arbitrary attribute (text equality)", () => {
+    const s = span({ spanId: "s", traceId: "t", attributes: { "gen_ai.request.temperature": 0.7, tier: "gold" } });
+    // present key + matching (text-coerced) value → match
+    expect(evaluateRule(ruleEv("attr:gen_ai.request.temperature=0.7"), s).score).toBe(1);
+    expect(evaluateRule(ruleEv("attr:tier=gold"), s).score).toBe(1);
+    // present key, different value → no match
+    expect(evaluateRule(ruleEv("attr:tier=silver"), s).score).toBe(0);
+    // absent key → no match (not a fabricated match)
+    expect(evaluateRule(ruleEv("attr:missing=x"), s).score).toBe(0);
+    // a span with no attributes at all → no match, never throws
+    expect(evaluateRule(ruleEv("attr:tier=gold"), span({ spanId: "s2", traceId: "t" })).score).toBe(0);
+  });
+
   it("test_custom_pass_fail_labels", () => {
     const ev = ruleEv("status:error", { passLabel: "errored", failLabel: "clean" });
     expect(evaluateRule(ev, span({ spanId: "s", traceId: "t", statusCode: "ERROR" })).label).toBe("errored");

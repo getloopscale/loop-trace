@@ -7,6 +7,7 @@ import type { ObservabilityRange, ObservabilityResponse } from "./observability.
 import type { SessionListResponse, SessionDetailResponse } from "./session.js";
 import type { PruneStats } from "./retention.js";
 import type { EvaluatorSummary, ScoreBucket } from "./evaluation.js";
+import type { SpanAttributeKey, SpanAttributeValue } from "./span-facets.js";
 import type { Annotation, NormalizedAnnotation } from "./annotation.js";
 import type { Dataset, DatasetDetail } from "./dataset.js";
 import type {
@@ -64,6 +65,10 @@ export interface SpanRepository {
   /** M90: per-evaluator score aggregation bucketed over time (mean + label counts per period).
    *  Only buckets with ≥ 1 sample are returned (no fabricated zero period). */
   aggregateScoresOverTime(range: ObservabilityRange, workspaceId?: string): Promise<ScoreBucket[]>;
+  /** M92: facet discovery — top-N distinct span attribute keys in the workspace (recent window). */
+  discoverSpanAttributeKeys(workspaceId?: string): Promise<SpanAttributeKey[]>;
+  /** M92: facet discovery — top-N distinct values for one attribute key (key bound as a jsonb path). */
+  discoverSpanAttributeValues(key: string, workspaceId?: string): Promise<SpanAttributeValue[]>;
   /** Sessions newest-first with per-session scoped aggregates (M13). M81: server-paginated (limit/offset)
    *  with a workspace-scoped total. */
   listSessions(workspaceId?: string, opts?: { limit?: number; offset?: number }): Promise<SessionListResponse>;

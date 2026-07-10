@@ -129,6 +129,13 @@ function spanSatisfies(
     }
     case "kind":
       return deriveKind(span, hasChildren) === clause.value;
+    case "attr": {
+      // M92 — mirror the SQL `attributes ->> key = value` (text equality). A missing key is
+      // not a match; a present value is compared as text (the `->>` operator yields text).
+      const attrs = span.attributes as Record<string, unknown> | undefined;
+      const raw = attrs?.[clause.key];
+      return raw != null && String(raw) === clause.value;
+    }
   }
 }
 

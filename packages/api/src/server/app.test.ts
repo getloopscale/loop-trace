@@ -9,6 +9,8 @@ import type {
   CostPeriod,
   EvaluatorSummary,
   ScoreBucket,
+  SpanAttributeKey,
+  SpanAttributeValue,
   ListTracesOptions,
   NorthStarResponse,
   ObservabilityResponse,
@@ -166,6 +168,18 @@ class StubSpanRepository implements SpanRepository {
   ): Promise<ScoreBucket[]> {
     this.lastScoresRange = range;
     return this.scoreBuckets;
+  }
+
+  // M92: span attribute facet discovery stub.
+  attributeKeys: SpanAttributeKey[] = [{ key: "gen_ai.request.temperature", count: 3 }];
+  attributeValues: SpanAttributeValue[] = [{ value: "0.7", count: 2 }];
+  lastFacetKey: string | null = null;
+  async discoverSpanAttributeKeys(): Promise<SpanAttributeKey[]> {
+    return this.attributeKeys;
+  }
+  async discoverSpanAttributeValues(key: string): Promise<SpanAttributeValue[]> {
+    this.lastFacetKey = key;
+    return this.attributeValues;
   }
 
   sessionList: SessionListResponse = { sessions: [] };
@@ -966,6 +980,45 @@ describe("createApp (contract, stub repo)", () => {
     };
     expect(
       (await createApp(leaky).request("/v1/metrics/scores")).status,
+    ).toBeGreaterThanOrEqual(500);
+  });
+
+  // M92 — span attribute facet discovery route
+  it("test_get_span_attributes_keys_mode", async () => {
+    repo.attributeKeys = [
+      { key: "gen_ai.request.temperature", count: 5 },
+      { key: "tier", count: 2 },
+    ];
+    const res = await app.request("/v1/metrics/span-attributes");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { mode: string; keys: SpanAttributeKey[] };
+    expect(body.mode).toBe("keys");
+    expect(body.keys).toHaveLength(2);
+    expect(body.keys[0]?.key).toBe("gen_ai.request.temperature");
+  });
+
+  it("test_get_span_attributes_values_mode_binds_key", async () => {
+    repo.attributeValues = [{ value: "0.7", count: 3 }];
+    const res = await app.request("/v1/metrics/span-attributes?key=gen_ai.request.temperature");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { mode: string; key: string; values: SpanAttributeValue[] };
+    expect(body.mode).toBe("values");
+    expect(body.key).toBe("gen_ai.request.temperature");
+    expect(body.values[0]?.value).toBe("0.7");
+    expect(repo.lastFacetKey).toBe("gen_ai.request.temperature"); // the key reached the repo (bound path)
+  });
+
+  it("test_span_attributes_route_rejects_leaked_column_at_boundary_with_5xx", async () => {
+    const leaky: SpanRepository = {
+      ...repo,
+      save: repo.save.bind(repo),
+      getBySpanId: repo.getBySpanId.bind(repo),
+      getTraceTree: repo.getTraceTree.bind(repo),
+      listTraces: repo.listTraces.bind(repo),
+      discoverSpanAttributeKeys: async () => [{ key: "x", count: 1, span_id: "leak" }] as never,
+    };
+    expect(
+      (await createApp(leaky).request("/v1/metrics/span-attributes")).status,
     ).toBeGreaterThanOrEqual(500);
   });
 

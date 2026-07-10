@@ -12,6 +12,7 @@ import {
   observabilityResponseSchema,
   evaluatorsResponseSchema,
   scoresResponseSchema,
+  spanFacetsResponseSchema,
   sessionListResponseSchema,
   sessionDetailResponseSchema,
   traceTagsResponseSchema,
@@ -371,6 +372,18 @@ export function createApp(
       ),
     });
     return c.json(summary, 200);
+  });
+
+  app.get("/v1/metrics/span-attributes", requireScopeOnPrincipal("observability:read"), async (c) => {
+    // M92 — facet discovery. No `key` → the workspace's top attribute keys; `?key=<k>` → the top
+    // distinct values for that key. The key is bound as a jsonb path (injection-safe). Strict DTO.
+    const ws = getPrincipal(c).workspaceId;
+    const key = c.req.query("key");
+    const body =
+      key !== undefined && key.length > 0
+        ? { mode: "values" as const, key, values: await repo.discoverSpanAttributeValues(key, ws) }
+        : { mode: "keys" as const, keys: await repo.discoverSpanAttributeKeys(ws) };
+    return c.json(spanFacetsResponseSchema.parse(body), 200);
   });
 
   app.get("/v1/sessions", requireScopeOnPrincipal("observability:read"), async (c) => {

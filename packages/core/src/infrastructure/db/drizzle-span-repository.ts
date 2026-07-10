@@ -58,6 +58,7 @@ import {
 import type { PruneStats } from "../../domain/retention.js";
 import { parseSpanQuery, type SpanClause } from "../../domain/span-query.js";
 import type { EvaluatorSummary, ScoreBucket } from "../../domain/evaluation.js";
+import type { SpanAttributeKey, SpanAttributeValue } from "../../domain/span-facets.js";
 import { spans, traces, sessions, replaySessions, traceTags, spanEvaluations, annotations, datasets, datasetItems, labelingQueueItems, experimentRuns, experimentRunItems, copilotFeedback } from "./schema.js";
 import {
   DEFAULT_ANNOTATOR_KIND,
@@ -120,6 +121,11 @@ function spanClauseSql(c: SpanClause) {
         : sql`(s.status_code IS NULL OR s.status_code NOT IN ${ERROR_CODES_IN})`;
     case "kind":
       return sql`(${DERIVED_SPAN_KIND_SQL}) = ${c.value}`;
+    case "attr":
+      // M92 — arbitrary attribute: the KEY is bound as a jsonb path operand (data, not SQL) and
+      // the VALUE as a bind param. Drizzle emits `attributes ->> $1 = $2` — injection-safe by
+      // parameterization (the ATTR_KEY_RE shape check upstream is defense-in-depth, not the guard).
+      return sql`s.attributes->>${c.key} = ${c.value}`;
   }
 }
 
@@ -1023,6 +1029,58 @@ export class DrizzleSpanRepository implements SpanRepository {
         labels: labelsByCell.get(`${periodStart}|${r.name}`) ?? {},
       };
     });
+  }
+
+  // M92 — facet discovery over the spans.attributes jsonb bag. Capped: a recent 30-day window +
+  // top-N by frequency (the suggest control needs a hint, not an exhaustive index — ADR-3). Every
+  // query is workspace-scoped. The `key` in values-mode is a BOUND jsonb path (injection-safe).
+  private static readonly FACET_WINDOW = sql.raw("interval '30 days'");
+  private static readonly FACET_LIMIT = 50;
+
+  async discoverSpanAttributeKeys(
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<SpanAttributeKey[]> {
+    const res = await this.db.execute(sql`
+      SELECT key, count(*)::int AS count
+      FROM (
+        SELECT jsonb_object_keys(attributes) AS key
+        FROM spans
+        WHERE workspace_id = ${workspaceId}
+          AND attributes IS NOT NULL
+          AND ingested_at >= now() - ${DrizzleSpanRepository.FACET_WINDOW}
+      ) k
+      GROUP BY key
+      ORDER BY count DESC, key ASC
+      LIMIT ${DrizzleSpanRepository.FACET_LIMIT}
+    `);
+    return (res.rows as { key: string; count: number }[]).map((r) => ({
+      key: r.key,
+      count: Number(r.count),
+    }));
+  }
+
+  async discoverSpanAttributeValues(
+    key: string,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<SpanAttributeValue[]> {
+    // The KEY is bound as a jsonb path operand (data, never SQL) — same injection-safety as `attr:`.
+    const res = await this.db.execute(sql`
+      SELECT value, count(*)::int AS count
+      FROM (
+        SELECT attributes->>${key} AS value
+        FROM spans
+        WHERE workspace_id = ${workspaceId}
+          AND ingested_at >= now() - ${DrizzleSpanRepository.FACET_WINDOW}
+      ) v
+      WHERE value IS NOT NULL
+      GROUP BY value
+      ORDER BY count DESC, value ASC
+      LIMIT ${DrizzleSpanRepository.FACET_LIMIT}
+    `);
+    return (res.rows as { value: string; count: number }[]).map((r) => ({
+      value: r.value,
+      count: Number(r.count),
+    }));
   }
 
   async listSessions(

@@ -50,6 +50,12 @@ export {
   type ScoreBucket,
   type ScoresResponse,
 } from "./domain/evaluation.js";
+export {
+  spanFacetsResponseSchema,
+  type SpanFacetsResponse,
+  type SpanAttributeKey,
+  type SpanAttributeValue,
+} from "./domain/span-facets.js";
 // M36: online evaluators (compute/write path) — types + pure rule/guard engines.
 export {
   EVALUATOR_KINDS,
