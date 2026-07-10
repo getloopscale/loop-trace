@@ -7,6 +7,7 @@
  */
 import {      sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { z } from "zod";
 
 import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
 import { isoTimestamp } from "../../domain/session.js";
@@ -29,6 +30,34 @@ import {
     LATENCY_MS_EXPR,
   DERIVED_AGENT_NAME_SQL } from "./repo-shared.js";
 import { rowsAs } from "../../domain/sql-rows.js";
+
+
+const bucketVal = z.union([z.date(), z.string()]);
+/** M100 (B-L1) — raw observability rows; a renamed SELECT alias fails loudly at the rowsAs boundary. */
+export const trafficRowSchema = z.object({ bucket: bucketVal, traceCount: z.number(), errorCount: z.number() });
+export const latencyRowSchema = z.object({
+  bucket: bucketVal,
+  p50: z.number().nullable(),
+  p75: z.number().nullable(),
+  p95: z.number().nullable(),
+  p99: z.number().nullable(),
+});
+export const tokensByModelRowSchema = z.object({
+  bucket: bucketVal,
+  model: z.string(),
+  inputTokens: z.number(),
+  outputTokens: z.number(),
+});
+/** M100 (B-L1) — the raw agents-catalog row. */
+export const agentRowSchema = z.object({
+  name: z.string(),
+  first_seen: z.union([z.date(), z.string()]),
+  last_seen: z.union([z.date(), z.string()]),
+  run_count: z.number(),
+  versions: z.array(z.string()).nullable(),
+  system_prompt: z.string().nullable(),
+  tools: z.array(z.string()).nullable(),
+});
 
 export async function aggregateCostByPeriod(
   db: NodePgDatabase,
@@ -214,16 +243,16 @@ export async function aggregateObservability(
   `);
 
   const raw: RawObservability = {
-    traffic: trafficRes.rows as unknown as RawObservability["traffic"],
-    latency: (latencyRes.rows as unknown as { bucket: Date; p50: number | null; p75: number | null; p95: number | null; p99: number | null }[]).map(
-      (r) => ({
-        bucket: r.bucket,
-        p50: r.p50 ?? 0,
-        p75: r.p75 ?? 0,
-        p95: r.p95 ?? 0,
-        p99: r.p99 ?? 0 }),
-    ),
-    tokensByModel: modelRes.rows as unknown as RawObservability["tokensByModel"] };
+    traffic: rowsAs(trafficRes, trafficRowSchema, "observability.traffic"),
+    latency: rowsAs(latencyRes, latencyRowSchema, "observability.latency").map((r) => ({
+      bucket: r.bucket,
+      p50: r.p50 ?? 0,
+      p75: r.p75 ?? 0,
+      p95: r.p95 ?? 0,
+      p99: r.p99 ?? 0,
+    })),
+    tokensByModel: rowsAs(modelRes, tokensByModelRowSchema, "observability.tokensByModel"),
+  };
   return shapeObservability(raw, range, priceTable);
 }
 
@@ -424,15 +453,7 @@ export async function aggregateAgents(
     GROUP BY base.agent_name
     ORDER BY max(base.ingested_at) DESC
   `);
-  const rows = res.rows as unknown as {
-    name: string;
-    first_seen: Date;
-    last_seen: Date;
-    run_count: number;
-    versions: string[] | null;
-    system_prompt: string | null;
-    tools: string[] | null;
-  }[];
+  const rows = rowsAs(res, agentRowSchema, "aggregateAgents");
   const now = new Date();
   return rows.map((r): Agent => {
     const raw: RawAgent = {

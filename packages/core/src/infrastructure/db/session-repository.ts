@@ -5,7 +5,9 @@
  */
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { z } from "zod";
 
+import { rowsAs } from "../../domain/sql-rows.js";
 import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
 import { round3 } from "../../domain/tool-stats.js";
 import {
@@ -18,6 +20,30 @@ import {
 } from "../../domain/session.js";
 import { LATENCY_MS_EXPR, preview, traceRowToItem } from "./repo-shared.js";
 import { sessions, traces } from "./schema.js";
+
+
+/** M100 (B-L1) — the raw session-list row (a renamed SELECT alias now fails loudly at rowsAs). */
+export const sessionListRowSchema = z.object({
+  sessionId: z.string(),
+  firstSeenAt: z.union([z.date(), z.string()]),
+  lastSeenAt: z.union([z.date(), z.string()]),
+  traceCount: z.number(),
+  costUsd: z.number(),
+  totalTokens: z.number(),
+  errorCount: z.number(),
+  evaluationsCount: z.number(),
+  firstMessageRaw: z.string().nullable(),
+});
+
+/** M100 (B-L1) — the raw session-detail aggregate row. */
+export const sessionAggRowSchema = z.object({
+  traceCount: z.number(),
+  costUsd: z.number().nullable(),
+  totalTokens: z.number().nullable(),
+  errorCount: z.number(),
+  p50: z.number().nullable(),
+  p95: z.number().nullable(),
+});
 
 export async function listSessions(
   db: NodePgDatabase,
@@ -62,17 +88,7 @@ export async function listSessions(
     ORDER BY s.last_seen_at DESC, s.session_id DESC
     LIMIT ${limit} OFFSET ${offset}
   `);
-  const rows = res.rows as unknown as {
-    sessionId: string;
-    firstSeenAt: Date;
-    lastSeenAt: Date;
-    traceCount: number;
-    costUsd: number;
-    totalTokens: number;
-    errorCount: number;
-    evaluationsCount: number;
-    firstMessageRaw: string | null;
-  }[];
+  const rows = rowsAs(res, sessionListRowSchema, "listSessions");
   const sessionsOut: SessionListItem[] = rows.map((r) => {
     const item: SessionListItem = {
       sessionId: r.sessionId,
@@ -127,14 +143,7 @@ export async function getSessionDetail(
     FROM traces
     WHERE session_id = ${sessionId} AND workspace_id = ${workspaceId}
   `);
-  const agg = (aggRes.rows as unknown as {
-    traceCount: number;
-    costUsd: number | null;
-    totalTokens: number | null;
-    errorCount: number;
-    p50: number | null;
-    p95: number | null;
-  }[])[0]!;
+  const agg = rowsAs(aggRes, sessionAggRowSchema, "getSessionDetail")[0]!;
 
   // Member traces as the stable list DTO (reuses the M3 mapping).
   const memberRows = await db
