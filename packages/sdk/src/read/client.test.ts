@@ -532,8 +532,8 @@ describe("LensReadClient — evaluators + guards (M111)", () => {
     expect(bodyOf(fetchFn)).toEqual({ enabled: false });
   });
 
-  it("deleteEvaluator DELETEs /v1/evaluators/{id}", async () => {
-    const fetchFn = mockFetch({ ok: true });
+  it("deleteEvaluator DELETEs /v1/evaluators/{id} (204 → void)", async () => {
+    const fetchFn = mockFetch(undefined, { status: 204, text: "" });
     const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
     await client.deleteEvaluator("ev1");
     expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/evaluators/ev1");
@@ -566,8 +566,8 @@ describe("LensReadClient — evaluators + guards (M111)", () => {
     expect(g.id).toBe("g1");
   });
 
-  it("deleteGuard DELETEs /v1/guards/{id}", async () => {
-    const fetchFn = mockFetch({ ok: true });
+  it("deleteGuard DELETEs /v1/guards/{id} (204 → void)", async () => {
+    const fetchFn = mockFetch(undefined, { status: 204, text: "" });
     const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
     await client.deleteGuard("g1");
     expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/guards/g1");

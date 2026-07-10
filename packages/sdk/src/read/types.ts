@@ -116,8 +116,16 @@ interface EvaluatorCommon {
 /** The create body — discriminated on `kind`. */
 export type CreateEvaluatorBody = EvaluatorCommon &
   ({ kind: "rule"; config: RuleConfig } | { kind: "llm_judge"; config: JudgeConfig });
-/** A stored evaluator (the create shape + server-assigned `id`/`createdAt`). */
-export type EvaluatorRecord = CreateEvaluatorBody & { id: string; createdAt: string };
+/**
+ * A stored evaluator: the create shape + server-assigned fields. `target`/`enabled` are REQUIRED here
+ * (the engine always emits them with defaults applied) even though they are optional in the create body.
+ */
+export type EvaluatorRecord = CreateEvaluatorBody & {
+  id: string;
+  createdAt: string;
+  target: string;
+  enabled: boolean;
+};
 /** A partial evaluator update (any subset; `kind`+`config` must be provided together). */
 export interface EvaluatorUpdateBody {
   name?: string;
@@ -138,8 +146,8 @@ export interface GuardBody {
   labelValue?: string;
   enabled?: boolean;
 }
-/** A stored guard. */
-export type GuardRecord = GuardBody & { id: string; createdAt: string };
+/** A stored guard (`enabled` is always emitted by the engine). */
+export type GuardRecord = GuardBody & { id: string; createdAt: string; enabled: boolean };
 /** Options for {@link LensReadClient.runEvaluator} — scope the run to specific traces / a limit. */
 export interface RunEvaluatorBody {
   traceIds?: string[];
