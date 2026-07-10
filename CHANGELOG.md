@@ -8,6 +8,20 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.42.0] - 2026-07-10
+
+### Added
 - **Dashboard UX polish (M98, theo-cloud/dashboard — closes v9).** The last craft gaps on the shipped observability screens: (1) the trace **peek-sheet** `lazy()`-loads the trace-detail view (CodeMirror + react-markdown) behind `<Suspense>` — a separate ~53 kB chunk off the traces first-paint, loaded only on peek-open — and the sanitized `Markdown` wrapper is extracted to its own module so the Ask thread no longer transitively bundles CodeMirror (D-H1/H2); (2) the alerts **On/Off toggle** flips **optimistically** with `onError` rollback + disabled-while-pending (no stale RTT gap, no silent divergence, D-H3); (3) the experiments **compare** view renders a per-lane loading Skeleton (no fabricated-empty during load, D-H4); (4) the traces table's **columns build + client sort are memoized** with stable deps (no rebuild per filter keystroke, D-M1); (5) the hand-rolled **columns popover** gains Escape/outside-click/focus management + `useId` a11y ids (D-M5); (6) the 4× duplicated lens `errorMessage` helper is DRY'd into one `lensErrorMessage` (D-M6). Behavior-preserving — the full dashboard suite (1744 tests) is green. Adversarial review READY_TO_MERGE after it caught (and I fixed) a defeated `useMemo` whose unstable deps made the D-M1 perf claim untrue.
 - **Engine code-health — SpanRepository role split + shared SQL fragment (M97, phase 3/4 — audit B-M1/B-M2).** The 48-method `SpanRepository` god-interface is decomposed into 9 cohesive role interfaces (`TraceReadRepository`, `AggregateRepository`, `SessionRepository`, `AnnotationRepository`, `DatasetRepository`, `CopilotFeedbackRepository`, `LabelingQueueRepository`, `ExperimentRepository`, `RetentionRepository`) — a consumer narrows to the surface it uses (ISP); `SpanRepository` stays their composition so every existing consumer is unchanged. The experiment, dataset, and labeling-queue implementations are extracted into their own files (the facade delegates over the shared `db` handle), taking the adapter from **2143 → 1707 LoC**. The clamped span-latency-in-ms expression (duplicated 8×) is extracted to one shared `LATENCY_MS_EXPR` fragment. Behavior-preserving throughout — proven by the unchanged unit + real-Postgres integration suites and an adversarial review (0 behavior change).
 - **Typed SQL→DTO boundary — `rowsAs` (M97, phase 2 — audit B-L1).** A validated `rowsAs(res, schema, context)` helper (`packages/core/src/domain/sql-rows.ts`) replaces the `as unknown as Row[]` casts on raw `db.execute` aggregate rows: it parses each row against a Zod schema (zod is already a domain dep) and throws a loud, contextful error (naming the query + the offending field) when a SELECT alias drifts from the TS shape — a renamed column now fails at the boundary instead of shaping a silent `undefined` downstream. Adopted at the north-star aggregate (`aggregateNorthStar`) with a `bucketRowSchema`; the remaining aggregate casts migrate incrementally against the same helper. Behavior-preserving (the integration suite is unchanged and green).
@@ -19,16 +33,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - **OTLP ingest durability & backpressure (M93).** Hardened the highest-volume write path (`POST /v1/traces`) against oversized/gzip-bomb/high-volume/partially-malformed input: (1) the raw body is bounded by `hono/body-limit` (env `THEOLENS_MAX_INGEST_BYTES`, default 4 MiB) → **413** before it is buffered (OOM guard); (2) the gzip path is bounded via native `gunzipSync({maxOutputLength})` (env `THEOLENS_MAX_DECOMPRESSED_BYTES`, default 16 MiB) so a gzip-bomb → **413** (distinct from a corrupt stream → 400); (3) a per-workspace ingest rate limiter (env `THEOLENS_INGEST_RPM`, default 600) sheds a runaway producer with **429** before the pool exhausts; (4) a single malformed span no longer 400s the whole batch — valid spans are persisted and the invalid ones counted, returning an OTLP-truthful **200 `{partialSuccess:{rejectedSpans,errorMessage}}`** (a `spansRejected` metric makes drops visible, never silent). A structurally-undecodable envelope still fails 400 (trust boundary). Live-verified over real HTTP (413 body, 413 gzip-bomb, 200 partial-success with the good span readable back, 429 flood); no new dependency (reuses `hono/body-limit`, native zlib, the existing `RateLimiter`).
 - **New phase roadmap: `ROADMAP-sota-experience-v9.md` (M93–M98) — Maturity & Hardening (no new features).** Where v5–v8 delivered the *capabilities*, v9 makes what exists production-grade — evolution only, across DX (external API/SDK contract + internal engineering health), UX (dashboard polish), and the backend (a balance of resilience, performance, code-health). Authored from a four-lens code-grounded audit (`knowledge-base/discoveries/2026-07-10-v9-maturity-audit.md`) comparing against the four SOTA peers. Milestones: **M93** ingest durability & backpressure (body/gunzip caps, ingest rate limiter, OTLP per-span partial-success); **M94** process & dependency resilience (PG pool + statement/HTTP timeouts, graceful shutdown, `/health`+`/ready`, provider retry-with-backoff + `Retry-After`); **M95** query-layer performance & scale-proof (composite `(workspace_id,time)` indexes, jsonb GIN for M92 facets, de-N+1 `listTraces`, benchmark + `/analysis`); **M96** API contract consistency & discoverability (one `{code,message,details}` error envelope, field-level 400s, OpenAPI generated from the Zod DTOs + `/v1` index); **M97** engine code-health & internal DX (split the 2130-LoC god-repository into role interfaces/files, DRY the SQL fragments, Testcontainers so integration tests never silently skip, typed SQL→DTO boundary); **M98** dashboard UX polish (lazy-load the peek-sheet bundle, alerts-toggle optimism, compare loading skeleton, memoization + list virtualization, columns-toggle a11y). Ranked M93>M94>M95>M96>M98>M97; each an independent CYCLE. Out of scope: any new feature, a distributed limiter, `spans` partitioning, a read-client SDK, visual redesign.
 
-### Changed
-
-### Deprecated
-
-### Removed
 
 ### Fixed
 - **Full integration suite now runs green in one shot (M95, test-harness).** The migrate-on-boot integration test reset the DB with a **hardcoded** `DROP TABLE` list that had gone stale (missing `labeling_queue_items`, `experiment_runs`, … from later migrations) while also dropping the `drizzle` migration-tracking schema — so when it ran inside the full suite it left orphan tables + no tracking, and every subsequent integration file re-migrated from scratch and failed with `relation already exists`, corrupting the shared DB (the B-M4 fragility). It now drops **every** `public` table dynamically (future-proof — a new migration's table can never be omitted). Also corrected two stale integration assertions surfaced once the suite could run: `listTraces()` empty-result asserts the real paginated envelope `{traces, total, limit, offset}`, and the empty-OTLP-envelope response asserts the M93 partial-success contract `{partialSuccess:{}}`. Full integration suite: 32 files / 265 tests green on a fresh shared Postgres. The systematic per-file isolation (Testcontainers) remains M97's scope.
-
-### Security
 
 ## [0.41.0] - 2026-07-09
 
