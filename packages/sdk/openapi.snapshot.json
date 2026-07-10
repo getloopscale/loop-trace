@@ -1097,7 +1097,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/TraceTagsResponse"
                 }
               }
             }
@@ -1162,7 +1162,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/TraceTagsResponse"
                 }
               }
             }
@@ -1294,7 +1294,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/AnnotationsResponse"
                 }
               }
             }
@@ -1359,7 +1359,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/AnnotationsResponse"
                 }
               }
             }
@@ -1481,7 +1481,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Dataset"
                 }
               }
             }
@@ -1603,7 +1603,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Dataset"
                 }
               }
             }
@@ -1735,7 +1735,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/DatasetDetail"
                 }
               }
             }
@@ -1802,7 +1802,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/DatasetDetail"
                 }
               }
             }
@@ -2773,6 +2773,108 @@
         },
         "required": [
           "datasets"
+        ],
+        "additionalProperties": false
+      },
+      "DatasetDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "traceId": {
+                  "type": "string"
+                },
+                "inputSnapshot": {
+                  "type": "string"
+                },
+                "outputSnapshot": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "traceId",
+                "createdAt"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "createdAt",
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "TraceTagsResponse": {
+        "type": "object",
+        "properties": {
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "tags"
+        ],
+        "additionalProperties": false
+      },
+      "AnnotationsResponse": {
+        "type": "object",
+        "properties": {
+          "annotations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "spanId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "note": {
+                  "type": "string"
+                },
+                "annotatorKind": {
+                  "type": "string"
+                },
+                "updatedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "annotatorKind",
+                "updatedAt"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "annotations"
         ],
         "additionalProperties": false
       }

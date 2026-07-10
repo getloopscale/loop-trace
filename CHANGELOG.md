@@ -9,6 +9,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Roadmap v12 opened: `ROADMAP-sota-experience-v12.md` — the typed write SDK, M107–M110 (write-client core → mutation correctness/idempotency → hermetic write↔read contract proof → write quickstart/examples)
+- `@usetheo/lens-sdk`: 9 typed curation **write** methods on `LensReadClient` — `createDataset`/`updateDataset`/`deleteDataset`/`addDatasetItem`/`removeDatasetItem` + `annotateTrace`/`deleteAnnotations`/`tagTrace`/`untagTrace`. Responses generated from new engine OpenAPI components (`DatasetDetail`, `TraceTagsResponse`, `AnnotationsResponse`); request bodies are typed interfaces; a generalized transport handles method+body + 204-void deletes, with a conservative write-retry (server-signaled transient only — a non-idempotent create is never re-applied on an ambiguous timeout) (M107)
 
 ### Changed
 

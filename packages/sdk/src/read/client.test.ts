@@ -10,7 +10,9 @@ const KEY = "theo_live_abc123";
 function mockFetch(body: unknown, init?: { status?: number; text?: string }) {
   const status = init?.status ?? 200;
   const payload = init?.text !== undefined ? init.text : JSON.stringify(body);
-  const fn = vi.fn(async () => new Response(payload, { status }));
+  // 204/205/304 forbid a body — the Response constructor throws on a non-null body for those.
+  const noBody = status === 204 || status === 205 || status === 304;
+  const fn = vi.fn(async () => new Response(noBody ? null : payload, { status }));
   return fn as unknown as typeof fetch & ReturnType<typeof vi.fn>;
 }
 
@@ -335,5 +337,122 @@ describe("LensReadClient — resilient transport (M104)", () => {
       expect(delays[0]).toBeGreaterThanOrEqual(400);
       expect(delays[0]).toBeLessThanOrEqual(600);
     }
+  });
+});
+
+function methodOf(fn: ReturnType<typeof vi.fn>): string {
+  return (calledInit(fn).method ?? "GET") as string;
+}
+function bodyOf(fn: ReturnType<typeof vi.fn>): unknown {
+  const raw = calledInit(fn).body;
+  return typeof raw === "string" ? JSON.parse(raw) : raw;
+}
+
+describe("LensReadClient — write surface (M107)", () => {
+  it("createDataset POSTs {name} to /v1/datasets with content-type json", async () => {
+    const fetchFn = mockFetch({ id: "d1", name: "eval-set" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const res = await client.createDataset({ name: "eval-set" });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/datasets");
+    expect(methodOf(fetchFn)).toBe("POST");
+    expect(bodyOf(fetchFn)).toEqual({ name: "eval-set" });
+    expect(header(calledInit(fetchFn), "content-type")).toBe("application/json");
+    expect(res.id).toBe("d1");
+  });
+
+  it("updateDataset PUTs {name} to /v1/datasets/{id}", async () => {
+    const fetchFn = mockFetch({ id: "d1", name: "renamed" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.updateDataset("d1", { name: "renamed" });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/datasets/d1");
+    expect(methodOf(fetchFn)).toBe("PUT");
+    expect(bodyOf(fetchFn)).toEqual({ name: "renamed" });
+  });
+
+  it("deleteDataset DELETEs /v1/datasets/{id} and resolves void on a 204", async () => {
+    const fetchFn = mockFetch(undefined, { status: 204, text: "" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const res = await client.deleteDataset("d1");
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/datasets/d1");
+    expect(methodOf(fetchFn)).toBe("DELETE");
+    expect(res).toBeUndefined();
+  });
+
+  it("addDatasetItem POSTs the body to /v1/datasets/{id}/items", async () => {
+    const fetchFn = mockFetch({ id: "d1", name: "s", items: [] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.addDatasetItem("d1", { traceId: "t1" });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/datasets/d1/items");
+    expect(methodOf(fetchFn)).toBe("POST");
+    expect(bodyOf(fetchFn)).toEqual({ traceId: "t1" });
+  });
+
+  it("removeDatasetItem DELETEs /v1/datasets/{id}/items/{traceId}", async () => {
+    const fetchFn = mockFetch({ id: "d1", name: "s", items: [] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.removeDatasetItem("d1", "t/1");
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/datasets/d1/items/t%2F1");
+    expect(methodOf(fetchFn)).toBe("DELETE");
+  });
+
+  it("annotateTrace POSTs the annotation to /v1/traces/{id}/annotations", async () => {
+    const fetchFn = mockFetch({ annotations: [] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.annotateTrace("tr1", { label: "good", note: "n" });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/traces/tr1/annotations");
+    expect(methodOf(fetchFn)).toBe("POST");
+    expect(bodyOf(fetchFn)).toEqual({ label: "good", note: "n" });
+  });
+
+  it("deleteAnnotations DELETEs /v1/traces/{id}/annotations", async () => {
+    const fetchFn = mockFetch({ annotations: [] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const res = await client.deleteAnnotations("tr1");
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/traces/tr1/annotations");
+    expect(methodOf(fetchFn)).toBe("DELETE");
+    expect(Array.isArray(res.annotations)).toBe(true);
+  });
+
+  it("tagTrace POSTs {tag} to /v1/traces/{id}/tags", async () => {
+    const fetchFn = mockFetch({ tags: ["urgent"] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const res = await client.tagTrace("tr1", { tag: "urgent" });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/traces/tr1/tags");
+    expect(methodOf(fetchFn)).toBe("POST");
+    expect(bodyOf(fetchFn)).toEqual({ tag: "urgent" });
+    expect(res.tags).toContain("urgent");
+  });
+
+  it("untagTrace DELETEs /v1/traces/{id}/tags with the tag as a query param", async () => {
+    const fetchFn = mockFetch({ tags: [] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.untagTrace("tr1", "urgent");
+    const url = new URL(calledUrl(fetchFn));
+    expect(url.pathname).toBe("/v1/traces/tr1/tags");
+    expect(url.searchParams.get("tag")).toBe("urgent");
+    expect(methodOf(fetchFn)).toBe("DELETE");
+  });
+
+  it("retries a write on a 503 but NOT on a network reject (conservative, M107 ADR-3)", async () => {
+    // 503 (server-signaled) → retried then succeeds.
+    const f503 = seqFetch([status(503), ok({ id: "d1", name: "s" })]);
+    const c1 = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: f503, sleep: async () => {} });
+    await c1.createDataset({ name: "s" });
+    expect(f503).toHaveBeenCalledTimes(2);
+
+    // network reject on a non-idempotent POST → NOT retried (ambiguous), single call, typed throw.
+    const fNet = seqFetch([new TypeError("boom"), ok({ id: "d1", name: "s" })]);
+    const c2 = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fNet, sleep: async () => {} });
+    await expect(c2.createDataset({ name: "s" })).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    expect(fNet).toHaveBeenCalledTimes(1);
+  });
+
+  it("maps a 409 NAME_CONFLICT to a typed LensApiError", async () => {
+    const fetchFn = mockFetch(undefined, { status: 409, text: '{"code":"NAME_CONFLICT","message":"taken"}' });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await expect(client.updateDataset("d1", { name: "dup" })).rejects.toMatchObject({
+      status: 409,
+      code: "NAME_CONFLICT",
+    });
   });
 });

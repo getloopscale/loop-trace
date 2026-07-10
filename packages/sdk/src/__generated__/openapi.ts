@@ -1306,7 +1306,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["TraceTagsResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -1365,7 +1365,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["TraceTagsResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -1496,7 +1496,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["AnnotationsResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -1555,7 +1555,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["AnnotationsResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -1682,7 +1682,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["Dataset"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -1813,7 +1813,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["Dataset"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -1946,7 +1946,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["DatasetDetail"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -2022,7 +2022,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["DatasetDetail"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -2583,6 +2583,30 @@ export interface components {
                 name: string;
                 createdAt: string;
                 itemCount: number;
+            }[];
+        };
+        DatasetDetail: {
+            id: string;
+            name: string;
+            createdAt: string;
+            items: {
+                traceId: string;
+                inputSnapshot?: string;
+                outputSnapshot?: string;
+                createdAt: string;
+            }[];
+        };
+        TraceTagsResponse: {
+            tags: string[];
+        };
+        AnnotationsResponse: {
+            annotations: {
+                spanId?: string;
+                name: string;
+                label?: string;
+                note?: string;
+                annotatorKind: string;
+                updatedAt: string;
             }[];
         };
     };

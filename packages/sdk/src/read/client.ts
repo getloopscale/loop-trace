@@ -14,9 +14,15 @@
  */
 import { errorFromReject, errorFromResponse, invalidBodyError } from "./errors.js";
 import type {
+  AddDatasetItemBody,
+  AnnotateBody,
+  AnnotationsResponse,
   Capabilities,
   CostByPeriodOptions,
   CostByPeriodResponse,
+  CreateDatasetBody,
+  Dataset,
+  DatasetDetail,
   DatasetsResponse,
   ListSessionsOptions,
   ListTracesOptions,
@@ -24,8 +30,11 @@ import type {
   ObservabilityResponse,
   SessionListResponse,
   Span,
+  TagBody,
   ToolStatsResponse,
   TraceListResponse,
+  TraceTagsResponse,
+  UpdateDatasetBody,
 } from "./types.js";
 
 export interface LensReadClientOptions {
@@ -119,47 +128,72 @@ export class LensReadClient {
   }
 
   /** One `fetch` with an `AbortController` timeout; a fired abort rejects (→ mapped to TIMEOUT). */
-  private async fetchOnce(url: string): Promise<Response> {
+  private async fetchOnce(method: string, url: string, body?: unknown): Promise<Response> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const headers: Record<string, string> = {
+      authorization: `Bearer ${this.apiKey}`,
+      accept: "application/json",
+    };
+    const init: RequestInit = { method, headers, signal: controller.signal };
+    if (body !== undefined) {
+      headers["content-type"] = "application/json";
+      init.body = JSON.stringify(body);
+    }
     try {
-      return await this.fetchImpl(url, {
-        method: "GET",
-        headers: { authorization: `Bearer ${this.apiKey}`, accept: "application/json" },
-        signal: controller.signal,
-      });
+      return await this.fetchImpl(url, init);
     } finally {
       clearTimeout(timer);
     }
   }
 
-  private async request<T>(path: string, query?: Query): Promise<T> {
-    const url = this.buildUrl(path, query);
+  /** Parse a 2xx body; a 204 / empty body resolves to `undefined` (void deletes), never a parse crash. */
+  private async parseBody<T>(res: Response, method: string, path: string): Promise<T> {
+    if (res.status === 204) return undefined as T;
+    const text = await res.text();
+    if (text.length === 0) return undefined as T;
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      throw invalidBodyError(res.status, method, path);
+    }
+  }
+
+  /**
+   * The shared transport seam for every method. Retries a transient failure with bounded backoff;
+   * `retryNetwork` gates whether a network reject / timeout abort is retried — GET + idempotent
+   * writes pass `true`, a non-idempotent write passes `false` so an ambiguous timeout is never
+   * silently re-applied (M107 ADR-3; M108 tunes the per-verb flag).
+   */
+  private async send<T>(
+    method: string,
+    path: string,
+    opts: { query?: Query; body?: unknown; retryNetwork: boolean },
+  ): Promise<T> {
+    const url = this.buildUrl(path, opts.query);
     for (let attempt = 0; ; attempt++) {
       let res: Response;
       try {
-        res = await this.fetchOnce(url);
+        res = await this.fetchOnce(method, url, opts.body);
       } catch (err) {
-        // Network reject / timeout abort — retry while attempts remain, else surface it typed.
-        if (attempt < this.maxRetries) {
+        if (opts.retryNetwork && attempt < this.maxRetries) {
           await this.sleep(this.backoffMs(attempt));
           continue;
         }
-        throw errorFromReject(err, "GET", path);
+        throw errorFromReject(err, method, path);
       }
-      if (res.ok) {
-        try {
-          return (await res.json()) as T;
-        } catch {
-          throw invalidBodyError(res.status, "GET", path);
-        }
-      }
+      if (res.ok) return this.parseBody<T>(res, method, path);
       if (isRetryableStatus(res.status) && attempt < this.maxRetries) {
         await this.sleep(this.backoffMs(attempt, res));
         continue;
       }
-      throw await errorFromResponse(res, "GET", path);
+      throw await errorFromResponse(res, method, path);
     }
+  }
+
+  /** A GET (idempotent → network retries enabled). */
+  private request<T>(path: string, query?: Query): Promise<T> {
+    return this.send<T>("GET", path, { retryNetwork: true, ...(query ? { query } : {}) });
   }
 
   /** `GET /v1/traces` — paginated, filterable trace list. */
@@ -211,5 +245,81 @@ export class LensReadClient {
   /** `GET /v1` — service discovery: identity, version, and the `/openapi.json` pointer. */
   capabilities(): Promise<Capabilities> {
     return this.request<Capabilities>("/v1");
+  }
+
+  // ─── Write surface (M107) — curate datasets + annotate/tag traces. ───
+  // Writes pass `retryNetwork: false` (M107 conservative default — a non-idempotent create is never
+  // re-applied on an ambiguous timeout); M108 loosens this for provably-idempotent verbs.
+
+  /** `POST /v1/datasets` — create (or idempotently get) a dataset by name. */
+  createDataset(body: CreateDatasetBody): Promise<Dataset> {
+    return this.send<Dataset>("POST", "/v1/datasets", { body, retryNetwork: false });
+  }
+
+  /** `PUT /v1/datasets/{id}` — rename a dataset (409 `NAME_CONFLICT` if the name is taken). */
+  updateDataset(datasetId: string, body: UpdateDatasetBody): Promise<Dataset> {
+    return this.send<Dataset>("PUT", `/v1/datasets/${encodeURIComponent(datasetId)}`, {
+      body,
+      retryNetwork: false,
+    });
+  }
+
+  /** `DELETE /v1/datasets/{id}` — delete a dataset (204 → void). */
+  deleteDataset(datasetId: string): Promise<void> {
+    return this.send<void>("DELETE", `/v1/datasets/${encodeURIComponent(datasetId)}`, {
+      retryNetwork: false,
+    });
+  }
+
+  /** `POST /v1/datasets/{id}/items` — add a captured trace and/or a synthetic input/output pair. */
+  addDatasetItem(datasetId: string, body: AddDatasetItemBody): Promise<DatasetDetail> {
+    return this.send<DatasetDetail>("POST", `/v1/datasets/${encodeURIComponent(datasetId)}/items`, {
+      body,
+      retryNetwork: false,
+    });
+  }
+
+  /** `DELETE /v1/datasets/{id}/items/{traceId}` — remove an item; returns the updated detail. */
+  removeDatasetItem(datasetId: string, traceId: string): Promise<DatasetDetail> {
+    return this.send<DatasetDetail>(
+      "DELETE",
+      `/v1/datasets/${encodeURIComponent(datasetId)}/items/${encodeURIComponent(traceId)}`,
+      { retryNetwork: false },
+    );
+  }
+
+  /** `POST /v1/traces/{traceId}/annotations` — add an annotation (label and/or note). */
+  annotateTrace(traceId: string, body: AnnotateBody): Promise<AnnotationsResponse> {
+    return this.send<AnnotationsResponse>(
+      "POST",
+      `/v1/traces/${encodeURIComponent(traceId)}/annotations`,
+      { body, retryNetwork: false },
+    );
+  }
+
+  /** `DELETE /v1/traces/{traceId}/annotations` — clear a trace's annotations. */
+  deleteAnnotations(traceId: string): Promise<AnnotationsResponse> {
+    return this.send<AnnotationsResponse>(
+      "DELETE",
+      `/v1/traces/${encodeURIComponent(traceId)}/annotations`,
+      { retryNetwork: false },
+    );
+  }
+
+  /** `POST /v1/traces/{traceId}/tags` — add a tag to a trace. */
+  tagTrace(traceId: string, body: TagBody): Promise<TraceTagsResponse> {
+    return this.send<TraceTagsResponse>("POST", `/v1/traces/${encodeURIComponent(traceId)}/tags`, {
+      body,
+      retryNetwork: false,
+    });
+  }
+
+  /** `DELETE /v1/traces/{traceId}/tags?tag=` — remove a tag from a trace. */
+  untagTrace(traceId: string, tag: string): Promise<TraceTagsResponse> {
+    return this.send<TraceTagsResponse>(
+      "DELETE",
+      `/v1/traces/${encodeURIComponent(traceId)}/tags`,
+      { query: { tag }, retryNetwork: false },
+    );
   }
 }
