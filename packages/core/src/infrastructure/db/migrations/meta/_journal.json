@@ -183,6 +183,13 @@
       "when": 1783675413140,
       "tag": "0025_redundant_bishop",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1783689577695,
+      "tag": "0026_demonic_johnny_blaze",
+      "breakpoints": true
     }
   ]
 }

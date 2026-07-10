@@ -108,29 +108,44 @@ suite("datasets (integration, M26d)", () => {
     expect(await repo.deleteDataset("not-a-uuid")).toBe(false);
   });
 
-  it("M101 — addDatasetItem to a deleted dataset never leaves an orphan (atomic guard)", async () => {
+  it("M101 — addDatasetItem to a deleted dataset returns false, inserts nothing (guard gates the insert)", async () => {
     await repo.save([span({ spanId: "r1", traceId: "t1", inputValue: "v" })]);
     const ds = await repo.createDataset("golden");
-
-    // Deterministic: after the dataset is gone, an add returns false and inserts nothing (the CTE
-    // guard sees no dataset) — the sequential proof that the guard actually gates the insert.
     expect(await repo.deleteDataset(ds.id)).toBe(true);
     expect(await repo.addDatasetItem(ds.id, "t1")).toBe(false);
     const after = await pool.query("SELECT count(*)::int AS n FROM dataset_items WHERE dataset_id=$1", [ds.id]);
     expect(after.rows[0].n).toBe(0);
+  });
 
-    // Race-aware invariant: run a concurrent delete + add on a fresh dataset. Regardless of which
-    // commits first, the no-orphan invariant MUST hold — either the add's guard finds no dataset (no
-    // insert), or it inserts and the delete's cascade removes it. The old check-then-write had a
-    // window where the add's separate SELECT saw the dataset, the delete cascaded, and the insert then
-    // orphaned a row; the single-statement CTE closes it. This invariant is TRUE for any ordering, so
-    // the test is deterministic, not flaky.
-    const ds2 = await repo.createDataset("golden-2");
-    await repo.addDatasetItem(ds2.id, "t1");
-    await Promise.all([repo.deleteDataset(ds2.id), repo.addDatasetItem(ds2.id, "t1")]);
-    expect(await repo.getDataset(ds2.id)).toBeNull(); // dataset gone
-    const orphans = await pool.query("SELECT count(*)::int AS n FROM dataset_items WHERE dataset_id=$1", [ds2.id]);
-    expect(orphans.rows[0].n).toBe(0); // NO orphan item survives the concurrent delete
+  it("M101 — a deleteDataset committing DURING a concurrent addDatasetItem never orphans (deterministic race, ADR 0003)", async () => {
+    await repo.save([span({ spanId: "r1", traceId: "t1", inputValue: "v" })]);
+    const ds = await repo.createDataset("golden-race");
+
+    // Force the dangerous interleaving deterministically on a SECOND connection: begin a delete tx and
+    // hold it (the `DELETE FROM datasets` takes the row's exclusive lock, uncommitted). Then start
+    // addDatasetItem on the pool — its guard sees the still-uncommitted dataset (READ COMMITTED), the
+    // insert proceeds to the FK integrity check, which BLOCKS on the held lock. Commit the delete →
+    // the parent is gone → the blocked insert re-evaluates → FK violation (23503) → addDatasetItem
+    // catches it → false. The FK's ON DELETE CASCADE guarantees no orphan for any ordering.
+    // (Against the pre-FK code this test is RED: the insert wouldn't block, would commit an item, and
+    // the already-run `DELETE dataset_items` would leave it orphaned.)
+    const client = await pool.connect();
+    let added: boolean;
+    try {
+      await client.query("BEGIN");
+      await client.query("DELETE FROM dataset_items WHERE dataset_id = $1", [ds.id]);
+      await client.query("DELETE FROM datasets WHERE id = $1", [ds.id]);
+      const addP = repo.addDatasetItem(ds.id, "t1"); // blocks on the FK lock
+      await new Promise((r) => setTimeout(r, 150)); // let the insert reach the blocked FK check
+      await client.query("COMMIT"); // dataset now gone → the blocked insert fails FK
+      added = await addP;
+    } finally {
+      client.release();
+    }
+    expect(added).toBe(false); // the add honestly reports the dataset is gone
+    expect(await repo.getDataset(ds.id)).toBeNull();
+    const orphans = await pool.query("SELECT count(*)::int AS n FROM dataset_items WHERE dataset_id = $1", [ds.id]);
+    expect(orphans.rows[0].n).toBe(0); // NO orphan survives the concurrent delete
   });
 
   it("M82 — deleteDataset is workspace-scoped (cannot delete another tenant's dataset)", async () => {

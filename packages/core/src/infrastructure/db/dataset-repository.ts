@@ -9,7 +9,7 @@ import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import type { Dataset, DatasetDetail } from "../../domain/dataset.js";
-import { NameConflictError, isUniqueViolation } from "../../domain/errors.js";
+import { NameConflictError, isForeignKeyViolation, isUniqueViolation } from "../../domain/errors.js";
 import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
 import { isoTimestamp } from "../../domain/session.js";
 import { datasetItems, datasets, experimentRunItems, experimentRuns, spans } from "./schema.js";
@@ -130,21 +130,28 @@ export async function addDatasetItem(
     .orderBy(asc(sql`${spans.startTimeUnixNano}::numeric`))
     .limit(1);
   const snap = root[0];
-  const res = await db.execute(sql`
-    WITH guard AS (
-      SELECT 1 AS ok
-      WHERE EXISTS (SELECT 1 FROM datasets WHERE id = ${datasetId} AND workspace_id = ${workspaceId})
-        AND EXISTS (SELECT 1 FROM traces WHERE trace_id = ${traceId} AND workspace_id = ${workspaceId})
-    ),
-    ins AS (
-      INSERT INTO dataset_items (workspace_id, dataset_id, trace_id, input_snapshot, output_snapshot)
-      SELECT ${workspaceId}, ${datasetId}, ${traceId}, ${snap?.input ?? null}, ${snap?.output ?? null}
-      FROM guard
-      ON CONFLICT (workspace_id, dataset_id, trace_id) DO NOTHING
-    )
-    SELECT ok FROM guard
-  `);
-  return res.rows.length > 0;
+  try {
+    const res = await db.execute(sql`
+      WITH guard AS (
+        SELECT 1 AS ok
+        WHERE EXISTS (SELECT 1 FROM datasets WHERE id = ${datasetId} AND workspace_id = ${workspaceId})
+          AND EXISTS (SELECT 1 FROM traces WHERE trace_id = ${traceId} AND workspace_id = ${workspaceId})
+      ),
+      ins AS (
+        INSERT INTO dataset_items (workspace_id, dataset_id, trace_id, input_snapshot, output_snapshot)
+        SELECT ${workspaceId}, ${datasetId}, ${traceId}, ${snap?.input ?? null}, ${snap?.output ?? null}
+        FROM guard
+        ON CONFLICT (workspace_id, dataset_id, trace_id) DO NOTHING
+      )
+      SELECT ok FROM guard
+    `);
+    return res.rows.length > 0;
+  } catch (err) {
+    // The FK's integrity lock blocked on a concurrent deleteDataset; after it committed the parent was
+    // gone → 23503. The honest answer is "the dataset is no longer there" → false (never an orphan, ADR 0003).
+    if (isForeignKeyViolation(err)) return false;
+    throw err;
+  }
 }
 
 export async function addSyntheticDatasetItem(
@@ -162,16 +169,21 @@ export async function addSyntheticDatasetItem(
   // M101 (B-L3) — dataset-exists guard + insert in ONE atomic CTE (no TOCTOU orphan window). The item
   // carries a fresh `replay-{uuid}` id (never a conflict), so `RETURNING` tells us a row was inserted
   // iff the dataset existed at statement time.
-  const res = await db.execute(sql`
-    WITH guard AS (
-      SELECT 1 WHERE EXISTS (SELECT 1 FROM datasets WHERE id = ${datasetId} AND workspace_id = ${workspaceId})
-    )
-    INSERT INTO dataset_items (workspace_id, dataset_id, trace_id, input_snapshot, output_snapshot)
-    SELECT ${workspaceId}, ${datasetId}, ${`replay-${randomUUID()}`}, ${input}, ${output}
-    FROM guard
-    RETURNING trace_id
-  `);
-  return res.rows.length > 0;
+  try {
+    const res = await db.execute(sql`
+      WITH guard AS (
+        SELECT 1 WHERE EXISTS (SELECT 1 FROM datasets WHERE id = ${datasetId} AND workspace_id = ${workspaceId})
+      )
+      INSERT INTO dataset_items (workspace_id, dataset_id, trace_id, input_snapshot, output_snapshot)
+      SELECT ${workspaceId}, ${datasetId}, ${`replay-${randomUUID()}`}, ${input}, ${output}
+      FROM guard
+      RETURNING trace_id
+    `);
+    return res.rows.length > 0;
+  } catch (err) {
+    if (isForeignKeyViolation(err)) return false; // raced a concurrent deleteDataset (ADR 0003)
+    throw err;
+  }
 }
 
 export async function removeDatasetItem(
