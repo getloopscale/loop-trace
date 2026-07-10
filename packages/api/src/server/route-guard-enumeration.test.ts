@@ -146,9 +146,13 @@ describe("M37 route guard enumeration", () => {
     const liveRoutes = new Set(
       app.routes
         .filter((route) => route.method !== "ALL")
-        // M94 — /health + /ready are intentionally UNAUTHENTICATED probes (no scope guard); they are
-        // not part of the scoped data surface this audit enumerates.
-        .filter((route) => route.path !== "/health" && route.path !== "/ready")
+        // M94 — /health + /ready are intentionally UNAUTHENTICATED probes (no scope guard).
+        // M96 — /openapi.json + /v1 + /version are intentionally UNAUTHENTICATED discovery endpoints.
+        // Neither is part of the scoped data surface this audit enumerates.
+        .filter(
+          (route) =>
+            !["/health", "/ready", "/openapi.json", "/v1", "/version"].includes(route.path),
+        )
         .map((route) => `${route.method} ${route.path}`),
     );
     expect(liveRoutes).toEqual(EXPECTED_DATA_ROUTES);

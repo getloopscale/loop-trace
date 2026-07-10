@@ -464,6 +464,47 @@ describe("createApp (contract, stub repo)", () => {
     expect(body.details?.some((d) => d.field === "minCostUsd")).toBe(true);
   });
 
+  it("m96_openapi_json_is_a_valid_openapi3_doc_with_the_error_component", async () => {
+    const res = await app.request("/openapi.json");
+    expect(res.status).toBe(200);
+    const doc = (await res.json()) as {
+      openapi: string;
+      paths: Record<string, unknown>;
+      components: { schemas: Record<string, unknown> };
+    };
+    expect(doc.openapi).toBe("3.0.3");
+    expect(doc.components.schemas["ApiError"]).toBeDefined();
+    expect(doc.components.schemas["TraceListResponse"]).toBeDefined();
+    // a known route is present, Hono `:id` rewritten to OpenAPI `{id}`
+    expect(doc.paths["/v1/traces"]).toBeDefined();
+    expect(doc.paths["/v1/spans/{spanId}"]).toBeDefined();
+    // $ref integrity: every schema $ref in the document resolves to a defined component
+    const refs = [...JSON.stringify(doc).matchAll(/#\/components\/schemas\/([A-Za-z0-9_]+)/g)].map((m) => m[1]);
+    expect(refs.length).toBeGreaterThan(0);
+    for (const name of new Set(refs)) expect(doc.components.schemas[name as string]).toBeDefined();
+  });
+
+  it("m96_openapi_covers_every_mounted_data_route (anti-drift)", async () => {
+    const doc = (await (await app.request("/openapi.json")).json()) as {
+      paths: Record<string, Record<string, unknown>>;
+    };
+    const excluded = new Set(["/health", "/ready", "/openapi.json", "/v1", "/version", "/*"]);
+    const mounted = app.routes
+      .filter((r) => r.method !== "ALL" && r.method !== "HEAD" && !excluded.has(r.path))
+      .map((r) => ({ method: r.method.toLowerCase(), path: r.path.replace(/:([A-Za-z0-9_]+)/g, "{$1}") }));
+    const missing = mounted.filter((m) => !doc.paths[m.path]?.[m.method]);
+    expect(missing).toEqual([]);
+  });
+
+  it("m96_v1_index_and_version_are_served", async () => {
+    const v1 = await app.request("/v1");
+    expect(v1.status).toBe(200);
+    expect(await v1.json()).toMatchObject({ service: "theo-lens", capability: "observability", openapi: "/openapi.json" });
+    const ver = await app.request("/version");
+    expect(ver.status).toBe(200);
+    expect((await ver.json()) as { version: string }).toHaveProperty("version");
+  });
+
   it("get_returns_persisted_span", async () => {
     await post(tracesEnvelope(rawSpan));
     const res = await app.request("/v1/spans/c-a1");

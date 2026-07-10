@@ -83,6 +83,7 @@ import {
 } from "./metrics.js";
 import { mountStatic } from "./static.js";
 import { tracesToCsv } from "./csv.js";
+import { buildOpenApiDocument } from "./openapi.js";
 
 /**
  * Build the Hono app. Depends only on the {@link SpanRepository} port (DIP) — the
@@ -158,6 +159,24 @@ export function createApp(
       return c.json({ status: "unavailable" }, 503);
     }
   });
+
+  // M96 — discovery surface, UNAUTHENTICATED and mounted before the /v1 bearer. `/openapi.json` is
+  // generated from the Zod DTOs + the live router at request time (never drifts); `/v1` is the
+  // capability index; `/version` is the build stamp. A customer generates a client from these.
+  app.get("/openapi.json", (c) => c.json(buildOpenApiDocument(app.routes, health?.version)));
+  app.get("/version", (c) => c.json({ version: health?.version ?? "unknown" }, 200));
+  app.get("/v1", (c) =>
+    c.json(
+      {
+        service: "theo-lens",
+        version: health?.version ?? "unknown",
+        capability: "observability",
+        openapi: "/openapi.json",
+        docs: "/openapi.json",
+      },
+      200,
+    ),
+  );
 
   // M22 admin surface (the Model B broker mints per-tenant keys here). Gated by
   // `requireScope('observability:admin')` — a `observability:platform-admin` key satisfies it via the
