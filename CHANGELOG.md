@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Roadmap v13 opened: `ROADMAP-sota-experience-v13.md` — the advanced write SDK, M111–M114 (evaluators + guards → labeling queue + ask/feedback → experiment runs + replay → contract tests + quickstart)
 
 ### Changed
 
