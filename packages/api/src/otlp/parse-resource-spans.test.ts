@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseResourceSpans, OtlpParseError } from "./parse-resource-spans.js";
+import { parseResourceSpans, parseResourceSpansPartial, OtlpParseError } from "./parse-resource-spans.js";
 
 function envelope(spans: unknown[]): unknown {
   return { resourceSpans: [{ scopeSpans: [{ spans }] }] };
@@ -114,6 +114,37 @@ describe("parseResourceSpans", () => {
   it("parse_throws_OtlpParseError_on_malformed_span", () => {
     const bad = { ...rawSpan, spanId: "" };
     expect(() => parseResourceSpans(envelope([bad]))).toThrow(OtlpParseError);
+  });
+
+  // M93 — per-span partial-success (the total variant)
+  it("M93_partial_collects_valid_spans_and_counts_rejected", () => {
+    const bad = { ...rawSpan, spanId: "" }; // fails spanSchema
+    const good2 = { ...rawSpan, spanId: "b2", traceId: "t2" };
+    const r = parseResourceSpansPartial(envelope([rawSpan, bad, good2]));
+    expect(r.spans.map((s) => s.spanId)).toEqual(["a1", "b2"]); // 2 valid kept
+    expect(r.rejected).toBe(1);
+    expect(r.firstError).toMatch(/invalid OTLP span/i);
+  });
+
+  it("M93_partial_all_valid_reports_zero_rejected", () => {
+    const r = parseResourceSpansPartial(envelope([rawSpan]));
+    expect(r.spans).toHaveLength(1);
+    expect(r.rejected).toBe(0);
+    expect(r.firstError).toBeUndefined();
+  });
+
+  it("M93_partial_is_total_never_throws_on_a_bad_span", () => {
+    const bad = { ...rawSpan, spanId: "" };
+    expect(() => parseResourceSpansPartial(envelope([bad, bad, bad]))).not.toThrow();
+    const r = parseResourceSpansPartial(envelope([bad, bad, bad]));
+    expect(r.spans).toEqual([]);
+    expect(r.rejected).toBe(3);
+  });
+
+  it("M93_strict_parseResourceSpans_stays_back_compat_throwing", () => {
+    // the strict wrapper is unchanged — a bad span still throws (seed/demo/SDK callers rely on it)
+    const bad = { ...rawSpan, spanId: "" };
+    expect(() => parseResourceSpans(envelope([rawSpan, bad]))).toThrow(OtlpParseError);
   });
 
   it("parse_attaches_model_and_tokens_from_genai_attrs", () => {

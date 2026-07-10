@@ -34,7 +34,14 @@ export const sessionListItemSchema = z
   .strict();
 
 export const sessionListResponseSchema = z
-  .object({ sessions: z.array(sessionListItemSchema) })
+  .object({
+    sessions: z.array(sessionListItemSchema),
+    // M81 — server-side pagination (mirrors trace-list): `total` is the workspace-scoped session count;
+    // `limit`/`offset` echo the applied window. Defaulted so an older response still parses.
+    total: z.number().int().nonnegative().default(0),
+    limit: z.number().int().nonnegative().default(0),
+    offset: z.number().int().nonnegative().default(0),
+  })
   .strict();
 
 export const sessionDetailResponseSchema = z

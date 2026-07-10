@@ -12,6 +12,11 @@ import {
   parseBackfillMax,
   parseEvalSweepHours,
   parseCopilotRpm,
+  parseIngestRpm,
+  parseMaxIngestBytes,
+  parseMaxDecompressedBytes,
+  parseHttpRequestTimeoutMs,
+  parseShutdownDrainMs,
   runSweep,
   OpenAICompatibleChat,
   OpenAICompatibleReplay,
@@ -25,6 +30,7 @@ import {
 import type pg from "pg";
 
 import { createApp } from "./app.js";
+import { installGracefulShutdown } from "./shutdown.js";
 import { parseRequireCredentialEnv } from "./auth/middleware.js";
 import { ApiKeyAuthVerifier } from "./auth/api-key-verifier.js";
 import { runPrune } from "./retention-run.js";
@@ -95,6 +101,17 @@ export async function bootstrap(
   const replayClient: ReplayClient | null =
     judgeConfig !== null ? new OpenAICompatibleReplay(judgeConfig) : null;
   const replayLimiter = new RateLimiter(parseCopilotRpm(process.env));
+  // M64: the experiment-run route reuses the replay provider client + a dedicated limiter + the
+  // evaluator repo (rule-evaluator scoring). null client → the run fails closed (503).
+  const experimentLimiter = new RateLimiter(parseCopilotRpm(process.env));
+  // M93: OTLP ingest backpressure — a dedicated, higher-rpm per-workspace limiter (ingest is the
+  // high-volume write path) so a runaway producer sheds with 429 before the pool exhausts.
+  const ingestLimiter = new RateLimiter(parseIngestRpm(process.env));
+  const ingestDeps = {
+    limiter: ingestLimiter,
+    maxBodyBytes: parseMaxIngestBytes(process.env),
+    maxDecompressedBytes: parseMaxDecompressedBytes(process.env),
+  };
   const app = createApp(
     repo,
     webDistDir,
@@ -102,6 +119,16 @@ export async function bootstrap(
     { repo: evaluatorRepo, engine },
     { spanRepo: repo, chat, limiter: copilotLimiter },
     { spanRepo: repo, chat: replayClient, limiter: replayLimiter },
+    { spanRepo: repo, evaluatorRepo, chat: replayClient, limiter: experimentLimiter },
+    ingestDeps,
+    // M94: readiness probe — a bounded `SELECT 1` (the pool's connectionTimeoutMillis bounds it);
+    // it throwing → /ready 503 so the edge drains a DB-unreachable node.
+    {
+      version: process.env["THEOLENS_VERSION"] ?? "dev",
+      pingDb: async () => {
+        await pool.query("SELECT 1");
+      },
+    },
   );
 
   // M36: opt-in periodic evaluator sweep (default OFF, D5). v1 sweeps the `default`
@@ -169,9 +196,11 @@ export async function main(): Promise<void> {
   const webDistDir = process.env["THEOLENS_WEB_DIST"] ?? DEFAULT_WEB_DIST;
 
   let app: Hono;
+  let pool: pg.Pool;
+  let stop: () => void;
   try {
     console.error(JSON.stringify({ level: "info", msg: "migrating" }));
-    ({ app } = await bootstrap(uri, webDistDir));
+    ({ app, pool, stop } = await bootstrap(uri, webDistDir));
   } catch (err) {
     console.error(
       JSON.stringify({
@@ -185,7 +214,21 @@ export async function main(): Promise<void> {
   }
 
   const port = Number(process.env["THEOLENS_PORT"] ?? 4318);
-  serve({ fetch: app.fetch, port });
+  const server = serve({ fetch: app.fetch, port });
+  // M94: a DB-blocked route 503s at this ceiling instead of hanging a socket (env-tunable). The
+  // default `serve` yields an HTTP/1 `http.Server` which carries `requestTimeout` (Http2Server does
+  // not, hence the guarded assignment).
+  const requestTimeout = parseHttpRequestTimeoutMs(process.env);
+  if ("requestTimeout" in server) {
+    (server as { requestTimeout: number }).requestTimeout = requestTimeout;
+  }
+  // M94: on SIGTERM/SIGINT (rolling deploy) drain in-flight requests then close the pool.
+  installGracefulShutdown({
+    server,
+    pool,
+    stop,
+    drainMs: parseShutdownDrainMs(process.env),
+  });
   console.error(JSON.stringify({ level: "info", msg: "listening", port }));
 }
 

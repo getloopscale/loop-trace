@@ -1,5 +1,42 @@
 import { describe, it, expect } from "vitest";
-import { extractEvaluations } from "./evaluation.js";
+import { extractEvaluations, scoresResponseSchema } from "./evaluation.js";
+
+describe("scoresResponseSchema (M90)", () => {
+  it("round-trips a well-formed time-bucketed score payload", () => {
+    const payload = {
+      range: "7d",
+      scores: [
+        { periodStart: "2026-07-08T00:00:00.000Z", name: "hallucination", sampleCount: 3, avgScore: 0.21, labels: {} },
+        { periodStart: "2026-07-08T00:00:00.000Z", name: "tone", sampleCount: 2, labels: { friendly: 2 } },
+      ],
+    };
+    expect(scoresResponseSchema.parse(payload)).toEqual(payload);
+  });
+
+  it("rejects an unknown column (strict, no-leak invariant)", () => {
+    expect(() =>
+      scoresResponseSchema.parse({
+        range: "24h",
+        scores: [{ periodStart: "x", name: "n", sampleCount: 1, labels: {}, leaked: "col" }],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects a negative sampleCount and a bad range", () => {
+    expect(() =>
+      scoresResponseSchema.parse({ range: "24h", scores: [{ periodStart: "x", name: "n", sampleCount: -1, labels: {} }] }),
+    ).toThrow();
+    expect(() => scoresResponseSchema.parse({ range: "bogus", scores: [] })).toThrow();
+  });
+
+  it("avgScore is optional — a categorical-only bucket omits it", () => {
+    const parsed = scoresResponseSchema.parse({
+      range: "1h",
+      scores: [{ periodStart: "x", name: "tone", sampleCount: 2, labels: { warm: 2 } }],
+    });
+    expect(parsed.scores[0].avgScore).toBeUndefined();
+  });
+});
 
 describe("extractEvaluations (M26)", () => {
   it("test_extract_single_eval", () => {

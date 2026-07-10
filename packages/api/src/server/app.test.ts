@@ -8,6 +8,9 @@ import type {
   CostByPeriodResponse,
   CostPeriod,
   EvaluatorSummary,
+  ScoreBucket,
+  SpanAttributeKey,
+  SpanAttributeValue,
   ListTracesOptions,
   NorthStarResponse,
   ObservabilityResponse,
@@ -19,10 +22,13 @@ import type {
   TraceCost,
   TraceListResponse,
   TraceTreeNode,
+  LabelingQueueItem,
+  LabelingQueuePage,
+  NormalizedResolution,
 } from "@usetheo/lens-core";
 
 import { createApp } from "./app.js";
-import { spansIngested, tracesIngested, evaluationsExtracted, annotationsWritten, datasetItemsAdded } from "./metrics.js";
+import { spansIngested, tracesIngested, evaluationsExtracted, annotationsWritten, datasetItemsAdded, spansRejected, ingestRateLimited } from "./metrics.js";
 import { encodeOtlpProtobuf } from "../otlp/__fixtures__/otlp-protobuf.js";
 
 /**
@@ -31,6 +37,8 @@ import { encodeOtlpProtobuf } from "../otlp/__fixtures__/otlp-protobuf.js";
  * path (repo failure → 5xx, Rule 8) and the "no side-effect on rejection"
  * invariants that the real-DB integration suite cannot cheaply assert.
  */
+const ISO_NOW = "2026-07-07T00:00:00.000Z";
+
 class StubSpanRepository implements SpanRepository {
   readonly saveCalls: Span[][] = [];
   private readonly store = new Map<string, Span>();
@@ -148,6 +156,30 @@ class StubSpanRepository implements SpanRepository {
   ): Promise<EvaluatorSummary[]> {
     this.lastEvaluatorsRange = range;
     return this.evaluators;
+  }
+
+  // M90: score aggregation over time stub.
+  lastScoresRange: ObservabilityResponse["range"] | null = null;
+  scoreBuckets: ScoreBucket[] = [
+    { periodStart: "2026-07-08T00:00:00.000Z", name: "hallucination", sampleCount: 3, avgScore: 0.3, labels: { factual: 3 } },
+  ];
+  async aggregateScoresOverTime(
+    range: ObservabilityResponse["range"],
+  ): Promise<ScoreBucket[]> {
+    this.lastScoresRange = range;
+    return this.scoreBuckets;
+  }
+
+  // M92: span attribute facet discovery stub.
+  attributeKeys: SpanAttributeKey[] = [{ key: "gen_ai.request.temperature", count: 3 }];
+  attributeValues: SpanAttributeValue[] = [{ value: "0.7", count: 2 }];
+  lastFacetKey: string | null = null;
+  async discoverSpanAttributeKeys(): Promise<SpanAttributeKey[]> {
+    return this.attributeKeys;
+  }
+  async discoverSpanAttributeValues(key: string): Promise<SpanAttributeValue[]> {
+    this.lastFacetKey = key;
+    return this.attributeValues;
   }
 
   sessionList: SessionListResponse = { sessions: [] };
@@ -293,6 +325,31 @@ class StubSpanRepository implements SpanRepository {
   async aggregateAgents(): Promise<Agent[]> {
     return this.agents;
   }
+
+  // M63 labeling-queue stub — an in-memory map so the route negative-cases (400/404) are exercised.
+  private readonly queue = new Map<string, LabelingQueueItem>();
+  async enqueueLabelingItem(traceId: string, spanId: string, createdBy: string): Promise<LabelingQueueItem> {
+    const id = `lq-${this.queue.size + 1}`;
+    const item: LabelingQueueItem = { id, traceId, spanId, status: "pending", createdBy, createdAt: ISO_NOW };
+    this.queue.set(id, item);
+    return item;
+  }
+  async listLabelingQueue(): Promise<LabelingQueuePage> {
+    const items = [...this.queue.values()];
+    return { items, total: items.length, page: 1, pageSize: 50 };
+  }
+  async getLabelingQueueItem(itemId: string): Promise<LabelingQueueItem | null> {
+    return this.queue.get(itemId) ?? null;
+  }
+  async resolveLabelingItem(itemId: string, resolution: NormalizedResolution): Promise<boolean> {
+    const item = this.queue.get(itemId);
+    if (!item) return false;
+    this.queue.set(itemId, { ...item, status: "resolved", label: resolution.label, resolvedAt: ISO_NOW });
+    return true;
+  }
+  async exportResolvedAsDataset(name: string): Promise<Dataset> {
+    return { id: "ds-export", name, createdAt: ISO_NOW, itemCount: 0 };
+  }
 }
 
 function tracesEnvelope(span: Record<string, unknown>): string {
@@ -391,6 +448,78 @@ describe("createApp (contract, stub repo)", () => {
     expect(res.status).toBe(404);
   });
 
+  it("m96_404_returns_code_message_envelope", async () => {
+    const res = await app.request("/v1/spans/missing");
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ code: "NOT_FOUND", message: "not found" });
+  });
+
+  it("m96_invalid_query_names_the_offending_field", async () => {
+    // a non-numeric cost bound fails the query DTO (z.coerce → NaN) → field-level 400
+    const res = await app.request("/v1/traces?min_cost_usd=notanumber");
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { code: string; message: string; details?: { field: string }[] };
+    expect(body.code).toBe("INVALID_QUERY");
+    expect(Array.isArray(body.details)).toBe(true);
+    expect(body.details?.some((d) => d.field === "minCostUsd")).toBe(true);
+  });
+
+  it("m96_openapi_json_is_a_valid_openapi3_doc_with_the_error_component", async () => {
+    const res = await app.request("/openapi.json");
+    expect(res.status).toBe(200);
+    const doc = (await res.json()) as {
+      openapi: string;
+      paths: Record<string, unknown>;
+      components: { schemas: Record<string, unknown> };
+    };
+    expect(doc.openapi).toBe("3.0.3");
+    expect(doc.components.schemas["ApiError"]).toBeDefined();
+    expect(doc.components.schemas["TraceListResponse"]).toBeDefined();
+    // a known route is present, Hono `:id` rewritten to OpenAPI `{id}`
+    expect(doc.paths["/v1/traces"]).toBeDefined();
+    expect(doc.paths["/v1/spans/{spanId}"]).toBeDefined();
+    // $ref integrity: every schema $ref in the document resolves to a defined component
+    const refs = [...JSON.stringify(doc).matchAll(/#\/components\/schemas\/([A-Za-z0-9_]+)/g)].map((m) => m[1]);
+    expect(refs.length).toBeGreaterThan(0);
+    for (const name of new Set(refs)) expect(doc.components.schemas[name as string]).toBeDefined();
+  });
+
+  it("m96_openapi_covers_every_mounted_data_route (anti-drift)", async () => {
+    const doc = (await (await app.request("/openapi.json")).json()) as {
+      paths: Record<string, Record<string, unknown>>;
+    };
+    const isExcluded = (p: string) =>
+      ["/health", "/ready", "/openapi.json", "/v1", "/version", "/*"].includes(p) ||
+      p.startsWith("/v1/admin");
+    const mounted = app.routes
+      .filter((r) => r.method !== "ALL" && r.method !== "HEAD" && !isExcluded(r.path))
+      .map((r) => ({ method: r.method.toLowerCase(), path: r.path.replace(/:([A-Za-z0-9_]+)/g, "{$1}") }));
+    const missing = mounted.filter((m) => !doc.paths[m.path]?.[m.method]);
+    expect(missing).toEqual([]);
+  });
+
+  it("m96_openapi_never_exposes_admin_key_lifecycle_routes (least privilege)", async () => {
+    // build the app WITH a pool so the /v1/admin/keys lifecycle routes are actually mounted, then
+    // prove they are absent from the unauthenticated public spec (info-disclosure guard).
+    const withAdmin = createApp(repo, undefined, { pool: {} as never });
+    const mountsAdmin = withAdmin.routes.some((r) => r.path.startsWith("/v1/admin"));
+    expect(mountsAdmin).toBe(true); // precondition — the routes ARE mounted in this config
+    const doc = (await (await withAdmin.request("/openapi.json")).json()) as {
+      paths: Record<string, unknown>;
+    };
+    const adminPaths = Object.keys(doc.paths).filter((p) => p.startsWith("/v1/admin"));
+    expect(adminPaths).toEqual([]);
+  });
+
+  it("m96_v1_index_and_version_are_served", async () => {
+    const v1 = await app.request("/v1");
+    expect(v1.status).toBe(200);
+    expect(await v1.json()).toMatchObject({ service: "theo-lens", capability: "observability", openapi: "/openapi.json" });
+    const ver = await app.request("/version");
+    expect(ver.status).toBe(200);
+    expect((await ver.json()) as { version: string }).toHaveProperty("version");
+  });
+
   it("get_returns_persisted_span", async () => {
     await post(tracesEnvelope(rawSpan));
     const res = await app.request("/v1/spans/c-a1");
@@ -446,6 +575,30 @@ describe("createApp (contract, stub repo)", () => {
     expect(res.status).toBe(415);
   });
 
+  // M93 — per-span partial-success: a mixed good/bad batch persists the good spans + reports rejected.
+  it("M93_post_mixed_batch_persists_good_and_reports_rejected_200", async () => {
+    const good = { ...rawSpan, spanId: "m-good", traceId: "m-t" };
+    const bad = { ...rawSpan, spanId: "", traceId: "m-t" }; // empty spanId fails spanSchema
+    const res = await post(
+      JSON.stringify({ resourceSpans: [{ scopeSpans: [{ spans: [good, bad] }] }] }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { partialSuccess: { rejectedSpans?: number; errorMessage?: string } };
+    expect(body.partialSuccess.rejectedSpans).toBe(1);
+    expect(body.partialSuccess.errorMessage).toMatch(/invalid OTLP span/i);
+    // the GOOD span was persisted (not dropped with the batch); the metric counts only saved spans
+    expect(repo.saveCalls).toHaveLength(1);
+    expect(spansIngested.value).toBe(1);
+    expect(spansRejected.value).toBe(1);
+    expect(await repo.getBySpanId("m-good")).not.toBeNull();
+  });
+
+  it("M93_post_all_valid_reports_empty_partial_success", async () => {
+    const res = await post(tracesEnvelope(rawSpan));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { partialSuccess: Record<string, unknown> };
+    expect(body.partialSuccess).toEqual({}); // OTLP: empty == full success
+  });
   it("get_trace_tree_returns_reconstructed_tree", async () => {
     await post(
       JSON.stringify({
@@ -513,7 +666,8 @@ describe("createApp (contract, stub repo)", () => {
   it("get_v1_traces_empty_returns_empty_list", async () => {
     const res = await app.request("/v1/traces");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ traces: [] });
+    // M81: the list response now carries the pagination envelope (total/limit/offset).
+    expect(await res.json()).toMatchObject({ traces: [], total: 0 });
   });
 
   it("get_v1_traces_rejects_leaked_column_at_boundary_with_5xx", async () => {
@@ -603,7 +757,8 @@ describe("createApp (contract, stub repo)", () => {
     expect(ok.status).toBe(200);
     expect((await ok.json()).traces[0].traceId).toBe("t1");
     const empty = await app.request("/v1/analytics/tools/unknown/traces");
-    expect(await empty.json()).toEqual({ traces: [] });
+    // M81: the list DTO now includes the pagination envelope (schema-defaulted for the empty case).
+    expect(await empty.json()).toMatchObject({ traces: [] });
   });
 
   it("tool_routes_return_5xx_on_repo_failure", async () => {
@@ -880,6 +1035,94 @@ describe("createApp (contract, stub repo)", () => {
     };
     expect(
       (await createApp(leaky).request("/v1/metrics/evaluators")).status,
+    ).toBeGreaterThanOrEqual(500);
+  });
+
+  // M90 — score aggregation over time route
+  it("test_get_scores_returns_time_bucketed_shape", async () => {
+    repo.scoreBuckets = [
+      { periodStart: "2026-07-08T00:00:00.000Z", name: "hallucination", sampleCount: 3, avgScore: 0.21, labels: { factual: 3 } },
+      { periodStart: "2026-07-08T01:00:00.000Z", name: "tone", sampleCount: 2, labels: { warm: 2 } },
+    ];
+    const res = await app.request("/v1/metrics/scores?range=7d");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { range: string; scores: ScoreBucket[] };
+    expect(body.range).toBe("7d");
+    expect(body.scores).toHaveLength(2);
+    expect(body.scores[0]?.name).toBe("hallucination");
+    expect(body.scores[0]?.avgScore).toBe(0.21);
+    expect(body.scores[1]?.avgScore).toBeUndefined(); // categorical-only bucket
+    expect(repo.lastScoresRange).toBe("7d"); // validated range passed through
+  });
+
+  it("test_get_scores_rejects_bad_range_with_400", async () => {
+    expect((await app.request("/v1/metrics/scores?range=banana")).status).toBe(400);
+  });
+
+  it("test_get_scores_defaults_range_to_24h", async () => {
+    await app.request("/v1/metrics/scores");
+    expect(repo.lastScoresRange).toBe("24h");
+  });
+
+  it("test_scores_route_rejects_leaked_column_at_boundary_with_5xx", async () => {
+    const leaky: SpanRepository = {
+      ...repo,
+      save: repo.save.bind(repo),
+      getBySpanId: repo.getBySpanId.bind(repo),
+      getTraceTree: repo.getTraceTree.bind(repo),
+      listTraces: repo.listTraces.bind(repo),
+      aggregateScoresOverTime: async () =>
+        [{ periodStart: "x", name: "y", sampleCount: 1, labels: {}, span_id: "leak" }] as never,
+    };
+    expect(
+      (await createApp(leaky).request("/v1/metrics/scores")).status,
+    ).toBeGreaterThanOrEqual(500);
+  });
+
+  // M92 — span attribute facet discovery route
+  it("test_get_span_attributes_keys_mode", async () => {
+    repo.attributeKeys = [
+      { key: "gen_ai.request.temperature", count: 5 },
+      { key: "tier", count: 2 },
+    ];
+    const res = await app.request("/v1/metrics/span-attributes");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { mode: string; keys: SpanAttributeKey[] };
+    expect(body.mode).toBe("keys");
+    expect(body.keys).toHaveLength(2);
+    expect(body.keys[0]?.key).toBe("gen_ai.request.temperature");
+  });
+
+  it("test_get_span_attributes_values_mode_binds_key", async () => {
+    repo.attributeValues = [{ value: "0.7", count: 3 }];
+    const res = await app.request("/v1/metrics/span-attributes?key=gen_ai.request.temperature");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { mode: string; key: string; values: SpanAttributeValue[] };
+    expect(body.mode).toBe("values");
+    expect(body.key).toBe("gen_ai.request.temperature");
+    expect(body.values[0]?.value).toBe("0.7");
+    expect(repo.lastFacetKey).toBe("gen_ai.request.temperature"); // the key reached the repo (bound path)
+  });
+
+  it("test_get_span_attributes_rejects_malformed_key_with_400", async () => {
+    // an oversized/hostile key is rejected at the boundary before reaching SQL (defense-in-depth).
+    expect((await app.request("/v1/metrics/span-attributes?key=" + encodeURIComponent("a".repeat(200)))).status).toBe(400);
+    expect((await app.request("/v1/metrics/span-attributes?key=" + encodeURIComponent("bad key!"))).status).toBe(400);
+    // a well-shaped key still succeeds
+    expect((await app.request("/v1/metrics/span-attributes?key=gen_ai.request.temperature")).status).toBe(200);
+  });
+
+  it("test_span_attributes_route_rejects_leaked_column_at_boundary_with_5xx", async () => {
+    const leaky: SpanRepository = {
+      ...repo,
+      save: repo.save.bind(repo),
+      getBySpanId: repo.getBySpanId.bind(repo),
+      getTraceTree: repo.getTraceTree.bind(repo),
+      listTraces: repo.listTraces.bind(repo),
+      discoverSpanAttributeKeys: async () => [{ key: "x", count: 1, span_id: "leak" }] as never,
+    };
+    expect(
+      (await createApp(leaky).request("/v1/metrics/span-attributes")).status,
     ).toBeGreaterThanOrEqual(500);
   });
 
@@ -1257,5 +1500,175 @@ describe("createApp serves the UI when a web-dist dir is provided (M7)", () => {
     const app = createApp(new StubSpanRepository());
     const res = await app.request("/");
     expect(res.status).toBe(404);
+  });
+
+});
+
+// M63 labeling-queue route negative cases (400 malformed body before write; 404 foreign/missing item).
+// Self-contained apps (single-tenant default Principal holds all scopes → the handler is reached).
+describe("M63 labeling-queue route negative cases", () => {
+  const app = createApp(new StubSpanRepository());
+
+  it("test_enqueue_labeling_400_on_missing_spanId (no store write)", async () => {
+    for (const bad of [{}, { spanId: "" }, { spanId: 42 }]) {
+      const res = await app.request("/v1/traces/t1/enqueue-for-labeling", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(bad),
+      });
+      expect(res.status).toBe(400);
+    }
+    // non-JSON body → 400
+    const nonJson = await app.request("/v1/traces/t1/enqueue-for-labeling", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{not json",
+    });
+    expect(nonJson.status).toBe(400);
+  });
+
+  it("test_resolve_labeling_400_on_blank_label (no store write)", async () => {
+    const res = await app.request("/v1/labeling-queue/lq-1/resolve", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ note: "only a note, no label" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("test_get_and_resolve_missing_labeling_item_return_404", async () => {
+    // a valid-shaped but absent item id → 404 (never 500), on both the read and the write verb.
+    const get = await app.request("/v1/labeling-queue/00000000-0000-0000-0000-000000000000");
+    expect(get.status).toBe(404);
+    const resolve = await app.request("/v1/labeling-queue/00000000-0000-0000-0000-000000000000/resolve", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ label: "good" }),
+    });
+    expect(resolve.status).toBe(404);
+  });
+
+  it("test_export_labeling_400_on_blank_name", async () => {
+    const res = await app.request("/v1/labeling-queue/export-as-dataset", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "  " }),
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+// M93 — ingest-hardening deps (body cap, gzip-bomb bound, per-workspace limiter) need a
+// custom-configured app, so this block builds its own createApp with tuned ingest deps.
+describe("M93 ingest durability & backpressure", () => {
+  let repo: StubSpanRepository;
+  beforeEach(() => {
+    repo = new StubSpanRepository();
+    spansIngested.reset();
+    spansRejected.reset();
+    ingestRateLimited.reset();
+  });
+
+  const envelope = (span: Record<string, unknown>) =>
+    JSON.stringify({ resourceSpans: [{ scopeSpans: [{ spans: [span] }] }] });
+  const okSpan = { spanId: "d-a1", traceId: "d-t1", name: "op", startTimeUnixNano: "1", endTimeUnixNano: "2" };
+
+  it("post_body_over_cap_returns_413", async () => {
+    const app = createApp(repo, undefined, {}, undefined, undefined, undefined, undefined, {
+      maxBodyBytes: 64, // tiny cap
+    });
+    const big = envelope({ ...okSpan, name: "x".repeat(500) }); // > 64 bytes
+    const res = await app.request("/v1/traces", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: big,
+    });
+    expect(res.status).toBe(413);
+    expect(((await res.json()) as { code: string }).code).toBe("PAYLOAD_TOO_LARGE");
+    expect(repo.saveCalls).toHaveLength(0);
+  });
+
+  it("post_gzip_bomb_over_decompressed_cap_returns_413", async () => {
+    const app = createApp(repo, undefined, {}, undefined, undefined, undefined, undefined, {
+      maxDecompressedBytes: 128,
+    });
+    const { gzipSync } = await import("node:zlib");
+    const bomb = gzipSync(Buffer.from(envelope({ ...okSpan, name: "y".repeat(4096) }))); // inflates > 128
+    const res = await app.request("/v1/traces", {
+      method: "POST",
+      headers: { "content-type": "application/json", "content-encoding": "gzip" },
+      body: bomb,
+    });
+    expect(res.status).toBe(413);
+    expect(repo.saveCalls).toHaveLength(0);
+  });
+
+  it("post_ingest_flood_past_window_returns_429_per_workspace", async () => {
+    const { RateLimiter } = await import("@usetheo/lens-core");
+    let now = 1_000_000;
+    const app = createApp(repo, undefined, {}, undefined, undefined, undefined, undefined, {
+      limiter: new RateLimiter(2), // 2 per window
+      now: () => now,
+    });
+    const send = () =>
+      app.request("/v1/traces", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: envelope(okSpan),
+      });
+    expect((await send()).status).toBe(200);
+    expect((await send()).status).toBe(200);
+    const third = await send(); // 3rd in the window → shed
+    expect(third.status).toBe(429);
+    expect(((await third.clone().json()) as { code: string }).code).toBe("RATE_LIMITED");
+    // M94 — the 429 advises Retry-After (seconds until the window resets)
+    expect(Number(third.headers.get("Retry-After"))).toBeGreaterThanOrEqual(1);
+    expect(ingestRateLimited.value).toBe(1);
+    // a NEW window (advance the clock) resets the allowance
+    now += 60_001;
+    expect((await send()).status).toBe(200);
+  });
+});
+
+// M94 — liveness/readiness probes
+describe("M94 health & readiness probes", () => {
+  it("GET /health is 200 with no dependency check (pure liveness)", async () => {
+    const app = createApp(new StubSpanRepository()); // no health dep at all
+    const res = await app.request("/health");
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { status: string }).status).toBe("ok");
+  });
+
+  it("GET /health reports the version when provided", async () => {
+    const app = createApp(new StubSpanRepository(), undefined, {}, undefined, undefined, undefined, undefined, undefined, { version: "9.9.9" });
+    const body = (await (await app.request("/health")).json()) as { version: string };
+    expect(body.version).toBe("9.9.9");
+  });
+
+  it("GET /ready is 200 when the DB probe succeeds", async () => {
+    const app = createApp(new StubSpanRepository(), undefined, {}, undefined, undefined, undefined, undefined, undefined, {
+      pingDb: async () => {},
+    });
+    const res = await app.request("/ready");
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { status: string }).status).toBe("ready");
+  });
+
+  it("GET /ready is 503 when the DB probe throws (fail-closed, LB drains the node)", async () => {
+    const app = createApp(new StubSpanRepository(), undefined, {}, undefined, undefined, undefined, undefined, undefined, {
+      pingDb: async () => {
+        throw new Error("connection refused");
+      },
+    });
+    const res = await app.request("/ready");
+    expect(res.status).toBe(503);
+    expect(((await res.json()) as { status: string }).status).toBe("unavailable");
+  });
+
+  it("both probes are reachable WITHOUT a bearer (unauthenticated)", async () => {
+    // requireCredential=true would 401 any /v1 route; the probes must still answer.
+    const app = createApp(new StubSpanRepository(), undefined, { requireCredential: true }, undefined, undefined, undefined, undefined, undefined, { pingDb: async () => {} });
+    expect((await app.request("/health")).status).toBe(200);
+    expect((await app.request("/ready")).status).toBe(200);
   });
 });

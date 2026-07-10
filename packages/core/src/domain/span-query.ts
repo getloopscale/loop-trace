@@ -11,13 +11,18 @@
  * `spans.kind` column is the OTLP numeric kind, not the semantic one.
  */
 
-/** Whitelisted query fields. */
+/** Whitelisted typed query fields. */
 export type SpanField = "kind" | "name" | "status" | "model";
 
-export interface SpanClause {
-  field: SpanField;
-  value: string;
-}
+/**
+ * A span-query clause. Typed fields (`kind|name|status|model`) carry a value; the
+ * M92 `attr` clause carries an arbitrary attribute KEY plus a value — matching a span
+ * whose `attributes ->> key` equals `value`. The key is a jsonb path bound as data at
+ * compile time (never SQL); it is additionally shape-validated here (defense-in-depth).
+ */
+export type SpanClause =
+  | { field: SpanField; value: string }
+  | { field: "attr"; key: string; value: string };
 
 export interface SpanQuery {
   clauses: SpanClause[];
@@ -36,6 +41,18 @@ export const SPAN_QUERY_KIND_VALUES = [
 ] as const;
 
 const STATUS_VALUES = ["ok", "error"] as const;
+
+// M92 — a valid attribute key: starts alphanumeric, then alphanumerics + dot/underscore/hyphen,
+// ≤ 128 chars. Instrumentation keys are dotted (gen_ai.request.temperature). This bounds abuse/DoS;
+// it is NOT the injection guard (the key is bound as a jsonb path — see spanClauseSql).
+const ATTR_KEY_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+
+/** M92 — is `key` a well-shaped attribute key? Shared by the DSL parser AND the facet-values route
+ *  boundary so a hostile/oversized key is rejected before it reaches SQL (defense-in-depth; the key
+ *  is bound as a jsonb path regardless). */
+export function isValidAttrKey(key: string): boolean {
+  return ATTR_KEY_RE.test(key);
+}
 
 // A token is either a quoted clause (`field:"a b c"`) or a bare run of non-space.
 // The quoted alternative is tried first so spaces inside quotes don't split a token.
@@ -76,7 +93,18 @@ export function parseSpanQuery(input: string): SpanQuery {
     }
     const field = m[1]!;
     const value = stripQuotes(m[2]!);
-    if (isValidClause(field, value)) {
+    if (field === "attr") {
+      // M92 — `attr:<key>=<value>`: the FIRST '=' splits key/value (the value may itself
+      // contain '='). The key is shape-validated; a malformed key/value drops the whole token.
+      const eq = value.indexOf("=");
+      const key = eq > 0 ? value.slice(0, eq) : "";
+      const attrValue = eq > 0 ? value.slice(eq + 1) : "";
+      if (isValidAttrKey(key) && attrValue.length > 0) {
+        clauses.push({ field: "attr", key, value: attrValue });
+      } else {
+        ignored.push(token);
+      }
+    } else if (isValidClause(field, value)) {
       clauses.push({ field, value });
     } else {
       ignored.push(token);

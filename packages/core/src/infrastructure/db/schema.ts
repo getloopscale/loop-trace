@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
+  check,
   customType,
   doublePrecision,
   index,
@@ -10,6 +12,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -93,8 +96,17 @@ export const spans = pgTable(
     index("spans_model_idx").on(t.model),
     // Backs the M11 time-windowed span scans (tokens-by-model over a range).
     index("spans_ingested_at_idx").on(t.ingestedAt),
+    // M95: composite (workspace_id, ingested_at) — serves the tenant filter AND the time range in ONE
+    // scan (the single-column indexes served only one). Backs aggregateObservability tokens-by-model,
+    // aggregateToolStats, and the facet-discovery recent-window scan.
+    index("spans_workspace_ingested_idx").on(t.workspaceId, t.ingestedAt),
     // M24: backs the full-text `search_tsv @@ websearch_to_tsquery(...)` filter.
     index("spans_search_tsv_gin_idx").using("gin", t.searchTsv),
+    // M95 NOTE: a jsonb GIN on `attributes` was evaluated and DROPPED — it accelerates `@>`
+    // containment, NOT the M92 `attributes ->> key = value` predicate (empirically `EXPLAIN`-proven:
+    // the `->>=` filter Seq-Scans regardless of the GIN). The `spans_workspace_ingested_idx` composite
+    // narrows the scan window for the attr/facet filters instead; a true attr-value index would require
+    // rewriting M92 to `@>` (a numeric-vs-string semantic change) — deferred to its own milestone.
   ],
 );
 
@@ -126,6 +138,9 @@ export const traces = pgTable(
     index("traces_session_id_idx").on(t.sessionId),
     // Backs the day/week cost aggregation (M5 risk #2 — period GROUP BY date_trunc(updated_at)).
     index("traces_updated_at_idx").on(t.updatedAt),
+    // M95: composite (workspace_id, updated_at) — one-scan tenant filter + time range/sort for
+    // aggregateObservability (traffic/latency), aggregateCostByPeriod, aggregateNorthStar, listTraces.
+    index("traces_workspace_updated_idx").on(t.workspaceId, t.updatedAt),
     // Backs the M9 status filter (ok/error).
     index("traces_status_code_idx").on(t.statusCode),
   ],
@@ -148,6 +163,9 @@ export const sessions = pgTable(
     primaryKey({ columns: [t.workspaceId, t.sessionId] }),
     index("sessions_workspace_id_idx").on(t.workspaceId),
     index("sessions_last_seen_at_idx").on(t.lastSeenAt),
+    // M95: composite (workspace_id, last_seen_at) — one-scan tenant filter + newest-first ORDER BY
+    // for listSessions (server-paginated).
+    index("sessions_workspace_last_seen_idx").on(t.workspaceId, t.lastSeenAt),
   ],
 );
 
@@ -226,6 +244,9 @@ export const spanEvaluations = pgTable(
     ),
     index("span_evaluations_name_idx").on(t.name),
     index("span_evaluations_trace_id_idx").on(t.traceId),
+    // M95: composite (workspace_id, trace_id) — makes the listTraces per-row eval-count correlated
+    // subquery (`WHERE se.workspace_id = $ AND se.trace_id = $`) INDEX-ONLY (was heap-hitting; B-H3).
+    index("span_evaluations_workspace_trace_idx").on(t.workspaceId, t.traceId),
   ],
 );
 
@@ -264,6 +285,36 @@ export const annotations = pgTable(
       t.annotatorKind,
     ),
     index("annotations_trace_id_idx").on(t.traceId),
+  ],
+);
+
+/**
+ * M83: copilot answer feedback. A per-tenant thumbs up/down on one Ask-copilot answer. The ask is
+ * stateless/single-turn (M33 D1/D4), so feedback is keyed by the CLIENT-side `turn_id` (the answer's
+ * ordinal id in the thread) under its trace — a re-vote UPSERTs the label (up↔down toggle), never a
+ * duplicate row. Workspace-leading unique so a `(trace, turn)` collision across tenants is two
+ * distinct rows, never a cross-tenant upsert (M22).
+ */
+export const copilotFeedback = pgTable(
+  "copilot_feedback",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceIdCol(),
+    traceId: text("trace_id").notNull(),
+    turnId: text("turn_id").notNull(),
+    spanId: text("span_id").default("").notNull(),
+    label: text("label").notNull(), // 'up' | 'down' (validated at the boundary)
+    question: text("question"),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    unique("copilot_feedback_turn_uq").on(t.workspaceId, t.traceId, t.turnId),
+    index("copilot_feedback_trace_id_idx").on(t.traceId),
+    // Defense-in-depth: the label is a 2-value enum enforced at the DB, not only at the app boundary
+    // — a future/other caller of recordAskFeedback cannot persist an out-of-domain label.
+    check("copilot_feedback_label_ck", sql`${t.label} in ('up','down')`),
   ],
 );
 
@@ -317,6 +368,103 @@ export const datasetItems = pgTable(
       t.traceId,
     ),
     index("dataset_items_dataset_id_idx").on(t.datasetId),
+  ],
+);
+
+/**
+ * M63: labeling-queue items. A span is enqueued for human review (`status = 'pending'`), a reviewer
+ * resolves it with a label/score/note (`status = 'resolved'`), and resolved items export to a golden
+ * dataset. `workspace_id`-scoped like every data row (theo-data invariant 2). The UNIQUE is a
+ * workspace-leading **partial** index `(workspace_id, trace_id, span_id) WHERE status = 'pending'`
+ * (D1) so at most ONE pending item exists per span per workspace (enqueue is idempotent while
+ * pending), yet a span **can** be re-enqueued after it is resolved (the resolved row leaves the
+ * partial index) and a span in two tenants never collides. `score` is double precision (clamped to
+ * [0,1] in the domain); `resolution_version` records the payload schema (D3).
+ */
+export const labelingQueueItems = pgTable(
+  "labeling_queue_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceIdCol(),
+    traceId: text("trace_id").notNull(),
+    spanId: text("span_id").notNull(),
+    status: text("status").default("pending").notNull(),
+    label: text("label"),
+    score: doublePrecision("score"),
+    note: text("note"),
+    resolutionVersion: integer("resolution_version"),
+    createdBy: text("created_by").notNull(),
+    resolvedBy: text("resolved_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => [
+    // D1: workspace-leading PARTIAL unique — one PENDING item per span per workspace. Enqueue is
+    // idempotent while pending; a resolved span leaves the index so it can be re-enqueued for a fresh
+    // review; a span in two tenants never collides (theo-data invariant 2).
+    uniqueIndex("labeling_queue_items_workspace_trace_span_pending_uq")
+      .on(t.workspaceId, t.traceId, t.spanId)
+      .where(sql`${t.status} = 'pending'`),
+    index("labeling_queue_items_workspace_status_idx").on(t.workspaceId, t.status),
+  ],
+);
+
+/**
+ * M64: experiment runs. One execution of a dataset × a variant (model/prompt override) through the M33
+ * provider path — the run carries the variant config + the computed aggregates (item/pass counts, avg
+ * score, total cost). `workspace_id`-scoped like every data row (theo-data invariant 2). The `id` PK is
+ * globally unique; the workspace-leading index keeps per-tenant list queries fast.
+ */
+export const experimentRuns = pgTable(
+  "experiment_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceIdCol(),
+    datasetId: uuid("dataset_id").notNull(),
+    name: text("name").notNull(),
+    variant: jsonb("variant").notNull(),
+    status: text("status").default("completed").notNull(),
+    truncated: boolean("truncated").default(false).notNull(),
+    itemCount: integer("item_count").default(0).notNull(),
+    passCount: integer("pass_count").default(0).notNull(),
+    avgScore: doublePrecision("avg_score"),
+    totalCostUsd: doublePrecision("total_cost_usd").default(0).notNull(),
+    createdBy: text("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("experiment_runs_workspace_dataset_idx").on(t.workspaceId, t.datasetId),
+    index("experiment_runs_workspace_created_idx").on(t.workspaceId, t.createdAt),
+  ],
+);
+
+/**
+ * M64: experiment run items — one row per dataset item per run: the replayed output + usage/cost + the
+ * evaluator `scores` jsonb (reusing the M36 Verdict shape). `workspace_id`-leading UNIQUE `(workspace_id,
+ * run_id, dataset_item_trace_id)` dedups a row per (run, source trace) and never collides across tenants.
+ */
+export const experimentRunItems = pgTable(
+  "experiment_run_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceIdCol(),
+    runId: uuid("run_id").notNull(),
+    datasetItemTraceId: text("dataset_item_trace_id").notNull(),
+    inputSnapshot: text("input_snapshot"),
+    output: text("output"),
+    promptTokens: integer("prompt_tokens").default(0).notNull(),
+    completionTokens: integer("completion_tokens").default(0).notNull(),
+    totalTokens: integer("total_tokens").default(0).notNull(),
+    costUsd: doublePrecision("cost_usd"),
+    latencyMs: integer("latency_ms").default(0).notNull(),
+    model: text("model").default("").notNull(),
+    scores: jsonb("scores").notNull(),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    unique("experiment_run_items_workspace_run_trace_uq").on(t.workspaceId, t.runId, t.datasetItemTraceId),
+    index("experiment_run_items_run_idx").on(t.runId),
   ],
 );
 

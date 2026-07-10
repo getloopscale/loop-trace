@@ -3,6 +3,7 @@ import type { AuthVerifier, Principal, SpanRepository } from "@usetheo/lens-core
 import { createApp } from "./app.js";
 import type { EvaluatorApiDeps } from "./handlers/evaluators.js";
 import type { CopilotApiDeps } from "./handlers/copilot.js";
+import type { ExperimentApiDeps } from "./handlers/experiment.js";
 
 /**
  * M37 scope×verb contract matrix refresh — representative routes across every
@@ -70,6 +71,9 @@ const repo = {
     tokensByModel: [],
   }),
   aggregateEvaluators: async () => [],
+  aggregateScoresOverTime: async () => [],
+  discoverSpanAttributeKeys: async () => [],
+  discoverSpanAttributeValues: async () => [],
   listSessions: async () => ({ sessions: [] }),
   getSessionDetail: async () => null,
   listTags: async () => [],
@@ -93,6 +97,16 @@ const repo = {
   }),
   addDatasetItem: async () => true,
   removeDatasetItem: async () => undefined,
+  // M63 labeling-queue stubs (success shapes; the matrix asserts the SCOPE guard, not the store).
+  enqueueLabelingItem: async () => ({
+    id: "i1", traceId: "t1", spanId: "s1", status: "pending", createdBy: "u", createdAt: ISO_NOW,
+  }),
+  listLabelingQueue: async () => ({ items: [], total: 0, page: 1, pageSize: 50 }),
+  getLabelingQueueItem: async () => ({
+    id: "i1", traceId: "t1", spanId: "s1", status: "resolved", label: "good", createdBy: "u", createdAt: ISO_NOW,
+  }),
+  resolveLabelingItem: async () => true,
+  exportResolvedAsDataset: async () => ({ id: "d1", name: "golden", createdAt: ISO_NOW, itemCount: 0 }),
 } as unknown as SpanRepository;
 
 const evaluatorDeps = {
@@ -143,12 +157,30 @@ const copilotDeps = {
   limiter: { tryAcquire: () => true },
 } as unknown as CopilotApiDeps;
 
+// M64 experiment deps — a 1-item dataset + a fast fake chat so a `write`-token run reaches 200.
+const experimentDeps = {
+  spanRepo: {
+    getDataset: async () => ({ id: "d1", name: "seed", createdAt: ISO_NOW, items: [{ traceId: "t1", inputSnapshot: "[]", outputSnapshot: "o", createdAt: ISO_NOW }] }),
+    createExperimentRun: async (run: { datasetId: string; name: string; variant: unknown; status: string; truncated: boolean; createdBy: string; items: unknown[] }) => ({
+      id: "run-1", datasetId: run.datasetId, name: run.name, variant: run.variant, status: run.status, truncated: run.truncated,
+      itemCount: run.items.length, passCount: 0, totalCostUsd: 0, createdBy: run.createdBy, createdAt: ISO_NOW, items: run.items,
+    }),
+    listExperimentRuns: async () => [],
+    getExperimentRun: async () => null,
+  },
+  evaluatorRepo: { listEvaluators: async () => [] },
+  chat: { run: async () => ({ content: "ok", promptTokens: 1, completionTokens: 1, totalTokens: 2, model: "m" }) },
+  limiter: { tryAcquire: () => true },
+} as unknown as ExperimentApiDeps;
+
 const app = createApp(
   repo,
   undefined,
   { verifier: verifier(), requireCredential: true },
   evaluatorDeps,
   copilotDeps,
+  undefined,
+  experimentDeps,
 );
 
 type TokenClass = keyof typeof TOKENS;
@@ -209,6 +241,18 @@ const CASES: readonly MatrixCase[] = [
     build: () => new Request("http://x/v1/metrics/observability?range=24h"),
   },
   {
+    name: "scores-over-time",
+    requiredScope: "observability:read",
+    successStatus: 200,
+    build: () => new Request("http://x/v1/metrics/scores?range=24h"),
+  },
+  {
+    name: "span-attribute-facets",
+    requiredScope: "observability:read",
+    successStatus: 200,
+    build: () => new Request("http://x/v1/metrics/span-attributes"),
+  },
+  {
     name: "sessions-list",
     requiredScope: "observability:read",
     successStatus: 200,
@@ -237,6 +281,82 @@ const CASES: readonly MatrixCase[] = [
     successStatus: 200,
     build: () =>
       new Request("http://x/v1/datasets/d1/items/t1", { method: "DELETE" }),
+  },
+  // M63 labeling queues — the CWE-441 second half: read for list/get, write for enqueue/resolve/export.
+  {
+    name: "labeling-queue-list",
+    requiredScope: "observability:read",
+    successStatus: 200,
+    build: () => new Request("http://x/v1/labeling-queue"),
+  },
+  {
+    name: "labeling-queue-get",
+    requiredScope: "observability:read",
+    successStatus: 200,
+    build: () => new Request("http://x/v1/labeling-queue/i1"),
+  },
+  {
+    name: "labeling-queue-enqueue",
+    requiredScope: "observability:write",
+    successStatus: 200,
+    build: () =>
+      new Request("http://x/v1/traces/t1/enqueue-for-labeling", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ spanId: "s1" }),
+      }),
+  },
+  {
+    name: "labeling-queue-resolve",
+    requiredScope: "observability:write",
+    successStatus: 200,
+    build: () =>
+      new Request("http://x/v1/labeling-queue/i1/resolve", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ label: "good", score: 0.9 }),
+      }),
+  },
+  {
+    name: "labeling-queue-export",
+    requiredScope: "observability:write",
+    successStatus: 200,
+    build: () =>
+      new Request("http://x/v1/labeling-queue/export-as-dataset", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "golden-set" }),
+      }),
+  },
+  // M64 experiment runs — write for create-run (billable), read for list/get/compare.
+  {
+    name: "experiment-run-create",
+    requiredScope: "observability:write",
+    successStatus: 200,
+    build: () =>
+      new Request("http://x/v1/experiment-runs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ datasetId: "d1", variant: { model: "m" } }),
+      }),
+  },
+  {
+    name: "experiment-run-list",
+    requiredScope: "observability:read",
+    successStatus: 200,
+    build: () => new Request("http://x/v1/experiment-runs"),
+  },
+  {
+    name: "experiment-run-compare",
+    requiredScope: "observability:read",
+    successStatus: 200,
+    build: () => new Request("http://x/v1/experiment-runs/compare?ids=a,b"),
+  },
+  {
+    name: "experiment-run-get",
+    requiredScope: "observability:read",
+    successStatus: 404,
+    build: () => new Request("http://x/v1/experiment-runs/00000000-0000-0000-0000-000000000000"),
   },
   {
     name: "evaluators-list",

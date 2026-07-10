@@ -32,6 +32,9 @@ export interface BucketRow {
   count: number;
 }
 
+/** M97 — runtime shape for a raw `date_trunc` bucket row (the SQL→DTO boundary for northStar). */
+export const bucketRowSchema = z.object({ bucket: z.union([z.date(), z.string()]), count: z.number() });
+
 /**
  * Pure shaping of raw `date_trunc` rows into north-star buckets: the bucket
  * timestamp becomes an ISO date string and the count is coerced to a

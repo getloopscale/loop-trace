@@ -11,6 +11,8 @@ import {
   datasetSchema,
   datasetDetailSchema,
   normalizeDatasetName,
+  NameConflictError,
+  apiError,
 } from "@usetheo/lens-core";
 
 import { getPrincipal, requireScopeOnPrincipal } from "../auth/middleware.js";
@@ -29,11 +31,11 @@ export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
     try {
       body = await c.req.json();
     } catch {
-      return c.json({ error: "invalid json body" }, 400);
+      return c.json(apiError("INVALID_BODY", "invalid json body"), 400);
     }
     const name = normalizeDatasetName((body as { name?: unknown })?.name);
     if (name === null) {
-      return c.json({ error: "dataset name is required (1-120 chars after trim)" }, 400);
+      return c.json(apiError("INVALID_BODY", "dataset name is required (1-120 chars after trim)"), 400);
     }
     const dataset = await repo.createDataset(name, getPrincipal(c).workspaceId);
     return c.json(datasetSchema.parse(dataset), 200);
@@ -47,7 +49,7 @@ export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
     );
     return detail
       ? c.json(datasetDetailSchema.parse(detail), 200)
-      : c.json({ error: "not found" }, 404);
+      : c.json(apiError("NOT_FOUND", "not found"), 404);
   });
 
   app.post("/v1/datasets/:datasetId/items", requireScopeOnPrincipal("observability:write"), async (c) => {
@@ -57,7 +59,7 @@ export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
     try {
       body = await c.req.json();
     } catch {
-      return c.json({ error: "invalid json body" }, 400);
+      return c.json(apiError("INVALID_BODY", "invalid json body"), 400);
     }
     const datasetId = c.req.param("datasetId");
     const ws = getPrincipal(c).workspaceId;
@@ -72,17 +74,44 @@ export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
       const output = typeof b.output === "string" ? b.output : "";
       const MAX = 256 * 1024;
       if (b.input.length > MAX || output.length > MAX) {
-        return c.json({ error: "input/output too large" }, 400);
+        return c.json(apiError("INVALID_BODY", "input/output too large"), 400);
       }
       ok = await repo.addSyntheticDatasetItem(datasetId, b.input, output, ws);
     } else {
-      return c.json({ error: "traceId or input is required" }, 400);
+      return c.json(apiError("INVALID_BODY", "traceId or input is required"), 400);
     }
-    if (!ok) return c.json({ error: "not found" }, 404);
+    if (!ok) return c.json(apiError("NOT_FOUND", "not found"), 404);
     datasetItemsAdded.add(1);
     const detail = await repo.getDataset(datasetId, ws);
     // detail is non-null here (the dataset existed for the add to succeed).
     return c.json(datasetDetailSchema.parse(detail), 200);
+  });
+
+  app.put("/v1/datasets/:datasetId", requireScopeOnPrincipal("observability:write"), async (c) => {
+    // M82: rename a dataset. 400 on a blank name, 404 absent, 409 on a duplicate name (ADR-1).
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json(apiError("INVALID_BODY", "invalid json body"), 400);
+    }
+    const name = normalizeDatasetName((body as { name?: unknown })?.name);
+    if (name === null) {
+      return c.json(apiError("INVALID_BODY", "dataset name is required (1-120 chars after trim)"), 400);
+    }
+    try {
+      const updated = await repo.renameDataset(c.req.param("datasetId"), name, getPrincipal(c).workspaceId);
+      return updated ? c.json(datasetSchema.parse(updated), 200) : c.json(apiError("NOT_FOUND", "not found"), 404);
+    } catch (err) {
+      if (err instanceof NameConflictError) return c.json(apiError("NAME_CONFLICT", err.message), 409);
+      throw err;
+    }
+  });
+
+  app.delete("/v1/datasets/:datasetId", requireScopeOnPrincipal("observability:delete"), async (c) => {
+    // M82: delete a dataset + cascade its items and experiment runs (ADR-2). Idempotent: absent → 404.
+    const ok = await repo.deleteDataset(c.req.param("datasetId"), getPrincipal(c).workspaceId);
+    return ok ? c.body(null, 204) : c.json(apiError("NOT_FOUND", "not found"), 404);
   });
 
   app.delete("/v1/datasets/:datasetId/items/:traceId", requireScopeOnPrincipal("observability:delete"), async (c) => {
@@ -94,6 +123,6 @@ export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
     const detail = await repo.getDataset(datasetId, ws);
     return detail
       ? c.json(datasetDetailSchema.parse(detail), 200)
-      : c.json({ error: "not found" }, 404);
+      : c.json(apiError("NOT_FOUND", "not found"), 404);
   });
 }

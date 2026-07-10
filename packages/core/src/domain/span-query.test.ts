@@ -66,4 +66,56 @@ describe("parseSpanQuery (M30)", () => {
       expect(() => parseSpanQuery(junk)).not.toThrow();
     }
   });
+
+  // M92 — arbitrary attribute clause
+  it("test_parse_attr_clause_key_and_value", () => {
+    expect(parseSpanQuery("attr:gen_ai.request.temperature=0.7")).toEqual({
+      clauses: [{ field: "attr", key: "gen_ai.request.temperature", value: "0.7" }],
+      ignored: [],
+    });
+  });
+
+  it("test_parse_attr_quoted_spaced_value", () => {
+    // the whole key=value is quoted so the space in the value does not split the token
+    expect(parseSpanQuery('attr:"gen_ai.system=Anthropic PBC"')).toEqual({
+      clauses: [{ field: "attr", key: "gen_ai.system", value: "Anthropic PBC" }],
+      ignored: [],
+    });
+  });
+
+  it("test_parse_attr_value_may_contain_equals", () => {
+    // only the FIRST '=' splits key/value; the value keeps the rest
+    expect(parseSpanQuery("attr:url=https://x/y?a=b")).toEqual({
+      clauses: [{ field: "attr", key: "url", value: "https://x/y?a=b" }],
+      ignored: [],
+    });
+  });
+
+  it("test_parse_attr_composes_with_typed_clause", () => {
+    const r = parseSpanQuery("kind:llm attr:foo=bar");
+    expect(r.clauses).toEqual([
+      { field: "kind", value: "llm" },
+      { field: "attr", key: "foo", value: "bar" },
+    ]);
+    expect(r.ignored).toEqual([]);
+  });
+
+  it("test_parse_attr_rejects_malformed_and_injection_shaped_keys", () => {
+    const bad = [
+      "attr:=x", // empty key
+      "attr:foo", // no '='
+      "attr:=", // empty key and value
+      "attr:k=", // empty value
+      `attr:${"a".repeat(200)}=v`, // over-long key
+      "attr:has space=v", // space in key (would be split anyway, but assert the whole token drops)
+    ];
+    for (const token of bad) {
+      const r = parseSpanQuery(token);
+      expect(r.clauses).toEqual([]); // no attr clause from a malformed key/value
+    }
+    // an injection-shaped key is dropped by the shape guard (defense-in-depth; the SQL binds it regardless)
+    const inj = parseSpanQuery(`attr:"a') OR 1=1--=1"`);
+    expect(inj.clauses).toEqual([]);
+    expect(() => parseSpanQuery(`attr:"a') OR 1=1--=1"`)).not.toThrow();
+  });
 });

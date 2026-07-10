@@ -99,4 +99,60 @@ suite("span_evaluations + evaluators aggregate (integration, M26)", () => {
     await pool.query("UPDATE traces SET updated_at = now() - interval '40 days' WHERE trace_id = 't-old'");
     expect(await repo.aggregateEvaluators("30d")).toEqual([]);
   });
+
+  // M90 — score aggregation over time
+  it("test_scores_over_time_buckets_by_period_with_mean_and_labels", async () => {
+    // Two evals in the current hour-bucket + one eval 2 hours back (a distinct hour
+    // bucket, still within 24h). The 2h gap never collides with the current hour.
+    await repo.save([
+      span({ spanId: "n1", traceId: "t-now", evaluations: [{ name: "hallucination", score: 0.2, label: "factual" }] }),
+      span({ spanId: "n2", traceId: "t-now", evaluations: [{ name: "hallucination", score: 0.4, label: "factual" }] }),
+    ]);
+    await repo.save([
+      span({ spanId: "o1", traceId: "t-2h", evaluations: [{ name: "hallucination", score: 0.8, label: "hallucinated" }] }),
+    ]);
+    await pool.query("UPDATE traces SET updated_at = now() - interval '2 hours' WHERE trace_id = 't-2h'");
+
+    const buckets = (await repo.aggregateScoresOverTime("24h")).filter((b) => b.name === "hallucination");
+    // Two distinct hourly buckets, sorted ascending (older first).
+    expect(buckets).toHaveLength(2);
+    expect(buckets[0]!.periodStart < buckets[1]!.periodStart).toBe(true);
+    // Older bucket: the 2h-back single sample.
+    expect(buckets[0]).toEqual({
+      periodStart: buckets[0]!.periodStart,
+      name: "hallucination",
+      sampleCount: 1,
+      avgScore: 0.8,
+      labels: { hallucinated: 1 },
+    });
+    // Current bucket: mean of {0.2, 0.4} = 0.3, both labelled factual.
+    expect(buckets[1]).toEqual({
+      periodStart: buckets[1]!.periodStart,
+      name: "hallucination",
+      sampleCount: 2,
+      avgScore: expect.closeTo(0.3, 5),
+      labels: { factual: 2 },
+    });
+  });
+
+  it("test_scores_over_time_categorical_only_omits_avg", async () => {
+    // an evaluator that only wrote a label (no numeric score) → no avgScore, labels present.
+    await repo.save([
+      span({ spanId: "c1", traceId: "t-cat", evaluations: [{ name: "tone", label: "warm" }] }),
+      span({ spanId: "c2", traceId: "t-cat", evaluations: [{ name: "tone", label: "warm" }] }),
+    ]);
+    const buckets = (await repo.aggregateScoresOverTime("24h")).filter((b) => b.name === "tone");
+    expect(buckets).toHaveLength(1);
+    expect(buckets[0]!.avgScore).toBeUndefined();
+    expect(buckets[0]!.sampleCount).toBe(2);
+    expect(buckets[0]!.labels).toEqual({ warm: 2 });
+  });
+
+  it("test_scores_over_time_empty_range_is_empty_not_zero_filled", async () => {
+    // an eval 40 days ago is out of the 24h window → no buckets at all. An empty
+    // period is an ABSENCE, never a fabricated zero-sample bucket (M89 honesty).
+    await repo.save([span({ spanId: "z", traceId: "t-z", evaluations: [{ name: "x", score: 0.5 }] })]);
+    await pool.query("UPDATE traces SET updated_at = now() - interval '40 days' WHERE trace_id = 't-z'");
+    expect(await repo.aggregateScoresOverTime("24h")).toEqual([]);
+  });
 });

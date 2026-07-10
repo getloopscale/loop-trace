@@ -1,0 +1,1 @@
+ALTER TABLE "copilot_feedback" ADD CONSTRAINT "copilot_feedback_label_ck" CHECK ("copilot_feedback"."label" in ('up','down'));

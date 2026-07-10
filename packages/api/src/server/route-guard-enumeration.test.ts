@@ -5,12 +5,15 @@ import { createApp } from "./app.js";
 import type { EvaluatorApiDeps } from "./handlers/evaluators.js";
 import type { CopilotApiDeps } from "./handlers/copilot.js";
 import type { ReplayApiDeps } from "./handlers/replay.js";
+import type { ExperimentApiDeps } from "./handlers/experiment.js";
 
 const EXPECTED_DATA_ROUTES = new Set([
+  "DELETE /v1/datasets/:datasetId",
   "DELETE /v1/datasets/:datasetId/items/:traceId",
   "DELETE /v1/evaluators/:id",
   "DELETE /v1/guards/:id",
   "DELETE /v1/traces/:traceId/annotations",
+  "DELETE /v1/traces/:traceId/ask/feedback",
   "DELETE /v1/traces/:traceId/tags",
   "GET /v1/agents",
   "GET /v1/analytics/cost",
@@ -20,11 +23,18 @@ const EXPECTED_DATA_ROUTES = new Set([
   "GET /v1/datasets/:datasetId",
   "GET /v1/evaluators",
   "GET /v1/evaluators/:id",
+  "GET /v1/experiment-runs",
+  "GET /v1/experiment-runs/:runId",
+  "GET /v1/experiment-runs/compare",
   "GET /v1/guards",
   "GET /v1/guards/:id/breaches",
+  "GET /v1/labeling-queue",
+  "GET /v1/labeling-queue/:itemId",
   "GET /v1/metrics/evaluators",
   "GET /v1/metrics/north-star",
   "GET /v1/metrics/observability",
+  "GET /v1/metrics/scores",
+  "GET /v1/metrics/span-attributes",
   "GET /v1/sessions",
   "GET /v1/sessions/:sessionId",
   "GET /v1/spans/:spanId",
@@ -36,12 +46,19 @@ const EXPECTED_DATA_ROUTES = new Set([
   "POST /v1/datasets",
   "POST /v1/datasets/:datasetId/items",
   "POST /v1/evaluators",
+  "PUT /v1/datasets/:datasetId",
+  "PUT /v1/evaluators/:id",
   "POST /v1/evaluators/:id/run",
+  "POST /v1/experiment-runs",
   "POST /v1/guards",
+  "POST /v1/labeling-queue/:itemId/resolve",
+  "POST /v1/labeling-queue/export-as-dataset",
   "POST /v1/replay-sessions",
   "POST /v1/traces",
   "POST /v1/traces/:traceId/annotations",
   "POST /v1/traces/:traceId/ask",
+  "POST /v1/traces/:traceId/ask/feedback",
+  "POST /v1/traces/:traceId/enqueue-for-labeling",
   "POST /v1/traces/:traceId/replay",
   "POST /v1/traces/:traceId/tags",
 ]);
@@ -105,6 +122,13 @@ function buildAuditApp() {
     limiter: { tryAcquire: () => true },
   } as unknown as ReplayApiDeps;
 
+  const experimentDeps = {
+    spanRepo: repo,
+    evaluatorRepo: { listEvaluators: async () => [] },
+    chat: null,
+    limiter: { tryAcquire: () => true },
+  } as unknown as ExperimentApiDeps;
+
   return createApp(
     repo,
     undefined,
@@ -112,6 +136,7 @@ function buildAuditApp() {
     evaluatorDeps,
     copilotDeps,
     replayDeps,
+    experimentDeps,
   );
 }
 
@@ -121,10 +146,17 @@ describe("M37 route guard enumeration", () => {
     const liveRoutes = new Set(
       app.routes
         .filter((route) => route.method !== "ALL")
+        // M94 — /health + /ready are intentionally UNAUTHENTICATED probes (no scope guard).
+        // M96 — /openapi.json + /v1 + /version are intentionally UNAUTHENTICATED discovery endpoints.
+        // Neither is part of the scoped data surface this audit enumerates.
+        .filter(
+          (route) =>
+            !["/health", "/ready", "/openapi.json", "/v1", "/version"].includes(route.path),
+        )
         .map((route) => `${route.method} ${route.path}`),
     );
     expect(liveRoutes).toEqual(EXPECTED_DATA_ROUTES);
-    expect(liveRoutes.size).toBe(37);
+    expect(liveRoutes.size).toBe(53);
   });
 
   it("asserts every mounted data route carries a per-verb scope middleware", () => {

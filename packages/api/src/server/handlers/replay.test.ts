@@ -11,14 +11,16 @@ import {
 
 import { replayHandler, type ReplayApiDeps } from "./replay.js";
 
-// A ReplayClient stub — records the messages/model it was asked to run.
+// A ReplayClient stub — records the messages/model/schema it was asked to run.
 class FakeReplay implements ReplayClient {
   lastMessages: ChatMessage[] | null = null;
   lastModel: string | undefined = undefined;
+  lastSchema: object | undefined = undefined;
   constructor(private readonly result: ReplayResult) {}
-  async run(messages: ChatMessage[], model?: string): Promise<ReplayResult> {
+  async run(messages: ChatMessage[], model?: string, responseSchema?: object): Promise<ReplayResult> {
     this.lastMessages = messages;
     this.lastModel = model;
+    this.lastSchema = responseSchema;
     return { ...this.result, model: model ?? this.result.model };
   }
 }
@@ -32,15 +34,16 @@ class FailingReplay implements ReplayClient {
 // write method it will throw (undefined is not a function) — a structural proof of no-mutation.
 function fakeSpanRepo(present: Record<string, boolean>): SpanRepository {
   return {
-    getTraceTree: async (traceId: string, _ws: string) =>
+    getTraceTree: async (traceId: string) =>
       present[traceId] ? ({ spanId: "s0", traceId, name: "op", children: [] } as unknown) : null,
   } as unknown as SpanRepository;
 }
 
 const RESULT: ReplayResult = { content: "new output", promptTokens: 12, completionTokens: 4, totalTokens: 16, model: "m" };
 
-function ctx(opts: { traceId?: string; body?: unknown; rawBody?: string; ws?: string }): Context {
+function ctx(opts: { traceId?: string; body?: unknown; rawBody?: string; ws?: string; headers?: Record<string, string> }): Context {
   const principal = { workspaceId: opts.ws ?? "ws-x", userId: "u", role: "member", scopes: ["observability:read"] };
+  const headers = opts.headers ?? {}; // M94 — capture c.header(...) so the 429 Retry-After is assertable
   return {
     get: (k: string) => (k === "principal" ? principal : undefined),
     req: {
@@ -50,6 +53,7 @@ function ctx(opts: { traceId?: string; body?: unknown; rawBody?: string; ws?: st
         return opts.body;
       },
     },
+    header: (k: string, v: string) => { headers[k] = v; },
     json: (obj: unknown, status = 200) =>
       new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json" } }),
   } as unknown as Context;
@@ -103,9 +107,12 @@ describe("M55 replayHandler", () => {
     const limiter = new RateLimiter(1);
     const d = deps({ chat, limiter, now: () => 2_000_000 });
     expect((await replayHandler(ctx({ body: { messages: [{ role: "user", content: "a" }] } }), d)).status).toBe(200);
-    const second = await replayHandler(ctx({ body: { messages: [{ role: "user", content: "b" }] } }), d);
+    const headers: Record<string, string> = {};
+    const second = await replayHandler(ctx({ body: { messages: [{ role: "user", content: "b" }] }, headers }), d);
     expect(second.status).toBe(429);
     expect(((await second.json()) as { code: string }).code).toBe("RATE_LIMITED");
+    // M94 — the 429 advises Retry-After (seconds until the window resets)
+    expect(Number(headers["Retry-After"])).toBeGreaterThanOrEqual(1);
   });
 
   it("test_replay_502_when_provider_fails_closed", async () => {
@@ -127,5 +134,66 @@ describe("M55 replayHandler", () => {
     // write method — the immutable-trace invariant (M44 read-only body).
     const res = await replayHandler(ctx({ body: { messages: [{ role: "user", content: "hi" }] } }), deps());
     expect(res.status).toBe(200);
+  });
+});
+
+describe("M62 replayHandler — cost surfacing + structured output", () => {
+  const WITH_COST: ReplayResult = { content: "o", promptTokens: 9, completionTokens: 3, totalTokens: 12, costUsd: 3.15e-6, model: "m" };
+
+  it("test_replay_response_includes_costUsd", async () => {
+    const res = await replayHandler(ctx({ body: { messages: [{ role: "user", content: "hi" }] } }), deps({ chat: new FakeReplay(WITH_COST) }));
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as Record<string, unknown>)["costUsd"]).toBe(3.15e-6);
+  });
+
+  it("test_replay_forwards_responseSchema_to_the_client", async () => {
+    const chat = new FakeReplay(RESULT);
+    const schema = { type: "object", properties: { answer: { type: "string" } } };
+    const res = await replayHandler(ctx({ body: { messages: [{ role: "user", content: "hi" }], responseSchema: schema } }), deps({ chat }));
+    expect(res.status).toBe(200);
+    expect(chat.lastSchema).toEqual(schema);
+  });
+
+  it("test_replay_omits_schema_when_absent", async () => {
+    const chat = new FakeReplay(RESULT);
+    await replayHandler(ctx({ body: { messages: [{ role: "user", content: "hi" }] } }), deps({ chat }));
+    expect(chat.lastSchema).toBeUndefined();
+  });
+
+  it("test_replay_400_when_responseSchema_is_not_an_object (no provider call)", async () => {
+    for (const bad of ["oops", 42, ["a"], null]) {
+      const chat = new FakeReplay(RESULT);
+      const res = await replayHandler(ctx({ body: { messages: [{ role: "user", content: "hi" }], responseSchema: bad } }), deps({ chat }));
+      expect(res.status).toBe(400);
+      expect(chat.lastMessages).toBeNull(); // rejected at the boundary, before any billable call
+    }
+  });
+
+  it("test_replay_400_when_responseSchema_exceeds_size_budget (no provider call)", async () => {
+    // a schema whose JSON is > 32 KiB is rejected before the billable call (billable-abuse hardening).
+    const huge = { type: "object", properties: Object.fromEntries(Array.from({ length: 4000 }, (_, i) => [`p${i}`, { type: "string" }])) };
+    const chat = new FakeReplay(RESULT);
+    const res = await replayHandler(ctx({ body: { messages: [{ role: "user", content: "hi" }], responseSchema: huge } }), deps({ chat }));
+    expect(res.status).toBe(400);
+    expect(chat.lastMessages).toBeNull();
+  });
+
+  it("test_replay_authorizes_with_principal_workspace_not_the_body (tenant isolation)", async () => {
+    // The trace is authorized against the PRINCIPAL's workspace, never a body-supplied one.
+    const calls: Array<{ traceId: string; ws: string }> = [];
+    const recordingRepo = {
+      getTraceTree: async (traceId: string, ws: string) => {
+        calls.push({ traceId, ws });
+        return { spanId: "s0", traceId, name: "op", children: [] } as unknown;
+      },
+    } as unknown as SpanRepository;
+    // a hostile body tries to smuggle a different workspace — it MUST be ignored.
+    const res = await replayHandler(
+      ctx({ ws: "ws-A", traceId: "t1", body: { messages: [{ role: "user", content: "hi" }], workspaceId: "ws-EVIL" } }),
+      deps({ spanRepo: recordingRepo, chat: new FakeReplay(RESULT) }),
+    );
+    expect(res.status).toBe(200);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].ws).toBe("ws-A"); // from the Principal, never "ws-EVIL"
   });
 });

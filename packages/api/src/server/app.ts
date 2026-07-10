@@ -11,6 +11,9 @@ import {
   observabilityRangeSchema,
   observabilityResponseSchema,
   evaluatorsResponseSchema,
+  scoresResponseSchema,
+  spanFacetsResponseSchema,
+  isValidAttrKey,
   sessionListResponseSchema,
   sessionDetailResponseSchema,
   traceTagsResponseSchema,
@@ -20,6 +23,8 @@ import {
   DEFAULT_ANNOTATION_NAME,
   DEFAULT_ANNOTATOR_KIND,
   agentCatalogResponseSchema,
+  apiError,
+  zodFieldErrors,
 } from "@usetheo/lens-core";
 
 import {
@@ -39,18 +44,46 @@ import type { CopilotApiDeps } from "./handlers/copilot.js";
 import type { ReplayApiDeps } from "./handlers/replay.js";
 import { registerExtraRoutes } from "./routes/register-extra-routes.js";
 import { registerDatasetRoutes } from "./routes/dataset-routes.js";
-import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
-import { OtlpParseError } from "../otlp/otlp-error.js";
+import { registerLabelingQueueRoutes } from "./routes/labeling-queue-routes.js";
+import { registerExperimentRoutes } from "./routes/experiment-routes.js";
+import type { ExperimentApiDeps } from "./handlers/experiment.js";
+import type { RateLimiter } from "@usetheo/lens-core";
+
+/**
+ * M93 — OTLP ingest hardening deps (all optional; a test app without them keeps the pre-M93 behavior
+ * minus the size caps, which default). `limiter` sheds a runaway per-workspace producer with 429;
+ * the byte caps bound the raw body (413 via bodyLimit) + the decompressed body (413, gzip-bomb).
+ */
+export interface IngestApiDeps {
+  limiter?: RateLimiter;
+  maxBodyBytes?: number;
+  maxDecompressedBytes?: number;
+  /** Injected clock for the limiter window (defaults to Date.now) — deterministic tests. */
+  now?: () => number;
+}
+
+/** M94 — liveness/readiness probe deps. `pingDb` runs a bounded `SELECT 1`; it throwing → /ready 503. */
+export interface HealthApiDeps {
+  version?: string;
+  pingDb?: () => Promise<void>;
+}
+import { bodyLimit } from "hono/body-limit";
+import { DEFAULT_MAX_INGEST_BYTES } from "@usetheo/lens-core";
+import { parseResourceSpansPartial } from "../otlp/parse-resource-spans.js";
+import { OtlpParseError, OtlpTooLargeError } from "../otlp/otlp-error.js";
 import { decodeOtlpBody } from "../otlp/decode-protobuf.js";
 import {
   spansIngested,
   tracesIngested,
   evaluationsExtracted,
   annotationsWritten,
+  spansRejected,
+  ingestRateLimited,
   logIngest,
 } from "./metrics.js";
 import { mountStatic } from "./static.js";
 import { tracesToCsv } from "./csv.js";
+import { buildOpenApiDocument } from "./openapi.js";
 
 /**
  * Build the Hono app. Depends only on the {@link SpanRepository} port (DIP) — the
@@ -93,6 +126,9 @@ export function createApp(
   evaluators?: EvaluatorApiDeps,
   copilot?: CopilotApiDeps,
   replay?: ReplayApiDeps,
+  experiment?: ExperimentApiDeps,
+  ingest?: IngestApiDeps,
+  health?: HealthApiDeps,
 ): Hono {
   const app = new Hono();
 
@@ -108,8 +144,39 @@ export function createApp(
         error: err instanceof Error ? err.message : String(err),
       }),
     );
-    return c.json({ error: "internal error" }, 500);
+    return c.json(apiError("INTERNAL", "internal error"), 500);
   });
+
+  // M94 — k8s/edge probes, UNAUTHENTICATED and mounted before the /v1 bearer. `/health` is pure
+  // liveness (no dependency — a DB outage must NOT fail liveness, else a recoverable pod is killed);
+  // `/ready` runs a DB probe (SELECT 1) and 503s when the DB is unreachable so the LB drains the node.
+  app.get("/health", (c) => c.json({ status: "ok", version: health?.version ?? "unknown" }, 200));
+  app.get("/ready", async (c) => {
+    try {
+      await health?.pingDb?.();
+      return c.json({ status: "ready" }, 200);
+    } catch {
+      return c.json({ status: "unavailable" }, 503);
+    }
+  });
+
+  // M96 — discovery surface, UNAUTHENTICATED and mounted before the /v1 bearer. `/openapi.json` is
+  // generated from the Zod DTOs + the live router at request time (never drifts); `/v1` is the
+  // capability index; `/version` is the build stamp. A customer generates a client from these.
+  app.get("/openapi.json", (c) => c.json(buildOpenApiDocument(app.routes, health?.version)));
+  app.get("/version", (c) => c.json({ version: health?.version ?? "unknown" }, 200));
+  app.get("/v1", (c) =>
+    c.json(
+      {
+        service: "theo-lens",
+        version: health?.version ?? "unknown",
+        capability: "observability",
+        openapi: "/openapi.json",
+        docs: "/openapi.json",
+      },
+      200,
+    ),
+  );
 
   // M22 admin surface (the Model B broker mints per-tenant keys here). Gated by
   // `requireScope('observability:admin')` — a `observability:platform-admin` key satisfies it via the
@@ -141,48 +208,82 @@ export function createApp(
     return dataBearer(c, next);
   });
 
-  app.post("/v1/traces", requireScopeOnPrincipal("observability:write"), async (c) => {
-    const contentType = (c.req.header("content-type") ?? "").toLowerCase();
-    if (
-      !contentType.includes("application/json") &&
-      !contentType.includes("application/x-protobuf")
-    ) {
-      return c.json(
-        { error: "unsupported content-type (use application/json or application/x-protobuf)" },
-        415,
-      );
-    }
+  app.post(
+    "/v1/traces",
+    // M93 — bound the RAW body BEFORE it is buffered (OOM guard): bodyLimit aborts the stream at the
+    // cap and returns a typed 413. Runs before the scope guard so an oversized body is shed early.
+    bodyLimit({
+      maxSize: ingest?.maxBodyBytes ?? DEFAULT_MAX_INGEST_BYTES,
+      onError: (c) =>
+        c.json(
+          { code: "PAYLOAD_TOO_LARGE", message: "OTLP body exceeds the ingest size limit" },
+          413,
+        ),
+    }),
+    requireScopeOnPrincipal("observability:write"),
+    async (c) => {
+      const contentType = (c.req.header("content-type") ?? "").toLowerCase();
+      if (
+        !contentType.includes("application/json") &&
+        !contentType.includes("application/x-protobuf")
+      ) {
+        return c.json(
+          { code: "UNSUPPORTED_MEDIA_TYPE", message: "use application/json or application/x-protobuf" },
+          415,
+        );
+      }
 
-    const raw = Buffer.from(await c.req.arrayBuffer());
+      // M93 — per-workspace ingest backpressure: shed a runaway producer with 429 (before the pool
+      // saturates) rather than a whole-server stall. Workspace resolved from the Principal.
+      const ws = getPrincipal(c).workspaceId;
+      if (ingest?.limiter) {
+        const nowMs = (ingest.now ?? Date.now)();
+        if (!ingest.limiter.tryAcquire(ws, nowMs)) {
+          ingestRateLimited.add(1);
+          c.header("Retry-After", String(ingest.limiter.retryAfterSeconds(ws, nowMs))); // M94
+          return c.json({ code: "RATE_LIMITED", message: "ingest rate limit exceeded for this workspace" }, 429);
+        }
+      }
 
-    let envelope: unknown;
-    try {
-      envelope = decodeOtlpBody(raw, contentType, c.req.header("content-encoding"));
-    } catch (err) {
-      if (err instanceof OtlpParseError) return c.json({ error: err.message }, 400);
-      throw err;
-    }
+      const raw = Buffer.from(await c.req.arrayBuffer());
 
-    let toSave;
-    try {
-      toSave = parseResourceSpans(envelope);
-    } catch (err) {
-      if (err instanceof OtlpParseError) return c.json({ error: err.message }, 400);
-      throw err;
-    }
+      let envelope: unknown;
+      try {
+        envelope = decodeOtlpBody(raw, contentType, c.req.header("content-encoding"), {
+          ...(ingest?.maxDecompressedBytes !== undefined
+            ? { maxDecompressedBytes: ingest.maxDecompressedBytes }
+            : {}),
+        });
+      } catch (err) {
+        // A gzip-bomb (decompresses past the bound) → 413; a corrupt/undecodable envelope → 400.
+        if (err instanceof OtlpTooLargeError)
+          return c.json({ code: "PAYLOAD_TOO_LARGE", message: err.message }, 413);
+        if (err instanceof OtlpParseError)
+          return c.json({ code: "INVALID_OTLP", message: err.message }, 400);
+        throw err;
+      }
 
-    if (toSave.length === 0) {
-      return c.json({}, 200);
-    }
+      // M93 — total per span: valid spans are saved, malformed ones are dropped + counted (OTLP
+      // partial-success). The undecodable-envelope 400 is already enforced above (decodeOtlpBody).
+      const { spans: toSave, rejected, firstError } = parseResourceSpansPartial(envelope);
 
-    await repo.save(toSave, getPrincipal(c).workspaceId);
-    spansIngested.add(toSave.length);
-    tracesIngested.add(new Set(toSave.map((s) => s.traceId)).size);
-    const evals = toSave.reduce((n, s) => n + (s.evaluations?.length ?? 0), 0);
-    evaluationsExtracted.add(evals);
-    logIngest(toSave.length, evals);
-    return c.json({ partialSuccess: {} }, 200);
-  });
+      if (toSave.length > 0) {
+        await repo.save(toSave, ws);
+        spansIngested.add(toSave.length);
+        tracesIngested.add(new Set(toSave.map((s) => s.traceId)).size);
+        const evals = toSave.reduce((n, s) => n + (s.evaluations?.length ?? 0), 0);
+        evaluationsExtracted.add(evals);
+        logIngest(toSave.length, evals);
+      }
+      if (rejected > 0) {
+        spansRejected.add(rejected);
+        // OTLP ExportTracePartialSuccess: rejected_spans + a human-facing error_message.
+        return c.json({ partialSuccess: { rejectedSpans: rejected, errorMessage: firstError } }, 200);
+      }
+      // Full success — an empty partial_success is equivalent to "not present" per the OTLP contract.
+      return c.json({ partialSuccess: {} }, 200);
+    },
+  );
 
   app.get("/v1/traces", requireScopeOnPrincipal("observability:read"), async (c) => {
     // M9: whitelisted filter/sort/export. Validate query params at the boundary
@@ -218,7 +319,7 @@ export function createApp(
       sessionId: c.req.query("session_id") || undefined,
     });
     if (!parsed.success) {
-      return c.json({ error: "invalid query parameters" }, 400);
+      return c.json(apiError("INVALID_QUERY", "invalid query parameters", zodFieldErrors(parsed.error)), 400);
     }
     // Parse through the strict DTO at the boundary so the no-column-leak invariant
     // (risk #2) is enforced at runtime, not just by adapter discipline (F-arch-1).
@@ -241,7 +342,7 @@ export function createApp(
       c.req.param("spanId"),
       getPrincipal(c).workspaceId,
     );
-    return span ? c.json(span, 200) : c.json({ error: "not found" }, 404);
+    return span ? c.json(span, 200) : c.json(apiError("NOT_FOUND", "not found"), 404);
   });
 
   app.get("/v1/traces/:traceId/cost", requireScopeOnPrincipal("observability:read"), async (c) => {
@@ -251,7 +352,7 @@ export function createApp(
     );
     return cost
       ? c.json(traceCostSchema.parse(cost), 200)
-      : c.json({ error: "not found" }, 404);
+      : c.json(apiError("NOT_FOUND", "not found"), 404);
   });
 
   app.get("/v1/traces/:traceId", requireScopeOnPrincipal("observability:read"), async (c) => {
@@ -259,7 +360,7 @@ export function createApp(
       c.req.param("traceId"),
       getPrincipal(c).workspaceId,
     );
-    return tree ? c.json(tree, 200) : c.json({ error: "not found" }, 404);
+    return tree ? c.json(tree, 200) : c.json(apiError("NOT_FOUND", "not found"), 404);
   });
 
   app.get("/v1/agents", requireScopeOnPrincipal("observability:read"), async (c) => {
@@ -286,7 +387,7 @@ export function createApp(
     // Whitelist the period (fail-fast on anything but day/week, Rule 8); default day.
     const raw = c.req.query("period");
     if (raw !== undefined && raw !== "day" && raw !== "week") {
-      return c.json({ error: "invalid period (use day or week)" }, 400);
+      return c.json(apiError("INVALID_QUERY", "invalid period (use day or week)"), 400);
     }
     const result = await repo.aggregateCostByPeriod(
       raw === "week" ? "week" : "day",
@@ -303,11 +404,11 @@ export function createApp(
     try {
       body = await c.req.json();
     } catch {
-      return c.json({ error: "invalid json body" }, 400);
+      return c.json(apiError("INVALID_BODY", "invalid json body"), 400);
     }
     const traceId = (body as { traceId?: unknown })?.traceId;
     if (typeof traceId !== "string" || traceId.length === 0) {
-      return c.json({ error: "traceId is required" }, 400);
+      return c.json(apiError("INVALID_BODY", "traceId is required"), 400);
     }
     await repo.recordReplaySession(traceId, getPrincipal(c).workspaceId);
     return c.json({ recorded: true }, 200);
@@ -323,7 +424,7 @@ export function createApp(
     const raw = c.req.query("range");
     const parsed = observabilityRangeSchema.safeParse(raw ?? "24h");
     if (!parsed.success) {
-      return c.json({ error: "invalid range (use 1h|24h|7d|30d)" }, 400);
+      return c.json(apiError("INVALID_QUERY", "invalid range (use 1h|24h|7d|30d)"), 400);
     }
     const obs = await repo.aggregateObservability(
       parsed.data,
@@ -337,7 +438,7 @@ export function createApp(
     // boundary (Rule 8), same whitelist as observability; default 24h.
     const parsed = observabilityRangeSchema.safeParse(c.req.query("range") ?? "24h");
     if (!parsed.success) {
-      return c.json({ error: "invalid range (use 1h|24h|7d|30d)" }, 400);
+      return c.json(apiError("INVALID_QUERY", "invalid range (use 1h|24h|7d|30d)"), 400);
     }
     // Parse through the strict DTO at the boundary so the no-column-leak invariant
     // is enforced at runtime, uniform with every other read route (F-api-1).
@@ -350,8 +451,50 @@ export function createApp(
     return c.json(summary, 200);
   });
 
+  app.get("/v1/metrics/scores", requireScopeOnPrincipal("observability:read"), async (c) => {
+    // M90: per-evaluator score aggregation over time. Range validated at the boundary
+    // (Rule 8), same whitelist as observability; default 24h. Parsed through the strict
+    // DTO so the no-column-leak invariant holds at runtime (F-api-1).
+    const parsed = observabilityRangeSchema.safeParse(c.req.query("range") ?? "24h");
+    if (!parsed.success) {
+      return c.json(apiError("INVALID_QUERY", "invalid range (use 1h|24h|7d|30d)"), 400);
+    }
+    const summary = scoresResponseSchema.parse({
+      range: parsed.data,
+      scores: await repo.aggregateScoresOverTime(
+        parsed.data,
+        getPrincipal(c).workspaceId,
+      ),
+    });
+    return c.json(summary, 200);
+  });
+
+  app.get("/v1/metrics/span-attributes", requireScopeOnPrincipal("observability:read"), async (c) => {
+    // M92 — facet discovery. No `key` → the workspace's top attribute keys; `?key=<k>` → the top
+    // distinct values for that key. The key is bound as a jsonb path (injection-safe). Strict DTO.
+    const ws = getPrincipal(c).workspaceId;
+    const key = c.req.query("key");
+    // Shape-validate the key at the boundary (fail-fast 400, Rule 8) — reject an oversized/hostile key
+    // before it reaches SQL (it is bound regardless, but this caps abuse; same shape as the DSL clause).
+    if (key !== undefined && key.length > 0 && !isValidAttrKey(key)) {
+      return c.json(apiError("INVALID_QUERY", "invalid attribute key"), 400);
+    }
+    const body =
+      key !== undefined && key.length > 0
+        ? { mode: "values" as const, key, values: await repo.discoverSpanAttributeValues(key, ws) }
+        : { mode: "keys" as const, keys: await repo.discoverSpanAttributeKeys(ws) };
+    return c.json(spanFacetsResponseSchema.parse(body), 200);
+  });
+
   app.get("/v1/sessions", requireScopeOnPrincipal("observability:read"), async (c) => {
-    const list = await repo.listSessions(getPrincipal(c).workspaceId);
+    // M81: server-side pagination — parse the (coerced) limit/offset the BFF forwards; the repo clamps
+    // and returns a workspace-scoped total. Invalid/absent params fall back to the repo defaults.
+    const limitRaw = Number.parseInt(c.req.query("limit") ?? "", 10);
+    const offsetRaw = Number.parseInt(c.req.query("offset") ?? "", 10);
+    const list = await repo.listSessions(getPrincipal(c).workspaceId, {
+      ...(Number.isFinite(limitRaw) ? { limit: limitRaw } : {}),
+      ...(Number.isFinite(offsetRaw) ? { offset: offsetRaw } : {}),
+    });
     return c.json(sessionListResponseSchema.parse(list), 200);
   });
 
@@ -362,7 +505,7 @@ export function createApp(
     );
     return detail
       ? c.json(sessionDetailResponseSchema.parse(detail), 200)
-      : c.json({ error: "not found" }, 404);
+      : c.json(apiError("NOT_FOUND", "not found"), 404);
   });
 
   app.get("/v1/traces/:traceId/tags", requireScopeOnPrincipal("observability:read"), async (c) => {
@@ -380,16 +523,16 @@ export function createApp(
     try {
       body = await c.req.json();
     } catch {
-      return c.json({ error: "invalid json body" }, 400);
+      return c.json(apiError("INVALID_BODY", "invalid json body"), 400);
     }
     const tag = normalizeTag((body as { tag?: unknown })?.tag);
     if (tag === null) {
-      return c.json({ error: "tag is required (1-64 chars after trim)" }, 400);
+      return c.json(apiError("INVALID_BODY", "tag is required (1-64 chars after trim)"), 400);
     }
     const traceId = c.req.param("traceId");
     const ws = getPrincipal(c).workspaceId;
     const ok = await repo.addTag(traceId, tag, ws);
-    if (!ok) return c.json({ error: "not found" }, 404);
+    if (!ok) return c.json(apiError("NOT_FOUND", "not found"), 404);
     const tags = await repo.listTags(traceId, ws);
     return c.json(traceTagsResponseSchema.parse({ tags }), 200);
   });
@@ -399,7 +542,7 @@ export function createApp(
     // so a slash-bearing free-form tag routes safely (EC-1). Idempotent (D2).
     const tag = normalizeTag(c.req.query("tag"));
     if (tag === null) {
-      return c.json({ error: "tag query param is required (1-64 chars)" }, 400);
+      return c.json(apiError("INVALID_QUERY", "tag query param is required (1-64 chars)"), 400);
     }
     const traceId = c.req.param("traceId");
     const ws = getPrincipal(c).workspaceId;
@@ -425,19 +568,19 @@ export function createApp(
     try {
       body = await c.req.json();
     } catch {
-      return c.json({ error: "invalid json body" }, 400);
+      return c.json(apiError("INVALID_BODY", "invalid json body"), 400);
     }
     const ann = normalizeAnnotation(body);
     if (ann === null) {
       return c.json(
-        { error: "annotation requires a label or a note" },
+        apiError("INVALID_BODY", "annotation requires a label or a note"),
         400,
       );
     }
     const traceId = c.req.param("traceId");
     const ws = getPrincipal(c).workspaceId;
     const ok = await repo.upsertAnnotation(traceId, ann, ws);
-    if (!ok) return c.json({ error: "not found" }, 404);
+    if (!ok) return c.json(apiError("NOT_FOUND", "not found"), 404);
     annotationsWritten.add(1);
     const annotations = await repo.listAnnotations(traceId, ws);
     return c.json(annotationsResponseSchema.parse({ annotations }), 200);
@@ -467,7 +610,10 @@ export function createApp(
   // M26d dataset routes + M36 evaluators + M33 copilot routes (extracted to keep
   // app.ts ≤ 500 — M33 D5).
   registerDatasetRoutes(app, repo);
+  registerLabelingQueueRoutes(app, repo);
   registerExtraRoutes(app, { evaluators, copilot, replay });
+  // M64 experiments — the run route reuses the replay provider client + limiter + the evaluator repo.
+  if (experiment !== undefined) registerExperimentRoutes(app, experiment);
 
   // Mount static UI serving LAST so the catch-all never shadows /v1/* (M7, D1).
   if (webDistDir !== undefined) {

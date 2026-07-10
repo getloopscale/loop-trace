@@ -5,6 +5,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import type pg from "pg";
 
 import type { Span } from "../../domain/span.js";
+import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
 import { createPool, DrizzleSpanRepository } from "./drizzle-span-repository.js";
 
 const PG_URI = process.env["THEOLENS_PG_URI"];
@@ -34,7 +35,7 @@ suite("datasets (integration, M26d)", () => {
 
   beforeEach(async () => {
     await pool.query(
-      "TRUNCATE spans, traces, sessions, replay_sessions, span_evaluations, annotations, dataset_items, datasets",
+      "TRUNCATE spans, traces, sessions, replay_sessions, span_evaluations, annotations, dataset_items, datasets, experiment_runs, experiment_run_items",
     );
   });
 
@@ -49,6 +50,68 @@ suite("datasets (integration, M26d)", () => {
     expect(b.name).toBe("travel");
     const { rows } = await pool.query("SELECT count(*)::int AS n FROM datasets");
     expect(rows[0].n).toBe(1);
+  });
+
+  it("M82 — renameDataset changes the name, keeps id + createdAt", async () => {
+    const a = await repo.createDataset("orig");
+    const renamed = await repo.renameDataset(a.id, "renamed");
+    expect(renamed).not.toBeNull();
+    expect(renamed!.id).toBe(a.id);
+    expect(renamed!.name).toBe("renamed");
+    expect(renamed!.createdAt).toBe(a.createdAt);
+    // absent id → null (not a throw)
+    expect(await repo.renameDataset("00000000-0000-0000-0000-000000000000", "x")).toBeNull();
+    expect(await repo.renameDataset("not-a-uuid", "x")).toBeNull();
+  });
+
+  it("M82 — renameDataset to an existing name throws NameConflictError", async () => {
+    await repo.createDataset("aaa");
+    const b = await repo.createDataset("bbb");
+    await expect(repo.renameDataset(b.id, "aaa")).rejects.toThrow(/already exists/i);
+  });
+
+  it("M82 — renameDataset is workspace-scoped (cannot rename another tenant's dataset)", async () => {
+    const a = await repo.createDataset("shared", "ws-A");
+    // ws-B trying to rename ws-A's dataset → null (not found in its scope)
+    expect(await repo.renameDataset(a.id, "hijacked", "ws-B")).toBeNull();
+    // and ws-A's row is untouched
+    const still = await repo.getDataset(a.id, "ws-A");
+    expect(still!.name).toBe("shared");
+  });
+
+  it("M82 — deleteDataset removes the dataset + its items + experiment runs, atomically + idempotent", async () => {
+    await repo.save([span({ spanId: "r1", traceId: "t1", inputValue: "v" })]);
+    const ds = await repo.createDataset("golden");
+    await repo.addDatasetItem(ds.id, "t1");
+    // seed an experiment run + run item on this dataset (direct insert — the cascade must remove them)
+    const runIns = await pool.query(
+      `INSERT INTO experiment_runs (workspace_id, dataset_id, name, variant, status, truncated, item_count, pass_count, total_cost_usd, created_by, created_at)
+       VALUES ($1,$2,'run-1','{}','done',false,1,1,0,'tester',now()) RETURNING id`,
+      [DEFAULT_WORKSPACE_ID, ds.id],
+    );
+    const runId = runIns.rows[0].id as string;
+    await pool.query(
+      "INSERT INTO experiment_run_items (workspace_id, run_id, dataset_item_trace_id, scores) VALUES ($1,$2,'t1','{}'::jsonb)",
+      [DEFAULT_WORKSPACE_ID, runId],
+    );
+    // delete cascades everything
+    expect(await repo.deleteDataset(ds.id)).toBe(true);
+    expect(await repo.getDataset(ds.id)).toBeNull();
+    const items = await pool.query("SELECT count(*)::int AS n FROM dataset_items WHERE dataset_id=$1", [ds.id]);
+    expect(items.rows[0].n).toBe(0);
+    const runs = await pool.query("SELECT count(*)::int AS n FROM experiment_runs WHERE dataset_id=$1", [ds.id]);
+    expect(runs.rows[0].n).toBe(0);
+    const runItems = await pool.query("SELECT count(*)::int AS n FROM experiment_run_items WHERE run_id=$1", [runId]);
+    expect(runItems.rows[0].n).toBe(0);
+    // idempotent: deleting again is a no-op false, not an error
+    expect(await repo.deleteDataset(ds.id)).toBe(false);
+    expect(await repo.deleteDataset("not-a-uuid")).toBe(false);
+  });
+
+  it("M82 — deleteDataset is workspace-scoped (cannot delete another tenant's dataset)", async () => {
+    const a = await repo.createDataset("shared", "ws-A");
+    expect(await repo.deleteDataset(a.id, "ws-B")).toBe(false); // ws-B cannot delete ws-A's
+    expect(await repo.getDataset(a.id, "ws-A")).not.toBeNull(); // still there
   });
 
   it("test_add_item_snapshots_trace_io", async () => {

@@ -21,6 +21,11 @@ function counter() {
 
 export const spansIngested = counter();
 export const tracesIngested = counter();
+// M93: spans dropped at ingest for failing validation (OTLP partial-success). A distinct counter so
+// "producer sending malformed spans" is visible at runtime, never a silent drop (data-honesty).
+export const spansRejected = counter();
+// M93: ingest requests shed by the per-workspace backpressure limiter (429).
+export const ingestRateLimited = counter();
 // M26: online-eval results extracted from `eval.*` span attributes at ingest. A
 // distinct counter so "no evals on the Evals page" is distinguishable at runtime
 // from "evals arrived but extraction dropped them" (wiring-triad pillar c).
@@ -31,6 +36,11 @@ export const annotationsWritten = counter();
 // M26d: dataset items added via the API. Distinct counter so curation volume is
 // observable at runtime (wiring-triad pillar c).
 export const datasetItemsAdded = counter();
+// M63: labeling-queue lifecycle. Distinct counters so the review funnel is observable at
+// runtime (wiring-triad pillar c): spans enqueued vs items resolved vs golden-dataset exports.
+export const labelingItemsEnqueued = counter();
+export const labelingItemsResolved = counter();
+export const labelingQueueExports = counter();
 // M33: "Ask about this step" copilot. Distinct counters so ops can see, at runtime,
 // answered asks vs the two fail-closed states — a rate-limited spike (abuse) and a
 // provider-unavailable spike (outage) are distinguishable from healthy usage
@@ -38,12 +48,19 @@ export const datasetItemsAdded = counter();
 export const copilotAsksAnswered = counter();
 export const copilotAsksRateLimited = counter();
 export const copilotAsksUnavailable = counter();
+// M83 — copilot answer feedback volume (thumbs up/down recorded) is observable at runtime (pillar c).
+export const copilotFeedbackRecorded = counter();
 
 // M55 span-replay — a billable, abuse-prone provider call MUST be observable so a healthy replay
 // volume, a rate-limit spike, and a provider-outage spike are distinguishable (wiring-triad pillar c).
 export const replayRuns = counter();
 export const replayRateLimited = counter();
 export const replayUnavailable = counter();
+// M64: experiment runs. Distinct counters so the experiment funnel is observable at runtime
+// (wiring-triad pillar c): runs started vs rows scored vs runs that failed closed.
+export const experimentRunsStarted = counter();
+export const experimentRowsScored = counter();
+export const experimentRunsUnavailable = counter();
 
 /** Structured ingest log line on stderr (stdout stays clean for piping). */
 export function logIngest(spans: number, evals = 0): void {

@@ -71,6 +71,7 @@ suite("M36 evaluators routes (integration)", () => {
         verifier: verifierFor({
           ro: principal(["observability:read"], "ws-x"),
           rw: principal(["observability:read", "observability:write", "observability:delete"], "ws-x"),
+          rw2: principal(["observability:read", "observability:write", "observability:delete"], "ws-y"),
         }),
         requireCredential: true,
       },
@@ -166,5 +167,49 @@ suite("M36 evaluators routes (integration)", () => {
     const breaches = await req("GET", `/v1/guards/${gId}/breaches`, "rw");
     expect(breaches.status).toBe(200);
     expect(((await breaches.json()) as { traceIds: string[] }).traceIds).toEqual([]);
+  });
+
+  it("M82 — PUT /evaluators/:id renames (write scope) keeping id/kind/createdAt", async () => {
+    const created = await req("POST", "/v1/evaluators", "rw", { name: "orig", kind: "rule", config: { predicate: "status:error" } });
+    const rec = (await created.json()) as { id: string; createdAt: string };
+    // read-only principal → 403 on the write verb
+    const ro = await req("PUT", `/v1/evaluators/${rec.id}`, "ro", { name: "renamed" });
+    expect(ro.status).toBe(403);
+    const put = await req("PUT", `/v1/evaluators/${rec.id}`, "rw", { name: "renamed" });
+    expect(put.status).toBe(200);
+    const updated = (await put.json()) as { id: string; name: string; kind: string; createdAt: string };
+    expect(updated.name).toBe("renamed");
+    expect(updated.id).toBe(rec.id); // id preserved
+    expect(updated.kind).toBe("rule"); // kind preserved
+    expect(updated.createdAt).toBe(rec.createdAt); // createdAt preserved
+  });
+
+  it("M82 — PUT /evaluators/:id to an existing name conflicts (409)", async () => {
+    await req("POST", "/v1/evaluators", "rw", { name: "aaa", kind: "rule", config: { predicate: "status:error" } });
+    const b = await req("POST", "/v1/evaluators", "rw", { name: "bbb", kind: "rule", config: { predicate: "status:error" } });
+    const bId = ((await b.json()) as { id: string }).id;
+    const conflict = await req("PUT", `/v1/evaluators/${bId}`, "rw", { name: "aaa" });
+    expect(conflict.status).toBe(409); // duplicate name → typed 409, not a 500
+  });
+
+  it("M82 — PUT /evaluators/:id absent → 404", async () => {
+    const put = await req("PUT", `/v1/evaluators/00000000-0000-0000-0000-000000000000`, "rw", { name: "x" });
+    expect(put.status).toBe(404);
+  });
+
+  it("M82 — PUT /evaluators/:id with a non-uuid id → 404, never a 500 (review H-1)", async () => {
+    const put = await req("PUT", `/v1/evaluators/not-a-uuid`, "rw", { name: "x" });
+    expect(put.status).toBe(404); // garbage path param → absent, not a pg 22P02 → 500
+  });
+
+  it("M82 — PUT /evaluators/:id is workspace-scoped (ws-y cannot rename ws-x's evaluator)", async () => {
+    const created = await req("POST", "/v1/evaluators", "rw", { name: "owned", kind: "rule", config: { predicate: "status:error" } });
+    const id = ((await created.json()) as { id: string }).id;
+    // ws-y (rw2) attempts to rename ws-x's evaluator → not found in its scope → 404
+    const hijack = await req("PUT", `/v1/evaluators/${id}`, "rw2", { name: "hijacked" });
+    expect(hijack.status).toBe(404);
+    // ws-x's evaluator is untouched
+    const still = await req("GET", `/v1/evaluators/${id}`, "rw");
+    expect(((await still.json()) as { name: string }).name).toBe("owned");
   });
 });

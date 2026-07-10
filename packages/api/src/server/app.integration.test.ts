@@ -97,7 +97,9 @@ suite("createApp (integration)", () => {
   it("post_traces_empty_envelope_returns_200_empty", async () => {
     const res = await post(JSON.stringify({ resourceSpans: [] }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({});
+    // M93 partial-success contract: full success carries an empty partial_success
+    // (`{ partialSuccess: {} }`), which per OTLP is equivalent to "not present".
+    expect(await res.json()).toEqual({ partialSuccess: {} });
     expect(spansIngested.value).toBe(0);
   });
 

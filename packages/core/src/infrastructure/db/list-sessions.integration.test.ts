@@ -96,4 +96,22 @@ suite("listSessions first-message enrichment (integration, M20 T1.1)", () => {
     expect(() => sessionListItemSchema.parse(snull)).not.toThrow();
     expect(() => sessionListItemSchema.parse(sws)).not.toThrow();
   });
+
+  it("list_sessions_paginates_with_a_workspace_scoped_total (M81)", async () => {
+    // three distinct sessions in the default workspace
+    for (const i of [1, 2, 3]) {
+      await repo.save([span({ spanId: `p${i}`, traceId: `tp${i}`, sessionId: `SP${i}`, inputValue: `q${i}` })]);
+    }
+    const page1 = await repo.listSessions(undefined, { limit: 2, offset: 0 });
+    expect(page1.sessions).toHaveLength(2); // the page is bounded
+    expect(page1.total).toBe(3); // total counts SESSIONS, not member traces
+    expect(page1.limit).toBe(2);
+    expect(page1.offset).toBe(0);
+    const page2 = await repo.listSessions(undefined, { limit: 2, offset: 2 });
+    expect(page2.sessions).toHaveLength(1); // the remainder
+    expect(page2.total).toBe(3); // stable across pages
+    // the two pages are disjoint (offset advances the window)
+    const p1 = new Set(page1.sessions.map((s) => s.sessionId));
+    expect(page2.sessions.every((s) => !p1.has(s.sessionId))).toBe(true);
+  });
 });

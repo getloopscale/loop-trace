@@ -196,7 +196,9 @@ suite("DrizzleSpanRepository (integration)", () => {
   });
 
   it("listTraces_returns_empty_array_when_no_traces", async () => {
-    expect(await repo.listTraces()).toEqual({ traces: [] });
+    // Contract is the paginated envelope { traces, total, limit, offset } — asserting the full
+    // shape (not just traces) proves the empty-result path still carries correct pagination metadata.
+    expect(await repo.listTraces()).toEqual({ traces: [], total: 0, limit: 50, offset: 0 });
   });
 
   it("replay_source_tree_is_deterministic_from_persisted_session_with_parallel_tools", async () => {

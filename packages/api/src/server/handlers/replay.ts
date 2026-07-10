@@ -37,10 +37,21 @@ const ROLES = new Set(["system", "user", "assistant"]);
 const MAX_MESSAGES = 100;
 const MAX_TOTAL_BYTES = 256 * 1024; // 256 KiB across all message content
 const MAX_MODEL_LEN = 256;
+const MAX_SCHEMA_BYTES = 32 * 1024; // 32 KiB for the optional structured-output schema (M62)
 
-/** Validate + normalize the edited messages + optional model. Throws a code string on any violation. */
-function parseReplayBody(body: unknown): { messages: ChatMessage[]; model: string | undefined } {
-  const b = body as { messages?: unknown; model?: unknown };
+/** True for a plain JSON object (a valid structured-output schema shape) — not array/null/primitive. */
+function isPlainObject(v: unknown): v is object {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** Validate + normalize the edited messages + optional model + optional responseSchema. Throws a code
+ *  string on any violation (fail-fast at the boundary — never forwards a malformed schema). */
+function parseReplayBody(body: unknown): {
+  messages: ChatMessage[];
+  model: string | undefined;
+  responseSchema: object | undefined;
+} {
+  const b = body as { messages?: unknown; model?: unknown; responseSchema?: unknown };
   if (!Array.isArray(b.messages) || b.messages.length === 0 || b.messages.length > MAX_MESSAGES) {
     throw "INVALID_BODY";
   }
@@ -61,7 +72,16 @@ function parseReplayBody(body: unknown): { messages: ChatMessage[]; model: strin
     const trimmed = b.model.trim();
     model = trimmed === "" ? undefined : trimmed;
   }
-  return { messages, model };
+  // M62: optional structured output — must be a plain JSON object (an OpenAI json_schema). A non-object
+  // (string/array/number/null) is a client mistake → 400 before any billable call (error-handling.md).
+  // Bounded to MAX_SCHEMA_BYTES so a huge/deep schema cannot inflate the billable provider request.
+  let responseSchema: object | undefined;
+  if (b.responseSchema !== undefined) {
+    if (!isPlainObject(b.responseSchema)) throw "INVALID_SCHEMA";
+    if (Buffer.byteLength(JSON.stringify(b.responseSchema), "utf8") > MAX_SCHEMA_BYTES) throw "INVALID_SCHEMA";
+    responseSchema = b.responseSchema;
+  }
+  return { messages, model, responseSchema };
 }
 
 export async function replayHandler(c: Context, deps: ReplayApiDeps): Promise<Response> {
@@ -69,8 +89,10 @@ export async function replayHandler(c: Context, deps: ReplayApiDeps): Promise<Re
   const clock = deps.now ?? Date.now;
 
   // Rate-limit first (protects the billable endpoint before any work, D3).
-  if (!deps.limiter.tryAcquire(ws, clock())) {
+  const rlNow = clock();
+  if (!deps.limiter.tryAcquire(ws, rlNow)) {
     replayRateLimited.add(1); // observable: an abuse/spike is visible at runtime (pillar c)
+    c.header("Retry-After", String(deps.limiter.retryAfterSeconds(ws, rlNow))); // M94
     return c.json({ code: "RATE_LIMITED", message: "replay rate limit exceeded" }, 429);
   }
   // Fail-closed: no provider configured → disabled.
@@ -85,7 +107,7 @@ export async function replayHandler(c: Context, deps: ReplayApiDeps): Promise<Re
     return c.json({ code: "INVALID_BODY", message: "invalid json body" }, 400);
   }
 
-  let parsed: { messages: ChatMessage[]; model: string | undefined };
+  let parsed: { messages: ChatMessage[]; model: string | undefined; responseSchema: object | undefined };
   try {
     parsed = parseReplayBody(body);
   } catch (code) {
@@ -102,7 +124,7 @@ export async function replayHandler(c: Context, deps: ReplayApiDeps): Promise<Re
 
   const t0 = clock();
   try {
-    const result = await deps.chat.run(parsed.messages, parsed.model);
+    const result = await deps.chat.run(parsed.messages, parsed.model, parsed.responseSchema);
     const latencyMs = Math.max(0, clock() - t0);
     replayRuns.add(1); // observable: healthy replay volume (pillar c)
     return c.json(
@@ -113,6 +135,8 @@ export async function replayHandler(c: Context, deps: ReplayApiDeps): Promise<Re
         totalTokens: result.totalTokens,
         latencyMs,
         model: result.model,
+        // M62: real provider cost when reported (undefined → omitted → the UI renders an em-dash).
+        ...(result.costUsd !== undefined ? { costUsd: result.costUsd } : {}),
       },
       200,
     );

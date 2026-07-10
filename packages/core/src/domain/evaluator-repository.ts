@@ -19,6 +19,8 @@ export interface EvaluatorRepository {
   createEvaluator(ev: Evaluator, workspaceId?: string): Promise<EvaluatorRecord>;
   listEvaluators(workspaceId?: string): Promise<EvaluatorRecord[]>;
   getEvaluator(id: string, workspaceId?: string): Promise<EvaluatorRecord | null>;
+  /** M82: partial edit (rename/enable/config). Returns the updated record, null if absent; throws NameConflictError on a duplicate name. */
+  updateEvaluator(id: string, updates: Partial<Evaluator>, workspaceId?: string): Promise<EvaluatorRecord | null>;
   /** Deletes the evaluator AND cascades its guards in one transaction (EC-4). */
   deleteEvaluator(id: string, workspaceId?: string): Promise<void>;
 

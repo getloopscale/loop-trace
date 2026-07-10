@@ -2,7 +2,22 @@
  * @usetheo/lens-core barrel — domain types, repository port, and Drizzle adapter.
  */
 export { type Span, spanSchema } from "./domain/span.js";
-export { type SpanRepository, type TraceTreeNode } from "./domain/span-repository.js";
+export {
+  type SpanRepository,
+  type TraceTreeNode,
+  type TraceReadRepository,
+  type AggregateRepository,
+  type SessionRepository,
+  type AnnotationRepository,
+  type DatasetRepository,
+  type CopilotFeedbackRepository,
+  type LabelingQueueRepository,
+  type ExperimentRepository,
+  type RetentionRepository,
+} from "./domain/span-repository.js";
+export { NameConflictError, isUniqueViolation } from "./domain/errors.js";
+export { type ApiErrorBody, type FieldIssue, apiError, zodFieldErrors } from "./domain/api-error.js";
+export { type SqlResult, rowsAs } from "./domain/sql-rows.js";
 // M22: multi-tenant workspace-isolation domain types (ported from theo-memory).
 export {
   type Workspace,
@@ -41,10 +56,21 @@ export {
   extractEvaluations,
   evaluatorSummarySchema,
   evaluatorsResponseSchema,
+  scoreBucketSchema,
+  scoresResponseSchema,
   type SpanEvaluation,
   type EvaluatorSummary,
   type EvaluatorsResponse,
+  type ScoreBucket,
+  type ScoresResponse,
 } from "./domain/evaluation.js";
+export {
+  spanFacetsResponseSchema,
+  type SpanFacetsResponse,
+  type SpanAttributeKey,
+  type SpanAttributeValue,
+} from "./domain/span-facets.js";
+export { isValidAttrKey, parseSpanQuery, type SpanClause, type SpanQuery } from "./domain/span-query.js";
 // M36: online evaluators (compute/write path) — types + pure rule/guard engines.
 export {
   EVALUATOR_KINDS,
@@ -97,8 +123,24 @@ export {
   parseEvalSweepHours,
   parseBackfillMax,
   parseCopilotRpm,
+  parseIngestRpm,
+  parseMaxIngestBytes,
+  parseMaxDecompressedBytes,
+  parsePoolConfig,
+  parseHttpRequestTimeoutMs,
+  parseShutdownDrainMs,
+  parseProviderRetry,
+  type PoolConfig,
+  type ProviderRetryConfig,
   DEFAULT_EVAL_BACKFILL_MAX,
   DEFAULT_COPILOT_RPM,
+  DEFAULT_INGEST_RPM,
+  DEFAULT_MAX_INGEST_BYTES,
+  DEFAULT_MAX_DECOMPRESSED_BYTES,
+  DEFAULT_POOL_CONFIG,
+  DEFAULT_HTTP_REQUEST_TIMEOUT_MS,
+  DEFAULT_SHUTDOWN_DRAIN_MS,
+  DEFAULT_PROVIDER_RETRY,
 } from "./domain/evaluator-config.js";
 export {
   runEvaluator,
@@ -140,6 +182,49 @@ export {
   type DatasetsResponse,
   type DatasetDetail,
 } from "./domain/dataset.js";
+// M83: copilot answer feedback.
+export {
+  normalizeAskFeedback,
+  InvalidFeedbackError,
+  type FeedbackLabel,
+  type AskFeedbackInput,
+  type CopilotFeedbackRecord,
+} from "./domain/copilot-feedback.js";
+// M63: labeling queues (human-in-the-loop review).
+export {
+  normalizeLabelResolution,
+  labelingQueueItemSchema,
+  labelingQueuePageSchema,
+  LABELING_QUEUE_STATUSES,
+  RESOLUTION_SCHEMA_VERSION,
+  type LabelingQueueItem,
+  type LabelingQueuePage,
+  type LabelingQueueStatus,
+  type NormalizedResolution,
+} from "./domain/labeling-queue.js";
+// M64: experiments (regression-dataset-run + compare).
+export {
+  aggregateRun,
+  compareRuns,
+  experimentRunSchema,
+  experimentRunItemSchema,
+  runVariantSchema,
+  RUN_STATUSES,
+  type ExperimentRun,
+  type ExperimentRunItem,
+  type RunVariant,
+  type RunStatus,
+  type RunScore,
+  type RunAggregate,
+} from "./domain/experiment.js";
+export {
+  runExperiment,
+  MAX_RUN_ITEMS,
+  type RunInput,
+  type RunDeps,
+  type RunOutput,
+  type RunDatasetItem,
+} from "./domain/experiment-engine.js";
 // M32: agents catalog (derived).
 export {
   classifyAgentHealth,

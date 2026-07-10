@@ -18,15 +18,18 @@ suite("composition root migrate-on-boot (integration)", () => {
 
   beforeAll(async () => {
     pool = createPool(PG_URI as string);
-    // Make the database pristine: drop the drizzle journal + ALL domain tables
-    // so `bootstrap` must recreate them from the committed migrations. The list
-    // MUST include every table any migration creates — a missing one (e.g. M14's
-    // trace_tags) survives the reset and makes migrate-from-scratch fail with
-    // "relation already exists".
+    // Make the database pristine: drop the drizzle journal + EVERY table in `public`
+    // so `bootstrap` must recreate them from the committed migrations. Dropping every
+    // table dynamically (not a hardcoded list) is future-proof: a table added by a new
+    // migration (labeling_queue_items, experiment_runs, …) that a stale list omits would
+    // survive the reset and make migrate-from-scratch fail with "relation already exists"
+    // — which also corrupts the shared DB for every other integration file in the suite.
     await pool.query("DROP SCHEMA IF EXISTS drizzle CASCADE");
-    await pool.query(
-      "DROP TABLE IF EXISTS spans, traces, sessions, replay_sessions, trace_tags, span_evaluations, annotations, dataset_items, datasets, theo_api_keys, workspace_users, workspaces, evaluators, guards CASCADE",
-    );
+    await pool.query(`DO $$ DECLARE r RECORD; BEGIN
+      FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+        EXECUTE 'DROP TABLE IF EXISTS public.' || quote_ident(r.tablename) || ' CASCADE';
+      END LOOP;
+    END $$;`);
   });
 
   afterAll(async () => {

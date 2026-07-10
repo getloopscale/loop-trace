@@ -11,6 +11,8 @@
  */
 import { z } from "zod";
 
+import { observabilityRangeSchema } from "./observability.js";
+
 export interface SpanEvaluation {
   name: string;
   score?: number;
@@ -43,6 +45,38 @@ export const evaluatorsResponseSchema = z
   .strict();
 
 export type EvaluatorsResponse = z.infer<typeof evaluatorsResponseSchema>;
+
+/**
+ * One `(time-bucket, evaluator)` cell of the M90 score time-series: the numeric
+ * mean (omitted when the evaluator only wrote labels in this bucket) + the label
+ * distribution. `.strict()` enforces the no-column-leak invariant at the boundary.
+ * A bucket is emitted only when it has ≥ 1 sample — an empty period is a gap, never
+ * a fabricated zero (M89 data-honesty carry-over).
+ */
+export const scoreBucketSchema = z
+  .object({
+    /** ISO-8601 bucket start (from `date_trunc` on the trace's `updated_at`). */
+    periodStart: z.string(),
+    name: z.string(),
+    sampleCount: z.number().int().nonnegative(),
+    /** Mean of the non-null numeric scores in this bucket (omitted when none had a score). */
+    avgScore: z.number().optional(),
+    /** Label → occurrence count in this bucket. */
+    labels: z.record(z.string(), z.number().int().nonnegative()),
+  })
+  .strict();
+
+export type ScoreBucket = z.infer<typeof scoreBucketSchema>;
+
+/** Response DTO for `GET /v1/metrics/scores` (M90 — score aggregation over time). */
+export const scoresResponseSchema = z
+  .object({
+    range: observabilityRangeSchema,
+    scores: z.array(scoreBucketSchema),
+  })
+  .strict();
+
+export type ScoresResponse = z.infer<typeof scoresResponseSchema>;
 
 // `eval.<name>.<field>` — name is a non-empty run of non-dot chars; field is whitelisted.
 const EVAL_KEY_RE = /^eval\.([^.]+)\.(score|label|explanation)$/;

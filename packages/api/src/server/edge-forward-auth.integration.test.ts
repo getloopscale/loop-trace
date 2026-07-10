@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { createSpanRepository, migrateLatest } from "@usetheo/lens-core";
+import { createSpanRepository, migrateLatest, evaluatorRepoFromPool, RateLimiter } from "@usetheo/lens-core";
 import { createHash, randomBytes } from "node:crypto";
 import type pg from "pg";
 import { createApp } from "./app.js";
@@ -116,14 +116,27 @@ suite("M22 ForwardAuth edge contract (integration)", () => {
     const made = createSpanRepository(PG_URI as string);
     pool = made.pool;
     await migrateLatest(pool);
-    app = createApp(made.repo, undefined, {
-      pool,
-      verifier: new ApiKeyAuthVerifier(pool),
-      requireCredential: true,
-    });
+    // M64: wire the experiment-run route with a fake provider so the run e2e proves isolation through
+    // the edge (a real provider is not needed to prove the workspace-scoped write path).
+    const fakeChat = { run: async () => ({ content: "ok", promptTokens: 1, completionTokens: 1, totalTokens: 2, model: "m" }) };
+    const experimentDeps = {
+      spanRepo: made.repo,
+      evaluatorRepo: evaluatorRepoFromPool(pool),
+      chat: fakeChat,
+      limiter: new RateLimiter(1000),
+    } as unknown as Parameters<typeof createApp>[6];
+    app = createApp(
+      made.repo,
+      undefined,
+      { pool, verifier: new ApiKeyAuthVerifier(pool), requireCredential: true },
+      undefined,
+      undefined,
+      undefined,
+      experimentDeps,
+    );
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE spans, traces, sessions");
+    await pool.query("TRUNCATE spans, traces, sessions, labeling_queue_items, datasets, dataset_items, experiment_runs, experiment_run_items");
   });
   afterAll(async () => {
     await pool.end();
@@ -158,6 +171,87 @@ suite("M22 ForwardAuth edge contract (integration)", () => {
 
     // A no-customer-key request is DENIED at the edge (the service is never called).
     const noKey = await viaEdge(new Request("http://x/v1/traces"));
+    expect(noKey.status).toBe(401);
+  });
+
+  it("test_labeling_queue_cross_tenant_isolation_through_edge (M63)", async () => {
+    // Tenant B ingests a span, then enqueues it for labeling — both through the edge.
+    expect(
+      (await viaEdge(new Request("http://x/v1/traces", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-customer-key": "cust_bob" },
+        body: OTLP("b-trace", "b-span", "bob canary"),
+      }))).status,
+    ).toBe(200);
+    const enqueue = await viaEdge(new Request("http://x/v1/traces/b-trace/enqueue-for-labeling", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-customer-key": "cust_bob" },
+      body: JSON.stringify({ spanId: "b-span" }),
+    }));
+    expect(enqueue.status).toBe(200);
+
+    // Tenant A lists the labeling queue through the edge → MUST NOT see Bob's item (cross-tenant deny).
+    const aList = await viaEdge(new Request("http://x/v1/labeling-queue", { headers: { "x-customer-key": "cust_alice" } }));
+    expect(aList.status).toBe(200);
+    expect(((await aList.json()) as { items: unknown[] }).items).toHaveLength(0);
+
+    // Tenant B lists → MUST see its own item (proves the path reaches data; A's empty result is isolation).
+    const bList = await viaEdge(new Request("http://x/v1/labeling-queue", { headers: { "x-customer-key": "cust_bob" } }));
+    const bItems = ((await bList.json()) as { items: { traceId: string }[] }).items;
+    expect(bItems.map((i) => i.traceId)).toContain("b-trace");
+
+    // A no-customer-key enqueue is DENIED at the edge (the billable write route is never reached).
+    const noKey = await viaEdge(new Request("http://x/v1/traces/b-trace/enqueue-for-labeling", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ spanId: "b-span" }),
+    }));
+    expect(noKey.status).toBe(401);
+  });
+
+  it("test_experiment_run_cross_tenant_isolation_through_edge (M64)", async () => {
+    // Tenant B ingests a trace, builds a regression dataset from it, then runs an experiment — all
+    // through the edge — and the run is scoped to B's workspace; tenant A can never see it.
+    expect(
+      (await viaEdge(new Request("http://x/v1/traces", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-customer-key": "cust_bob" },
+        body: OTLP("b-trace", "b-span", "bob canary"),
+      }))).status,
+    ).toBe(200);
+    const ds = await viaEdge(new Request("http://x/v1/datasets", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-customer-key": "cust_bob" },
+      body: JSON.stringify({ name: "b-regression" }),
+    }));
+    const datasetId = ((await ds.json()) as { id: string }).id;
+    expect((await viaEdge(new Request(`http://x/v1/datasets/${datasetId}/items`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-customer-key": "cust_bob" },
+      body: JSON.stringify({ traceId: "b-trace" }),
+    }))).status).toBe(200);
+    // B runs an experiment on its dataset through the edge (the fake provider returns a canned output).
+    const run = await viaEdge(new Request("http://x/v1/experiment-runs", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-customer-key": "cust_bob" },
+      body: JSON.stringify({ datasetId, variant: { model: "m" } }),
+    }));
+    expect(run.status).toBe(200);
+
+    // Tenant A lists experiment runs through the edge → MUST NOT see B's run (cross-tenant deny).
+    const aList = await viaEdge(new Request("http://x/v1/experiment-runs", { headers: { "x-customer-key": "cust_alice" } }));
+    expect(aList.status).toBe(200);
+    expect(((await aList.json()) as { runs: unknown[] }).runs).toHaveLength(0);
+    // Tenant B lists → sees its own run (the path reaches data; A's empty is isolation, not a false negative).
+    const bList = await viaEdge(new Request("http://x/v1/experiment-runs", { headers: { "x-customer-key": "cust_bob" } }));
+    expect(((await bList.json()) as { runs: { datasetId: string }[] }).runs.map((r) => r.datasetId)).toContain(datasetId);
+
+    // A no-customer-key run is DENIED at the edge (the billable run route is never reached).
+    const noKey = await viaEdge(new Request("http://x/v1/experiment-runs", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ datasetId, variant: { model: "m" } }),
+    }));
     expect(noKey.status).toBe(401);
   });
 

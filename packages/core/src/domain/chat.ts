@@ -7,12 +7,34 @@
  * content throws {@link ChatError} — never a fabricated answer.
  */
 
+import { parseProviderRetry, type ProviderRetryConfig } from "./evaluator-config.js";
+
 /** Typed error for any chat failure — fail-closed, never a silent answer. */
 export class ChatError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ChatError";
   }
+}
+
+/** M94 — retry/backoff injection point (test-injectable clock; env-configured policy in production). */
+export interface RequestOpts {
+  retry?: ProviderRetryConfig;
+  sleep?: (ms: number) => Promise<void>;
+}
+
+const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Parse a `Retry-After` header (integer seconds) to ms; a missing/invalid value → 0. */
+function retryAfterMs(header: string | null | undefined): number {
+  if (header == null) return 0;
+  const s = Number(header);
+  return Number.isFinite(s) && s > 0 ? s * 1000 : 0;
+}
+
+/** Exponential backoff with jitter (ms) for attempt N (1-based): base·2^(N-1) + [0,base). */
+function backoffMs(attempt: number, baseMs: number): number {
+  return baseMs * 2 ** (attempt - 1) + Math.floor(Math.random() * baseMs);
 }
 
 export interface ChatMessage {
@@ -39,33 +61,70 @@ async function requestChatCompletion(
   config: ChatConfig,
   messages: ChatMessage[],
   fetchImpl: typeof fetch,
+  responseSchema?: object,
+  opts?: RequestOpts,
 ): Promise<unknown> {
-  let resp: Response;
-  try {
-    resp = await fetchImpl(
-      `${config.baseUrl.replace(/\/$/, "")}/chat/completions`,
-      {
+  // M94 — a transient failure (network / timeout / 429 / 5xx) is retried with bounded backoff
+  // (honoring Retry-After); a fatal 4xx≠429 fails fast (error-handling.md §2). Policy is env-tunable
+  // (parseProviderRetry); the sleep is injectable for deterministic tests.
+  const retry = opts?.retry ?? parseProviderRetry();
+  const sleep = opts?.sleep ?? realSleep;
+  const maxAttempts = Math.max(1, retry.maxAttempts);
+  const body = JSON.stringify({
+    model: config.model,
+    temperature: 0,
+    messages,
+    // M62: optional structured output — forwarded as an OpenAI-compatible `response_format`
+    // json_schema (the provider enforces it). Absent schema → no field (identical to today).
+    ...(responseSchema
+      ? { response_format: { type: "json_schema", json_schema: { name: "variant_schema", schema: responseSchema } } }
+      : {}),
+  });
+
+  let lastError = new ChatError("chat request exhausted retries");
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let resp: Response;
+    try {
+      resp = await fetchImpl(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
           ...(config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {}),
         },
-        body: JSON.stringify({ model: config.model, temperature: 0, messages }),
-        // A stalled provider aborts at the timeout → fetch rejects → ChatError (never a silent hang).
+        body,
+        // A stalled provider aborts at the timeout → fetch rejects → retry/ChatError (never a silent hang).
         signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
-      },
-    );
-  } catch (err) {
-    throw new ChatError(`chat request failed: ${String(err)}`);
+      });
+    } catch (err) {
+      // Network / timeout (AbortError) — retryable.
+      lastError = new ChatError(`chat request failed: ${String(err)}`);
+      if (attempt < maxAttempts) {
+        await sleep(Math.min(backoffMs(attempt, retry.baseDelayMs), retry.maxBackoffMs));
+        continue;
+      }
+      throw lastError;
+    }
+    if (resp.ok) {
+      try {
+        return await resp.json();
+      } catch {
+        throw new ChatError("chat response was not JSON");
+      }
+    }
+    // Non-2xx: 429 + 5xx are recoverable (retry with backoff, honoring Retry-After); 4xx≠429 is fatal.
+    // NOTE (accepted trade-off): retrying a 5xx/timeout re-issues a non-idempotent chat completion,
+    // so an ambiguous failure MAY double-bill. This matches the provider SDKs' own behavior; ≤2
+    // attempts by default bounds the exposure. A stricter idempotency-key path is a future option.
+    const recoverable = resp.status === 429 || resp.status >= 500;
+    if (!recoverable || attempt >= maxAttempts) {
+      throw new ChatError(`chat endpoint returned ${resp.status}`);
+    }
+    lastError = new ChatError(`chat endpoint returned ${resp.status}`);
+    // Honor Retry-After but CAP it (a hostile `Retry-After: 999999` must not pin the request for hours).
+    const advised = Math.min(retryAfterMs(resp.headers?.get?.("retry-after")), retry.maxBackoffMs);
+    await sleep(Math.min(Math.max(advised, backoffMs(attempt, retry.baseDelayMs)), retry.maxBackoffMs));
   }
-  if (!resp.ok) {
-    throw new ChatError(`chat endpoint returned ${resp.status}`);
-  }
-  try {
-    return await resp.json();
-  } catch {
-    throw new ChatError("chat response was not JSON");
-  }
+  throw lastError;
 }
 
 /** Extract the required assistant text or THROW (content is mandatory for both callers). */
@@ -86,8 +145,9 @@ export async function openaiChatCompletion(
   config: ChatConfig,
   messages: ChatMessage[],
   fetchImpl: typeof fetch = fetch,
+  opts?: RequestOpts,
 ): Promise<string> {
-  return extractContent(await requestChatCompletion(config, messages, fetchImpl));
+  return extractContent(await requestChatCompletion(config, messages, fetchImpl, undefined, opts));
 }
 
 /** Result of a usage-capturing chat call (M55 replay). Tokens come from the provider, never computed. */
@@ -96,6 +156,9 @@ export interface ChatCompletionWithUsage {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  /** M62: real provider cost (USD) when the provider reports `usage.cost` (e.g. OpenRouter). Additive —
+   *  a provider that omits it → undefined (the UI renders an em-dash; cost is NEVER computed/fabricated). */
+  costUsd?: number;
 }
 
 /**
@@ -108,16 +171,22 @@ export async function openaiChatCompletionWithUsage(
   config: ChatConfig,
   messages: ChatMessage[],
   fetchImpl: typeof fetch = fetch,
+  responseSchema?: object,
+  opts?: RequestOpts,
 ): Promise<ChatCompletionWithUsage> {
-  const body = await requestChatCompletion(config, messages, fetchImpl);
+  const body = await requestChatCompletion(config, messages, fetchImpl, responseSchema, opts);
   const content = extractContent(body);
-  const usage = (body as { usage?: { prompt_tokens?: unknown; completion_tokens?: unknown; total_tokens?: unknown } })?.usage;
+  const usage = (body as { usage?: { prompt_tokens?: unknown; completion_tokens?: unknown; total_tokens?: unknown; cost?: unknown } })?.usage;
   const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+  // M62: cost is an ADDITIVE read — present only when the provider reports it (undefined otherwise,
+  // never 0/NaN). No request change was needed (probed: OpenRouter returns `usage.cost` by default).
+  const costUsd = typeof usage?.cost === "number" && Number.isFinite(usage.cost) ? usage.cost : undefined;
   return {
     content,
     promptTokens: num(usage?.prompt_tokens),
     completionTokens: num(usage?.completion_tokens),
     totalTokens: num(usage?.total_tokens),
+    ...(costUsd !== undefined ? { costUsd } : {}),
   };
 }
 
@@ -150,7 +219,7 @@ export interface ReplayResult extends ChatCompletionWithUsage {
  * output + usage. THROWS {@link ChatError} on any provider failure (fail-closed).
  */
 export interface ReplayClient {
-  run(messages: ChatMessage[], modelOverride?: string): Promise<ReplayResult>;
+  run(messages: ChatMessage[], modelOverride?: string, responseSchema?: object): Promise<ReplayResult>;
 }
 
 /** OpenAI-compatible {@link ReplayClient} over {@link openaiChatCompletionWithUsage}. */
@@ -160,11 +229,12 @@ export class OpenAICompatibleReplay implements ReplayClient {
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
-  async run(messages: ChatMessage[], modelOverride?: string): Promise<ReplayResult> {
+  async run(messages: ChatMessage[], modelOverride?: string, responseSchema?: object): Promise<ReplayResult> {
     // base_url/apiKey are ALWAYS the server config — only the model may be overridden (no SSRF: the
-    // client can never redirect the call to a different endpoint).
+    // client can never redirect the call to a different endpoint). M62: an optional response schema is
+    // forwarded as structured output (the provider enforces it).
     const model = modelOverride && modelOverride.trim() ? modelOverride.trim() : this.config.model;
-    const usage = await openaiChatCompletionWithUsage({ ...this.config, model }, messages, this.fetchImpl);
+    const usage = await openaiChatCompletionWithUsage({ ...this.config, model }, messages, this.fetchImpl, responseSchema);
     return { ...usage, model };
   }
 }
