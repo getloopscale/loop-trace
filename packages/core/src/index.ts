@@ -4,6 +4,7 @@
 export { type Span, spanSchema } from "./domain/span.js";
 export { type SpanRepository, type TraceTreeNode } from "./domain/span-repository.js";
 export { NameConflictError, isUniqueViolation } from "./domain/errors.js";
+export { type ApiErrorBody, type FieldIssue, apiError, zodFieldErrors } from "./domain/api-error.js";
 // M22: multi-tenant workspace-isolation domain types (ported from theo-memory).
 export {
   type Workspace,

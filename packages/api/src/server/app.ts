@@ -23,6 +23,8 @@ import {
   DEFAULT_ANNOTATION_NAME,
   DEFAULT_ANNOTATOR_KIND,
   agentCatalogResponseSchema,
+  apiError,
+  zodFieldErrors,
 } from "@usetheo/lens-core";
 
 import {
@@ -141,7 +143,7 @@ export function createApp(
         error: err instanceof Error ? err.message : String(err),
       }),
     );
-    return c.json({ error: "internal error" }, 500);
+    return c.json(apiError("INTERNAL", "internal error"), 500);
   });
 
   // M94 — k8s/edge probes, UNAUTHENTICATED and mounted before the /v1 bearer. `/health` is pure
@@ -298,7 +300,7 @@ export function createApp(
       sessionId: c.req.query("session_id") || undefined,
     });
     if (!parsed.success) {
-      return c.json({ error: "invalid query parameters" }, 400);
+      return c.json(apiError("INVALID_QUERY", "invalid query parameters", zodFieldErrors(parsed.error)), 400);
     }
     // Parse through the strict DTO at the boundary so the no-column-leak invariant
     // (risk #2) is enforced at runtime, not just by adapter discipline (F-arch-1).
@@ -321,7 +323,7 @@ export function createApp(
       c.req.param("spanId"),
       getPrincipal(c).workspaceId,
     );
-    return span ? c.json(span, 200) : c.json({ error: "not found" }, 404);
+    return span ? c.json(span, 200) : c.json(apiError("NOT_FOUND", "not found"), 404);
   });
 
   app.get("/v1/traces/:traceId/cost", requireScopeOnPrincipal("observability:read"), async (c) => {
@@ -331,7 +333,7 @@ export function createApp(
     );
     return cost
       ? c.json(traceCostSchema.parse(cost), 200)
-      : c.json({ error: "not found" }, 404);
+      : c.json(apiError("NOT_FOUND", "not found"), 404);
   });
 
   app.get("/v1/traces/:traceId", requireScopeOnPrincipal("observability:read"), async (c) => {
@@ -339,7 +341,7 @@ export function createApp(
       c.req.param("traceId"),
       getPrincipal(c).workspaceId,
     );
-    return tree ? c.json(tree, 200) : c.json({ error: "not found" }, 404);
+    return tree ? c.json(tree, 200) : c.json(apiError("NOT_FOUND", "not found"), 404);
   });
 
   app.get("/v1/agents", requireScopeOnPrincipal("observability:read"), async (c) => {
@@ -366,7 +368,7 @@ export function createApp(
     // Whitelist the period (fail-fast on anything but day/week, Rule 8); default day.
     const raw = c.req.query("period");
     if (raw !== undefined && raw !== "day" && raw !== "week") {
-      return c.json({ error: "invalid period (use day or week)" }, 400);
+      return c.json(apiError("INVALID_QUERY", "invalid period (use day or week)"), 400);
     }
     const result = await repo.aggregateCostByPeriod(
       raw === "week" ? "week" : "day",
@@ -383,11 +385,11 @@ export function createApp(
     try {
       body = await c.req.json();
     } catch {
-      return c.json({ error: "invalid json body" }, 400);
+      return c.json(apiError("INVALID_BODY", "invalid json body"), 400);
     }
     const traceId = (body as { traceId?: unknown })?.traceId;
     if (typeof traceId !== "string" || traceId.length === 0) {
-      return c.json({ error: "traceId is required" }, 400);
+      return c.json(apiError("INVALID_BODY", "traceId is required"), 400);
     }
     await repo.recordReplaySession(traceId, getPrincipal(c).workspaceId);
     return c.json({ recorded: true }, 200);
@@ -403,7 +405,7 @@ export function createApp(
     const raw = c.req.query("range");
     const parsed = observabilityRangeSchema.safeParse(raw ?? "24h");
     if (!parsed.success) {
-      return c.json({ error: "invalid range (use 1h|24h|7d|30d)" }, 400);
+      return c.json(apiError("INVALID_QUERY", "invalid range (use 1h|24h|7d|30d)"), 400);
     }
     const obs = await repo.aggregateObservability(
       parsed.data,
@@ -417,7 +419,7 @@ export function createApp(
     // boundary (Rule 8), same whitelist as observability; default 24h.
     const parsed = observabilityRangeSchema.safeParse(c.req.query("range") ?? "24h");
     if (!parsed.success) {
-      return c.json({ error: "invalid range (use 1h|24h|7d|30d)" }, 400);
+      return c.json(apiError("INVALID_QUERY", "invalid range (use 1h|24h|7d|30d)"), 400);
     }
     // Parse through the strict DTO at the boundary so the no-column-leak invariant
     // is enforced at runtime, uniform with every other read route (F-api-1).
@@ -436,7 +438,7 @@ export function createApp(
     // DTO so the no-column-leak invariant holds at runtime (F-api-1).
     const parsed = observabilityRangeSchema.safeParse(c.req.query("range") ?? "24h");
     if (!parsed.success) {
-      return c.json({ error: "invalid range (use 1h|24h|7d|30d)" }, 400);
+      return c.json(apiError("INVALID_QUERY", "invalid range (use 1h|24h|7d|30d)"), 400);
     }
     const summary = scoresResponseSchema.parse({
       range: parsed.data,
@@ -456,7 +458,7 @@ export function createApp(
     // Shape-validate the key at the boundary (fail-fast 400, Rule 8) — reject an oversized/hostile key
     // before it reaches SQL (it is bound regardless, but this caps abuse; same shape as the DSL clause).
     if (key !== undefined && key.length > 0 && !isValidAttrKey(key)) {
-      return c.json({ error: "invalid attribute key" }, 400);
+      return c.json(apiError("INVALID_QUERY", "invalid attribute key"), 400);
     }
     const body =
       key !== undefined && key.length > 0
@@ -484,7 +486,7 @@ export function createApp(
     );
     return detail
       ? c.json(sessionDetailResponseSchema.parse(detail), 200)
-      : c.json({ error: "not found" }, 404);
+      : c.json(apiError("NOT_FOUND", "not found"), 404);
   });
 
   app.get("/v1/traces/:traceId/tags", requireScopeOnPrincipal("observability:read"), async (c) => {
@@ -502,16 +504,16 @@ export function createApp(
     try {
       body = await c.req.json();
     } catch {
-      return c.json({ error: "invalid json body" }, 400);
+      return c.json(apiError("INVALID_BODY", "invalid json body"), 400);
     }
     const tag = normalizeTag((body as { tag?: unknown })?.tag);
     if (tag === null) {
-      return c.json({ error: "tag is required (1-64 chars after trim)" }, 400);
+      return c.json(apiError("INVALID_BODY", "tag is required (1-64 chars after trim)"), 400);
     }
     const traceId = c.req.param("traceId");
     const ws = getPrincipal(c).workspaceId;
     const ok = await repo.addTag(traceId, tag, ws);
-    if (!ok) return c.json({ error: "not found" }, 404);
+    if (!ok) return c.json(apiError("NOT_FOUND", "not found"), 404);
     const tags = await repo.listTags(traceId, ws);
     return c.json(traceTagsResponseSchema.parse({ tags }), 200);
   });
@@ -521,7 +523,7 @@ export function createApp(
     // so a slash-bearing free-form tag routes safely (EC-1). Idempotent (D2).
     const tag = normalizeTag(c.req.query("tag"));
     if (tag === null) {
-      return c.json({ error: "tag query param is required (1-64 chars)" }, 400);
+      return c.json(apiError("INVALID_QUERY", "tag query param is required (1-64 chars)"), 400);
     }
     const traceId = c.req.param("traceId");
     const ws = getPrincipal(c).workspaceId;
@@ -547,7 +549,7 @@ export function createApp(
     try {
       body = await c.req.json();
     } catch {
-      return c.json({ error: "invalid json body" }, 400);
+      return c.json(apiError("INVALID_BODY", "invalid json body"), 400);
     }
     const ann = normalizeAnnotation(body);
     if (ann === null) {
@@ -559,7 +561,7 @@ export function createApp(
     const traceId = c.req.param("traceId");
     const ws = getPrincipal(c).workspaceId;
     const ok = await repo.upsertAnnotation(traceId, ann, ws);
-    if (!ok) return c.json({ error: "not found" }, 404);
+    if (!ok) return c.json(apiError("NOT_FOUND", "not found"), 404);
     annotationsWritten.add(1);
     const annotations = await repo.listAnnotations(traceId, ws);
     return c.json(annotationsResponseSchema.parse({ annotations }), 200);

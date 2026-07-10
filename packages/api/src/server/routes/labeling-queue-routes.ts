@@ -12,6 +12,7 @@ import {
   labelingQueuePageSchema,
   normalizeLabelResolution,
   type LabelingQueueStatus,
+  apiError,
 } from "@usetheo/lens-core";
 
 import { getPrincipal, requireScopeOnPrincipal } from "../auth/middleware.js";
@@ -40,7 +41,7 @@ export function registerLabelingQueueRoutes(app: Hono, repo: SpanRepository): vo
 
   app.get("/v1/labeling-queue/:itemId", requireScopeOnPrincipal("observability:read"), async (c) => {
     const item = await repo.getLabelingQueueItem(c.req.param("itemId"), getPrincipal(c).workspaceId);
-    return item ? c.json(labelingQueueItemSchema.parse(item), 200) : c.json({ error: "not found" }, 404);
+    return item ? c.json(labelingQueueItemSchema.parse(item), 200) : c.json(apiError("NOT_FOUND", "not found"), 404);
   });
 
   app.post("/v1/traces/:traceId/enqueue-for-labeling", requireScopeOnPrincipal("observability:write"), async (c) => {
@@ -49,11 +50,11 @@ export function registerLabelingQueueRoutes(app: Hono, repo: SpanRepository): vo
     try {
       body = await c.req.json();
     } catch {
-      return c.json({ error: "invalid json body" }, 400);
+      return c.json(apiError("INVALID_BODY", "invalid json body"), 400);
     }
     const spanId = (body as { spanId?: unknown })?.spanId;
     if (typeof spanId !== "string" || spanId.length === 0 || spanId.length > 256) {
-      return c.json({ error: "spanId is required (1-256 chars)" }, 400);
+      return c.json(apiError("INVALID_BODY", "spanId is required (1-256 chars)"), 400);
     }
     const p = getPrincipal(c);
     const item = await repo.enqueueLabelingItem(c.req.param("traceId"), spanId, p.userId ?? "unknown", p.workspaceId);
@@ -68,15 +69,15 @@ export function registerLabelingQueueRoutes(app: Hono, repo: SpanRepository): vo
     try {
       body = await c.req.json();
     } catch {
-      return c.json({ error: "invalid json body" }, 400);
+      return c.json(apiError("INVALID_BODY", "invalid json body"), 400);
     }
     const resolution = normalizeLabelResolution(body);
     if (resolution === null) {
-      return c.json({ error: "a non-empty label is required to resolve" }, 400);
+      return c.json(apiError("INVALID_BODY", "a non-empty label is required to resolve"), 400);
     }
     const p = getPrincipal(c);
     const ok = await repo.resolveLabelingItem(c.req.param("itemId"), resolution, p.userId ?? "unknown", p.workspaceId);
-    if (!ok) return c.json({ error: "not found" }, 404);
+    if (!ok) return c.json(apiError("NOT_FOUND", "not found"), 404);
     labelingItemsResolved.add(1);
     const item = await repo.getLabelingQueueItem(c.req.param("itemId"), p.workspaceId);
     return c.json(labelingQueueItemSchema.parse(item), 200);
@@ -88,12 +89,12 @@ export function registerLabelingQueueRoutes(app: Hono, repo: SpanRepository): vo
     try {
       body = await c.req.json();
     } catch {
-      return c.json({ error: "invalid json body" }, 400);
+      return c.json(apiError("INVALID_BODY", "invalid json body"), 400);
     }
     const nameRaw = (body as { name?: unknown })?.name;
     const name = typeof nameRaw === "string" ? nameRaw.trim() : "";
     if (name.length === 0 || name.length > EXPORT_NAME_MAX) {
-      return c.json({ error: `dataset name is required (1-${EXPORT_NAME_MAX} chars after trim)` }, 400);
+      return c.json(apiError("INVALID_BODY", `dataset name is required (1-${EXPORT_NAME_MAX} chars after trim)`), 400);
     }
     const dataset = await repo.exportResolvedAsDataset(name, getPrincipal(c).workspaceId);
     labelingQueueExports.add(1);

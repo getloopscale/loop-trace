@@ -448,6 +448,22 @@ describe("createApp (contract, stub repo)", () => {
     expect(res.status).toBe(404);
   });
 
+  it("m96_404_returns_code_message_envelope", async () => {
+    const res = await app.request("/v1/spans/missing");
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ code: "NOT_FOUND", message: "not found" });
+  });
+
+  it("m96_invalid_query_names_the_offending_field", async () => {
+    // a non-numeric cost bound fails the query DTO (z.coerce → NaN) → field-level 400
+    const res = await app.request("/v1/traces?min_cost_usd=notanumber");
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { code: string; message: string; details?: { field: string }[] };
+    expect(body.code).toBe("INVALID_QUERY");
+    expect(Array.isArray(body.details)).toBe(true);
+    expect(body.details?.some((d) => d.field === "minCostUsd")).toBe(true);
+  });
+
   it("get_returns_persisted_span", async () => {
     await post(tracesEnvelope(rawSpan));
     const res = await app.request("/v1/spans/c-a1");
