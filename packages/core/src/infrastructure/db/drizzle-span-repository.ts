@@ -12,9 +12,12 @@ import {
   spanClauseSql,
   toRow,
   fromRow,
-  preview,
   traceRowToItem,
 } from "./repo-shared.js";
+import * as annotationRepo from "./annotation-repository.js";
+import * as retentionRepo from "./retention-repository.js";
+import * as sessionRepo from "./session-repository.js";
+import * as copilotFeedbackRepo from "./copilot-feedback-repository.js";
 import * as experimentRepo from "./experiment-repository.js";
 import * as datasetRepo from "./dataset-repository.js";
 import * as labelingRepo from "./labeling-queue-repository.js";
@@ -57,23 +60,16 @@ import {
   type RawObservability,
 } from "../../domain/observability.js";
 import {
-  shapeSessionDetail,
   isoTimestamp,
   type SessionListResponse,
-  type SessionListItem,
   type SessionDetailResponse,
-  type RawSessionDetail,
 } from "../../domain/session.js";
 import type { PruneStats } from "../../domain/retention.js";
 import { parseSpanQuery } from "../../domain/span-query.js";
 import type { EvaluatorSummary, ScoreBucket } from "../../domain/evaluation.js";
 import type { SpanAttributeKey, SpanAttributeValue } from "../../domain/span-facets.js";
-import { spans, traces, sessions, replaySessions, traceTags, spanEvaluations, annotations, copilotFeedback } from "./schema.js";
-import {
-  DEFAULT_ANNOTATOR_KIND,
-  type Annotation,
-  type NormalizedAnnotation,
-} from "../../domain/annotation.js";
+import { spans, traces, replaySessions, traceTags, spanEvaluations } from "./schema.js";
+import type { Annotation, NormalizedAnnotation } from "../../domain/annotation.js";
 import type { Dataset, DatasetDetail } from "../../domain/dataset.js";
 import { shapeAgent, type Agent, type RawAgent } from "../../domain/agent-catalog.js";
 
@@ -918,313 +914,43 @@ export class DrizzleSpanRepository implements SpanRepository {
     }));
   }
 
-  async listSessions(
-    workspaceId: string = DEFAULT_WORKSPACE_ID,
-    opts: { limit?: number; offset?: number } = {},
-  ): Promise<SessionListResponse> {
-    // M81 — server-side pagination: clamp the window (default 50, cap 500 like traces) and expose a
-    // workspace-scoped total (count of SESSIONS, the GROUP BY grain). The BFF already forwards limit/offset.
-    const limit = Math.min(500, Math.max(1, Math.floor(opts.limit ?? 50)));
-    const offset = Math.max(0, Math.floor(opts.offset ?? 0));
-    // One row per real session (only session.id-bearing traces — D3), with
-    // scoped aggregates summed over the spans-derived traces table (D2). LEFT JOIN
-    // so a session with zero member traces still lists (traceCount 0). Deterministic
-    // tiebreaker on session_id (EC-7). Backed by sessions_last_seen_at_idx (D4).
-    // M20: the first user message is the input of the earliest root span across
-    // the session (a correlated scalar subquery, NOT a join — it returns one value
-    // per session and must not perturb the GROUP BY). The `~ '^\d+$'` guard keeps
-    // the numeric ORDER BY cast from erroring on legacy/garbage nanos (mirrors the
-    // M11 latency guard). Mapped through preview() with the EC-1 guard below.
-    const res = await this.db.execute(sql`
-      SELECT s.session_id AS "sessionId",
-             s.first_seen_at AS "firstSeenAt",
-             s.last_seen_at AS "lastSeenAt",
-             count(t.trace_id)::int AS "traceCount",
-             coalesce(sum(t.cost_usd), 0)::double precision AS "costUsd",
-             coalesce(sum(t.total_tokens), 0)::int AS "totalTokens",
-             count(t.trace_id) FILTER (WHERE t.status_code = 'error')::int AS "errorCount",
-             (SELECT count(*)::int
-                FROM span_evaluations se
-               WHERE se.workspace_id = ${workspaceId}
-                 AND se.trace_id IN (SELECT te.trace_id FROM traces te
-                                      WHERE te.session_id = s.session_id
-                                        AND te.workspace_id = ${workspaceId})) AS "evaluationsCount",
-             (SELECT sp.input_value
-                FROM spans sp
-                JOIN traces tt ON tt.trace_id = sp.trace_id AND tt.workspace_id = ${workspaceId}
-               WHERE tt.session_id = s.session_id
-                 AND sp.workspace_id = ${workspaceId}
-                 AND sp.parent_span_id IS NULL
-                 AND sp.start_time_unix_nano ~ '^\\d+$'
-               ORDER BY sp.start_time_unix_nano::numeric ASC
-               LIMIT 1) AS "firstMessageRaw"
-      FROM sessions s
-      LEFT JOIN traces t ON t.session_id = s.session_id AND t.workspace_id = s.workspace_id
-      WHERE s.workspace_id = ${workspaceId}
-      GROUP BY s.session_id, s.first_seen_at, s.last_seen_at
-      ORDER BY s.last_seen_at DESC, s.session_id DESC
-      LIMIT ${limit} OFFSET ${offset}
-    `);
-    const rows = res.rows as unknown as {
-      sessionId: string;
-      firstSeenAt: Date;
-      lastSeenAt: Date;
-      traceCount: number;
-      costUsd: number;
-      totalTokens: number;
-      errorCount: number;
-      evaluationsCount: number;
-      firstMessageRaw: string | null;
-    }[];
-    const sessionsOut: SessionListItem[] = rows.map((r) => {
-      const item: SessionListItem = {
-        sessionId: r.sessionId,
-        firstSeenAt: isoTimestamp(r.firstSeenAt),
-        lastSeenAt: isoTimestamp(r.lastSeenAt),
-        traceCount: r.traceCount,
-        costUsd: round3(r.costUsd ?? 0),
-        totalTokens: r.totalTokens ?? 0,
-        errorRate: r.traceCount === 0 ? 0 : round3(r.errorCount / r.traceCount),
-      };
-      // EC-1: only surface a non-empty, non-whitespace first message.
-      if (r.firstMessageRaw != null && r.firstMessageRaw.trim() !== "") {
-        item.firstMessagePreview = preview(r.firstMessageRaw);
-      }
-      // M26d: per-session eval count (>0 → shown; 0 → omitted, no "0" column).
-      if (r.evaluationsCount > 0) item.evaluationsCount = r.evaluationsCount;
-      return item;
-    });
-    // M81: workspace-scoped total (one row per session — matches the GROUP BY grain).
-    const totalRes = await this.db.execute(
-      sql`SELECT count(*)::int AS n FROM sessions s WHERE s.workspace_id = ${workspaceId}`,
-    );
-    const total = (totalRes.rows[0] as { n: number } | undefined)?.n ?? 0;
-    return { sessions: sessionsOut, total, limit, offset };
+  // M99 (B-M1) — the SessionRepository role now lives in `session-repository.ts`.
+  listSessions(workspaceId: string = DEFAULT_WORKSPACE_ID, opts: { limit?: number; offset?: number } = {}): Promise<SessionListResponse> {
+    return sessionRepo.listSessions(this.db, workspaceId, opts);
   }
 
-  async getSessionDetail(
-    sessionId: string,
-    workspaceId: string = DEFAULT_WORKSPACE_ID,
-  ): Promise<SessionDetailResponse | null> {
-    // Absent session → null (route 404). "Absent" = no row in the workspace's sessions.
-    const sessionRows = await this.db
-      .select()
-      .from(sessions)
-      .where(
-        and(
-          eq(sessions.sessionId, sessionId),
-          eq(sessions.workspaceId, workspaceId),
-        ),
-      )
-      .limit(1);
-    const session = sessionRows[0];
-    if (!session) return null;
-
-    // Scoped aggregates over the member traces. count/cost/tokens cover ALL member
-    // traces; the latency percentile FILTERs to numeric-bound traces only (M11 EC-1:
-    // the cast runs only for filtered-in rows, so a NULL/garbage bound neither errors
-    // nor counts as 0ms) and clamps clock skew via greatest(0, …).
-    const aggRes = await this.db.execute(sql`
-      SELECT count(*)::int AS "traceCount",
-             coalesce(sum(cost_usd), 0)::double precision AS "costUsd",
-             coalesce(sum(total_tokens), 0)::int AS "totalTokens",
-             count(*) FILTER (WHERE status_code = 'error')::int AS "errorCount",
-             percentile_cont(0.5) WITHIN GROUP (ORDER BY ${sql.raw(LATENCY_MS_EXPR)})
-               FILTER (WHERE start_time_unix_nano ~ '^\\d+$' AND end_time_unix_nano ~ '^\\d+$')::double precision AS p50,
-             percentile_cont(0.95) WITHIN GROUP (ORDER BY ${sql.raw(LATENCY_MS_EXPR)})
-               FILTER (WHERE start_time_unix_nano ~ '^\\d+$' AND end_time_unix_nano ~ '^\\d+$')::double precision AS p95
-      FROM traces
-      WHERE session_id = ${sessionId} AND workspace_id = ${workspaceId}
-    `);
-    const agg = (aggRes.rows as unknown as {
-      traceCount: number;
-      costUsd: number | null;
-      totalTokens: number | null;
-      errorCount: number;
-      p50: number | null;
-      p95: number | null;
-    }[])[0]!;
-
-    // Member traces as the stable list DTO (reuses the M3 mapping).
-    const memberRows = await this.db
-      .select()
-      .from(traces)
-      .where(
-        and(
-          eq(traces.sessionId, sessionId),
-          eq(traces.workspaceId, workspaceId),
-        ),
-      )
-      .orderBy(desc(traces.updatedAt));
-
-    const raw: RawSessionDetail = {
-      sessionId: session.sessionId,
-      firstSeenAt: session.firstSeenAt,
-      lastSeenAt: session.lastSeenAt,
-      traceCount: agg.traceCount,
-      costUsd: agg.costUsd,
-      totalTokens: agg.totalTokens,
-      errorCount: agg.errorCount,
-      p50: agg.p50,
-      p95: agg.p95,
-      traces: memberRows.map(traceRowToItem),
-    };
-    return shapeSessionDetail(raw);
+  getSessionDetail(sessionId: string, workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<SessionDetailResponse | null> {
+    return sessionRepo.getSessionDetail(this.db, sessionId, workspaceId);
   }
 
-  async addTag(
-    traceId: string,
-    tag: string,
-    workspaceId: string = DEFAULT_WORKSPACE_ID,
-  ): Promise<boolean> {
-    // M14 (D2): you can only tag a real trace. Returns false → route 404 when the
-    // trace does not exist. The insert is idempotent (UNIQUE(trace_id,tag) +
-    // ON CONFLICT DO NOTHING) so a duplicate add is a harmless no-op.
-    // NOTE: the existence check is advisory, not transactional — traces are
-    // recompute-owned aggregates and never hard-deleted in this codebase, so the
-    // SELECT→INSERT window is unreachable and an orphan tag row cannot occur. A
-    // future trace-deletion path MUST revisit this (add a FK or a transaction).
-    const existing = await this.db
-      .select({ traceId: traces.traceId })
-      .from(traces)
-      .where(
-        and(eq(traces.traceId, traceId), eq(traces.workspaceId, workspaceId)),
-      )
-      .limit(1);
-    if (existing.length === 0) return false;
-    await this.db
-      .insert(traceTags)
-      .values({ traceId, tag, workspaceId })
-      .onConflictDoNothing({
-        target: [traceTags.workspaceId, traceTags.traceId, traceTags.tag],
-      });
-    return true;
+  // M99 (B-M1) — the AnnotationRepository role now lives in `annotation-repository.ts`; the facade
+  // delegates over the shared `db` handle. Behavior unchanged (SQL moved verbatim).
+  addTag(traceId: string, tag: string, workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<boolean> {
+    return annotationRepo.addTag(this.db, traceId, tag, workspaceId);
   }
 
-  async removeTag(
-    traceId: string,
-    tag: string,
-    workspaceId: string = DEFAULT_WORKSPACE_ID,
-  ): Promise<void> {
-    // Idempotent (D2): a no-op when the tag/trace is absent (within the workspace).
-    await this.db
-      .delete(traceTags)
-      .where(
-        and(
-          eq(traceTags.traceId, traceId),
-          eq(traceTags.tag, tag),
-          eq(traceTags.workspaceId, workspaceId),
-        ),
-      );
+  removeTag(traceId: string, tag: string, workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<void> {
+    return annotationRepo.removeTag(this.db, traceId, tag, workspaceId);
   }
 
-  async listTags(
-    traceId: string,
-    workspaceId: string = DEFAULT_WORKSPACE_ID,
-  ): Promise<string[]> {
-    // Ordered for a stable UI / deterministic test (EC-6); empty when none.
-    const rows = await this.db
-      .select({ tag: traceTags.tag })
-      .from(traceTags)
-      .where(
-        and(
-          eq(traceTags.traceId, traceId),
-          eq(traceTags.workspaceId, workspaceId),
-        ),
-      )
-      .orderBy(asc(traceTags.tag));
-    return rows.map((r) => r.tag);
+  listTags(traceId: string, workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<string[]> {
+    return annotationRepo.listTags(this.db, traceId, workspaceId);
   }
 
-  async upsertAnnotation(
-    traceId: string,
-    ann: NormalizedAnnotation,
-    workspaceId: string = DEFAULT_WORKSPACE_ID,
-  ): Promise<boolean> {
-    // M26b (D2): one annotation per (trace, span, name, annotatorKind) — re-submitting
-    // REPLACES label/note/updatedAt (latest wins). `span_id = ''` sentinel = trace-level.
-    // Advisory trace-exists check (like addTag) → false → route 404; same orphan-window
-    // reasoning (traces are recompute-owned, never hard-deleted outside prune).
-    const existing = await this.db
-      .select({ traceId: traces.traceId })
-      .from(traces)
-      .where(
-        and(eq(traces.traceId, traceId), eq(traces.workspaceId, workspaceId)),
-      )
-      .limit(1);
-    if (existing.length === 0) return false;
-    const spanId = ann.spanId ?? "";
-    await this.db
-      .insert(annotations)
-      .values({
-        workspaceId,
-        traceId,
-        spanId,
-        name: ann.name,
-        label: ann.label ?? null,
-        note: ann.note ?? null,
-        annotatorKind: ann.annotatorKind,
-      })
-      .onConflictDoUpdate({
-        target: [
-          annotations.workspaceId,
-          annotations.traceId,
-          annotations.spanId,
-          annotations.name,
-          annotations.annotatorKind,
-        ],
-        set: {
-          label: ann.label ?? null,
-          note: ann.note ?? null,
-          updatedAt: sql`now()`,
-        },
-      });
-    return true;
+  upsertAnnotation(traceId: string, ann: NormalizedAnnotation, workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<boolean> {
+    return annotationRepo.upsertAnnotation(this.db, traceId, ann, workspaceId);
   }
 
-  async listAnnotations(
-    traceId: string,
-    workspaceId: string = DEFAULT_WORKSPACE_ID,
-  ): Promise<Annotation[]> {
-    // Newest-first (D2); trace-level (span_id '') + all spans'. Empty when none.
-    const rows = await this.db
-      .select()
-      .from(annotations)
-      .where(
-        and(
-          eq(annotations.traceId, traceId),
-          eq(annotations.workspaceId, workspaceId),
-        ),
-      )
-      .orderBy(desc(annotations.updatedAt));
-    return rows.map((r) => ({
-      // '' sentinel → trace-level: omit spanId so the DTO stays `.strict()` clean.
-      ...(r.spanId !== "" ? { spanId: r.spanId } : {}),
-      name: r.name,
-      ...(r.label != null ? { label: r.label } : {}),
-      ...(r.note != null ? { note: r.note } : {}),
-      annotatorKind: r.annotatorKind,
-      updatedAt: r.updatedAt.toISOString(),
-    }));
+  listAnnotations(traceId: string, workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<Annotation[]> {
+    return annotationRepo.listAnnotations(this.db, traceId, workspaceId);
   }
 
-  async removeAnnotation(
+  removeAnnotation(
     traceId: string,
     key: { spanId?: string; name: string; annotatorKind?: string },
     workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<void> {
-    // Idempotent (D2): a no-op when the annotation/trace is absent (in the workspace).
-    await this.db
-      .delete(annotations)
-      .where(
-        and(
-          eq(annotations.traceId, traceId),
-          eq(annotations.workspaceId, workspaceId),
-          eq(annotations.spanId, key.spanId ?? ""),
-          eq(annotations.name, key.name),
-          eq(annotations.annotatorKind, key.annotatorKind ?? DEFAULT_ANNOTATOR_KIND),
-        ),
-      );
+    return annotationRepo.removeAnnotation(this.db, traceId, key, workspaceId);
   }
 
   // ── M26d datasets ──────────────────────────────────────────────────────────
@@ -1271,57 +997,13 @@ export class DrizzleSpanRepository implements SpanRepository {
 
   // ── M83 copilot answer feedback ──────────────────────────────────────────────
 
-  async recordAskFeedback(
-    traceId: string,
-    input: AskFeedbackInput,
-    workspaceId: string = DEFAULT_WORKSPACE_ID,
-  ): Promise<CopilotFeedbackRecord> {
-    // UPSERT on (workspace_id, trace_id, turn_id): a re-vote toggles the label (up↔down) in place,
-    // never a duplicate row. Workspace-leading unique keeps a same-turn collision tenant-isolated.
-    const rows = await this.db
-      .insert(copilotFeedback)
-      .values({
-        workspaceId,
-        traceId,
-        turnId: input.turnId,
-        spanId: input.spanId ?? "",
-        label: input.label,
-        question: input.question ?? null,
-      })
-      .onConflictDoUpdate({
-        target: [copilotFeedback.workspaceId, copilotFeedback.traceId, copilotFeedback.turnId],
-        set: { label: input.label, question: input.question ?? null, updatedAt: new Date() },
-      })
-      .returning();
-    const r = rows[0]!;
-    return {
-      id: r.id,
-      traceId: r.traceId,
-      turnId: r.turnId,
-      label: r.label as CopilotFeedbackRecord["label"],
-      updatedAt: r.updatedAt.toISOString(),
-      ...(r.spanId ? { spanId: r.spanId } : {}),
-      ...(r.question != null ? { question: r.question } : {}),
-    };
+  // M99 (B-M1) — the CopilotFeedbackRepository role now lives in `copilot-feedback-repository.ts`.
+  recordAskFeedback(traceId: string, input: AskFeedbackInput, workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<CopilotFeedbackRecord> {
+    return copilotFeedbackRepo.recordAskFeedback(this.db, traceId, input, workspaceId);
   }
 
-  async deleteAskFeedback(
-    traceId: string,
-    turnId: string,
-    workspaceId: string = DEFAULT_WORKSPACE_ID,
-  ): Promise<boolean> {
-    // Retract the vote (the UI "clear"). Workspace-scoped; idempotent — no matching row → false.
-    const deleted = await this.db
-      .delete(copilotFeedback)
-      .where(
-        and(
-          eq(copilotFeedback.workspaceId, workspaceId),
-          eq(copilotFeedback.traceId, traceId),
-          eq(copilotFeedback.turnId, turnId),
-        ),
-      )
-      .returning({ id: copilotFeedback.id });
-    return deleted.length > 0;
+  deleteAskFeedback(traceId: string, turnId: string, workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<boolean> {
+    return copilotFeedbackRepo.deleteAskFeedback(this.db, traceId, turnId, workspaceId);
   }
 
   // ── M63 labeling queues ──────────────────────────────────────────────────────
@@ -1454,59 +1136,9 @@ export class DrizzleSpanRepository implements SpanRepository {
     });
   }
 
-  async prune(olderThan: Date): Promise<PruneStats> {
-    // M23 trace-granular hard-delete cascade, atomic in one transaction (the
-    // tables have NO DB foreign keys — see the orphan-risk note on listTags — so
-    // each dependent table is cleaned explicitly). Order: delete spans/tags/replay
-    // of stale traces FIRST (the `stale` subquery reads `traces` while it still
-    // holds those rows), THEN the stale traces, THEN now-orphaned sessions.
-    const cutoff = olderThan.toISOString();
-    const rowCount = (r: { rowCount: number | null }): number => r.rowCount ?? 0;
-    return this.db.transaction(async (tx) => {
-      // M22: trace_id is no longer globally unique (composite PK (workspace_id,
-      // trace_id)). The stale set is keyed by BOTH columns so a stale trace in one
-      // workspace never cascades a delete onto a same-trace_id row in another
-      // workspace (row-value IN over the pair). Retention itself stays system-wide
-      // (age-based operator policy) — only the cascade is workspace-precise.
-      const stale = sql`(SELECT workspace_id, trace_id FROM traces WHERE updated_at < ${cutoff})`;
-      const spansRes = await tx.execute(
-        sql`DELETE FROM spans WHERE (workspace_id, trace_id) IN ${stale}`,
-      );
-      const tagsRes = await tx.execute(
-        sql`DELETE FROM trace_tags WHERE (workspace_id, trace_id) IN ${stale}`,
-      );
-      const replayRes = await tx.execute(
-        sql`DELETE FROM replay_sessions WHERE (workspace_id, trace_id) IN ${stale}`,
-      );
-      // M26: eval rows of stale traces (avoid orphan span_evaluations). M26b: human
-      // annotations of stale traces. Both keyed by (workspace_id, trace_id), no FK.
-      const evalsRes = await tx.execute(
-        sql`DELETE FROM span_evaluations WHERE (workspace_id, trace_id) IN ${stale}`,
-      );
-      const annotationsRes = await tx.execute(
-        sql`DELETE FROM annotations WHERE (workspace_id, trace_id) IN ${stale}`,
-      );
-      const tracesRes = await tx.execute(
-        sql`DELETE FROM traces WHERE updated_at < ${cutoff}`,
-      );
-      // EC-1: the `IS NOT NULL` guard is mandatory — a NULL in a NOT IN set makes
-      // the whole predicate UNKNOWN and would silently delete ZERO orphans. The pair
-      // (workspace_id, session_id) matches the composite sessions PK so a live
-      // session in workspace B is never orphan-deleted by workspace A's traces.
-      const sessionsRes = await tx.execute(
-        sql`DELETE FROM sessions WHERE (workspace_id, session_id) NOT IN (SELECT workspace_id, session_id FROM traces WHERE session_id IS NOT NULL)`,
-      );
-      return {
-        cutoff,
-        spansDeleted: rowCount(spansRes),
-        tagsDeleted: rowCount(tagsRes),
-        replaySessionsDeleted: rowCount(replayRes),
-        tracesDeleted: rowCount(tracesRes),
-        sessionsDeleted: rowCount(sessionsRes),
-        evaluationsDeleted: rowCount(evalsRes),
-        annotationsDeleted: rowCount(annotationsRes),
-      };
-    });
+  // M99 (B-M1) — the RetentionRepository role now lives in `retention-repository.ts`.
+  prune(olderThan: Date): Promise<PruneStats> {
+    return retentionRepo.prune(this.db, olderThan);
   }
 }
 
