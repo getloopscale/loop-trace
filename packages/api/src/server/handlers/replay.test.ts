@@ -41,8 +41,9 @@ function fakeSpanRepo(present: Record<string, boolean>): SpanRepository {
 
 const RESULT: ReplayResult = { content: "new output", promptTokens: 12, completionTokens: 4, totalTokens: 16, model: "m" };
 
-function ctx(opts: { traceId?: string; body?: unknown; rawBody?: string; ws?: string }): Context {
+function ctx(opts: { traceId?: string; body?: unknown; rawBody?: string; ws?: string; headers?: Record<string, string> }): Context {
   const principal = { workspaceId: opts.ws ?? "ws-x", userId: "u", role: "member", scopes: ["observability:read"] };
+  const headers = opts.headers ?? {}; // M94 — capture c.header(...) so the 429 Retry-After is assertable
   return {
     get: (k: string) => (k === "principal" ? principal : undefined),
     req: {
@@ -52,7 +53,7 @@ function ctx(opts: { traceId?: string; body?: unknown; rawBody?: string; ws?: st
         return opts.body;
       },
     },
-    header: () => {}, // M94 — the real Hono context exposes `c.header`; the 429 path sets Retry-After
+    header: (k: string, v: string) => { headers[k] = v; },
     json: (obj: unknown, status = 200) =>
       new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json" } }),
   } as unknown as Context;
@@ -106,9 +107,12 @@ describe("M55 replayHandler", () => {
     const limiter = new RateLimiter(1);
     const d = deps({ chat, limiter, now: () => 2_000_000 });
     expect((await replayHandler(ctx({ body: { messages: [{ role: "user", content: "a" }] } }), d)).status).toBe(200);
-    const second = await replayHandler(ctx({ body: { messages: [{ role: "user", content: "b" }] } }), d);
+    const headers: Record<string, string> = {};
+    const second = await replayHandler(ctx({ body: { messages: [{ role: "user", content: "b" }] }, headers }), d);
     expect(second.status).toBe(429);
     expect(((await second.json()) as { code: string }).code).toBe("RATE_LIMITED");
+    // M94 — the 429 advises Retry-After (seconds until the window resets)
+    expect(Number(headers["Retry-After"])).toBeGreaterThanOrEqual(1);
   });
 
   it("test_replay_502_when_provider_fails_closed", async () => {

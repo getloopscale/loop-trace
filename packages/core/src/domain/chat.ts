@@ -99,7 +99,7 @@ async function requestChatCompletion(
       // Network / timeout (AbortError) — retryable.
       lastError = new ChatError(`chat request failed: ${String(err)}`);
       if (attempt < maxAttempts) {
-        await sleep(backoffMs(attempt, retry.baseDelayMs));
+        await sleep(Math.min(backoffMs(attempt, retry.baseDelayMs), retry.maxBackoffMs));
         continue;
       }
       throw lastError;
@@ -112,13 +112,17 @@ async function requestChatCompletion(
       }
     }
     // Non-2xx: 429 + 5xx are recoverable (retry with backoff, honoring Retry-After); 4xx≠429 is fatal.
+    // NOTE (accepted trade-off): retrying a 5xx/timeout re-issues a non-idempotent chat completion,
+    // so an ambiguous failure MAY double-bill. This matches the provider SDKs' own behavior; ≤2
+    // attempts by default bounds the exposure. A stricter idempotency-key path is a future option.
     const recoverable = resp.status === 429 || resp.status >= 500;
     if (!recoverable || attempt >= maxAttempts) {
       throw new ChatError(`chat endpoint returned ${resp.status}`);
     }
     lastError = new ChatError(`chat endpoint returned ${resp.status}`);
-    const advised = retryAfterMs(resp.headers?.get?.("retry-after"));
-    await sleep(Math.max(advised, backoffMs(attempt, retry.baseDelayMs)));
+    // Honor Retry-After but CAP it (a hostile `Retry-After: 999999` must not pin the request for hours).
+    const advised = Math.min(retryAfterMs(resp.headers?.get?.("retry-after")), retry.maxBackoffMs);
+    await sleep(Math.min(Math.max(advised, backoffMs(attempt, retry.baseDelayMs)), retry.maxBackoffMs));
   }
   throw lastError;
 }

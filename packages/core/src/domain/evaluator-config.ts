@@ -136,11 +136,15 @@ export function parseShutdownDrainMs(env: NodeJS.ProcessEnv = process.env): numb
 export interface ProviderRetryConfig {
   maxAttempts: number;
   baseDelayMs: number;
+  /** Ceiling on a single backoff wait (ms) — caps a hostile/misconfigured provider `Retry-After`
+   *  (e.g. `999999`) so it cannot pin the request for hours. Default 60s. */
+  maxBackoffMs: number;
 }
-export const DEFAULT_PROVIDER_RETRY: ProviderRetryConfig = { maxAttempts: 2, baseDelayMs: 250 };
+export const DEFAULT_PROVIDER_RETRY: ProviderRetryConfig = { maxAttempts: 2, baseDelayMs: 250, maxBackoffMs: 60_000 };
 export function parseProviderRetry(env: NodeJS.ProcessEnv = process.env): ProviderRetryConfig {
   return {
     maxAttempts: positiveIntEnv(env, "THEOLENS_PROVIDER_MAX_ATTEMPTS", DEFAULT_PROVIDER_RETRY.maxAttempts),
     baseDelayMs: positiveIntEnv(env, "THEOLENS_PROVIDER_RETRY_BASE_MS", DEFAULT_PROVIDER_RETRY.baseDelayMs),
+    maxBackoffMs: positiveIntEnv(env, "THEOLENS_PROVIDER_MAX_BACKOFF_MS", DEFAULT_PROVIDER_RETRY.maxBackoffMs),
   };
 }

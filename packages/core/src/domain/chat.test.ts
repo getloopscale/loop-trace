@@ -96,6 +96,19 @@ describe("M94 provider retry & classification", () => {
     expect(slept[0]).toBeGreaterThanOrEqual(2000); // >= Retry-After: 2s
   });
 
+  it("caps a hostile Retry-After so it cannot pin the request for hours", async () => {
+    const seq = fetchSequence([
+      { status: 429, headers: { "retry-after": "999999" } }, // ~11.5 days if uncapped
+      { status: 200, body: { choices: [{ message: { content: "ok" } }] } },
+    ]);
+    const slept: number[] = [];
+    await openaiChatCompletion(cfg, [], seq.fetch, {
+      retry: { maxAttempts: 2, baseDelayMs: 250, maxBackoffMs: 60_000 },
+      sleep: async (ms) => void slept.push(ms),
+    });
+    expect(slept[0]).toBe(60_000); // capped at maxBackoffMs, NOT 999999000
+  });
+
   it("a single attempt (maxAttempts=1) never retries", async () => {
     const seq = fetchSequence([{ status: 503 }]);
     await expect(

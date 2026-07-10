@@ -129,9 +129,10 @@ describe("M94 resilience config", () => {
     expect(parseShutdownDrainMs({ THEOLENS_SHUTDOWN_DRAIN_MS: "3000" })).toBe(3_000);
   });
 
-  it("parseProviderRetry default (2 attempts) + override + invalid fallback", () => {
-    expect(parseProviderRetry({})).toEqual({ maxAttempts: 2, baseDelayMs: 250 });
+  it("parseProviderRetry default (2 attempts, 60s backoff cap) + override + invalid fallback", () => {
+    expect(parseProviderRetry({})).toEqual({ maxAttempts: 2, baseDelayMs: 250, maxBackoffMs: 60_000 });
     expect(parseProviderRetry({ THEOLENS_PROVIDER_MAX_ATTEMPTS: "3" }).maxAttempts).toBe(3);
+    expect(parseProviderRetry({ THEOLENS_PROVIDER_MAX_BACKOFF_MS: "5000" }).maxBackoffMs).toBe(5000);
     // never < 1 attempt (an invalid value keeps the default; the call always runs once)
     expect(parseProviderRetry({ THEOLENS_PROVIDER_MAX_ATTEMPTS: "0" }).maxAttempts).toBe(2);
   });
