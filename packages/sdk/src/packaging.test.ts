@@ -16,7 +16,10 @@ import { describe, expect, it } from "vitest";
 const SDK_DIR = fileURLToPath(new URL("..", import.meta.url));
 
 describe("SDK packaging (M7, T2.2)", () => {
-  it("test_sdk_tarball_includes_dist_and_excludes_src", () => {
+  // `pnpm pack` runs `prepack: tsc -b` (a real build) + tar — subprocess I/O that can exceed the
+  // default 5s test timeout under concurrent test load. A generous timeout removes the flakiness
+  // without weakening the assertion (M104: surfaced once the read-SDK sources grew the build).
+  it("test_sdk_tarball_includes_dist_and_excludes_src", { timeout: 60_000 }, () => {
     const dest = mkdtempSync(join(tmpdir(), "lens-sdk-pack-"));
     execFileSync("pnpm", ["pack", "--pack-destination", dest], {
       cwd: SDK_DIR,

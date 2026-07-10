@@ -8,6 +8,8 @@ export { GEN_AI } from "./attributes.js";
 
 // M103 — the typed READ surface: read traces/metrics/sessions/etc. back via a `theo_live_*` key.
 export { LensReadClient, type LensReadClientOptions } from "./read/client.js";
+// M104 — the single typed error every read method can throw (switch on `.code`).
+export { LensApiError, type FieldIssue } from "./read/errors.js";
 export type {
   TraceListResponse,
   Span,

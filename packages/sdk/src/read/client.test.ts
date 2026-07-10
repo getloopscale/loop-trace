@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LensReadClient } from "./client.js";
+import { LensApiError } from "./errors.js";
 
 const BASE = "https://lens.example.com";
 const KEY = "theo_live_abc123";
@@ -157,5 +158,139 @@ describe("LensReadClient — the 7 typed read methods (T2.2)", () => {
     expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/datasets");
     expect(Array.isArray(res)).toBe(true);
     expect(res[0]?.id).toBe("d1");
+  });
+});
+
+/** A fetch returning queued responses/rejects in order (last item repeats if calls exceed the queue). */
+function seqFetch(items: Array<Response | Error>) {
+  let i = 0;
+  const fn = vi.fn(async () => {
+    const item = items[Math.min(i, items.length - 1)];
+    i += 1;
+    if (item instanceof Error) throw item;
+    return item as Response;
+  });
+  return fn as unknown as typeof fetch & ReturnType<typeof vi.fn>;
+}
+const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
+const status = (code: number, headers?: Record<string, string>) =>
+  new Response("", { status: code, ...(headers ? { headers } : {}) });
+/** Fixed jitter → 0.8 + 0.5·0.4 = 1.0 (no jitter) so exp-backoff delays are exact. */
+const NO_JITTER = () => 0.5;
+
+describe("LensReadClient — resilient transport (M104)", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("retries a 503 once then resolves (2 calls, one backoff of base·2^0)", async () => {
+    const fetchFn = seqFetch([status(503), ok({ tools: [] })]);
+    const delays: number[] = [];
+    const client = new LensReadClient({
+      baseUrl: BASE,
+      apiKey: KEY,
+      fetch: fetchFn,
+      sleep: async (ms) => void delays.push(ms),
+      random: NO_JITTER,
+    });
+    await client.toolStats();
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect(delays).toEqual([500]);
+  });
+
+  it("fails fast on a fatal 400 — single call, no backoff, typed error", async () => {
+    const fetchFn = seqFetch([status(400)]);
+    const delays: number[] = [];
+    const client = new LensReadClient({
+      baseUrl: BASE,
+      apiKey: KEY,
+      fetch: fetchFn,
+      sleep: async (ms) => void delays.push(ms),
+    });
+    await expect(client.toolStats()).rejects.toBeInstanceOf(LensApiError);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(delays).toEqual([]);
+  });
+
+  it("honors Retry-After seconds on a 429", async () => {
+    const fetchFn = seqFetch([status(429, { "retry-after": "2" }), ok({ tools: [] })]);
+    const delays: number[] = [];
+    const client = new LensReadClient({
+      baseUrl: BASE,
+      apiKey: KEY,
+      fetch: fetchFn,
+      sleep: async (ms) => void delays.push(ms),
+    });
+    await client.toolStats();
+    expect(delays).toEqual([2000]);
+  });
+
+  it("caps retries at maxRetries then throws the typed error (maxRetries+1 calls)", async () => {
+    const fetchFn = seqFetch([status(503), status(503), status(503), status(503)]);
+    const client = new LensReadClient({
+      baseUrl: BASE,
+      apiKey: KEY,
+      fetch: fetchFn,
+      maxRetries: 2,
+      sleep: async () => {},
+      random: NO_JITTER,
+    });
+    await expect(client.toolStats()).rejects.toMatchObject({
+      code: "UNEXPECTED_RESPONSE",
+      status: 503,
+    });
+    expect(fetchFn).toHaveBeenCalledTimes(3);
+  });
+
+  it("retries a network reject then throws NETWORK_ERROR", async () => {
+    const fetchFn = seqFetch([new TypeError("fetch failed"), new TypeError("fetch failed"), new TypeError("fetch failed")]);
+    const client = new LensReadClient({
+      baseUrl: BASE,
+      apiKey: KEY,
+      fetch: fetchFn,
+      maxRetries: 2,
+      sleep: async () => {},
+    });
+    await expect(client.toolStats()).rejects.toMatchObject({ code: "NETWORK_ERROR", status: 0 });
+    expect(fetchFn).toHaveBeenCalledTimes(3);
+  });
+
+  it("aborts a hung request at timeoutMs and throws TIMEOUT", async () => {
+    vi.useFakeTimers();
+    const hanging = vi.fn(
+      (_url: unknown, init: { signal?: AbortSignal }) =>
+        new Promise<Response>((_, reject) => {
+          init.signal?.addEventListener("abort", () =>
+            reject(new DOMException("aborted", "AbortError")),
+          );
+        }),
+    ) as unknown as typeof fetch;
+    const client = new LensReadClient({
+      baseUrl: BASE,
+      apiKey: KEY,
+      fetch: hanging,
+      maxRetries: 0,
+      timeoutMs: 100,
+    });
+    const p = client.toolStats();
+    const assertion = expect(p).rejects.toMatchObject({ code: "TIMEOUT", status: 0 });
+    await vi.advanceTimersByTimeAsync(100);
+    await assertion;
+  });
+
+  it("keeps exp-backoff jitter within ±20% and under the cap", async () => {
+    for (const rnd of [() => 0, () => 0.999999]) {
+      const fetchFn = seqFetch([status(503), ok({ tools: [] })]);
+      const delays: number[] = [];
+      const client = new LensReadClient({
+        baseUrl: BASE,
+        apiKey: KEY,
+        fetch: fetchFn,
+        sleep: async (ms) => void delays.push(ms),
+        random: rnd,
+      });
+      await client.toolStats();
+      // base = 500 at attempt 0; jitter multiplier ∈ [0.8, 1.2] → delay ∈ [400, 600] (rounded)
+      expect(delays[0]).toBeGreaterThanOrEqual(400);
+      expect(delays[0]).toBeLessThanOrEqual(600);
+    }
   });
 });

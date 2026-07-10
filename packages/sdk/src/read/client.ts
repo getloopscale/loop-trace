@@ -8,9 +8,11 @@
  * Auth is a `theo_live_*` key sent as `Authorization: Bearer <key>`; the per-tenant key resolves the
  * workspace at the edge, so the client NEVER sends a workspace parameter (theo-data invariant 2/3).
  *
- * M103 is the happy-path core: `request()` throws a plain `Error` on a non-2xx (naming status + path).
- * M104 replaces that seam with a typed `LensApiError` + a resilient (retry/backoff/timeout) transport.
+ * Failures surface as a typed {@link LensApiError} (M104); transient ones (408/429/5xx/network/timeout)
+ * are retried with bounded exp-backoff honoring `Retry-After`, while a fatal 4xx fails fast. A request
+ * timeout is enforced via `AbortController`.
  */
+import { errorFromReject, errorFromResponse, invalidBodyError } from "./errors.js";
 import type {
   CostByPeriodOptions,
   CostByPeriodResponse,
@@ -32,15 +34,46 @@ export interface LensReadClientOptions {
   apiKey: string;
   /** Injected transport (defaults to `globalThis.fetch`) — the seam unit tests drive. */
   fetch?: typeof fetch;
+  /** Max retry attempts for a transient failure (default 2 → up to 3 total tries). */
+  maxRetries?: number;
+  /** Per-request timeout in ms before the socket is aborted (default 30_000). */
+  timeoutMs?: number;
+  /** Injectable backoff sleep (default real `setTimeout`) — the seam that keeps tests deterministic. */
+  sleep?: (ms: number) => Promise<void>;
+  /** Injectable jitter source in [0,1) (default `Math.random`) — deterministic backoff in tests. */
+  random?: () => number;
 }
 
 /** A query value map; `undefined` entries are dropped, everything else is stringified. */
 type Query = Record<string, string | number | undefined>;
 
+const RETRY_BASE_MS = 500;
+const RETRY_CAP_MS = 20_000;
+const JITTER = 0.2; // ±20% symmetric
+
+/** Transient statuses worth another attempt (GET is idempotent → safe to retry). */
+function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+/** Parse a `Retry-After` header (seconds or HTTP-date) into ms, or undefined when absent/garbage. */
+function retryAfterMs(res: Response): number | undefined {
+  const raw = res.headers.get("retry-after");
+  if (raw === null) return undefined;
+  if (/^\d+$/.test(raw.trim())) return Number(raw.trim()) * 1000;
+  const at = Date.parse(raw);
+  if (Number.isNaN(at)) return undefined;
+  return Math.max(0, at - Date.now());
+}
+
 export class LensReadClient {
   private readonly baseUrl: string;
   private readonly apiKey: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly maxRetries: number;
+  private readonly timeoutMs: number;
+  private readonly sleep: (ms: number) => Promise<void>;
+  private readonly random: () => number;
 
   constructor(options: LensReadClientOptions) {
     if (!options.baseUrl) throw new Error("LensReadClient: baseUrl is required");
@@ -59,6 +92,10 @@ export class LensReadClient {
     if (typeof this.fetchImpl !== "function") {
       throw new Error("LensReadClient: no fetch implementation (pass options.fetch)");
     }
+    this.maxRetries = options.maxRetries ?? 2;
+    this.timeoutMs = options.timeoutMs ?? 30_000;
+    this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+    this.random = options.random ?? Math.random;
   }
 
   private buildUrl(path: string, query?: Query): string {
@@ -71,19 +108,56 @@ export class LensReadClient {
     return url.toString();
   }
 
-  private async request<T>(path: string, query?: Query): Promise<T> {
-    const res = await this.fetchImpl(this.buildUrl(path, query), {
-      method: "GET",
-      headers: { authorization: `Bearer ${this.apiKey}`, accept: "application/json" },
-    });
-    if (!res.ok) {
-      // M103 minimal error — typed LensApiError + retry arrive in M104.
-      throw new Error(`GET ${path} failed: ${res.status}`);
-    }
+  /** Delay before the next retry: honor `Retry-After` (capped) else exp-backoff + ±20% jitter. */
+  private backoffMs(attempt: number, res?: Response): number {
+    const advised = res ? retryAfterMs(res) : undefined;
+    if (advised !== undefined) return Math.min(advised, RETRY_CAP_MS);
+    const base = Math.min(RETRY_BASE_MS * 2 ** attempt, RETRY_CAP_MS);
+    const jitter = 1 - JITTER + this.random() * (2 * JITTER); // [0.8, 1.2)
+    return Math.min(Math.round(base * jitter), RETRY_CAP_MS);
+  }
+
+  /** One `fetch` with an `AbortController` timeout; a fired abort rejects (→ mapped to TIMEOUT). */
+  private async fetchOnce(url: string): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      return (await res.json()) as T;
-    } catch {
-      throw new Error(`GET ${path}: invalid JSON response body`);
+      return await this.fetchImpl(url, {
+        method: "GET",
+        headers: { authorization: `Bearer ${this.apiKey}`, accept: "application/json" },
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async request<T>(path: string, query?: Query): Promise<T> {
+    const url = this.buildUrl(path, query);
+    for (let attempt = 0; ; attempt++) {
+      let res: Response;
+      try {
+        res = await this.fetchOnce(url);
+      } catch (err) {
+        // Network reject / timeout abort — retry while attempts remain, else surface it typed.
+        if (attempt < this.maxRetries) {
+          await this.sleep(this.backoffMs(attempt));
+          continue;
+        }
+        throw errorFromReject(err, "GET", path);
+      }
+      if (res.ok) {
+        try {
+          return (await res.json()) as T;
+        } catch {
+          throw invalidBodyError(res.status, "GET", path);
+        }
+      }
+      if (isRetryableStatus(res.status) && attempt < this.maxRetries) {
+        await this.sleep(this.backoffMs(attempt, res));
+        continue;
+      }
+      throw await errorFromResponse(res, "GET", path);
     }
   }
 
