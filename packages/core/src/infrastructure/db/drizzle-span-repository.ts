@@ -1,13 +1,10 @@
 import { fileURLToPath } from "node:url";
-import {             } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
 
 import type { Span } from "../../domain/span.js";
 import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
-import {
-            } from "./repo-shared.js";
 import * as traceReadRepo from "./trace-read-repository.js";
 import * as aggregateRepo from "./aggregate-repository.js";
 import * as annotationRepo from "./annotation-repository.js";
@@ -40,7 +37,6 @@ import {   type ToolStatsResponse } from "../../domain/tool-stats.js";
 import { parsePoolConfig, type PoolConfig } from "../../domain/evaluator-config.js";
 import {
       type NorthStarResponse } from "../../domain/north-star.js";
-import { } from "../../domain/sql-rows.js";
 import {
       type ObservabilityRange,
   type ObservabilityResponse } from "../../domain/observability.js";
@@ -48,10 +44,8 @@ import {
     type SessionListResponse,
   type SessionDetailResponse } from "../../domain/session.js";
 import type { PruneStats } from "../../domain/retention.js";
-import { } from "../../domain/span-query.js";
 import type { EvaluatorSummary, ScoreBucket } from "../../domain/evaluation.js";
 import type { SpanAttributeKey, SpanAttributeValue } from "../../domain/span-facets.js";
-import {     } from "./schema.js";
 import type { Annotation, NormalizedAnnotation } from "../../domain/annotation.js";
 import type { Dataset, DatasetDetail } from "../../domain/dataset.js";
 import {  type Agent } from "../../domain/agent-catalog.js";
