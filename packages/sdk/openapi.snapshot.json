@@ -1426,7 +1426,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Dataset"
+                  "$ref": "#/components/schemas/DatasetsResponse"
                 }
               }
             }
@@ -2736,6 +2736,43 @@
           "name",
           "createdAt",
           "itemCount"
+        ],
+        "additionalProperties": false
+      },
+      "DatasetsResponse": {
+        "type": "object",
+        "properties": {
+          "datasets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "itemCount": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "createdAt",
+                "itemCount"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "datasets"
         ],
         "additionalProperties": false
       }

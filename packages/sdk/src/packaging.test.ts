@@ -36,6 +36,11 @@ describe("SDK packaging (M7, T2.2)", () => {
     expect(entries).toContain("package/dist/index.js");
     expect(entries).toContain("package/dist/index.d.ts");
     expect(entries).toContain("package/package.json");
+    // M105: the read surface + its (type-erased) generated module must ship so a consumer's
+    // `npm install` gets the read client, not just the ingest SDK.
+    expect(entries).toContain("package/dist/read/client.js");
+    expect(entries).toContain("package/dist/read/client.d.ts");
+    expect(entries).toContain("package/dist/__generated__/openapi.js");
     // No source ships in the published artifact.
     expect(entries.some((e) => e.startsWith("package/src/"))).toBe(false);
   });

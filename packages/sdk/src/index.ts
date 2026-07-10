@@ -18,6 +18,7 @@ export type {
   CostByPeriodResponse,
   ToolStatsResponse,
   Dataset,
+  DatasetsResponse,
   ListTracesOptions,
   ListSessionsOptions,
   ObservabilityOptions,

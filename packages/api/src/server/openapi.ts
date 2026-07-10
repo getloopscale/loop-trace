@@ -13,6 +13,7 @@ import { z } from "zod";
 import {
   costByPeriodResponseSchema,
   datasetSchema,
+  datasetsResponseSchema,
   observabilityResponseSchema,
   sessionListResponseSchema,
   spanSchema,
@@ -45,6 +46,7 @@ function namedSchemas(): Record<string, z.ZodTypeAny> {
     CostByPeriodResponse: costByPeriodResponseSchema,
     ToolStatsResponse: toolStatsResponseSchema,
     Dataset: datasetSchema,
+    DatasetsResponse: datasetsResponseSchema,
   };
 }
 
@@ -56,7 +58,7 @@ const RESPONSE_FOR_ROUTE: Record<string, string> = {
   "GET /v1/sessions": "SessionListResponse",
   "GET /v1/analytics/cost": "CostByPeriodResponse",
   "GET /v1/analytics/tools": "ToolStatsResponse",
-  "GET /v1/datasets": "Dataset",
+  "GET /v1/datasets": "DatasetsResponse",
 };
 
 const HONO_PARAM = /:([A-Za-z0-9_]+)/g;

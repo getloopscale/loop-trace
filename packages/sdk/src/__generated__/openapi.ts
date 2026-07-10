@@ -1624,7 +1624,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["Dataset"];
+                        "application/json": components["schemas"]["DatasetsResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -2576,6 +2576,14 @@ export interface components {
             name: string;
             createdAt: string;
             itemCount: number;
+        };
+        DatasetsResponse: {
+            datasets: {
+                id: string;
+                name: string;
+                createdAt: string;
+                itemCount: number;
+            }[];
         };
     };
     responses: never;

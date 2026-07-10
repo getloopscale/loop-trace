@@ -151,13 +151,13 @@ describe("LensReadClient — the 7 typed read methods (T2.2)", () => {
     expect(url.search).toBe("");
   });
 
-  it("listDatasets hits /v1/datasets and returns an array", async () => {
-    const fetchFn = mockFetch([{ id: "d1", name: "set" }]);
+  it("listDatasets hits /v1/datasets and returns the { datasets } wrapper", async () => {
+    const fetchFn = mockFetch({ datasets: [{ id: "d1", name: "set" }] });
     const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
     const res = await client.listDatasets();
     expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/datasets");
-    expect(Array.isArray(res)).toBe(true);
-    expect(res[0]?.id).toBe("d1");
+    expect(Array.isArray(res.datasets)).toBe(true);
+    expect(res.datasets[0]?.id).toBe("d1");
   });
 });
 

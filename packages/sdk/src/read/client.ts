@@ -16,7 +16,7 @@ import { errorFromReject, errorFromResponse, invalidBodyError } from "./errors.j
 import type {
   CostByPeriodOptions,
   CostByPeriodResponse,
-  Dataset,
+  DatasetsResponse,
   ListSessionsOptions,
   ListTracesOptions,
   ObservabilityOptions,
@@ -202,8 +202,8 @@ export class LensReadClient {
     return this.request<ToolStatsResponse>("/v1/analytics/tools");
   }
 
-  /** `GET /v1/datasets` — the workspace's datasets. */
-  listDatasets(): Promise<Dataset[]> {
-    return this.request<Dataset[]>("/v1/datasets");
+  /** `GET /v1/datasets` — the workspace's datasets, wrapped as `{ datasets: [...] }`. */
+  listDatasets(): Promise<DatasetsResponse> {
+    return this.request<DatasetsResponse>("/v1/datasets");
   }
 }

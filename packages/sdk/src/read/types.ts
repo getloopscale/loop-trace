@@ -26,8 +26,10 @@ export type SessionListResponse = Schemas["SessionListResponse"];
 export type CostByPeriodResponse = Schemas["CostByPeriodResponse"];
 /** `GET /v1/analytics/tools` — tool-call usage stats. */
 export type ToolStatsResponse = Schemas["ToolStatsResponse"];
-/** A single dataset (`GET /v1/datasets` returns `Dataset[]`). */
+/** A single dataset entity. */
 export type Dataset = Schemas["Dataset"];
+/** `GET /v1/datasets` — the workspace's datasets, wrapped as `{ datasets: Dataset[] }`. */
+export type DatasetsResponse = Schemas["DatasetsResponse"];
 
 /** Options for {@link LensReadClient.listTraces} — map to snake_case query params. */
 export interface ListTracesOptions {
