@@ -8,7 +8,6 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- `@usetheo/lens-sdk`: `LensReadClient` gains a `basePath` option (default `/v1`) so a customer whose `theo_live_*` key reaches Lens through the unified edge sets `basePath: "/v1/lens"` and the client composes `/v1/lens/*` URLs (the edge rewrites them to `/v1/*` upstream) (#49)
 
 ### Changed
 
@@ -17,9 +16,17 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Removed
 
 ### Fixed
-- `@usetheo/lens-sdk`: the read/write client could not reach Lens through the unified edge — it hard-built engine-relative `/v1/*` paths while the edge exposes the capability at `/v1/lens/*`, so a customer pointing the SDK at the edge got 404 on every call. Fixed via the `basePath` option; proven live (default → edge 404 unrouted; `basePath:/v1/lens` → edge 401 routed + ForwardAuth-gated). Surfaced by a live `/dogfood full` run through the real edge (#49)
 
 ### Security
+
+## [0.47.0] - 2026-07-10
+
+### Added
+- `@usetheo/lens-sdk`: `LensReadClient` gains a `basePath` option (default `/v1`) so a customer whose `theo_live_*` key reaches Lens through the unified edge sets `basePath: "/v1/lens"` and the client composes `/v1/lens/*` URLs (the edge rewrites them to `/v1/*` upstream) (#49)
+
+
+### Fixed
+- `@usetheo/lens-sdk`: the read/write client could not reach Lens through the unified edge — it hard-built engine-relative `/v1/*` paths while the edge exposes the capability at `/v1/lens/*`, so a customer pointing the SDK at the edge got 404 on every call. Fixed via the `basePath` option; proven live (default → edge 404 unrouted; `basePath:/v1/lens` → edge 401 routed + ForwardAuth-gated). Surfaced by a live `/dogfood full` run through the real edge (#49)
 
 ## [0.46.0] - 2026-07-10
 
