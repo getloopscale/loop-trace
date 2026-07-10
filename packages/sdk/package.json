@@ -19,7 +19,7 @@
     "generate": "cd ../.. && node_modules/.bin/tsc -b packages/core && node_modules/.bin/tsx packages/sdk/scripts/generate-types.ts",
     "verify-types": "pnpm run generate && cd ../.. && git diff --exit-code -- packages/sdk/openapi.snapshot.json packages/sdk/src/__generated__/openapi.ts",
     "test": "pnpm --dir ../.. exec vitest run -c vitest.contract.config.ts packages/sdk/src",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p examples/tsconfig.json",
     "lint": "eslint src"
   },
   "engines": {

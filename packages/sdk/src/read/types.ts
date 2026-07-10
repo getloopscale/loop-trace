@@ -56,3 +56,17 @@ export interface ObservabilityOptions {
 export interface CostByPeriodOptions {
   period?: string;
 }
+
+/**
+ * The `GET /v1` discovery document — service identity + the machine-contract pointer. Hand-written:
+ * `/v1` is intentionally excluded from `/openapi.json` (a discovery/infra route, not a data route),
+ * so there is no generated component to alias.
+ */
+export interface Capabilities {
+  service: string;
+  version: string;
+  capability: string;
+  /** Path to the OpenAPI document (relative to the base URL). */
+  openapi: string;
+  docs: string;
+}

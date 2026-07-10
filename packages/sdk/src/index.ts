@@ -19,6 +19,7 @@ export type {
   ToolStatsResponse,
   Dataset,
   DatasetsResponse,
+  Capabilities,
   ListTracesOptions,
   ListSessionsOptions,
   ObservabilityOptions,

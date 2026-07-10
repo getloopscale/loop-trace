@@ -14,6 +14,7 @@
  */
 import { errorFromReject, errorFromResponse, invalidBodyError } from "./errors.js";
 import type {
+  Capabilities,
   CostByPeriodOptions,
   CostByPeriodResponse,
   DatasetsResponse,
@@ -205,5 +206,10 @@ export class LensReadClient {
   /** `GET /v1/datasets` — the workspace's datasets, wrapped as `{ datasets: [...] }`. */
   listDatasets(): Promise<DatasetsResponse> {
     return this.request<DatasetsResponse>("/v1/datasets");
+  }
+
+  /** `GET /v1` — service discovery: identity, version, and the `/openapi.json` pointer. */
+  capabilities(): Promise<Capabilities> {
+    return this.request<Capabilities>("/v1");
   }
 }

@@ -159,6 +159,22 @@ describe("LensReadClient — the 7 typed read methods (T2.2)", () => {
     expect(Array.isArray(res.datasets)).toBe(true);
     expect(res.datasets[0]?.id).toBe("d1");
   });
+
+  it("capabilities hits /v1 and returns service + version + openapi pointer", async () => {
+    const fetchFn = mockFetch({
+      service: "theo-lens",
+      version: "1.2.3",
+      capability: "observability",
+      openapi: "/openapi.json",
+      docs: "/openapi.json",
+    });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const res = await client.capabilities();
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1");
+    expect(res.service).toBe("theo-lens");
+    expect(res.version).toBe("1.2.3");
+    expect(res.openapi).toBe("/openapi.json");
+  });
 });
 
 /** A fetch returning queued responses/rejects in order (last item repeats if calls exceed the queue). */
