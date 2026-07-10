@@ -227,13 +227,14 @@ export interface CreateExperimentRunBody {
   name: string;
   variant: RunVariant;
 }
-/** One evaluator score on a run item. */
+/** One evaluator score on a run item (mirrors the engine's `runScoreSchema`). */
 export interface RunScore {
-  evaluator: string;
-  label?: string;
+  name: string;
   score?: number;
+  label?: string;
+  explanation?: string;
 }
-/** One experiment-run item — the replayed output + usage + scores. */
+/** One experiment-run item — the replayed output + usage + scores (or an error state). */
 export interface ExperimentRunItem {
   datasetItemTraceId: string;
   inputSnapshot?: string;
@@ -245,6 +246,7 @@ export interface ExperimentRunItem {
   latencyMs: number;
   model: string;
   scores: RunScore[];
+  error?: string;
 }
 /** An experiment run + its aggregate scorecard. */
 export interface ExperimentRun {
@@ -272,12 +274,13 @@ export interface ReplaySpanBody {
   messages: ReplayMessage[];
   model?: string;
 }
-/** The replay output + usage. */
+/** The replay output + usage (the engine's replay handler renames `content`→`output` at the boundary). */
 export interface ReplayResult {
-  content: string;
+  output: string;
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  latencyMs: number;
   costUsd?: number;
   model: string;
 }

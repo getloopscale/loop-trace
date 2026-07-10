@@ -656,7 +656,7 @@ describe("LensReadClient — experiment runs + replay (M113, billable non-idempo
   });
 
   it("replaySpan POSTs the messages and does NOT retry a network reject (billable)", async () => {
-    const fNet = seqFetch([new TypeError("boom"), ok({ content: "hi", promptTokens: 1, completionTokens: 1, totalTokens: 2, model: "gpt-4" })]);
+    const fNet = seqFetch([new TypeError("boom"), ok({ output: "hi", promptTokens: 1, completionTokens: 1, totalTokens: 2, latencyMs: 12, model: "gpt-4" })]);
     const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fNet, sleep: async () => {} });
     await expect(client.replaySpan("tr1", { messages: [{ role: "user", content: "hi" }] })).rejects.toMatchObject({ code: "NETWORK_ERROR" });
     expect(fNet).toHaveBeenCalledTimes(1);
