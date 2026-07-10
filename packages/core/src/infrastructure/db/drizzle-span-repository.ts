@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { and, asc, desc, eq, getTableColumns, gte, inArray, isNull, lte, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
@@ -7,8 +6,9 @@ import pg from "pg";
 
 import type { Span } from "../../domain/span.js";
 import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
-import { NameConflictError, isUniqueViolation } from "../../domain/errors.js";
 import { isUuid } from "./uuid.js";
+import * as experimentRepo from "./experiment-repository.js";
+import * as datasetRepo from "./dataset-repository.js";
 import type { AskFeedbackInput, CopilotFeedbackRecord } from "../../domain/copilot-feedback.js";
 import type {
   SpanRepository,
@@ -25,8 +25,7 @@ import type {
   LabelingQueueStatus,
   NormalizedResolution,
 } from "../../domain/labeling-queue.js";
-import type { ExperimentRun, ExperimentRunItem, RunStatus, RunVariant } from "../../domain/experiment.js";
-import { aggregateRun } from "../../domain/experiment.js";
+import type { ExperimentRun } from "../../domain/experiment.js";
 import { computeTraceCost, type PriceTable } from "../../domain/pricing.js";
 import { DEFAULT_PRICES } from "../../domain/default-prices.js";
 import type {
@@ -61,7 +60,7 @@ import type { PruneStats } from "../../domain/retention.js";
 import { parseSpanQuery, type SpanClause } from "../../domain/span-query.js";
 import type { EvaluatorSummary, ScoreBucket } from "../../domain/evaluation.js";
 import type { SpanAttributeKey, SpanAttributeValue } from "../../domain/span-facets.js";
-import { spans, traces, sessions, replaySessions, traceTags, spanEvaluations, annotations, datasets, datasetItems, labelingQueueItems, experimentRuns, experimentRunItems, copilotFeedback } from "./schema.js";
+import { spans, traces, sessions, replaySessions, traceTags, spanEvaluations, annotations, labelingQueueItems, copilotFeedback } from "./schema.js";
 import {
   DEFAULT_ANNOTATOR_KIND,
   type Annotation,
@@ -1411,289 +1410,43 @@ export class DrizzleSpanRepository implements SpanRepository {
   // ── M26d datasets ──────────────────────────────────────────────────────────
 
   /** Map a datasets row (+ item count) to the DTO. */
-  private datasetRow(r: { id: string; name: string; createdAt: Date; itemCount: number }): Dataset {
-    return {
-      id: r.id,
-      name: r.name,
-      createdAt: isoTimestamp(r.createdAt),
-      itemCount: r.itemCount,
-    };
+  // M97 (B-M1) — the DatasetRepository role now lives in `dataset-repository.ts`; the facade
+  // delegates over the shared `db` handle. Behavior unchanged (the SQL/shaping moved verbatim).
+  createDataset(name: string, workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<Dataset> {
+    return datasetRepo.createDataset(this.db, name, workspaceId);
   }
 
-  async createDataset(
-    name: string,
-    workspaceId: string = DEFAULT_WORKSPACE_ID,
-  ): Promise<Dataset> {
-    // D1: create-or-get on the workspace-leading UNIQUE (idempotent). Insert-or-
-    // nothing, then read the row back (just-created or pre-existing) + item count.
-    await this.db
-      .insert(datasets)
-      .values({ name, workspaceId })
-      .onConflictDoNothing({ target: [datasets.workspaceId, datasets.name] });
-    const rows = await this.db
-      .select({
-        id: datasets.id,
-        name: datasets.name,
-        createdAt: datasets.createdAt,
-        itemCount: sql<number>`count(${datasetItems.id})::int`.as("item_count"),
-      })
-      .from(datasets)
-      .leftJoin(
-        datasetItems,
-        and(
-          eq(datasetItems.datasetId, datasets.id),
-          eq(datasetItems.workspaceId, datasets.workspaceId),
-        ),
-      )
-      .where(and(eq(datasets.name, name), eq(datasets.workspaceId, workspaceId)))
-      .groupBy(datasets.id, datasets.name, datasets.createdAt)
-      .limit(1);
-    return this.datasetRow(rows[0]!);
+  listDatasets(workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<Dataset[]> {
+    return datasetRepo.listDatasets(this.db, workspaceId);
   }
 
-  async listDatasets(
-    workspaceId: string = DEFAULT_WORKSPACE_ID,
-  ): Promise<Dataset[]> {
-    // LEFT JOIN + GROUP BY for the per-dataset item count (a correlated subquery in
-    // the projection did not correlate reliably here; the grouped join is idiomatic).
-    const rows = await this.db
-      .select({
-        id: datasets.id,
-        name: datasets.name,
-        createdAt: datasets.createdAt,
-        itemCount: sql<number>`count(${datasetItems.id})::int`.as("item_count"),
-      })
-      .from(datasets)
-      .leftJoin(
-        datasetItems,
-        and(
-          eq(datasetItems.datasetId, datasets.id),
-          eq(datasetItems.workspaceId, datasets.workspaceId),
-        ),
-      )
-      .where(eq(datasets.workspaceId, workspaceId))
-      .groupBy(datasets.id, datasets.name, datasets.createdAt)
-      .orderBy(desc(datasets.createdAt));
-    return rows.map((r) => this.datasetRow(r));
+  getDataset(datasetId: string, workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<DatasetDetail | null> {
+    return datasetRepo.getDataset(this.db, datasetId, workspaceId);
   }
 
-  async getDataset(
-    datasetId: string,
-    workspaceId: string = DEFAULT_WORKSPACE_ID,
-  ): Promise<DatasetDetail | null> {
-    if (!isUuid(datasetId)) return null; // non-uuid path param → absent, not a 500
-    const dsRows = await this.db
-      .select()
-      .from(datasets)
-      .where(
-        and(eq(datasets.id, datasetId), eq(datasets.workspaceId, workspaceId)),
-      )
-      .limit(1);
-    const ds = dsRows[0];
-    if (!ds) return null;
-    const items = await this.db
-      .select()
-      .from(datasetItems)
-      .where(
-        and(
-          eq(datasetItems.datasetId, datasetId),
-          eq(datasetItems.workspaceId, workspaceId),
-        ),
-      )
-      .orderBy(desc(datasetItems.createdAt));
-    return {
-      id: ds.id,
-      name: ds.name,
-      createdAt: isoTimestamp(ds.createdAt),
-      items: items.map((i) => ({
-        traceId: i.traceId,
-        ...(i.inputSnapshot != null ? { inputSnapshot: i.inputSnapshot } : {}),
-        ...(i.outputSnapshot != null ? { outputSnapshot: i.outputSnapshot } : {}),
-        createdAt: isoTimestamp(i.createdAt),
-      })),
-    };
+  addDatasetItem(datasetId: string, traceId: string, workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<boolean> {
+    return datasetRepo.addDatasetItem(this.db, datasetId, traceId, workspaceId);
   }
 
-  async addDatasetItem(
-    datasetId: string,
-    traceId: string,
-    workspaceId: string = DEFAULT_WORKSPACE_ID,
-  ): Promise<boolean> {
-    // D2/D3: snapshot the trace's root input/output AT ADD-TIME (durable past prune),
-    // idempotent on (dataset, trace). Returns false if the dataset OR the trace is
-    // absent in the workspace (→ 404) — advisory checks, like addTag/upsertAnnotation.
-    if (!isUuid(datasetId)) return false;
-    const ds = await this.db
-      .select({ id: datasets.id })
-      .from(datasets)
-      .where(
-        and(eq(datasets.id, datasetId), eq(datasets.workspaceId, workspaceId)),
-      )
-      .limit(1);
-    if (ds.length === 0) return false;
-    const tr = await this.db
-      .select({ traceId: traces.traceId })
-      .from(traces)
-      .where(
-        and(eq(traces.traceId, traceId), eq(traces.workspaceId, workspaceId)),
-      )
-      .limit(1);
-    if (tr.length === 0) return false;
-    // The root span (earliest, parent_span_id IS NULL) carries the trace's I/O.
-    const root = await this.db
-      .select({ input: spans.inputValue, output: spans.outputValue })
-      .from(spans)
-      .where(
-        and(
-          eq(spans.traceId, traceId),
-          eq(spans.workspaceId, workspaceId),
-          isNull(spans.parentSpanId),
-        ),
-      )
-      .orderBy(asc(sql`${spans.startTimeUnixNano}::numeric`))
-      .limit(1);
-    const snap = root[0];
-    await this.db
-      .insert(datasetItems)
-      .values({
-        workspaceId,
-        datasetId,
-        traceId,
-        inputSnapshot: snap?.input ?? null,
-        outputSnapshot: snap?.output ?? null,
-      })
-      .onConflictDoNothing({
-        target: [
-          datasetItems.workspaceId,
-          datasetItems.datasetId,
-          datasetItems.traceId,
-        ],
-      });
-    return true;
-  }
-
-  async addSyntheticDatasetItem(
+  addSyntheticDatasetItem(
     datasetId: string,
     input: string,
     output: string,
     workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<boolean> {
-    // M55: a synthetic item from a playground replay — input/output stored directly, sourced by a
-    // generated `replay-{uuid}` id (NOT a real trace) so the item stays addressable (view + remove by
-    // this id) and the unique index dedups correctly. Each save is a new example (fresh id). Returns
-    // false if the dataset is absent in the workspace (→ 404). No source trace to snapshot from.
-    if (!isUuid(datasetId)) return false;
-    const ds = await this.db
-      .select({ id: datasets.id })
-      .from(datasets)
-      .where(and(eq(datasets.id, datasetId), eq(datasets.workspaceId, workspaceId)))
-      .limit(1);
-    if (ds.length === 0) return false;
-    await this.db.insert(datasetItems).values({
-      workspaceId,
-      datasetId,
-      traceId: `replay-${randomUUID()}`,
-      inputSnapshot: input,
-      outputSnapshot: output,
-    });
-    return true;
+    return datasetRepo.addSyntheticDatasetItem(this.db, datasetId, input, output, workspaceId);
   }
 
-  async removeDatasetItem(
-    datasetId: string,
-    traceId: string,
-    workspaceId: string = DEFAULT_WORKSPACE_ID,
-  ): Promise<void> {
-    if (!isUuid(datasetId)) return; // idempotent: a non-uuid id removes nothing
-    await this.db
-      .delete(datasetItems)
-      .where(
-        and(
-          eq(datasetItems.datasetId, datasetId),
-          eq(datasetItems.traceId, traceId),
-          eq(datasetItems.workspaceId, workspaceId),
-        ),
-      );
+  removeDatasetItem(datasetId: string, traceId: string, workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<void> {
+    return datasetRepo.removeDatasetItem(this.db, datasetId, traceId, workspaceId);
   }
 
-  async renameDataset(
-    datasetId: string,
-    newName: string,
-    workspaceId: string = DEFAULT_WORKSPACE_ID,
-  ): Promise<Dataset | null> {
-    if (!isUuid(datasetId)) return null; // non-uuid path param → absent, not a 500
-    // UPDATE the name (workspace-scoped); a collision with another dataset's name violates the
-    // (workspace_id, name) UNIQUE → surface as a typed NameConflictError (route maps to 409, M82 ADR-1).
-    let updated: { id: string }[];
-    try {
-      updated = await this.db
-        .update(datasets)
-        .set({ name: newName })
-        .where(and(eq(datasets.id, datasetId), eq(datasets.workspaceId, workspaceId)))
-        .returning({ id: datasets.id });
-    } catch (err) {
-      if (isUniqueViolation(err)) throw new NameConflictError("a dataset with that name already exists");
-      throw err;
-    }
-    if (updated.length === 0) return null; // absent (or another workspace's dataset)
-    // Read back the full DTO with itemCount (reuse the createDataset LEFT JOIN shape).
-    const rows = await this.db
-      .select({
-        id: datasets.id,
-        name: datasets.name,
-        createdAt: datasets.createdAt,
-        itemCount: sql<number>`count(${datasetItems.id})::int`.as("item_count"),
-      })
-      .from(datasets)
-      .leftJoin(
-        datasetItems,
-        and(eq(datasetItems.datasetId, datasets.id), eq(datasetItems.workspaceId, datasets.workspaceId)),
-      )
-      .where(and(eq(datasets.id, datasetId), eq(datasets.workspaceId, workspaceId)))
-      .groupBy(datasets.id, datasets.name, datasets.createdAt)
-      .limit(1);
-    return rows[0] ? this.datasetRow(rows[0]) : null;
+  renameDataset(datasetId: string, newName: string, workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<Dataset | null> {
+    return datasetRepo.renameDataset(this.db, datasetId, newName, workspaceId);
   }
 
-  async deleteDataset(
-    datasetId: string,
-    workspaceId: string = DEFAULT_WORKSPACE_ID,
-  ): Promise<boolean> {
-    if (!isUuid(datasetId)) return false; // idempotent: a non-uuid id deletes nothing
-    const exists = await this.db
-      .select({ id: datasets.id })
-      .from(datasets)
-      .where(and(eq(datasets.id, datasetId), eq(datasets.workspaceId, workspaceId)))
-      .limit(1);
-    if (exists.length === 0) return false;
-    // M82 ADR-2: cascade everything derived from the dataset in ONE transaction (no orphans, no FK):
-    // the experiment runs' items → the experiment runs → the dataset items → the dataset. All workspace-scoped.
-    await this.db.transaction(async (tx) => {
-      const runIds = await tx
-        .select({ id: experimentRuns.id })
-        .from(experimentRuns)
-        .where(and(eq(experimentRuns.datasetId, datasetId), eq(experimentRuns.workspaceId, workspaceId)));
-      if (runIds.length > 0) {
-        await tx
-          .delete(experimentRunItems)
-          .where(
-            and(
-              inArray(experimentRunItems.runId, runIds.map((r) => r.id)),
-              eq(experimentRunItems.workspaceId, workspaceId),
-            ),
-          );
-      }
-      await tx
-        .delete(experimentRuns)
-        .where(and(eq(experimentRuns.datasetId, datasetId), eq(experimentRuns.workspaceId, workspaceId)));
-      await tx
-        .delete(datasetItems)
-        .where(and(eq(datasetItems.datasetId, datasetId), eq(datasetItems.workspaceId, workspaceId)));
-      await tx
-        .delete(datasets)
-        .where(and(eq(datasets.id, datasetId), eq(datasets.workspaceId, workspaceId)));
-    });
-    return true;
+  deleteDataset(datasetId: string, workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<boolean> {
+    return datasetRepo.deleteDataset(this.db, datasetId, workspaceId);
   }
 
   // ── M83 copilot answer feedback ──────────────────────────────────────────────
@@ -1883,125 +1636,24 @@ export class DrizzleSpanRepository implements SpanRepository {
   // ── M64 experiment runs ──────────────────────────────────────────────────────
 
   /** Map an experiment_runs row to the API DTO (nullable columns → optional/undefined). */
-  private experimentRunRow(r: typeof experimentRuns.$inferSelect, items?: ExperimentRunItem[]): ExperimentRun {
-    return {
-      id: r.id,
-      datasetId: r.datasetId,
-      name: r.name,
-      variant: r.variant as RunVariant,
-      status: r.status as RunStatus,
-      truncated: r.truncated,
-      itemCount: r.itemCount,
-      passCount: r.passCount,
-      avgScore: r.avgScore ?? undefined,
-      totalCostUsd: r.totalCostUsd,
-      createdBy: r.createdBy,
-      createdAt: r.createdAt.toISOString(),
-      ...(items ? { items } : {}),
-    };
-  }
-
-  private experimentItemRow(r: typeof experimentRunItems.$inferSelect): ExperimentRunItem {
-    return {
-      datasetItemTraceId: r.datasetItemTraceId,
-      inputSnapshot: r.inputSnapshot ?? undefined,
-      output: r.output ?? undefined,
-      promptTokens: r.promptTokens,
-      completionTokens: r.completionTokens,
-      totalTokens: r.totalTokens,
-      costUsd: r.costUsd ?? undefined,
-      latencyMs: r.latencyMs,
-      model: r.model,
-      scores: (r.scores as ExperimentRunItem["scores"]) ?? [],
-      error: r.error ?? undefined,
-    };
-  }
-
-  async createExperimentRun(
-    run: {
-      datasetId: string;
-      name: string;
-      variant: RunVariant;
-      status: RunStatus;
-      truncated: boolean;
-      createdBy: string;
-      items: ExperimentRunItem[];
-    },
+  // M97 (B-M1) — the ExperimentRepository role now lives in `experiment-repository.ts`; the facade
+  // delegates over the shared `db` handle. Behavior unchanged (the SQL/shaping moved verbatim).
+  createExperimentRun(
+    run: Parameters<typeof experimentRepo.createExperimentRun>[1],
     workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<ExperimentRun> {
-    // Compute aggregates from the engine's items (single source of truth) + persist run + items atomically.
-    const agg = aggregateRun(run.items);
-    const runId = await this.db.transaction(async (tx) => {
-      const inserted = await tx
-        .insert(experimentRuns)
-        .values({
-          workspaceId,
-          datasetId: run.datasetId,
-          name: run.name,
-          variant: run.variant,
-          status: run.status,
-          truncated: run.truncated,
-          itemCount: agg.itemCount,
-          passCount: agg.passCount,
-          avgScore: agg.avgScore ?? null,
-          totalCostUsd: agg.totalCostUsd,
-          createdBy: run.createdBy,
-        })
-        .returning({ id: experimentRuns.id });
-      const id = inserted[0]!.id;
-      if (run.items.length > 0) {
-        await tx.insert(experimentRunItems).values(
-          run.items.map((it) => ({
-            workspaceId,
-            runId: id,
-            datasetItemTraceId: it.datasetItemTraceId,
-            inputSnapshot: it.inputSnapshot ?? null,
-            output: it.output ?? null,
-            promptTokens: it.promptTokens,
-            completionTokens: it.completionTokens,
-            totalTokens: it.totalTokens,
-            costUsd: it.costUsd ?? null,
-            latencyMs: it.latencyMs,
-            model: it.model,
-            scores: it.scores,
-            error: it.error ?? null,
-          })),
-        );
-      }
-      return id;
-    });
-    return (await this.getExperimentRun(runId, workspaceId))!;
+    return experimentRepo.createExperimentRun(this.db, run, workspaceId);
   }
 
-  async listExperimentRuns(
+  listExperimentRuns(
     datasetId: string | undefined,
     workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<ExperimentRun[]> {
-    const where =
-      datasetId !== undefined
-        ? and(eq(experimentRuns.workspaceId, workspaceId), eq(experimentRuns.datasetId, datasetId))
-        : eq(experimentRuns.workspaceId, workspaceId);
-    const rows = await this.db.select().from(experimentRuns).where(where).orderBy(desc(experimentRuns.createdAt));
-    return rows.map((r) => this.experimentRunRow(r));
+    return experimentRepo.listExperimentRuns(this.db, datasetId, workspaceId);
   }
 
-  async getExperimentRun(
-    runId: string,
-    workspaceId: string = DEFAULT_WORKSPACE_ID,
-  ): Promise<ExperimentRun | null> {
-    if (!isUuid(runId)) return null; // non-uuid path param → absent, not a 500
-    const runs = await this.db
-      .select()
-      .from(experimentRuns)
-      .where(and(eq(experimentRuns.id, runId), eq(experimentRuns.workspaceId, workspaceId)))
-      .limit(1);
-    if (!runs[0]) return null;
-    const items = await this.db
-      .select()
-      .from(experimentRunItems)
-      .where(and(eq(experimentRunItems.runId, runId), eq(experimentRunItems.workspaceId, workspaceId)))
-      .orderBy(asc(experimentRunItems.createdAt));
-    return this.experimentRunRow(runs[0], items.map((it) => this.experimentItemRow(it)));
+  getExperimentRun(runId: string, workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<ExperimentRun | null> {
+    return experimentRepo.getExperimentRun(this.db, runId, workspaceId);
   }
 
   async aggregateAgents(

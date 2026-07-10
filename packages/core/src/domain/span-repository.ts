@@ -27,13 +27,18 @@ export interface TraceTreeNode extends Span {
 }
 
 /**
- * Persistence port for spans (DIP). The domain declares the contract; the
- * infrastructure layer (Drizzle/Postgres) implements it.
+ * M97 (audit B-M1) — the persistence port is decomposed into cohesive ROLE interfaces so a consumer
+ * depends only on the surface it uses (ISP). `SpanRepository` is their composition — it stays a
+ * single 48-method port so every existing consumer is unchanged, while a new consumer (e.g. a route
+ * handler that only reads traces) can narrow to `TraceReadRepository` alone.
+ *
+ * M22 tenancy note (applies to every read/write below): each method takes an optional `workspaceId`
+ * (defaults to the `default` workspace → single-tenant behavior unchanged). Reads/deletes scope by
+ * it; `save` binds it on insert. The route layer passes the resolved Principal's workspace.
  */
-export interface SpanRepository {
-  // M22: every method takes an optional `workspaceId` (defaults to the `default`
-  // workspace → single-tenant behavior unchanged). Reads/deletes scope by it;
-  // `save` binds it on insert. The route layer passes the Principal's workspace.
+
+/** Trace/span ingest + point reads. */
+export interface TraceReadRepository {
   /** Persist a batch of spans and recompute the trace/session aggregates. */
   save(spans: Span[], workspaceId?: string): Promise<void>;
   /** Read a single span by its spanId, or null if absent. */
@@ -48,12 +53,16 @@ export interface SpanRepository {
   listTraces(opts?: ListTracesOptions, workspaceId?: string): Promise<TraceListResponse>;
   /** Per-trace cost summary (M5), or null if the trace is absent. */
   getTraceCost(traceId: string, workspaceId?: string): Promise<TraceCost | null>;
+  /** Executions (traces) that called a given tool, newest-first (M6 drill-down). */
+  listTracesForTool(toolName: string, limit?: number, workspaceId?: string): Promise<TraceListResponse>;
+}
+
+/** Time-series + windowed aggregates and facet discovery (the read-analytics surface). */
+export interface AggregateRepository {
   /** Cost aggregated into day/week time buckets (M5). */
   aggregateCostByPeriod(period: CostPeriod, workspaceId?: string): Promise<CostByPeriodResponse>;
   /** Per-tool operational stats (count/p50/p95/error-rate) over a recent window (M6). */
   aggregateToolStats(workspaceId?: string): Promise<ToolStatsResponse>;
-  /** Executions (traces) that called a given tool, newest-first (M6 drill-down). */
-  listTracesForTool(toolName: string, limit?: number, workspaceId?: string): Promise<TraceListResponse>;
   /** Record that a trace's replay was opened in the UI (M8 north-star). */
   recordReplaySession(traceId: string, workspaceId?: string): Promise<void>;
   /** North-star metrics: traces ingested per day + replay sessions per week (M8). */
@@ -69,11 +78,25 @@ export interface SpanRepository {
   discoverSpanAttributeKeys(workspaceId?: string): Promise<SpanAttributeKey[]>;
   /** M92: facet discovery — top-N distinct values for one attribute key (key bound as a jsonb path). */
   discoverSpanAttributeValues(key: string, workspaceId?: string): Promise<SpanAttributeValue[]>;
+  /**
+   * Agents catalog (M32): spans grouped by the `agent.name` attribute into per-agent
+   * rows (latest-seen, run count, versions, tools, system prompt) with health flags.
+   * Derived (no table); only `agent.name`-bearing spans are cataloged. Empty when none.
+   */
+  aggregateAgents(workspaceId?: string): Promise<Agent[]>;
+}
+
+/** Session list + detail reads. */
+export interface SessionRepository {
   /** Sessions newest-first with per-session scoped aggregates (M13). M81: server-paginated (limit/offset)
    *  with a workspace-scoped total. */
   listSessions(workspaceId?: string, opts?: { limit?: number; offset?: number }): Promise<SessionListResponse>;
   /** One session's scoped aggregates + member traces (M13), or null if absent. */
   getSessionDetail(sessionId: string, workspaceId?: string): Promise<SessionDetailResponse | null>;
+}
+
+/** Trace tags + human annotations. */
+export interface AnnotationRepository {
   /** Add a tag to a trace (M14, idempotent). Returns false if the trace is absent. */
   addTag(traceId: string, tag: string, workspaceId?: string): Promise<boolean>;
   /** Remove a tag from a trace (M14, idempotent — no-op if absent). */
@@ -94,6 +117,10 @@ export interface SpanRepository {
     key: { spanId?: string; name: string; annotatorKind?: string },
     workspaceId?: string,
   ): Promise<void>;
+}
+
+/** Curated datasets + their items. */
+export interface DatasetRepository {
   /** Create a dataset, or return the existing one with the same name (M26d, idempotent). */
   createDataset(name: string, workspaceId?: string): Promise<Dataset>;
   /** All datasets with their item counts, newest-first (M26d); empty when none. */
@@ -117,6 +144,10 @@ export interface SpanRepository {
   renameDataset(datasetId: string, newName: string, workspaceId?: string): Promise<Dataset | null>;
   /** M82: delete a dataset + cascade its items and experiment runs (one tx). Idempotent; false if absent. */
   deleteDataset(datasetId: string, workspaceId?: string): Promise<boolean>;
+}
+
+/** Copilot answer feedback (thumbs up/down). */
+export interface CopilotFeedbackRepository {
   /**
    * M83: record copilot answer feedback (thumbs up/down). UPSERTs on (workspace, trace, turnId) so a
    * re-vote toggles the label instead of duplicating. Returns the persisted record.
@@ -124,6 +155,10 @@ export interface SpanRepository {
   recordAskFeedback(traceId: string, input: AskFeedbackInput, workspaceId?: string): Promise<CopilotFeedbackRecord>;
   /** M83: retract feedback for a turn (the UI "clear"). Idempotent; false if there was no vote. */
   deleteAskFeedback(traceId: string, turnId: string, workspaceId?: string): Promise<boolean>;
+}
+
+/** Human labeling queue + export-to-dataset. */
+export interface LabelingQueueRepository {
   /**
    * Enqueue a span for human labeling (M63). Idempotent on (workspace, trace, span) — a second
    * enqueue of the same span returns the existing item (ON CONFLICT DO NOTHING). Returns the item.
@@ -156,6 +191,10 @@ export interface SpanRepository {
    * dataset (reuses M44) + add each resolved item's trace. `workspace_id` carried. Returns the dataset.
    */
   exportResolvedAsDataset(name: string, workspaceId?: string): Promise<Dataset>;
+}
+
+/** Regression-experiment runs. */
+export interface ExperimentRepository {
   /**
    * Persist an experiment run + its items (M64). Atomic: the run row (aggregates) + all item rows
    * (output/usage/scores jsonb) in one transaction. `workspace_id`-scoped. Returns the run with items.
@@ -176,12 +215,10 @@ export interface SpanRepository {
   listExperimentRuns(datasetId: string | undefined, workspaceId?: string): Promise<ExperimentRun[]>;
   /** One run + its items, or null if absent / another workspace (M64). */
   getExperimentRun(runId: string, workspaceId?: string): Promise<ExperimentRun | null>;
-  /**
-   * Agents catalog (M32): spans grouped by the `agent.name` attribute into per-agent
-   * rows (latest-seen, run count, versions, tools, system prompt) with health flags.
-   * Derived (no table); only `agent.name`-bearing spans are cataloged. Empty when none.
-   */
-  aggregateAgents(workspaceId?: string): Promise<Agent[]>;
+}
+
+/** System-wide age-based retention sweep (operator policy, NOT tenant-scoped). */
+export interface RetentionRepository {
   /**
    * Hard-delete trace data older than `olderThan` (M23 retention) — trace-granular:
    * every trace with `updated_at < olderThan` and all its spans/tags/replay rows,
@@ -191,3 +228,19 @@ export interface SpanRepository {
    */
   prune(olderThan: Date): Promise<PruneStats>;
 }
+
+/**
+ * Persistence port for spans (DIP). The domain declares the contract; the infrastructure layer
+ * (Drizzle/Postgres) implements it. Composed from the role interfaces above (M97 B-M1) — the full
+ * surface is unchanged, so every existing consumer keeps working; new consumers narrow to a role.
+ */
+export interface SpanRepository
+  extends TraceReadRepository,
+    AggregateRepository,
+    SessionRepository,
+    AnnotationRepository,
+    DatasetRepository,
+    CopilotFeedbackRepository,
+    LabelingQueueRepository,
+    ExperimentRepository,
+    RetentionRepository {}

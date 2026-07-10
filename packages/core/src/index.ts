@@ -2,7 +2,19 @@
  * @usetheo/lens-core barrel — domain types, repository port, and Drizzle adapter.
  */
 export { type Span, spanSchema } from "./domain/span.js";
-export { type SpanRepository, type TraceTreeNode } from "./domain/span-repository.js";
+export {
+  type SpanRepository,
+  type TraceTreeNode,
+  type TraceReadRepository,
+  type AggregateRepository,
+  type SessionRepository,
+  type AnnotationRepository,
+  type DatasetRepository,
+  type CopilotFeedbackRepository,
+  type LabelingQueueRepository,
+  type ExperimentRepository,
+  type RetentionRepository,
+} from "./domain/span-repository.js";
 export { NameConflictError, isUniqueViolation } from "./domain/errors.js";
 export { type ApiErrorBody, type FieldIssue, apiError, zodFieldErrors } from "./domain/api-error.js";
 export { type SqlResult, rowsAs } from "./domain/sql-rows.js";
