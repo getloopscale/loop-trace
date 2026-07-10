@@ -8,8 +8,10 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Dev/process: `/dogfood` now provisions REAL `theo_live_*` consumer keys itself (new `scripts/provision-consumer-key.sh`: Kratos identity → browser login → session-token exchange → `POST /v1/api-keys`) and drives the full through-the-edge data round-trip + cross-tenant isolation automatically (`surface-probe.mjs --kratos-container`). Closes the standing edge-round-trip SKIP — the dogfood now tests "complete like a real user" (internal tooling; no product API change)
 
 ### Changed
+- Dev/process: `surface-probe.mjs` direct OTLP-ingest leg now sends the bearer key so the direct API/SDK surfaces pass against a fail-closed (`THEOLENS_REQUIRE_CREDENTIAL=1`) instance — a probe bug the real-user run caught (internal tooling)
 
 ### Deprecated
 
