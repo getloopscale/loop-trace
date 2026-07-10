@@ -20,9 +20,13 @@ function mockEngine(): typeof fetch {
       );
     }
     if (method === "POST" && url.pathname === "/v1/traces/trace-123/annotations") {
-      return new Response(JSON.stringify({ annotations: [{ name: "feedback", label: "regression", annotatorKind: "HUMAN" }] }), {
-        status: 200,
-      });
+      // Faithful to the engine's AnnotationsResponse shape (name/annotatorKind/updatedAt all required).
+      return new Response(
+        JSON.stringify({
+          annotations: [{ name: "feedback", label: "regression", annotatorKind: "HUMAN", updatedAt: "t" }],
+        }),
+        { status: 200 },
+      );
     }
     return new Response("{}", { status: 200 });
   }) as unknown as typeof fetch;
