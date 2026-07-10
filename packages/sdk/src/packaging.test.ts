@@ -16,7 +16,10 @@ import { describe, expect, it } from "vitest";
 const SDK_DIR = fileURLToPath(new URL("..", import.meta.url));
 
 describe("SDK packaging (M7, T2.2)", () => {
-  it("test_sdk_tarball_includes_dist_and_excludes_src", () => {
+  // `pnpm pack` runs `prepack: tsc -b` (a real build) + tar — subprocess I/O that can exceed the
+  // default 5s test timeout under concurrent test load. A generous timeout removes the flakiness
+  // without weakening the assertion (M104: surfaced once the read-SDK sources grew the build).
+  it("test_sdk_tarball_includes_dist_and_excludes_src", { timeout: 60_000 }, () => {
     const dest = mkdtempSync(join(tmpdir(), "lens-sdk-pack-"));
     execFileSync("pnpm", ["pack", "--pack-destination", dest], {
       cwd: SDK_DIR,
@@ -33,6 +36,11 @@ describe("SDK packaging (M7, T2.2)", () => {
     expect(entries).toContain("package/dist/index.js");
     expect(entries).toContain("package/dist/index.d.ts");
     expect(entries).toContain("package/package.json");
+    // M105: the read surface + its (type-erased) generated module must ship so a consumer's
+    // `npm install` gets the read client, not just the ingest SDK.
+    expect(entries).toContain("package/dist/read/client.js");
+    expect(entries).toContain("package/dist/read/client.d.ts");
+    expect(entries).toContain("package/dist/__generated__/openapi.js");
     // No source ships in the published artifact.
     expect(entries.some((e) => e.startsWith("package/src/"))).toBe(false);
   });

@@ -19,6 +19,19 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [0.44.0] - 2026-07-10
+
+### Added
+- Roadmap v11 opened: `ROADMAP-sota-experience-v11.md` — External DX (typed read SDK), M103–M106 (SDK read-client core → typed errors/resilience → contract proof + publish → quickstart/samples)
+- `@usetheo/lens-sdk`: `LensReadClient` — a typed read client for the 7 named-component read routes (`listTraces`, `getSpan`, `observability`, `listSessions`, `costByPeriod`, `toolStats`, `listDatasets`), authenticated by a `theo_live_*` key over native `fetch`, with response types generated from the engine's OpenAPI and pinned by a drift gate (M103)
+- `@usetheo/lens-sdk`: `LensApiError` — one typed error every read method throws (`status`, `code`, `message`, `details`), plus a resilient transport that retries transient failures (408/429/5xx/network/timeout) with bounded exponential backoff honoring `Retry-After`, fails fast on a fatal 4xx, and enforces a per-request timeout via `AbortController` (M104)
+- `@usetheo/lens-sdk`: hermetic SDK↔engine contract test (drives every read method against the real engine app + Postgres, asserting typed round-trip + the real `{code,message}` error envelope), a `verify-types` CI drift gate, and packaging assertions that the read surface ships in the published tarball (M105)
+- `@usetheo/lens-sdk`: `LensReadClient.capabilities()` (`GET /v1` discovery — service, version, `/openapi.json` pointer), a doc-smoke-tested `README.md` quickstart, and runnable env-gated `examples/` (M106)
+
+
+### Fixed
+- `@usetheo/lens-sdk`: `listDatasets()` now returns the `{ datasets: [...] }` wrapper the `GET /v1/datasets` route actually emits (was mistyped as a bare array in M103; the engine OpenAPI now exposes a `DatasetsResponse` component so the SDK type matches) — caught by the M105 contract test (M105)
+
 ## [0.43.0] - 2026-07-10
 
 ### Added

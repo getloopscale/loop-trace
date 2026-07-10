@@ -24,6 +24,11 @@ export default defineConfig({
       "@usetheo/lens-core": fileURLToPath(
         new URL("./packages/core/src/index.ts", import.meta.url),
       ),
+      // M105: the SDK ↔ engine contract test builds the real app via createApp (exported from the
+      // api test barrel). Mirrors the contract config so `@usetheo/lens-api` resolves to src.
+      "@usetheo/lens-api": fileURLToPath(
+        new URL("./packages/api/src/index.ts", import.meta.url),
+      ),
     },
   },
   test: {
