@@ -14,9 +14,20 @@ export class NameConflictError extends Error {
 /** True when a caught error is a Postgres unique-violation (SQLSTATE 23505). Drizzle wraps the pg error,
  *  so check both the error itself and its `.cause` (the underlying `pg` error carrying the SQLSTATE code). */
 export function isUniqueViolation(err: unknown): boolean {
+  return isSqlState(err, "23505");
+}
+
+/** True when a caught error is a Postgres foreign-key violation (SQLSTATE 23503) — e.g. an insert that
+ *  races a concurrent parent delete (M101 / ADR 0003). Same wrap-aware check as {@link isUniqueViolation}. */
+export function isForeignKeyViolation(err: unknown): boolean {
+  return isSqlState(err, "23503");
+}
+
+/** Drizzle wraps the pg error, so check both the error itself and its `.cause` for the SQLSTATE. */
+function isSqlState(err: unknown, state: string): boolean {
   const code = (e: unknown): string | undefined =>
     typeof e === "object" && e !== null ? (e as { code?: string }).code : undefined;
-  if (code(err) === "23505") return true;
+  if (code(err) === state) return true;
   const cause = typeof err === "object" && err !== null ? (err as { cause?: unknown }).cause : undefined;
-  return code(cause) === "23505";
+  return code(cause) === state;
 }

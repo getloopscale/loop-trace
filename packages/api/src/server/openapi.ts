@@ -89,10 +89,27 @@ export interface MountedRoute {
 }
 
 /**
+ * M102 (M96 F5) — memoize the generated document by (routes signature, version). The route set is
+ * fixed once the app is built, so `/openapi.json` (an unauthenticated endpoint) rebuilds the spec at
+ * most once per distinct signature instead of on every request. Bounded (one entry per app shape).
+ */
+const docCache = new Map<string, Record<string, unknown>>();
+
+/**
  * Build the OpenAPI 3 document. `routes` is `app.routes` from the live Hono app, so the path list
- * always matches what is mounted. `version` stamps `info.version`.
+ * always matches what is mounted. `version` stamps `info.version`. Memoized (see docCache).
  */
 export function buildOpenApiDocument(routes: MountedRoute[], version = "dev"): Record<string, unknown> {
+  const cacheKey = `${version}\n${routes.map((r) => `${r.method} ${r.path}`).join("\n")}`;
+  const cached = docCache.get(cacheKey);
+  if (cached) return cached;
+  // Freeze the cached doc so a future caller mutating the shared object can never poison the cache.
+  const doc = Object.freeze(generateOpenApiDocument(routes, version));
+  docCache.set(cacheKey, doc);
+  return doc;
+}
+
+function generateOpenApiDocument(routes: MountedRoute[], version: string): Record<string, unknown> {
   const registry = new OpenAPIRegistry();
   for (const [name, schema] of Object.entries(namedSchemas())) registry.register(name, schema);
   const components = new OpenApiGeneratorV3(registry.definitions).generateComponents();

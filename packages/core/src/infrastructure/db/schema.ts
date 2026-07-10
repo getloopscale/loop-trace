@@ -348,7 +348,12 @@ export const datasetItems = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     workspaceId: workspaceIdCol(),
-    datasetId: uuid("dataset_id").notNull(),
+    datasetId: uuid("dataset_id")
+      .notNull()
+      // M101 (B-L3 / ADR 0003) — a real FK so a concurrent deleteDataset can NEVER leave an orphan
+      // item: the insert's referential-integrity lock blocks the delete until it commits, then the
+      // cascade removes the item (or the insert fails 23503 → the caller returns false).
+      .references(() => datasets.id, { onDelete: "cascade" }),
     // The source ref: a real trace_id for a trace-sourced item, OR a synthetic `replay-{uuid}` id for a
     // playground-replay item (M55) whose input/output live in the snapshot columns. Always present, so
     // the item stays addressable (view + remove by this id) and the unique index dedups correctly.

@@ -16,6 +16,8 @@ import {
   type Evaluator,
   type EvaluatorRepository,
   type EngineDeps,
+  apiError,
+  zodFieldErrors,
 } from "@usetheo/lens-core";
 
 import { getPrincipal } from "../auth/middleware.js";
@@ -52,10 +54,10 @@ async function readJson(c: Context): Promise<unknown | null> {
 
 export async function createEvaluatorHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
   const body = await readJson(c);
-  if (body === null) return c.json({ code: "INVALID_BODY", message: "invalid json body" }, 400);
+  if (body === null) return c.json(apiError("INVALID_BODY", "invalid json body"), 400);
   const parsed = evaluatorSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ code: "INVALID_EVALUATOR", message: parsed.error.message }, 400);
+    return c.json(apiError("INVALID_EVALUATOR", "invalid evaluator", zodFieldErrors(parsed.error)), 400);
   }
   const ev = parsed.data;
   // EC-1: a non-empty rule predicate that parses to zero clauses would match every
@@ -63,7 +65,7 @@ export async function createEvaluatorHandler(c: Context, deps: EvaluatorApiDeps)
   if (ev.kind === "rule") {
     const reason = validatePredicate(ev.config.predicate);
     if (reason !== null) {
-      return c.json({ code: "INVALID_PREDICATE", message: reason }, 400);
+      return c.json(apiError("INVALID_PREDICATE", reason), 400);
     }
   }
   const rec = await deps.repo.createEvaluator(ev, getPrincipal(c).workspaceId);
@@ -77,37 +79,37 @@ export async function listEvaluatorsHandler(c: Context, deps: EvaluatorApiDeps):
 
 export async function getEvaluatorHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
   const rec = await deps.repo.getEvaluator(c.req.param("id") ?? "", getPrincipal(c).workspaceId);
-  return rec ? c.json(rec, 200) : c.json({ code: "EVALUATOR_NOT_FOUND", message: "not found" }, 404);
+  return rec ? c.json(rec, 200) : c.json(apiError("EVALUATOR_NOT_FOUND", "not found"), 404);
 }
 
 export async function updateEvaluatorHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
   const body = await readJson(c);
-  if (body === null) return c.json({ code: "INVALID_BODY", message: "invalid json body" }, 400);
+  if (body === null) return c.json(apiError("INVALID_BODY", "invalid json body"), 400);
   const parsed = evaluatorUpdateSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ code: "INVALID_EVALUATOR", message: parsed.error.message }, 400);
+    return c.json(apiError("INVALID_EVALUATOR", "invalid evaluator", zodFieldErrors(parsed.error)), 400);
   }
   const updates = parsed.data;
   // If the caller changes kind/config, validate the pair against the create union (never store a
   // half-typed config). A rename (`{name}`) skips this.
   if (updates.kind !== undefined || updates.config !== undefined) {
     if (updates.kind === undefined || updates.config === undefined) {
-      return c.json({ code: "INVALID_EVALUATOR", message: "kind and config must be provided together" }, 400);
+      return c.json(apiError("INVALID_EVALUATOR", "kind and config must be provided together"), 400);
     }
     const full = evaluatorSchema.safeParse({ name: updates.name ?? "placeholder_name", kind: updates.kind, config: updates.config });
     if (!full.success) {
-      return c.json({ code: "INVALID_EVALUATOR", message: full.error.message }, 400);
+      return c.json(apiError("INVALID_EVALUATOR", "invalid evaluator", zodFieldErrors(full.error)), 400);
     }
     if (updates.kind === "rule") {
       const reason = validatePredicate((updates.config as { predicate: string }).predicate);
-      if (reason !== null) return c.json({ code: "INVALID_PREDICATE", message: reason }, 400);
+      if (reason !== null) return c.json(apiError("INVALID_PREDICATE", reason), 400);
     }
   }
   try {
     const rec = await deps.repo.updateEvaluator(c.req.param("id") ?? "", updates as Partial<Evaluator>, getPrincipal(c).workspaceId);
-    return rec ? c.json(rec, 200) : c.json({ code: "EVALUATOR_NOT_FOUND", message: "not found" }, 404);
+    return rec ? c.json(rec, 200) : c.json(apiError("EVALUATOR_NOT_FOUND", "not found"), 404);
   } catch (err) {
-    if (err instanceof NameConflictError) return c.json({ code: "NAME_CONFLICT", message: err.message }, 409);
+    if (err instanceof NameConflictError) return c.json(apiError("NAME_CONFLICT", err.message), 409);
     throw err;
   }
 }
@@ -121,7 +123,7 @@ export async function runEvaluatorHandler(c: Context, deps: EvaluatorApiDeps): P
   const ws = getPrincipal(c).workspaceId;
   const ev = await deps.repo.getEvaluator(c.req.param("id") ?? "", ws);
   if (ev === null) {
-    return c.json({ code: "EVALUATOR_NOT_FOUND", message: "not found" }, 404);
+    return c.json(apiError("EVALUATOR_NOT_FOUND", "not found"), 404);
   }
   // Validate the run body at the boundary (EVAL-2): garbage traceIds / a negative or
   // non-integer limit are rejected rather than reaching the engine untrusted.
@@ -129,14 +131,14 @@ export async function runEvaluatorHandler(c: Context, deps: EvaluatorApiDeps): P
   const opts: { traceIds?: string[]; limit?: number } = {};
   if (raw && raw["traceIds"] !== undefined) {
     if (!Array.isArray(raw["traceIds"]) || raw["traceIds"].some((t) => typeof t !== "string")) {
-      return c.json({ code: "INVALID_RUN_OPTS", message: "traceIds must be string[]" }, 400);
+      return c.json(apiError("INVALID_RUN_OPTS", "traceIds must be string[]"), 400);
     }
     opts.traceIds = raw["traceIds"] as string[];
   }
   if (raw && raw["limit"] !== undefined) {
     const lim = raw["limit"];
     if (typeof lim !== "number" || !Number.isInteger(lim) || lim <= 0) {
-      return c.json({ code: "INVALID_RUN_OPTS", message: "limit must be a positive integer" }, 400);
+      return c.json(apiError("INVALID_RUN_OPTS", "limit must be a positive integer"), 400);
     }
     opts.limit = lim;
   }
@@ -146,17 +148,17 @@ export async function runEvaluatorHandler(c: Context, deps: EvaluatorApiDeps): P
 
 export async function createGuardHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
   const body = await readJson(c);
-  if (body === null) return c.json({ code: "INVALID_BODY", message: "invalid json body" }, 400);
+  if (body === null) return c.json(apiError("INVALID_BODY", "invalid json body"), 400);
   const parsed = guardSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ code: "INVALID_GUARD", message: parsed.error.message }, 400);
+    return c.json(apiError("INVALID_GUARD", "invalid guard", zodFieldErrors(parsed.error)), 400);
   }
   const ws = getPrincipal(c).workspaceId;
   // EVAL-5: reject a guard pointing at a non-existent (or cross-workspace) evaluator
   // loudly (404) instead of storing an inert guard.
   const target = await deps.repo.getEvaluator(parsed.data.evaluatorId, ws);
   if (target === null) {
-    return c.json({ code: "EVALUATOR_NOT_FOUND", message: "guard.evaluatorId not found in workspace" }, 404);
+    return c.json(apiError("EVALUATOR_NOT_FOUND", "guard.evaluatorId not found in workspace"), 404);
   }
   const rec = await deps.repo.createGuard(parsed.data, ws);
   return c.json(rec, 200);

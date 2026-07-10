@@ -15,7 +15,7 @@ export {
   type ExperimentRepository,
   type RetentionRepository,
 } from "./domain/span-repository.js";
-export { NameConflictError, isUniqueViolation } from "./domain/errors.js";
+export { NameConflictError, isUniqueViolation, isForeignKeyViolation } from "./domain/errors.js";
 export { type ApiErrorBody, type FieldIssue, apiError, zodFieldErrors } from "./domain/api-error.js";
 export { type SqlResult, rowsAs } from "./domain/sql-rows.js";
 // M22: multi-tenant workspace-isolation domain types (ported from theo-memory).
