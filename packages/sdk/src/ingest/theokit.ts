@@ -116,7 +116,9 @@ export function sdkMessagesToOtlp(
 
   const rootId = spanId(`${runId}:root`);
   const rootAttrs: OtlpAttr[] = [];
-  if (sysInit?.model) rootAttrs.push(strAttr(GEN_AI.REQUEST_MODEL, sysInit.model));
+  // `model` is a `ModelSelection` ({id,params}) on the wire, or a bare string — extract the id.
+  const modelId = typeof sysInit?.model === "string" ? sysInit.model : sysInit?.model?.id;
+  if (modelId) rootAttrs.push(strAttr(GEN_AI.REQUEST_MODEL, modelId));
   if (agentId) {
     rootAttrs.push(strAttr("agent.id", agentId), strAttr("agent.name", agentId));
   }

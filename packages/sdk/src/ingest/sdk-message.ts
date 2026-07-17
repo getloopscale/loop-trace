@@ -27,13 +27,20 @@ export interface ToolUseBlock {
   readonly input: unknown;
 }
 
-/** Init metadata, emitted once at the start of a run. */
+/** A model selection: an id + optional params. Mirrors `@theokit/sdk` `ModelSelection`. */
+export interface ModelSelection {
+  readonly id: string;
+  readonly params?: readonly unknown[];
+}
+
+/** Init metadata, emitted once at the start of a run. `model` is a `ModelSelection` on the wire (a
+ *  `string` is also accepted for a simple shape); the mapper extracts `.id` defensively. */
 export interface SDKSystemMessage {
   readonly type: "system";
   readonly subtype?: "init";
   readonly agent_id: string;
   readonly run_id: string;
-  readonly model?: string;
+  readonly model?: string | ModelSelection;
   readonly tools?: readonly string[];
 }
 
@@ -65,7 +72,8 @@ export interface SDKThinkingMessage {
   readonly thinking_duration_ms?: number;
 }
 
-/** Tool invocation lifecycle. `args`/`result` are unstable → `unknown`. */
+/** Tool invocation lifecycle. `args`/`result` are unstable → `unknown`. `truncated` flags that the
+ *  runtime already capped `args`/`result` before emitting them. */
 export interface SDKToolUseMessage {
   readonly type: "tool_call";
   readonly agent_id: string;
@@ -75,6 +83,7 @@ export interface SDKToolUseMessage {
   readonly status: "running" | "completed" | "error";
   readonly args?: unknown;
   readonly result?: unknown;
+  readonly truncated?: { readonly args?: boolean; readonly result?: boolean };
 }
 
 /** Cloud run lifecycle transitions. */

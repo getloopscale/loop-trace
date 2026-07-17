@@ -38,6 +38,21 @@ describe("sdkMessagesToOtlp (M115 mapper)", () => {
     expect(a["agent.id"]).toBe("agentA");
   });
 
+  it("test_system_init_model_as_model_selection_extracts_id", () => {
+    // The @theokit/sdk wire shape: model is a ModelSelection {id, params}, not a string.
+    const m: SDKMessage = { type: "system", subtype: "init", agent_id: "a", run_id: "r", model: { id: "claude-opus-4-8", params: [{ p: 1 }] } };
+    const { root, attrsOf } = flat(sdkMessagesToOtlp([m], undefined, opts));
+    expect(attrsOf(root)["gen_ai.request.model"]).toBe("claude-opus-4-8"); // id extracted, never [object Object]
+  });
+
+  it("test_tool_call_running_status_skipped_no_span", () => {
+    const running: SDKMessage = { type: "tool_call", agent_id: "a", run_id: "r", call_id: "c1", name: "Bash", status: "running", args: { cmd: "ls" } };
+    const { spans } = flat(sdkMessagesToOtlp([sys("r"), running], undefined, opts));
+    // A `running` tool_call is a lifecycle-start, not a completed span — only the root exists.
+    expect(spans.filter((s) => s.name === "Bash")).toHaveLength(0);
+    expect(spans).toHaveLength(1);
+  });
+
   it("test_user_message_maps_to_input_value", () => {
     const { root, attrsOf } = flat(sdkMessagesToOtlp([sys("r"), user("r", "What is 2+2?")], undefined, opts));
     expect(attrsOf(root)["input.value"]).toBe("What is 2+2?");
