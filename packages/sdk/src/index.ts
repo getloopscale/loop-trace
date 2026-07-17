@@ -59,6 +59,28 @@ export type {
   ReplayResult,
   ReplaySessionBody,
   ReplaySessionAck,
+  // M117 read parity — GENERATED (zod-backed) response aliases + their option types.
+  TraceCostResponse,
+  AgentCatalogResponse,
+  NorthStarResponse,
+  EvaluatorMetricsResponse,
+  ScoresResponse,
+  SpanFacetsResponse,
+  SessionDetailResponse,
+  LabelingQueuePage,
+  MetricsRangeOptions,
+  SpanAttributesOptions,
+  ListLabelingQueueOptions,
+  // M117 read parity — HAND (bare `c.json`) response + request types.
+  TraceTree,
+  ListEvaluatorsResponse,
+  ListGuardsResponse,
+  GuardBreachesResponse,
+  ListExperimentRunsResponse,
+  RunCompareDeltas,
+  CompareExperimentRunsResponse,
+  AskCopilotBody,
+  AskCopilotResponse,
 } from "./read/types.js";
 
 // M115 — ingest the Claude Code / @theokit/sdk `SDKMessage` output: translate a run to OTLP + record it.
