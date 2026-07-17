@@ -11,15 +11,24 @@ import {
 } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 import {
+  agentCatalogResponseSchema,
   annotationsResponseSchema,
   costByPeriodResponseSchema,
   datasetDetailSchema,
   datasetSchema,
   datasetsResponseSchema,
+  evaluatorsResponseSchema,
+  labelingQueueItemSchema,
+  labelingQueuePageSchema,
+  northStarResponseSchema,
   observabilityResponseSchema,
+  scoresResponseSchema,
+  sessionDetailResponseSchema,
   sessionListResponseSchema,
+  spanFacetsResponseSchema,
   spanSchema,
   toolStatsResponseSchema,
+  traceCostSchema,
   traceListResponseSchema,
   traceTagsResponseSchema,
 } from "@usetheo/lens-core";
@@ -53,6 +62,18 @@ function namedSchemas(): Record<string, z.ZodTypeAny> {
     DatasetDetail: datasetDetailSchema,
     TraceTagsResponse: traceTagsResponseSchema,
     AnnotationsResponse: annotationsResponseSchema,
+    // M117 — read-parity zod response components (the GENERATED half of ADR D1). Each is a route that
+    // `.parse()`s a zod DTO, so surfacing it as a named component lets `openapi-typescript` emit a
+    // typed schema the SDK aliases (drift-gated) instead of a hand-authored type that can drift.
+    TraceCostResponse: traceCostSchema,
+    AgentCatalogResponse: agentCatalogResponseSchema,
+    NorthStarResponse: northStarResponseSchema,
+    EvaluatorsResponse: evaluatorsResponseSchema,
+    ScoresResponse: scoresResponseSchema,
+    SpanFacetsResponse: spanFacetsResponseSchema,
+    SessionDetailResponse: sessionDetailResponseSchema,
+    LabelingQueuePage: labelingQueuePageSchema,
+    LabelingQueueItem: labelingQueueItemSchema,
   };
 }
 
@@ -74,6 +95,20 @@ const RESPONSE_FOR_ROUTE: Record<string, string> = {
   "DELETE /v1/traces/:traceId/tags": "TraceTagsResponse",
   "POST /v1/traces/:traceId/annotations": "AnnotationsResponse",
   "DELETE /v1/traces/:traceId/annotations": "AnnotationsResponse",
+  // M117 — read-parity zod response components (13 routes → GENERATED SDK types, ADR D1).
+  "GET /v1/traces/:traceId/cost": "TraceCostResponse",
+  "GET /v1/traces/:traceId/tags": "TraceTagsResponse",
+  "GET /v1/traces/:traceId/annotations": "AnnotationsResponse",
+  "GET /v1/agents": "AgentCatalogResponse",
+  "GET /v1/analytics/tools/:toolName/traces": "TraceListResponse",
+  "GET /v1/metrics/north-star": "NorthStarResponse",
+  "GET /v1/metrics/evaluators": "EvaluatorsResponse",
+  "GET /v1/metrics/scores": "ScoresResponse",
+  "GET /v1/metrics/span-attributes": "SpanFacetsResponse",
+  "GET /v1/sessions/:sessionId": "SessionDetailResponse",
+  "GET /v1/datasets/:datasetId": "DatasetDetail",
+  "GET /v1/labeling-queue": "LabelingQueuePage",
+  "GET /v1/labeling-queue/:itemId": "LabelingQueueItem",
 };
 
 const HONO_PARAM = /:([A-Za-z0-9_]+)/g;

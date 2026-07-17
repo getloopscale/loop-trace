@@ -45,4 +45,28 @@ describe("OpenAPI snapshot drift gate (M103)", () => {
       expect(schemas, `missing named component ${name}`).toHaveProperty(name);
     }
   });
+
+  // M117 — the 13 read-parity zod routes must surface their named response components so the SDK
+  // types are GENERATED (drift-gated), not hand-authored. test_openapi_document_contains_trace_cost_component.
+  it("carries the 13 M117 read-parity zod response components", () => {
+    const doc = freshDoc() as { components: { schemas: Record<string, unknown> } };
+    const schemas = doc.components.schemas;
+    for (const name of [
+      "TraceCostResponse",
+      "TraceTagsResponse",
+      "AnnotationsResponse",
+      "AgentCatalogResponse",
+      "TraceListResponse",
+      "NorthStarResponse",
+      "EvaluatorsResponse",
+      "ScoresResponse",
+      "SpanFacetsResponse",
+      "SessionDetailResponse",
+      "DatasetDetail",
+      "LabelingQueuePage",
+      "LabelingQueueItem",
+    ]) {
+      expect(schemas, `missing M117 named component ${name}`).toHaveProperty(name);
+    }
+  });
 });

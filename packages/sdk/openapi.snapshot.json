@@ -251,7 +251,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/TraceCostResponse"
                 }
               }
             }
@@ -385,7 +385,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/AgentCatalogResponse"
                 }
               }
             }
@@ -499,7 +499,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/TraceListResponse"
                 }
               }
             }
@@ -680,7 +680,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/NorthStarResponse"
                 }
               }
             }
@@ -794,7 +794,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/EvaluatorsResponse"
                 }
               }
             }
@@ -851,7 +851,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ScoresResponse"
                 }
               }
             }
@@ -908,7 +908,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/SpanFacetsResponse"
                 }
               }
             }
@@ -1022,7 +1022,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/SessionDetailResponse"
                 }
               }
             }
@@ -1089,7 +1089,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/TraceTagsResponse"
                 }
               }
             }
@@ -1286,7 +1286,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/AnnotationsResponse"
                 }
               }
             }
@@ -1595,7 +1595,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/DatasetDetail"
                 }
               }
             }
@@ -1934,7 +1934,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/LabelingQueuePage"
                 }
               }
             }
@@ -1991,7 +1991,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/LabelingQueueItem"
                 }
               }
             }
@@ -2932,6 +2932,571 @@
         },
         "required": [
           "annotations"
+        ],
+        "additionalProperties": false
+      },
+      "TraceCostResponse": {
+        "type": "object",
+        "properties": {
+          "traceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "costUsd": {
+            "type": "number"
+          },
+          "inputTokens": {
+            "type": "integer"
+          },
+          "outputTokens": {
+            "type": "integer"
+          },
+          "totalTokens": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "traceId",
+          "costUsd",
+          "inputTokens",
+          "outputTokens",
+          "totalTokens"
+        ],
+        "additionalProperties": false
+      },
+      "AgentCatalogResponse": {
+        "type": "object",
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "firstSeenAt": {
+                  "type": "string"
+                },
+                "latestSeenAt": {
+                  "type": "string"
+                },
+                "runCount": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "versions": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "versionCount": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "tools": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "systemPrompt": {
+                  "type": "string"
+                },
+                "stale": {
+                  "type": "boolean"
+                },
+                "highChurn": {
+                  "type": "boolean"
+                },
+                "anonymous": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "name",
+                "firstSeenAt",
+                "latestSeenAt",
+                "runCount",
+                "versions",
+                "versionCount",
+                "tools",
+                "stale",
+                "highChurn",
+                "anonymous"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "agents"
+        ],
+        "additionalProperties": false
+      },
+      "NorthStarResponse": {
+        "type": "object",
+        "properties": {
+          "tracesPerDay": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "period": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "period",
+                "count"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "replaySessionsPerWeek": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "period": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "period",
+                "count"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "tracesPerDay",
+          "replaySessionsPerWeek"
+        ],
+        "additionalProperties": false
+      },
+      "EvaluatorsResponse": {
+        "type": "object",
+        "properties": {
+          "evaluators": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "avgScore": {
+                  "type": "number"
+                },
+                "labels": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              },
+              "required": [
+                "name",
+                "count",
+                "labels"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "evaluators"
+        ],
+        "additionalProperties": false
+      },
+      "ScoresResponse": {
+        "type": "object",
+        "properties": {
+          "range": {
+            "type": "string",
+            "enum": [
+              "1h",
+              "24h",
+              "7d",
+              "30d"
+            ]
+          },
+          "scores": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "periodStart": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "sampleCount": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "avgScore": {
+                  "type": "number"
+                },
+                "labels": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              },
+              "required": [
+                "periodStart",
+                "name",
+                "sampleCount",
+                "labels"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "range",
+          "scores"
+        ],
+        "additionalProperties": false
+      },
+      "SpanFacetsResponse": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "keys"
+                ]
+              },
+              "keys": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "count"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "mode",
+              "keys"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "values"
+                ]
+              },
+              "key": {
+                "type": "string"
+              },
+              "values": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "count"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "mode",
+              "key",
+              "values"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "SessionDetailResponse": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "firstSeenAt": {
+            "type": "string"
+          },
+          "lastSeenAt": {
+            "type": "string"
+          },
+          "traceCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "costUsd": {
+            "type": "number",
+            "minimum": 0
+          },
+          "totalTokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "errorRate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "latencyP50Ms": {
+            "type": "number",
+            "minimum": 0
+          },
+          "latencyP95Ms": {
+            "type": "number",
+            "minimum": 0
+          },
+          "traces": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "traceId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "sessionId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "startTimeUnixNano": {
+                  "type": "string",
+                  "pattern": "^\\d+$"
+                },
+                "durationMs": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "statusCode": {
+                  "type": "string"
+                },
+                "totalTokens": {
+                  "type": "integer"
+                },
+                "model": {
+                  "type": "string"
+                },
+                "costUsd": {
+                  "type": "number"
+                },
+                "rootOperationName": {
+                  "type": "string"
+                },
+                "rootToolName": {
+                  "type": "string"
+                },
+                "endTimeUnixNano": {
+                  "type": "string",
+                  "pattern": "^\\d+$"
+                },
+                "inputPreview": {
+                  "type": "string"
+                },
+                "outputPreview": {
+                  "type": "string"
+                },
+                "evaluationsCount": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "traceId"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "sessionId",
+          "firstSeenAt",
+          "lastSeenAt",
+          "traceCount",
+          "costUsd",
+          "totalTokens",
+          "errorRate",
+          "latencyP50Ms",
+          "latencyP95Ms",
+          "traces"
+        ],
+        "additionalProperties": false
+      },
+      "LabelingQueuePage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "traceId": {
+                  "type": "string"
+                },
+                "spanId": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pending",
+                    "resolved"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "number"
+                },
+                "note": {
+                  "type": "string"
+                },
+                "createdBy": {
+                  "type": "string"
+                },
+                "resolvedBy": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "resolvedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "traceId",
+                "spanId",
+                "status",
+                "createdBy",
+                "createdAt"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "additionalProperties": false
+      },
+      "LabelingQueueItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
+          },
+          "spanId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "resolved"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          },
+          "note": {
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "resolvedBy": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "resolvedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "traceId",
+          "spanId",
+          "status",
+          "createdBy",
+          "createdAt"
         ],
         "additionalProperties": false
       }

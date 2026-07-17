@@ -302,7 +302,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["TraceCostResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -448,7 +448,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["AgentCatalogResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -594,7 +594,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["TraceListResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -810,7 +810,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["NorthStarResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -954,7 +954,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["EvaluatorsResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -1026,7 +1026,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["ScoresResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -1098,7 +1098,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["SpanFacetsResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -1244,7 +1244,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["SessionDetailResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -1318,7 +1318,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["TraceTagsResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -1508,7 +1508,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["AnnotationsResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -1826,7 +1826,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["DatasetDetail"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -2163,7 +2163,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["LabelingQueuePage"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -2237,7 +2237,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["LabelingQueueItem"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -2680,6 +2680,138 @@ export interface components {
                 annotatorKind: string;
                 updatedAt: string;
             }[];
+        };
+        TraceCostResponse: {
+            traceId: string;
+            costUsd: number;
+            inputTokens: number;
+            outputTokens: number;
+            totalTokens: number;
+        };
+        AgentCatalogResponse: {
+            agents: {
+                name: string;
+                firstSeenAt: string;
+                latestSeenAt: string;
+                runCount: number;
+                versions: string[];
+                versionCount: number;
+                tools: string[];
+                systemPrompt?: string;
+                stale: boolean;
+                highChurn: boolean;
+                anonymous: boolean;
+            }[];
+        };
+        NorthStarResponse: {
+            tracesPerDay: {
+                period: string;
+                count: number;
+            }[];
+            replaySessionsPerWeek: {
+                period: string;
+                count: number;
+            }[];
+        };
+        EvaluatorsResponse: {
+            evaluators: {
+                name: string;
+                count: number;
+                avgScore?: number;
+                labels: {
+                    [key: string]: number;
+                };
+            }[];
+        };
+        ScoresResponse: {
+            /** @enum {string} */
+            range: "1h" | "24h" | "7d" | "30d";
+            scores: {
+                periodStart: string;
+                name: string;
+                sampleCount: number;
+                avgScore?: number;
+                labels: {
+                    [key: string]: number;
+                };
+            }[];
+        };
+        SpanFacetsResponse: {
+            /** @enum {string} */
+            mode: "keys";
+            keys: {
+                key: string;
+                count: number;
+            }[];
+        } | {
+            /** @enum {string} */
+            mode: "values";
+            key: string;
+            values: {
+                value: string;
+                count: number;
+            }[];
+        };
+        SessionDetailResponse: {
+            sessionId: string;
+            firstSeenAt: string;
+            lastSeenAt: string;
+            traceCount: number;
+            costUsd: number;
+            totalTokens: number;
+            errorRate: number;
+            latencyP50Ms: number;
+            latencyP95Ms: number;
+            traces: {
+                traceId: string;
+                sessionId?: string;
+                name?: string;
+                startTimeUnixNano?: string;
+                durationMs?: number;
+                statusCode?: string;
+                totalTokens?: number;
+                model?: string;
+                costUsd?: number;
+                rootOperationName?: string;
+                rootToolName?: string;
+                endTimeUnixNano?: string;
+                inputPreview?: string;
+                outputPreview?: string;
+                evaluationsCount?: number;
+            }[];
+        };
+        LabelingQueuePage: {
+            items: {
+                id: string;
+                traceId: string;
+                spanId: string;
+                /** @enum {string} */
+                status: "pending" | "resolved";
+                label?: string;
+                score?: number;
+                note?: string;
+                createdBy: string;
+                resolvedBy?: string;
+                createdAt: string;
+                resolvedAt?: string;
+            }[];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        LabelingQueueItem: {
+            id: string;
+            traceId: string;
+            spanId: string;
+            /** @enum {string} */
+            status: "pending" | "resolved";
+            label?: string;
+            score?: number;
+            note?: string;
+            createdBy: string;
+            resolvedBy?: string;
+            createdAt: string;
+            resolvedAt?: string;
         };
     };
     responses: never;
