@@ -18,8 +18,11 @@ import type {
   AgentCatalogResponse,
   AnnotateBody,
   AnnotationsResponse,
+  AskCopilotBody,
+  AskCopilotResponse,
   AskFeedbackBody,
   Capabilities,
+  CompareExperimentRunsResponse,
   CopilotFeedbackRecord,
   CostByPeriodOptions,
   CostByPeriodResponse,
@@ -36,9 +39,13 @@ import type {
   ExperimentRun,
   ExportLabelingBody,
   GuardBody,
+  GuardBreachesResponse,
   GuardRecord,
   LabelingQueueItem,
   LabelingQueuePage,
+  ListEvaluatorsResponse,
+  ListExperimentRunsResponse,
+  ListGuardsResponse,
   ListLabelingQueueOptions,
   ListSessionsOptions,
   ListTracesOptions,
@@ -64,6 +71,7 @@ import type {
   TraceCostResponse,
   TraceListResponse,
   TraceTagsResponse,
+  TraceTree,
   UpdateDatasetBody,
 } from "./types.js";
 
@@ -406,5 +414,72 @@ export class LensReadClient extends LensReadTransport {
   /** `GET /v1/labeling-queue/{itemId}` — a single queue item (read side of enqueue/resolve). */
   getLabelingItem(itemId: string): Promise<LabelingQueueItem> {
     return this.request<LabelingQueueItem>(`/v1/labeling-queue/${encodeURIComponent(itemId)}`);
+  }
+
+  // ─── M117 read parity — HAND (bare `c.json`, no zod schema) reads. ───
+  // The 8 GETs are idempotent → the `request` default (retryNetwork:true). `askCopilot` is a POST
+  // scoped observability:read but it launches BILLABLE provider work → `send(..., retryNetwork:false)`
+  // so a lost response is never auto-retried into a double-bill (the M108 lesson applied to runEvaluator).
+  // Types are hand-authored (no generated schema) and pinned by the T2.3 hermetic contract test.
+
+  /** `GET /v1/traces/{traceId}` — the reconstructed trace tree (root span + recursive children). */
+  getTrace(traceId: string): Promise<TraceTree> {
+    return this.request<TraceTree>(`/v1/traces/${encodeURIComponent(traceId)}`);
+  }
+
+  /** `GET /v1/evaluators` — the workspace's evaluators, wrapped as `{ evaluators: [...] }`. */
+  listEvaluators(): Promise<ListEvaluatorsResponse> {
+    return this.request<ListEvaluatorsResponse>("/v1/evaluators");
+  }
+
+  /** `GET /v1/evaluators/{id}` — a single evaluator (404 `EVALUATOR_NOT_FOUND` when absent). */
+  getEvaluator(id: string): Promise<EvaluatorRecord> {
+    return this.request<EvaluatorRecord>(`/v1/evaluators/${encodeURIComponent(id)}`);
+  }
+
+  /** `GET /v1/guards` — the workspace's guards, wrapped as `{ guards: [...] }`. */
+  listGuards(): Promise<ListGuardsResponse> {
+    return this.request<ListGuardsResponse>("/v1/guards");
+  }
+
+  /** `GET /v1/guards/{id}/breaches` — the trace ids a guard flagged, wrapped as `{ traceIds: [...] }`. */
+  getGuardBreaches(id: string): Promise<GuardBreachesResponse> {
+    return this.request<GuardBreachesResponse>(`/v1/guards/${encodeURIComponent(id)}/breaches`);
+  }
+
+  /** `GET /v1/experiment-runs?datasetId=` — the workspace's runs (optionally scoped to a dataset). */
+  listExperimentRuns(options: { datasetId?: string } = {}): Promise<ListExperimentRunsResponse> {
+    return this.request<ListExperimentRunsResponse>("/v1/experiment-runs", {
+      datasetId: options.datasetId,
+    });
+  }
+
+  /** `GET /v1/experiment-runs/{runId}` — a single run + its items (404 `RUN_NOT_FOUND` when absent). */
+  getExperimentRun(runId: string): Promise<ExperimentRun> {
+    return this.request<ExperimentRun>(`/v1/experiment-runs/${encodeURIComponent(runId)}`);
+  }
+
+  /**
+   * `GET /v1/experiment-runs/compare?ids=a,b` — compare 2-5 runs. The run-id list is joined into the
+   * `ids` QUERY param (comma-separated), NOT a path segment (the engine `?ids=a,b` contract); the engine
+   * returns a typed 400 `INVALID_BODY` when fewer than 2 ids are supplied.
+   */
+  compareExperimentRuns(ids: string[]): Promise<CompareExperimentRunsResponse> {
+    return this.request<CompareExperimentRunsResponse>("/v1/experiment-runs/compare", {
+      ids: ids.join(","),
+    });
+  }
+
+  /**
+   * `POST /v1/traces/{traceId}/ask` — ask the copilot about a trace (optionally a specific span).
+   * Scoped `observability:read` but it launches BILLABLE provider work → `retryNetwork:false`: a lost
+   * response surfaces a typed `LensApiError`, never an auto-retry into a double-bill (M108 lesson). The
+   * engine fails closed with `503 COPILOT_DISABLED` when no provider is configured.
+   */
+  askCopilot(traceId: string, body: AskCopilotBody): Promise<AskCopilotResponse> {
+    return this.send<AskCopilotResponse>("POST", `/v1/traces/${encodeURIComponent(traceId)}/ask`, {
+      body,
+      retryNetwork: false,
+    });
   }
 }
