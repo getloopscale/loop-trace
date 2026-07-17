@@ -8,6 +8,20 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.48.0] - 2026-07-17
+
+### Added
 - Engine: native **`POST /v1/runs`** ingest endpoint — accepts a Claude Code / `@theokit/sdk` `SDKMessage` batch (+ `RunResult`) directly (no client OTLP knowledge), maps it via a core copy of the M115 mapper, and persists per-tenant through the same ingest path as `/v1/traces` (scope `observability:write`, shared rate limiter, fail-fast typed 400 on a malformed body). Additive — no change to `/v1/traces`. Proven by a contract test (post a run → read back normalized) + negative cases. (M116)
 - SDK: `@usetheo/lens-sdk` can ingest a **Claude Code / `@theokit/sdk` run** — `recordRun({messages, result})` translates the native `SDKMessage` stream (+ `RunResult` usage/cost) to OTLP and posts `/v1/traces`, normalized by a new engine `theokit-sdk` adapter (`service.name=theokit-sdk`). `sdkMessagesToOtlp()` is the pure, reusable mapper. Additive — no change to the OTLP contract or the `claude-code` adapter. Proven by a hermetic contract test (translate → real engine ingest → read back normalized). (M115)
 - Dev/process: `/dogfood` now provisions REAL `theo_live_*` consumer keys itself (new `scripts/provision-consumer-key.sh`: Kratos identity → browser login → session-token exchange → `POST /v1/api-keys`) and drives the full through-the-edge data round-trip + cross-tenant isolation automatically (`surface-probe.mjs --kratos-container`). Closes the standing edge-round-trip SKIP — the dogfood now tests "complete like a real user" (internal tooling; no product API change)
@@ -17,17 +31,13 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - Dev/process: `/dogfood` SKILL (v0.5.0) makes driving **100% of the UI in the browser** MANDATORY on every `run` — all 12 lens screens AND each screen's primary action, live, recorded as a 12-row UI sub-matrix. API/BFF coverage, the headless render sweep, or a prior run do NOT substitute. New golden-rule UI-completeness soft cap (`dogfood-golden-rule.md § 4`): UI not covered → verdict caps at `EVIDENCE_WITH_CAVEATS` (internal tooling)
 - Roadmap: added phase v14 (`ROADMAP-sota-experience-v14.md`) — ingest the Claude Code / `@theokit/sdk` `SDKMessage` stream output format: M115 (SDK-side SDKMessage→OTLP translator in `@usetheo/lens-sdk` + a separate `theokit-sdk` engine adapter) + M116 (native `POST /v1/runs` ingest endpoint, follow-up). Decisions locked: translator now / native endpoint later; separate `theokit-sdk` adapter
 
+
 ### Changed
 - Dev/process: `surface-probe.mjs` direct OTLP-ingest leg now sends the bearer key so the direct API/SDK surfaces pass against a fail-closed (`THEOLENS_REQUIRE_CREDENTIAL=1`) instance — a probe bug the real-user run caught (internal tooling)
 
-### Deprecated
-
-### Removed
 
 ### Fixed
 - Ingest: re-ingesting an existing `span_id` under a new `trace_id` no longer creates a phantom `traces` rollup row (0 spans, NULL start-time) that returned 404 on `GET /v1/traces/:id`; the rollup recompute now skips the empty-span case (`HAVING count(*) > 0`). (#52)
-
-### Security
 
 ## [0.47.1] - 2026-07-10
 
