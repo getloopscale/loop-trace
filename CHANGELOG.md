@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Roadmap: added phase v15 (`ROADMAP-sota-experience-v15.md`) — mature the advanced surface from a 2026-07-17 maturity audit: M117 (SDK read/write parity + native `/v1/runs` ingest — close the write-without-read asymmetry), M118 (uniform hardening of the advanced write routes: bodyLimit + rate-limit + runtime metric + zod-at-the-boundary + provider circuit breaker + single error-envelope), M119 (test-depth backfill: `/v1/runs` 413/429, guards negatives + cross-workspace 404 security branch, shared SDKMessage-mapper drift guard, registry + through-edge coverage). No new capabilities — levels the advanced surface up to the core's bar. (`/roadmap-feature`)
 
 ### Changed
 
