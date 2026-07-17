@@ -37,6 +37,24 @@ export type TraceTagsResponse = Schemas["TraceTagsResponse"];
 /** `{ annotations: [...] }` — a trace's annotations after an annotate/delete write. */
 export type AnnotationsResponse = Schemas["AnnotationsResponse"];
 
+// ─── M117 read parity — GENERATED (zod-backed) response aliases (ADR D1). ───
+/** `GET /v1/traces/{id}/cost` — the trace's cost rollup. */
+export type TraceCostResponse = Schemas["TraceCostResponse"];
+/** `GET /v1/agents` — the derived agent catalog `{ agents: [...] }`. */
+export type AgentCatalogResponse = Schemas["AgentCatalogResponse"];
+/** `GET /v1/metrics/north-star` — the north-star aggregate. */
+export type NorthStarResponse = Schemas["NorthStarResponse"];
+/** `GET /v1/metrics/evaluators` — per-evaluator aggregate `{ evaluators: [...] }`. */
+export type EvaluatorMetricsResponse = Schemas["EvaluatorsResponse"];
+/** `GET /v1/metrics/scores` — per-evaluator score aggregation over time. */
+export type ScoresResponse = Schemas["ScoresResponse"];
+/** `GET /v1/metrics/span-attributes` — facet keys (no `key`) or values (`?key=`). */
+export type SpanFacetsResponse = Schemas["SpanFacetsResponse"];
+/** `GET /v1/sessions/{id}` — a single session's detail (traces). */
+export type SessionDetailResponse = Schemas["SessionDetailResponse"];
+/** `GET /v1/labeling-queue` — a server-paginated queue page `{ items, total, page, pageSize }`. */
+export type LabelingQueuePage = Schemas["LabelingQueuePage"];
+
 /** Options for {@link LensReadClient.listTraces} — map to snake_case query params. */
 export interface ListTracesOptions {
   status?: string;
@@ -61,6 +79,23 @@ export interface ObservabilityOptions {
 /** The aggregation period for cost analytics. */
 export interface CostByPeriodOptions {
   period?: string;
+}
+
+/** The rolling window for the evaluator/score metric reads (engine default `24h`). */
+export interface MetricsRangeOptions {
+  range?: string;
+}
+
+/** Options for {@link LensReadClient.getSpanAttributes} — omit `key` for the top keys; set it for that key's values. */
+export interface SpanAttributesOptions {
+  key?: string;
+}
+
+/** Options for {@link LensReadClient.listLabelingQueue} — server-paginated + optional status filter. */
+export interface ListLabelingQueueOptions {
+  page?: number;
+  pageSize?: number;
+  status?: "pending" | "resolved";
 }
 
 /**
@@ -166,20 +201,11 @@ export interface RunResult {
  * Labeling queue + copilot ask-feedback (M112). Hand-written (same rationale as M111 — the M114
  * contract test is the drift guard).
  */
-/** A labeling-queue item. */
-export interface LabelingQueueItem {
-  id: string;
-  traceId: string;
-  spanId: string;
-  status: "pending" | "resolved";
-  label?: string;
-  score?: number;
-  note?: string;
-  createdBy: string;
-  resolvedBy?: string;
-  createdAt: string;
-  resolvedAt?: string;
-}
+/**
+ * A labeling-queue item. GENERATED alias over the engine `labelingQueueItemSchema` (M117 wired it
+ * into `RESPONSE_FOR_ROUTE`) — was hand-authored in M112, now drift-gated from the same schema (DRY).
+ */
+export type LabelingQueueItem = Schemas["LabelingQueueItem"];
 /** Enqueue a span for human review. */
 export interface EnqueueLabelingBody {
   spanId: string;
