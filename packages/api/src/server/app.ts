@@ -25,6 +25,9 @@ import {
   agentCatalogResponseSchema,
   apiError,
   zodFieldErrors,
+  sdkMessagesToOtlp,
+  type SDKMessage,
+  type TheokitRunResult,
 } from "@usetheo/lens-core";
 
 import {
@@ -282,6 +285,63 @@ export function createApp(
       }
       // Full success — an empty partial_success is equivalent to "not present" per the OTLP contract.
       return c.json({ partialSuccess: {} }, 200);
+    },
+  );
+
+  // M116 — native `POST /v1/runs`: ingest a Claude Code / @theokit/sdk run directly (no client OTLP
+  // knowledge). The SDKMessage batch is mapped to spans by the core mapper (the M115 logic), then goes
+  // through the SAME persist tail as /v1/traces (ADR-2). Scope-gated (observability:write) + per-tenant
+  // + the shared ingest limiter. Fail-fast typed 400 on a malformed body (Rule 8).
+  app.post(
+    "/v1/runs",
+    // Bound the RAW body BEFORE it is buffered (OOM guard, mirrors /v1/traces) — 413 on an oversized body.
+    bodyLimit({
+      maxSize: ingest?.maxBodyBytes ?? DEFAULT_MAX_INGEST_BYTES,
+      onError: (c) => c.json({ code: "PAYLOAD_TOO_LARGE", message: "run body exceeds the ingest size limit" }, 413),
+    }),
+    requireScopeOnPrincipal("observability:write"),
+    async (c) => {
+    const contentType = (c.req.header("content-type") ?? "").toLowerCase();
+    if (contentType !== "application/json" && !contentType.startsWith("application/json;")) {
+      return c.json({ code: "UNSUPPORTED_MEDIA_TYPE", message: "use application/json" }, 415);
+    }
+    const ws = getPrincipal(c).workspaceId;
+    if (ingest?.limiter) {
+      const nowMs = (ingest.now ?? Date.now)();
+      if (!ingest.limiter.tryAcquire(ws, nowMs)) {
+        ingestRateLimited.add(1);
+        c.header("Retry-After", String(ingest.limiter.retryAfterSeconds(ws, nowMs)));
+        return c.json({ code: "RATE_LIMITED", message: "ingest rate limit exceeded for this workspace" }, 429);
+      }
+    }
+
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ code: "INVALID_BODY", message: "invalid JSON body" }, 400);
+    }
+    const b = body as { messages?: unknown; result?: unknown };
+    if (!Array.isArray(b.messages)) {
+      return c.json({ code: "INVALID_BODY", message: "`messages` must be an array of SDKMessage events" }, 400);
+    }
+
+    const envelope = sdkMessagesToOtlp(b.messages as SDKMessage[], b.result as TheokitRunResult | undefined);
+    const { spans: toSave, rejected, firstError } = parseResourceSpansPartial(envelope);
+    if (toSave.length > 0) {
+      await repo.save(toSave, ws);
+      spansIngested.add(toSave.length);
+      tracesIngested.add(new Set(toSave.map((s) => s.traceId)).size);
+      // Same metrics as /v1/traces — count any extracted online-evals (future-proof; 0 today).
+      const evals = toSave.reduce((n, s) => n + (s.evaluations?.length ?? 0), 0);
+      evaluationsExtracted.add(evals);
+      logIngest(toSave.length, evals);
+    }
+    if (rejected > 0) {
+      spansRejected.add(rejected);
+      return c.json({ partialSuccess: { rejectedSpans: rejected, errorMessage: firstError } }, 200);
+    }
+    return c.json({ partialSuccess: {} }, 200);
     },
   );
 

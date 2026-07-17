@@ -60,3 +60,31 @@ export type {
   ReplaySessionBody,
   ReplaySessionAck,
 } from "./read/types.js";
+
+// M115 — ingest the Claude Code / @theokit/sdk `SDKMessage` output: translate a run to OTLP + record it.
+export {
+  sdkMessagesToOtlp,
+  recordRun,
+  THEOKIT_SERVICE_NAME,
+  type OtlpTraces,
+  type SdkMessagesToOtlpOptions,
+  type TheokitRun,
+  type RecordRunOptions,
+} from "./ingest/theokit.js";
+export type {
+  SDKMessage,
+  SDKSystemMessage,
+  SDKUserMessageEvent,
+  SDKAssistantMessage,
+  SDKThinkingMessage,
+  SDKToolUseMessage,
+  SDKStatusMessage,
+  SDKTaskMessage,
+  SDKRequestMessage,
+  SDKObjectDelta,
+  TextBlock as SdkTextBlock,
+  ToolUseBlock as SdkToolUseBlock,
+  TokenUsage as TheokitTokenUsage,
+  CostBreakdown as TheokitCostBreakdown,
+  RunResult as TheokitRunResult,
+} from "./ingest/sdk-message.js";
