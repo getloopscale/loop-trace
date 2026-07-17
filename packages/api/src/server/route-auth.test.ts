@@ -179,3 +179,62 @@ describe("M22 route auth (per-verb scope)", () => {
     }
   });
 });
+
+/** M116 — the native POST /v1/runs endpoint reuses the same per-verb scope + per-tenant auth as /v1/traces. */
+function runsBody(): unknown {
+  return {
+    messages: [
+      { type: "system", subtype: "init", agent_id: "a", run_id: "r", model: { id: "gpt-4o" } },
+      { type: "user", agent_id: "a", run_id: "r", message: { role: "user", content: [{ type: "text", text: "hi" }] } },
+    ],
+    result: { usage: { inputTokens: 5, outputTokens: 1 } },
+  };
+}
+function runsReq(token?: string): Request {
+  return new Request("http://x/v1/runs", {
+    method: "POST",
+    headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify(runsBody()),
+  });
+}
+
+describe("M116 POST /v1/runs — per-verb scope + per-tenant auth", () => {
+  it("test_runs_requires_observability_write_scope", async () => {
+    const { repo } = repoStub();
+    const app = createApp(repo, undefined, {
+      verifier: verifierFor({
+        ro: principal(["observability:read"]),
+        rw: principal(["observability:read", "observability:write"]),
+      }),
+      requireCredential: true,
+    });
+    expect((await app.request(runsReq("ro"))).status).toBe(403); // read-only → 403 on the write verb
+    expect((await app.request(runsReq("rw"))).status).toBe(200);
+  });
+
+  it("test_runs_fail_closed_missing_or_unknown_credential_401", async () => {
+    const { repo } = repoStub();
+    const app = createApp(repo, undefined, {
+      verifier: verifierFor({ rw: principal(["observability:write"]) }),
+      requireCredential: true,
+    });
+    expect((await app.request(runsReq(undefined))).status).toBe(401);
+    expect((await app.request(runsReq("bogus"))).status).toBe(401);
+  });
+
+  it("test_runs_binds_principal_workspace_not_body", async () => {
+    const { repo, lastSaveWorkspace } = repoStub();
+    const app = createApp(repo, undefined, {
+      verifier: verifierFor({ rw: principal(["observability:write"], "ws-acme") }),
+      requireCredential: true,
+    });
+    // A body that tries to smuggle a workspace is ignored — save binds the Principal's workspace.
+    const smuggle = new Request("http://x/v1/runs", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer rw" },
+      body: JSON.stringify({ ...(runsBody() as object), workspace_id: "ws-evil", tenant: "ws-evil" }),
+    });
+    expect((await app.request(smuggle)).status).toBe(200);
+    expect(lastSaveWorkspace()).toBe("ws-acme"); // from the Principal, never the body
+  });
+});
