@@ -308,3 +308,8 @@ export {
   createSpanRepository,
   migrateLatest,
 } from "./infrastructure/db/drizzle-span-repository.js";
+
+// M116 — the core copy of the SDKMessage→OTLP mapper powering the native POST /v1/runs endpoint.
+export { sdkMessagesToOtlp, THEOKIT_SERVICE_NAME } from "./domain/theokit/sdk-messages-to-otlp.js";
+export type { OtlpTraces } from "./domain/theokit/sdk-messages-to-otlp.js";
+export type { SDKMessage, RunResult as TheokitRunResult } from "./domain/theokit/sdk-message.js";
