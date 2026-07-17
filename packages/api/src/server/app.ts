@@ -321,12 +321,19 @@ export function createApp(
     } catch {
       return c.json({ code: "INVALID_BODY", message: "invalid JSON body" }, 400);
     }
-    const b = body as { messages?: unknown; result?: unknown };
+    const b = body as { messages?: unknown; result?: unknown; startTimeMs?: unknown };
     if (!Array.isArray(b.messages)) {
       return c.json({ code: "INVALID_BODY", message: "`messages` must be an array of SDKMessage events" }, 400);
     }
 
-    const envelope = sdkMessagesToOtlp(b.messages as SDKMessage[], b.result as TheokitRunResult | undefined);
+    // M117: honor an optional caller-supplied base timestamp so the native /v1/runs path and the OTLP
+    // /v1/traces fallback (which the SDK maps client-side with the same seam) yield identical spans.
+    const startTimeMs = typeof b.startTimeMs === "number" && Number.isFinite(b.startTimeMs) ? b.startTimeMs : undefined;
+    const envelope = sdkMessagesToOtlp(
+      b.messages as SDKMessage[],
+      b.result as TheokitRunResult | undefined,
+      startTimeMs !== undefined ? { startTimeMs } : {},
+    );
     const { spans: toSave, rejected, firstError } = parseResourceSpansPartial(envelope);
     if (toSave.length > 0) {
       await repo.save(toSave, ws);

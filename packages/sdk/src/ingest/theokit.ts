@@ -234,29 +234,55 @@ export interface RecordRunOptions {
 }
 
 /**
- * Record a Claude Code / `@theokit/sdk` run to Theo Lens: translate the buffered `SDKMessage` stream
- * (+ `RunResult`) to OTLP and `POST /v1/traces`. OTLP ingest is idempotent server-side (span dedup on
- * `(workspace, span_id)`), so a lost-response network retry is safe. Throws `LensApiError` on a non-2xx
- * response or a network reject — never swallows.
+ * Record a Claude Code / `@theokit/sdk` run to Theo Lens.
+ *
+ * Prefers the NATIVE `POST /v1/runs` endpoint (M116): it takes the raw `SDKMessage` batch
+ * (`{ messages, result, startTimeMs }`) and maps it to spans server-side with the SAME
+ * `sdkMessagesToOtlp` mapper the SDK owns — so the SDK carries no OTLP knowledge on the happy path.
+ * When the engine has NOT deployed `/v1/runs` (older cloud / self-hosted) it answers `404`/`405`; on
+ * either status `recordRun` falls back to `POST /v1/traces` with the client-side OTLP envelope (the
+ * pre-M116 path). Both paths run the identical mapper, so read-back is byte-identical (ADR D2).
+ *
+ * The `startTimeMs` seam is forwarded on BOTH paths (in the `/v1/runs` body, and into the client-side
+ * mapper for the `/v1/traces` fallback) so a deterministic test observes identical timestamps either way.
+ *
+ * OTLP ingest is idempotent server-side (span dedup on `(workspace, span_id)`) and a `/v1/runs` that
+ * 404'd never persisted, so the fallback cannot double-write. Throws `LensApiError` on a non-2xx that is
+ * not the `/v1/runs`-absent signal, or on a network reject — never swallows.
  *
  * @public
  */
 export async function recordRun(run: TheokitRun, opts: RecordRunOptions): Promise<void> {
   if (!opts.apiKey) throw new Error("recordRun: apiKey is required");
-  const otlp = sdkMessagesToOtlp(run.messages, run.result, opts.startTimeMs !== undefined ? { startTimeMs: opts.startTimeMs } : {});
   const base = opts.basePath ?? "/v1";
-  const path = `${base}/traces`;
-  const url = `${opts.baseUrl}${path}`;
   const doFetch = opts.fetch ?? fetch;
-  let res: Response;
-  try {
-    res = await doFetch(url, {
-      method: "POST",
-      headers: { authorization: `Bearer ${opts.apiKey}`, "content-type": "application/json" },
-      body: JSON.stringify(otlp),
-    });
-  } catch (e) {
-    throw errorFromReject(e, "POST", path);
+  const headers = { authorization: `Bearer ${opts.apiKey}`, "content-type": "application/json" };
+
+  /** POST a JSON body to `${base}${suffix}`; throws a typed error on a non-2xx or a network reject. */
+  const post = async (suffix: string, body: unknown): Promise<Response> => {
+    const path = `${base}${suffix}`;
+    try {
+      return await doFetch(`${opts.baseUrl}${path}`, { method: "POST", headers, body: JSON.stringify(body) });
+    } catch (e) {
+      throw errorFromReject(e, "POST", path);
+    }
+  };
+
+  // Native /v1/runs first: the engine owns the SDKMessage→OTLP mapping (no client OTLP knowledge).
+  const runsBody = {
+    messages: run.messages,
+    ...(run.result !== undefined ? { result: run.result } : {}),
+    ...(opts.startTimeMs !== undefined ? { startTimeMs: opts.startTimeMs } : {}),
+  };
+  const runsRes = await post("/runs", runsBody);
+  if (runsRes.ok) return;
+  // 404/405 = the engine has not deployed /v1/runs → fall back to the OTLP /v1/traces path.
+  if (runsRes.status !== 404 && runsRes.status !== 405) {
+    throw await errorFromResponse(runsRes, "POST", `${base}/runs`);
   }
-  if (res.status >= 400) throw await errorFromResponse(res, "POST", path);
+
+  // Fallback: translate to OTLP client-side and POST /v1/traces (the pre-M116 path).
+  const otlp = sdkMessagesToOtlp(run.messages, run.result, opts.startTimeMs !== undefined ? { startTimeMs: opts.startTimeMs } : {});
+  const tracesRes = await post("/traces", otlp);
+  if (tracesRes.status >= 400) throw await errorFromResponse(tracesRes, "POST", `${base}/traces`);
 }
