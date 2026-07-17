@@ -319,6 +319,77 @@ export interface ReplaySessionAck {
   recorded: boolean;
 }
 
+// ─── M117 read parity — HAND (bare `c.json`, no zod schema) response types (ADR D1). ───
+// These 9 routes return a bare `c.json(record)` with no zod DTO to generate from, so the type is
+// hand-authored and pinned by the per-method hermetic contract test in
+// `read-parity-hand-contract.integration.test.ts` (T2.3 — the drift guard, per D1). Each REUSES an
+// existing element type (Span / EvaluatorRecord / GuardRecord / ExperimentRun) rather than
+// re-declaring its fields (DRY). The wrapper key mirrors the engine's `c.json({...})` key exactly (D3).
+
+/**
+ * `GET /v1/traces/{traceId}` — the reconstructed trace tree: a {@link Span} plus its recursive
+ * children (mirrors the engine `TraceTreeNode extends Span { children: TraceTreeNode[] }`).
+ */
+// M117→M118: hand-typed pending server-side zod.
+export interface TraceTree extends Span {
+  children: TraceTree[];
+}
+/** `GET /v1/evaluators` — `{ evaluators: EvaluatorRecord[] }`. */
+// M117→M118: hand-typed pending server-side zod.
+export interface ListEvaluatorsResponse {
+  evaluators: EvaluatorRecord[];
+}
+/** `GET /v1/guards` — `{ guards: GuardRecord[] }`. */
+// M117→M118: hand-typed pending server-side zod.
+export interface ListGuardsResponse {
+  guards: GuardRecord[];
+}
+/** `GET /v1/guards/{id}/breaches` — `{ traceIds: string[] }`. */
+// M117→M118: hand-typed pending server-side zod.
+export interface GuardBreachesResponse {
+  traceIds: string[];
+}
+/** `GET /v1/experiment-runs` — `{ runs: ExperimentRun[] }`. */
+// M117→M118: hand-typed pending server-side zod.
+export interface ListExperimentRunsResponse {
+  runs: ExperimentRun[];
+}
+/**
+ * The signed run-to-run aggregate deltas (A minus B) — mirrors the core `RunCompareDeltas`
+ * (`packages/core/src/domain/experiment.ts:110`); a metric absent on either side yields a `null` delta.
+ */
+// M117→M118: hand-typed pending server-side zod.
+export interface RunCompareDeltas {
+  passCountDelta: number;
+  passRateDelta: number;
+  avgScoreDelta: number | null;
+  totalCostDelta: number;
+  avgLatencyDelta: number | null;
+}
+/**
+ * `GET /v1/experiment-runs/compare?ids=a,b` — the compared runs (with items) + the signed `deltas` of
+ * the first two (`null` when fewer than two ids resolve).
+ */
+// M117→M118: hand-typed pending server-side zod.
+export interface CompareExperimentRunsResponse {
+  runs: ExperimentRun[];
+  deltas: RunCompareDeltas | null;
+}
+/**
+ * `POST /v1/traces/{traceId}/ask` request — the copilot question (required) + an optional span to
+ * anchor it to. Scoped `observability:read` but launches billable provider work.
+ */
+// M117→M118: hand-typed pending server-side zod.
+export interface AskCopilotBody {
+  question: string;
+  spanId?: string;
+}
+/** `POST /v1/traces/{traceId}/ask` response — `{ answer }`. */
+// M117→M118: hand-typed pending server-side zod.
+export interface AskCopilotResponse {
+  answer: string;
+}
+
 /**
  * The `GET /v1` discovery document — service identity + the machine-contract pointer. Hand-written:
  * `/v1` is intentionally excluded from `/openapi.json` (a discovery/infra route, not a data route),
