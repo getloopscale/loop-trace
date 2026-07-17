@@ -76,31 +76,31 @@ describe("recordRun — native /v1/runs first (M117)", () => {
   });
 
   it("test_recordRun_maps_network_reject_to_typed_error", async () => {
+    // A network reject on /v1/runs is NOT the unmounted (404/405) signal → surface it typed, no fallback.
+    // `rejects.toMatchObject` (not a `.catch()` that silently no-ops if the SUT ever resolves) is the
+    // honest assertion — a regression that swallows the reject fails this test instead of passing green.
     const fetchMock = vi.fn(async () => { throw new Error("ECONNREFUSED"); });
-    await recordRun({ messages: msgs }, { ...base, fetch: fetchMock as unknown as typeof fetch }).catch((e: LensApiError) => {
-      expect(e).toBeInstanceOf(LensApiError);
-      expect(e.status).toBe(0);
-      expect(e.code).toBe("NETWORK_ERROR");
-    });
+    await expect(
+      recordRun({ messages: msgs }, { ...base, fetch: fetchMock as unknown as typeof fetch }),
+    ).rejects.toMatchObject({ status: 0, code: "NETWORK_ERROR" });
+    expect(fetchMock).toHaveBeenCalledTimes(1); // no fallback on a network reject
   });
 
   it("test_recordRun_maps_v1_runs_401_to_a_typed_error (auth failure, not unmounted)", async () => {
     const fetchMock = seqFetch([new Response(JSON.stringify({ code: "UNAUTHORIZED", message: "bad key" }), { status: 401 })]);
-    await recordRun({ messages: msgs }, { ...base, fetch: fetchMock as unknown as typeof fetch }).catch((e: LensApiError) => {
-      expect(e.status).toBe(401);
-      expect(e.code).toBe("UNAUTHORIZED");
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await expect(
+      recordRun({ messages: msgs }, { ...base, fetch: fetchMock as unknown as typeof fetch }),
+    ).rejects.toMatchObject({ status: 401, code: "UNAUTHORIZED" });
+    expect(fetchMock).toHaveBeenCalledTimes(1); // 401 is not 404/405 → no fallback
   });
 
   it("test_recordRun_maps_a_late_error_on_the_traces_fallback", async () => {
-    // /v1/runs 404 → fallback /v1/traces 401. The fallback's error is surfaced typed.
+    // /v1/runs 404 → fallback /v1/traces 401. The fallback's error is surfaced typed (not swallowed).
     const fetchMock = seqFetch([notFound(404), new Response(JSON.stringify({ code: "UNAUTHORIZED", message: "bad key" }), { status: 401 })]);
-    await recordRun({ messages: msgs }, { ...base, fetch: fetchMock as unknown as typeof fetch }).catch((e: LensApiError) => {
-      expect(e.status).toBe(401);
-      expect(e.code).toBe("UNAUTHORIZED");
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await expect(
+      recordRun({ messages: msgs }, { ...base, fetch: fetchMock as unknown as typeof fetch }),
+    ).rejects.toMatchObject({ status: 401, code: "UNAUTHORIZED" });
+    expect(fetchMock).toHaveBeenCalledTimes(2); // ran /v1/runs then the /v1/traces fallback
   });
 
   it("test_recordRun_maps_the_otlp_body_once_across_both_attempts", async () => {

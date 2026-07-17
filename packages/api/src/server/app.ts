@@ -328,7 +328,19 @@ export function createApp(
 
     // M117: honor an optional caller-supplied base timestamp so the native /v1/runs path and the OTLP
     // /v1/traces fallback (which the SDK maps client-side with the same seam) yield identical spans.
-    const startTimeMs = typeof b.startTimeMs === "number" && Number.isFinite(b.startTimeMs) ? b.startTimeMs : undefined;
+    // A non-number is tolerated (ignored → mapper default), but an in-band number outside a sane epoch-ms
+    // window is rejected at the boundary (fail-fast, error-handling.md §2) rather than minting absurd
+    // span timestamps from an untrusted body value.
+    let startTimeMs: number | undefined;
+    if (typeof b.startTimeMs === "number" && Number.isFinite(b.startTimeMs)) {
+      if (b.startTimeMs < 0 || b.startTimeMs > Date.now() + 86_400_000) {
+        return c.json(
+          { code: "INVALID_BODY", message: "`startTimeMs` must be an epoch-ms in [0, now + 1 day]" },
+          400,
+        );
+      }
+      startTimeMs = b.startTimeMs;
+    }
     const envelope = sdkMessagesToOtlp(
       b.messages as SDKMessage[],
       b.result as TheokitRunResult | undefined,

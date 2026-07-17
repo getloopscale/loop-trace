@@ -177,6 +177,16 @@ suite("LensReadClient ↔ engine — M117 HAND read parity (T2.3, drift guard)",
     expect(typeof read.totalCostUsd).toBe("number");
     expect(Array.isArray(read.items)).toBe(true);
     expect(read.items?.length).toBe(2);
+    // Drift guard extends to the nested ExperimentRunItem fields — a shape change on any of these would
+    // otherwise slip past a length-only assertion (review INFO).
+    const item = read.items![0];
+    expect(typeof item.datasetItemTraceId).toBe("string");
+    expect(typeof item.promptTokens).toBe("number");
+    expect(typeof item.completionTokens).toBe("number");
+    expect(typeof item.totalTokens).toBe("number");
+    expect(typeof item.latencyMs).toBe("number");
+    expect(typeof item.model).toBe("string");
+    expect(Array.isArray(item.scores)).toBe(true);
   });
 
   it("seeded runs → listExperimentRuns returns the { runs } wrapper (with datasetId filter)", async () => {
