@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { DataTable, type DataTableColumn } from "@theokit/ui";
+import { DataTable, type DataTableColumn } from "@usetheo/ui";
 import type { ToolStat } from "../api/types.js";
 import { EmptyState } from "./states.js";
 

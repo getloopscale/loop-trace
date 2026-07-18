@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Tabs } from "@theokit/ui";
+import { Tabs } from "@usetheo/ui";
 import { useCostByPeriod } from "../hooks/useCost.js";
 import { CostByPeriod } from "../components/CostByPeriod.js";
 import { AutoRefreshControl } from "../components/AutoRefreshControl.js";

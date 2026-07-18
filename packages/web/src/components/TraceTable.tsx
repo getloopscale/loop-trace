@@ -8,7 +8,7 @@ import {
   Timestamp,
   type DataTableColumn,
   type DataTableSort,
-} from "@theokit/ui";
+} from "@usetheo/ui";
 import type { TraceListItem } from "../api/types.js";
 import { addAnnotation } from "../api/client.js";
 import { deriveTraceListItemKind } from "../lib/span-kind.js";

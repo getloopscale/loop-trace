@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Sidebar, TopNav, Tabs } from "@theokit/ui";
+import { Sidebar, TopNav, Tabs } from "@usetheo/ui";
 import { CommandPalette } from "./CommandPalette.js";
 import { DateRangePicker } from "./DateRangePicker.js";
 import { LiveToggle } from "./LiveToggle.js";

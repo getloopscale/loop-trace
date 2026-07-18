@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Badge, DataTable, Timestamp, type DataTableColumn } from "@theokit/ui";
+import { Badge, DataTable, Timestamp, type DataTableColumn } from "@usetheo/ui";
 import type { SessionListItem } from "../api/types.js";
 import { formatUsd } from "../lib/money.js";
 import { EmptyState } from "./states.js";

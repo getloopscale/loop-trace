@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Tabs } from "@theokit/ui";
+import { Tabs } from "@usetheo/ui";
 import { Activity, Clock, Coins, DollarSign, TrendingUp } from "lucide-react";
 import { useObservability } from "../hooks/useObservability.js";
 import { useNorthStar } from "../hooks/useNorthStar.js";

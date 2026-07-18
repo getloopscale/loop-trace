@@ -1,6 +1,6 @@
 /** Async-state primitives shared by every data view (loading / error / empty). */
 import type { ReactNode } from "react";
-import { Skeleton } from "@theokit/ui";
+import { Skeleton } from "@usetheo/ui";
 
 /**
  * Loading placeholder: a shimmer Skeleton block (FAANG-grade — no "Loading…"

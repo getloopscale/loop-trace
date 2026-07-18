@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { DataTable, Timestamp, type DataTableColumn } from "@theokit/ui";
+import { DataTable, Timestamp, type DataTableColumn } from "@usetheo/ui";
 import { useDatasets } from "../hooks/useDatasets.js";
 import { Loading, ErrorState, EmptyState } from "../components/states.js";
 import type { Dataset } from "../api/types.js";

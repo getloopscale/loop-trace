@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { DataTable, type DataTableColumn } from "@theokit/ui";
+import { DataTable, type DataTableColumn } from "@usetheo/ui";
 
 import { useEvaluatorDefs } from "../hooks/useEvaluatorDefs.js";
 import { Loading, ErrorState, EmptyState } from "../components/states.js";
