@@ -17,6 +17,7 @@ import {
 
 import { getPrincipal, requireScopeOnPrincipal } from "../auth/middleware.js";
 import { datasetItemsAdded } from "../metrics.js";
+import { bodyLimit413, DATASET_ITEM_MAX_BYTES, DATASET_NAME_MAX_BYTES } from "../body-caps.js"; // M118 (D1)
 
 export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
   app.get("/v1/datasets", requireScopeOnPrincipal("observability:read"), async (c) => {
@@ -25,7 +26,7 @@ export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
     return c.json(datasetsResponseSchema.parse({ datasets }), 200);
   });
 
-  app.post("/v1/datasets", requireScopeOnPrincipal("observability:write"), async (c) => {
+  app.post("/v1/datasets", bodyLimit413(DATASET_NAME_MAX_BYTES), requireScopeOnPrincipal("observability:write"), async (c) => {
     // M26d: create-or-get a dataset by name (D1, idempotent). 400 on a blank name.
     let body: unknown;
     try {
@@ -52,7 +53,7 @@ export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
       : c.json(apiError("NOT_FOUND", "not found"), 404);
   });
 
-  app.post("/v1/datasets/:datasetId/items", requireScopeOnPrincipal("observability:write"), async (c) => {
+  app.post("/v1/datasets/:datasetId/items", bodyLimit413(DATASET_ITEM_MAX_BYTES), requireScopeOnPrincipal("observability:write"), async (c) => {
     // M26d: add a trace to a dataset (snapshot at add-time, D2). 400 on a missing
     // traceId, 404 when the dataset OR the trace is absent (D3); idempotent otherwise.
     let body: unknown;
@@ -87,7 +88,7 @@ export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
     return c.json(datasetDetailSchema.parse(detail), 200);
   });
 
-  app.put("/v1/datasets/:datasetId", requireScopeOnPrincipal("observability:write"), async (c) => {
+  app.put("/v1/datasets/:datasetId", bodyLimit413(DATASET_NAME_MAX_BYTES), requireScopeOnPrincipal("observability:write"), async (c) => {
     // M82: rename a dataset. 400 on a blank name, 404 absent, 409 on a duplicate name (ADR-1).
     let body: unknown;
     try {

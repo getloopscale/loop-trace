@@ -13,9 +13,10 @@ import {
   compareExperimentRunsHandler,
   type ExperimentApiDeps,
 } from "../handlers/experiment.js";
+import { bodyLimit413, EXPERIMENT_MAX_BYTES } from "../body-caps.js"; // M118 (D1) — pre-parse 413 cap
 
 export function registerExperimentRoutes(app: Hono, deps: ExperimentApiDeps): void {
-  app.post("/v1/experiment-runs", requireScopeOnPrincipal("observability:write"), (c) => createExperimentRunHandler(c, deps));
+  app.post("/v1/experiment-runs", bodyLimit413(EXPERIMENT_MAX_BYTES), requireScopeOnPrincipal("observability:write"), (c) => createExperimentRunHandler(c, deps));
   app.get("/v1/experiment-runs", requireScopeOnPrincipal("observability:read"), (c) => listExperimentRunsHandler(c, deps));
   // compare must be registered BEFORE the :runId param route so "/compare" is not captured as a run id.
   app.get("/v1/experiment-runs/compare", requireScopeOnPrincipal("observability:read"), (c) => compareExperimentRunsHandler(c, deps));

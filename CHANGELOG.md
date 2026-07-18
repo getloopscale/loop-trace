@@ -23,6 +23,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 ### Security
+- Engine: **pre-parse `bodyLimit` (413) on every advanced write route** — copilot ask/feedback, replay, experiment-run, evaluator/guard CRUD + run, dataset create/rename/item, labeling-queue enqueue/resolve/export, and the `app.ts` tags/annotations/replay-sessions POSTs now bound the RAW body BEFORE it is buffered (typed `413 PAYLOAD_TOO_LARGE`), closing the parse-before-cap OOM/DoS class on the last siblings the core ingest surface (`/v1/traces`, `/v1/runs`) already guarded. `maxSize` reuses each route's existing post-parse cap (cap-less small routes get 64 KiB) so the cap only moves earlier — behavior-preserving for every happy path. Proven by a parameterized 413-per-route table (over-cap → 413, at-cap → not 413). (M118)
 
 ## [0.48.0] - 2026-07-17
 

@@ -22,6 +22,8 @@ import {
 } from "../handlers/evaluators.js";
 import { type CopilotApiDeps, askHandler, askFeedbackHandler, deleteAskFeedbackHandler } from "../handlers/copilot.js";
 import { type ReplayApiDeps, replayHandler } from "../handlers/replay.js";
+// M118 (D1) — pre-parse bodyLimit 413 caps on every buffering write route (reuse each route's cap).
+import { bodyLimit413, EVALUATOR_MAX_BYTES, DEFAULT_ADVANCED_MAX_BYTES, REPLAY_MAX_BYTES } from "../body-caps.js";
 
 export interface ExtraRoutes {
   evaluators?: EvaluatorApiDeps | undefined;
@@ -33,13 +35,13 @@ export function registerExtraRoutes(app: Hono, opts: ExtraRoutes): void {
   // M36: online-evaluators surface. Per-verb scope; workspace from the Principal.
   if (opts.evaluators !== undefined) {
     const ev = opts.evaluators;
-    app.post("/v1/evaluators", requireScopeOnPrincipal("observability:write"), (c) => createEvaluatorHandler(c, ev));
+    app.post("/v1/evaluators", bodyLimit413(EVALUATOR_MAX_BYTES), requireScopeOnPrincipal("observability:write"), (c) => createEvaluatorHandler(c, ev));
     app.get("/v1/evaluators", requireScopeOnPrincipal("observability:read"), (c) => listEvaluatorsHandler(c, ev));
     app.get("/v1/evaluators/:id", requireScopeOnPrincipal("observability:read"), (c) => getEvaluatorHandler(c, ev));
-    app.put("/v1/evaluators/:id", requireScopeOnPrincipal("observability:write"), (c) => updateEvaluatorHandler(c, ev));
+    app.put("/v1/evaluators/:id", bodyLimit413(EVALUATOR_MAX_BYTES), requireScopeOnPrincipal("observability:write"), (c) => updateEvaluatorHandler(c, ev));
     app.delete("/v1/evaluators/:id", requireScopeOnPrincipal("observability:delete"), (c) => deleteEvaluatorHandler(c, ev));
-    app.post("/v1/evaluators/:id/run", requireScopeOnPrincipal("observability:write"), (c) => runEvaluatorHandler(c, ev));
-    app.post("/v1/guards", requireScopeOnPrincipal("observability:write"), (c) => createGuardHandler(c, ev));
+    app.post("/v1/evaluators/:id/run", bodyLimit413(EVALUATOR_MAX_BYTES), requireScopeOnPrincipal("observability:write"), (c) => runEvaluatorHandler(c, ev));
+    app.post("/v1/guards", bodyLimit413(EVALUATOR_MAX_BYTES), requireScopeOnPrincipal("observability:write"), (c) => createGuardHandler(c, ev));
     app.get("/v1/guards", requireScopeOnPrincipal("observability:read"), (c) => listGuardsHandler(c, ev));
     app.delete("/v1/guards/:id", requireScopeOnPrincipal("observability:delete"), (c) => deleteGuardHandler(c, ev));
     app.get("/v1/guards/:id/breaches", requireScopeOnPrincipal("observability:read"), (c) => guardBreachesHandler(c, ev));
@@ -48,9 +50,9 @@ export function registerExtraRoutes(app: Hono, opts: ExtraRoutes): void {
   // M33: "Ask about this step" copilot — read-augmentation (observability:read).
   if (opts.copilot !== undefined) {
     const cp = opts.copilot;
-    app.post("/v1/traces/:traceId/ask", requireScopeOnPrincipal("observability:read"), (c) => askHandler(c, cp));
+    app.post("/v1/traces/:traceId/ask", bodyLimit413(DEFAULT_ADVANCED_MAX_BYTES), requireScopeOnPrincipal("observability:read"), (c) => askHandler(c, cp));
     // M83: record thumbs feedback on an answer — a WRITE (persists per-tenant), independent of the LLM.
-    app.post("/v1/traces/:traceId/ask/feedback", requireScopeOnPrincipal("observability:write"), (c) => askFeedbackHandler(c, cp));
+    app.post("/v1/traces/:traceId/ask/feedback", bodyLimit413(DEFAULT_ADVANCED_MAX_BYTES), requireScopeOnPrincipal("observability:write"), (c) => askFeedbackHandler(c, cp));
     app.delete("/v1/traces/:traceId/ask/feedback", requireScopeOnPrincipal("observability:write"), (c) => deleteAskFeedbackHandler(c, cp));
   }
 
@@ -58,6 +60,6 @@ export function registerExtraRoutes(app: Hono, opts: ExtraRoutes): void {
   // the copilot ask. The persist path (save-as-dataset) is a separate observability:write route.
   if (opts.replay !== undefined) {
     const rp = opts.replay;
-    app.post("/v1/traces/:traceId/replay", requireScopeOnPrincipal("observability:read"), (c) => replayHandler(c, rp));
+    app.post("/v1/traces/:traceId/replay", bodyLimit413(REPLAY_MAX_BYTES), requireScopeOnPrincipal("observability:read"), (c) => replayHandler(c, rp));
   }
 }

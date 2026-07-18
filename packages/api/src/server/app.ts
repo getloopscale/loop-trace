@@ -71,6 +71,7 @@ export interface HealthApiDeps {
   pingDb?: () => Promise<void>;
 }
 import { bodyLimit } from "hono/body-limit";
+import { bodyLimit413, DEFAULT_ADVANCED_MAX_BYTES } from "./body-caps.js"; // M118 (D1) — advanced-route 413 caps
 import { DEFAULT_MAX_INGEST_BYTES } from "@usetheo/lens-core";
 import { parseResourceSpansPartial } from "../otlp/parse-resource-spans.js";
 import { OtlpParseError, OtlpTooLargeError } from "../otlp/otlp-error.js";
@@ -475,7 +476,7 @@ export function createApp(
     return c.json(costByPeriodResponseSchema.parse(result), 200);
   });
 
-  app.post("/v1/replay-sessions", requireScopeOnPrincipal("observability:write"), async (c) => {
+  app.post("/v1/replay-sessions", bodyLimit413(DEFAULT_ADVANCED_MAX_BYTES), requireScopeOnPrincipal("observability:write"), async (c) => {
     // Record a replay-open event (M8 north-star). Fail-fast 400 on a missing
     // traceId (Rule 8); the UI calls this fire-and-forget so a 5xx never
     // degrades the replay UX (D3).
@@ -595,7 +596,7 @@ export function createApp(
     return c.json(traceTagsResponseSchema.parse({ tags }), 200);
   });
 
-  app.post("/v1/traces/:traceId/tags", requireScopeOnPrincipal("observability:write"), async (c) => {
+  app.post("/v1/traces/:traceId/tags", bodyLimit413(DEFAULT_ADVANCED_MAX_BYTES), requireScopeOnPrincipal("observability:write"), async (c) => {
     // Add a tag (M14). 400 on an invalid tag (Rule 8), 404 when the trace is
     // absent (D2 — you cannot tag what is not there); idempotent otherwise.
     let body: unknown;
@@ -639,7 +640,7 @@ export function createApp(
     return c.json(annotationsResponseSchema.parse({ annotations }), 200);
   });
 
-  app.post("/v1/traces/:traceId/annotations", requireScopeOnPrincipal("observability:write"), async (c) => {
+  app.post("/v1/traces/:traceId/annotations", bodyLimit413(DEFAULT_ADVANCED_MAX_BYTES), requireScopeOnPrincipal("observability:write"), async (c) => {
     // M26b: upsert a human annotation (👍/👎 + note) on a trace or span. 400 on an
     // empty annotation (no label AND no note, Rule 8), 404 when the trace is absent
     // (D2); idempotent upsert otherwise (latest wins). Returns the trace's annotations.

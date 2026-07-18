@@ -17,6 +17,7 @@ import {
 
 import { getPrincipal, requireScopeOnPrincipal } from "../auth/middleware.js";
 import { labelingItemsEnqueued, labelingItemsResolved, labelingQueueExports } from "../metrics.js";
+import { bodyLimit413, DEFAULT_ADVANCED_MAX_BYTES } from "../body-caps.js"; // M118 (D1) — small-body 64 KiB cap
 
 const EXPORT_NAME_MAX = 120;
 
@@ -44,7 +45,7 @@ export function registerLabelingQueueRoutes(app: Hono, repo: SpanRepository): vo
     return item ? c.json(labelingQueueItemSchema.parse(item), 200) : c.json(apiError("NOT_FOUND", "not found"), 404);
   });
 
-  app.post("/v1/traces/:traceId/enqueue-for-labeling", requireScopeOnPrincipal("observability:write"), async (c) => {
+  app.post("/v1/traces/:traceId/enqueue-for-labeling", bodyLimit413(DEFAULT_ADVANCED_MAX_BYTES), requireScopeOnPrincipal("observability:write"), async (c) => {
     // Enqueue a span for review. 400 on a missing spanId; idempotent on (workspace, trace, span).
     let body: unknown;
     try {
@@ -62,7 +63,7 @@ export function registerLabelingQueueRoutes(app: Hono, repo: SpanRepository): vo
     return c.json(labelingQueueItemSchema.parse(item), 200);
   });
 
-  app.post("/v1/labeling-queue/:itemId/resolve", requireScopeOnPrincipal("observability:write"), async (c) => {
+  app.post("/v1/labeling-queue/:itemId/resolve", bodyLimit413(DEFAULT_ADVANCED_MAX_BYTES), requireScopeOnPrincipal("observability:write"), async (c) => {
     // Resolve with a label/score/note. 400 on a blank label (an empty resolution is not a review),
     // 404 when the item is absent / another workspace.
     let body: unknown;
@@ -83,7 +84,7 @@ export function registerLabelingQueueRoutes(app: Hono, repo: SpanRepository): vo
     return c.json(labelingQueueItemSchema.parse(item), 200);
   });
 
-  app.post("/v1/labeling-queue/export-as-dataset", requireScopeOnPrincipal("observability:write"), async (c) => {
+  app.post("/v1/labeling-queue/export-as-dataset", bodyLimit413(DEFAULT_ADVANCED_MAX_BYTES), requireScopeOnPrincipal("observability:write"), async (c) => {
     // Export the workspace's RESOLVED items as a golden dataset (reuses M44). 400 on a blank name.
     let body: unknown;
     try {
