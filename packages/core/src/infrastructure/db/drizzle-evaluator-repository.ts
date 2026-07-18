@@ -205,6 +205,7 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
     id: string,
     workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<void> {
+    if (!isUuid(id)) return; // non-uuid path param → no-op (204 idempotent), not a 500 (22P02) — Rule 8
     await this.db
       .delete(guards)
       .where(and(eq(guards.id, id), eq(guards.workspaceId, workspaceId)));
@@ -245,6 +246,7 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
     guardId: string,
     workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<string[]> {
+    if (!isUuid(guardId)) return []; // non-uuid path param → no breaches (empty), not a 500 (22P02) — Rule 8
     // Join guard → its evaluator → that evaluator's verdicts; a row breaches per the
     // guard's operator. Workspace-scoped on every table (M22). The breach predicate
     // is built from the controlled `operator` enum (no injection — bound params).

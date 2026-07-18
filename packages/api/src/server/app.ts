@@ -24,6 +24,7 @@ import {
   DEFAULT_ANNOTATOR_KIND,
   agentCatalogResponseSchema,
   apiError,
+  errorBody,
   zodFieldErrors,
   sdkMessagesToOtlp,
   type SDKMessage,
@@ -71,6 +72,7 @@ export interface HealthApiDeps {
   pingDb?: () => Promise<void>;
 }
 import { bodyLimit } from "hono/body-limit";
+import { bodyLimit413, DEFAULT_ADVANCED_MAX_BYTES } from "./body-caps.js"; // M118 (D1) — advanced-route 413 caps
 import { DEFAULT_MAX_INGEST_BYTES } from "@usetheo/lens-core";
 import { parseResourceSpansPartial } from "../otlp/parse-resource-spans.js";
 import { OtlpParseError, OtlpTooLargeError } from "../otlp/otlp-error.js";
@@ -83,6 +85,11 @@ import {
   spansRejected,
   ingestRateLimited,
   logIngest,
+  // M118 — runtime metrics on the app.ts mutating routes that emitted none (wiring-triad pillar c).
+  tagsAdded,
+  tagsRemoved,
+  annotationsRemoved,
+  replaySessionsRecorded,
 } from "./metrics.js";
 import { mountStatic } from "./static.js";
 import { tracesToCsv } from "./csv.js";
@@ -218,10 +225,7 @@ export function createApp(
     bodyLimit({
       maxSize: ingest?.maxBodyBytes ?? DEFAULT_MAX_INGEST_BYTES,
       onError: (c) =>
-        c.json(
-          { code: "PAYLOAD_TOO_LARGE", message: "OTLP body exceeds the ingest size limit" },
-          413,
-        ),
+        c.json(errorBody("PAYLOAD_TOO_LARGE", "OTLP body exceeds the ingest size limit"), 413),
     }),
     requireScopeOnPrincipal("observability:write"),
     async (c) => {
@@ -230,10 +234,7 @@ export function createApp(
         !contentType.includes("application/json") &&
         !contentType.includes("application/x-protobuf")
       ) {
-        return c.json(
-          { code: "UNSUPPORTED_MEDIA_TYPE", message: "use application/json or application/x-protobuf" },
-          415,
-        );
+        return c.json(errorBody("UNSUPPORTED_MEDIA_TYPE", "use application/json or application/x-protobuf"), 415);
       }
 
       // M93 — per-workspace ingest backpressure: shed a runaway producer with 429 (before the pool
@@ -244,7 +245,7 @@ export function createApp(
         if (!ingest.limiter.tryAcquire(ws, nowMs)) {
           ingestRateLimited.add(1);
           c.header("Retry-After", String(ingest.limiter.retryAfterSeconds(ws, nowMs))); // M94
-          return c.json({ code: "RATE_LIMITED", message: "ingest rate limit exceeded for this workspace" }, 429);
+          return c.json(errorBody("RATE_LIMITED", "ingest rate limit exceeded for this workspace"), 429);
         }
       }
 
@@ -260,9 +261,9 @@ export function createApp(
       } catch (err) {
         // A gzip-bomb (decompresses past the bound) → 413; a corrupt/undecodable envelope → 400.
         if (err instanceof OtlpTooLargeError)
-          return c.json({ code: "PAYLOAD_TOO_LARGE", message: err.message }, 413);
+          return c.json(errorBody("PAYLOAD_TOO_LARGE", err.message), 413);
         if (err instanceof OtlpParseError)
-          return c.json({ code: "INVALID_OTLP", message: err.message }, 400);
+          return c.json(errorBody("INVALID_OTLP", err.message), 400);
         throw err;
       }
 
@@ -297,13 +298,13 @@ export function createApp(
     // Bound the RAW body BEFORE it is buffered (OOM guard, mirrors /v1/traces) — 413 on an oversized body.
     bodyLimit({
       maxSize: ingest?.maxBodyBytes ?? DEFAULT_MAX_INGEST_BYTES,
-      onError: (c) => c.json({ code: "PAYLOAD_TOO_LARGE", message: "run body exceeds the ingest size limit" }, 413),
+      onError: (c) => c.json(errorBody("PAYLOAD_TOO_LARGE", "run body exceeds the ingest size limit"), 413),
     }),
     requireScopeOnPrincipal("observability:write"),
     async (c) => {
     const contentType = (c.req.header("content-type") ?? "").toLowerCase();
     if (contentType !== "application/json" && !contentType.startsWith("application/json;")) {
-      return c.json({ code: "UNSUPPORTED_MEDIA_TYPE", message: "use application/json" }, 415);
+      return c.json(errorBody("UNSUPPORTED_MEDIA_TYPE", "use application/json"), 415);
     }
     const ws = getPrincipal(c).workspaceId;
     if (ingest?.limiter) {
@@ -311,7 +312,7 @@ export function createApp(
       if (!ingest.limiter.tryAcquire(ws, nowMs)) {
         ingestRateLimited.add(1);
         c.header("Retry-After", String(ingest.limiter.retryAfterSeconds(ws, nowMs)));
-        return c.json({ code: "RATE_LIMITED", message: "ingest rate limit exceeded for this workspace" }, 429);
+        return c.json(errorBody("RATE_LIMITED", "ingest rate limit exceeded for this workspace"), 429);
       }
     }
 
@@ -319,14 +320,30 @@ export function createApp(
     try {
       body = await c.req.json();
     } catch {
-      return c.json({ code: "INVALID_BODY", message: "invalid JSON body" }, 400);
+      return c.json(errorBody("INVALID_BODY", "invalid JSON body"), 400);
     }
-    const b = body as { messages?: unknown; result?: unknown };
+    const b = body as { messages?: unknown; result?: unknown; startTimeMs?: unknown };
     if (!Array.isArray(b.messages)) {
-      return c.json({ code: "INVALID_BODY", message: "`messages` must be an array of SDKMessage events" }, 400);
+      return c.json(errorBody("INVALID_BODY", "`messages` must be an array of SDKMessage events"), 400);
     }
 
-    const envelope = sdkMessagesToOtlp(b.messages as SDKMessage[], b.result as TheokitRunResult | undefined);
+    // M117: honor an optional caller-supplied base timestamp so the native /v1/runs path and the OTLP
+    // /v1/traces fallback (which the SDK maps client-side with the same seam) yield identical spans.
+    // A non-number is tolerated (ignored → mapper default), but an in-band number outside a sane epoch-ms
+    // window is rejected at the boundary (fail-fast, error-handling.md §2) rather than minting absurd
+    // span timestamps from an untrusted body value.
+    let startTimeMs: number | undefined;
+    if (typeof b.startTimeMs === "number" && Number.isFinite(b.startTimeMs)) {
+      if (b.startTimeMs < 0 || b.startTimeMs > Date.now() + 86_400_000) {
+        return c.json(errorBody("INVALID_BODY", "`startTimeMs` must be an epoch-ms in [0, now + 1 day]"), 400);
+      }
+      startTimeMs = b.startTimeMs;
+    }
+    const envelope = sdkMessagesToOtlp(
+      b.messages as SDKMessage[],
+      b.result as TheokitRunResult | undefined,
+      startTimeMs !== undefined ? { startTimeMs } : {},
+    );
     const { spans: toSave, rejected, firstError } = parseResourceSpansPartial(envelope);
     if (toSave.length > 0) {
       await repo.save(toSave, ws);
@@ -456,7 +473,7 @@ export function createApp(
     return c.json(costByPeriodResponseSchema.parse(result), 200);
   });
 
-  app.post("/v1/replay-sessions", requireScopeOnPrincipal("observability:write"), async (c) => {
+  app.post("/v1/replay-sessions", bodyLimit413(DEFAULT_ADVANCED_MAX_BYTES), requireScopeOnPrincipal("observability:write"), async (c) => {
     // Record a replay-open event (M8 north-star). Fail-fast 400 on a missing
     // traceId (Rule 8); the UI calls this fire-and-forget so a 5xx never
     // degrades the replay UX (D3).
@@ -471,6 +488,7 @@ export function createApp(
       return c.json(apiError("INVALID_BODY", "traceId is required"), 400);
     }
     await repo.recordReplaySession(traceId, getPrincipal(c).workspaceId);
+    replaySessionsRecorded.add(1); // observable: replay-session north-star write volume (pillar c)
     return c.json({ recorded: true }, 200);
   });
 
@@ -576,7 +594,7 @@ export function createApp(
     return c.json(traceTagsResponseSchema.parse({ tags }), 200);
   });
 
-  app.post("/v1/traces/:traceId/tags", requireScopeOnPrincipal("observability:write"), async (c) => {
+  app.post("/v1/traces/:traceId/tags", bodyLimit413(DEFAULT_ADVANCED_MAX_BYTES), requireScopeOnPrincipal("observability:write"), async (c) => {
     // Add a tag (M14). 400 on an invalid tag (Rule 8), 404 when the trace is
     // absent (D2 — you cannot tag what is not there); idempotent otherwise.
     let body: unknown;
@@ -593,6 +611,7 @@ export function createApp(
     const ws = getPrincipal(c).workspaceId;
     const ok = await repo.addTag(traceId, tag, ws);
     if (!ok) return c.json(apiError("NOT_FOUND", "not found"), 404);
+    tagsAdded.add(1); // observable: tag-add volume (pillar c)
     const tags = await repo.listTags(traceId, ws);
     return c.json(traceTagsResponseSchema.parse({ tags }), 200);
   });
@@ -607,6 +626,7 @@ export function createApp(
     const traceId = c.req.param("traceId");
     const ws = getPrincipal(c).workspaceId;
     await repo.removeTag(traceId, tag, ws);
+    tagsRemoved.add(1); // observable: tag-remove volume (pillar c)
     const tags = await repo.listTags(traceId, ws);
     return c.json(traceTagsResponseSchema.parse({ tags }), 200);
   });
@@ -620,7 +640,7 @@ export function createApp(
     return c.json(annotationsResponseSchema.parse({ annotations }), 200);
   });
 
-  app.post("/v1/traces/:traceId/annotations", requireScopeOnPrincipal("observability:write"), async (c) => {
+  app.post("/v1/traces/:traceId/annotations", bodyLimit413(DEFAULT_ADVANCED_MAX_BYTES), requireScopeOnPrincipal("observability:write"), async (c) => {
     // M26b: upsert a human annotation (👍/👎 + note) on a trace or span. 400 on an
     // empty annotation (no label AND no note, Rule 8), 404 when the trace is absent
     // (D2); idempotent upsert otherwise (latest wins). Returns the trace's annotations.
@@ -663,6 +683,7 @@ export function createApp(
       },
       ws,
     );
+    annotationsRemoved.add(1); // observable: annotation-remove volume (pillar c)
     const annotations = await repo.listAnnotations(traceId, ws);
     return c.json(annotationsResponseSchema.parse({ annotations }), 200);
   });

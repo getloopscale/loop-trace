@@ -3,6 +3,7 @@ import type { Context } from "hono";
 import {
   RateLimiter,
   ChatError,
+  ProviderBreakerOpenError,
   type ChatMessage,
   type ReplayClient,
   type ReplayResult,
@@ -27,6 +28,12 @@ class FakeReplay implements ReplayClient {
 class FailingReplay implements ReplayClient {
   async run(): Promise<ReplayResult> {
     throw new ChatError("provider 503");
+  }
+}
+/** M118 — a client whose breaker is OPEN fast-fails with ProviderBreakerOpenError. */
+class BreakerOpenReplay implements ReplayClient {
+  async run(): Promise<ReplayResult> {
+    throw new ProviderBreakerOpenError();
   }
 }
 
@@ -118,6 +125,12 @@ describe("M55 replayHandler", () => {
   it("test_replay_502_when_provider_fails_closed", async () => {
     const res = await replayHandler(ctx({ body: { messages: [{ role: "user", content: "hi" }] } }), deps({ chat: new FailingReplay() }));
     expect(res.status).toBe(502);
+    expect(((await res.json()) as { code: string }).code).toBe("REPLAY_UNAVAILABLE");
+  });
+
+  it("test_replay_503_when_provider_circuit_open (M118 breaker fast-fail)", async () => {
+    const res = await replayHandler(ctx({ body: { messages: [{ role: "user", content: "hi" }] } }), deps({ chat: new BreakerOpenReplay() }));
+    expect(res.status).toBe(503); // OPEN breaker → 503 (provider down), distinct from 502 (provider error)
     expect(((await res.json()) as { code: string }).code).toBe("REPLAY_UNAVAILABLE");
   });
 

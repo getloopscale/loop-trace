@@ -212,4 +212,94 @@ suite("M36 evaluators routes (integration)", () => {
     const still = await req("GET", `/v1/evaluators/${id}`, "rw");
     expect(((await still.json()) as { name: string }).name).toBe("owned");
   });
+
+  // ── M119 (Phase 2, D2) — guards negatives + cross-tenant isolation ────────────────────────────
+  // The guards are the shallowest advanced capability: happy-path only until now. These four assert
+  // the malformed-body 400, the cross-workspace 404 SECURITY branch (evaluators.ts:182-187), the
+  // delete-idempotency edge, and the breaches-read isolation — all against the REAL evaluator/guard
+  // repo (Testcontainers PG), reusing the two-workspace verifier (rw=ws-x, rw2=ws-y). A negative test
+  // asserts the SPECIFIC typed error, not merely "it 4xx-ed" (rules/testing.md §4.1).
+
+  it("test_create_guard_400_on_malformed_body", async () => {
+    // (a) a null/non-JSON body → INVALID_BODY (readJson returns null); (b) a non-guard-shape body →
+    // INVALID_GUARD (zod safeParse fails). Two distinct typed codes, both pinned.
+    const a = await req("POST", "/v1/guards", "rw", null);
+    expect(a.status).toBe(400);
+    expect(((await a.json()) as { code: string }).code).toBe("INVALID_BODY");
+    const b = await req("POST", "/v1/guards", "rw", { nope: 1 });
+    expect(b.status).toBe(400);
+    expect(((await b.json()) as { code: string }).code).toBe("INVALID_GUARD");
+  });
+
+  it("test_create_guard_404_when_evaluator_cross_workspace", async () => {
+    // SECURITY (EVAL-5, evaluators.ts:182-187): ws-x creates evaluator E; ws-y attaches a guard to
+    // E.id → the scoped getEvaluator(E.id, ws-y) is null → 404 EVALUATOR_NOT_FOUND. A 200 here would
+    // be a live cross-workspace leak (ws-y guarding ws-x's evaluator) — the milestone would fix the
+    // SQL scoping no-workaround. ws-x's guard list must not gain a guard either.
+    const ev = await req("POST", "/v1/evaluators", "rw", { name: "owned_eval", kind: "rule", config: { predicate: "status:error" } });
+    const evId = ((await ev.json()) as { id: string }).id;
+    const res = await req("POST", "/v1/guards", "rw2", { evaluatorId: evId, operator: "gt", threshold: 0 });
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as { code: string }).code).toBe("EVALUATOR_NOT_FOUND");
+    // ws-x sees NO guard (the cross-workspace attempt created nothing in either workspace).
+    const xGuards = await req("GET", "/v1/guards", "rw");
+    expect(((await xGuards.json()) as { guards: unknown[] }).guards).toHaveLength(0);
+    // ws-y also sees no guard.
+    const yGuards = await req("GET", "/v1/guards", "rw2");
+    expect(((await yGuards.json()) as { guards: unknown[] }).guards).toHaveLength(0);
+  });
+
+  it("test_delete_guard_absent_is_idempotent", async () => {
+    // A valid-but-absent DELETE target (edge case): deleteGuard is a workspace-scoped no-op on a
+    // missing row, so DELETE returns 204 — never 404/500 — and stays 204 on a repeat (idempotent).
+    const first = await req("DELETE", "/v1/guards/does-not-exist", "rw");
+    expect(first.status).toBe(204);
+    const second = await req("DELETE", "/v1/guards/does-not-exist", "rw");
+    expect(second.status).toBe(204);
+  });
+
+  it("test_guard_breaches_cross_tenant_isolation", async () => {
+    // Build a REAL breach in ws-x: ingest a span whose OTLP status is the proto-json enum name
+    // `STATUS_CODE_ERROR` (so `String(status.code)` matches the `status:error` predicate's /error/i —
+    // a numeric OTLP code 2 stringifies to "2" and would NOT match), create + run a rule evaluator
+    // (writes verdict score=1), create a `gt 0` guard so the verdict breaches. ws-x reading breaches
+    // sees the trace; ws-y reading the SAME guard id sees NONE (listBreachingTraces scopes g.workspace_id).
+    const errorSpanEnvelope = JSON.stringify({
+      resourceSpans: [{ scopeSpans: [{ spans: [{
+        spanId: "x-span", traceId: "x-trace", name: "op",
+        startTimeUnixNano: "1700000000000000000", endTimeUnixNano: "1700000000100000000",
+        status: { code: "STATUS_CODE_ERROR" },
+      }] }] }],
+    });
+    await app.request("http://x/v1/traces", {
+      method: "POST",
+      headers: { authorization: "Bearer rw", "content-type": "application/json" },
+      body: errorSpanEnvelope,
+    });
+    const ev = await req("POST", "/v1/evaluators", "rw", { name: "is_error", kind: "rule", config: { predicate: "status:error" }, target: "" });
+    const evId = ((await ev.json()) as { id: string }).id;
+    const run = await req("POST", `/v1/evaluators/${evId}/run`, "rw", {});
+    expect(((await run.json()) as { written: number }).written).toBeGreaterThanOrEqual(1);
+    const g = await req("POST", "/v1/guards", "rw", { evaluatorId: evId, operator: "gt", threshold: 0 });
+    expect(g.status).toBe(200);
+    const gId = ((await g.json()) as { id: string }).id;
+
+    // ws-x (the owner) sees its breaching trace — proves the path reaches data (not a false negative).
+    const xBreaches = await req("GET", `/v1/guards/${gId}/breaches`, "rw");
+    expect(xBreaches.status).toBe(200);
+    expect(((await xBreaches.json()) as { traceIds: string[] }).traceIds).toContain("x-trace");
+
+    // ws-y reads ws-x's guard id → MUST NOT see ws-x's breaching trace (scoped read, cross-tenant deny).
+    const yBreaches = await req("GET", `/v1/guards/${gId}/breaches`, "rw2");
+    expect(yBreaches.status).toBe(200);
+    const yTraceIds = ((await yBreaches.json()) as { traceIds: string[] }).traceIds;
+    expect(yTraceIds).not.toContain("x-trace");
+    expect(yTraceIds).toHaveLength(0);
+
+    // A non-uuid guard id in the breaches read → empty (200), never a 500 (22P02) — same isUuid
+    // guard as deleteGuard/getEvaluator (M119 no-workaround fix).
+    const garbage = await req("GET", `/v1/guards/not-a-uuid/breaches`, "rw");
+    expect(garbage.status).toBe(200);
+    expect(((await garbage.json()) as { traceIds: string[] }).traceIds).toEqual([]);
+  });
 });

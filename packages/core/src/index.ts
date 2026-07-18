@@ -17,6 +17,8 @@ export {
 } from "./domain/span-repository.js";
 export { NameConflictError, isUniqueViolation, isForeignKeyViolation } from "./domain/errors.js";
 export { type ApiErrorBody, type FieldIssue, apiError, zodFieldErrors } from "./domain/api-error.js";
+// M118 (D3) — the single typed error envelope: a stable code union + `errorBody` (shape == apiError).
+export { ERROR_CODES, type ErrorCode, isErrorCode, errorBody } from "./domain/error-envelope.js";
 export { type SqlResult, rowsAs } from "./domain/sql-rows.js";
 // M22: multi-tenant workspace-isolation domain types (ported from theo-memory).
 export {
@@ -111,6 +113,28 @@ export {
   MAX_ANSWER_BYTES,
 } from "./domain/copilot.js";
 export { RateLimiter } from "./domain/rate-limiter.js";
+// M118 (D2) — provider circuit breaker (hand-rolled closed/open/half-open, fast-fail 503 when OPEN).
+export {
+  ProviderBreaker,
+  ProviderBreakerOpenError,
+  type ProviderBreakerConfig,
+  DEFAULT_PROVIDER_BREAKER,
+} from "./domain/provider-breaker.js";
+// M118 (D4) — zod-at-the-boundary response schemas for the advanced write routes (server-side single
+// source of truth; lifted from the M117 SDK hand-types, wire shape unchanged).
+export {
+  evaluatorRecordSchema,
+  evaluatorsListResponseSchema,
+  guardRecordSchema,
+  guardsListResponseSchema,
+  runResultResponseSchema,
+  experimentRunsListResponseSchema,
+  runCompareDeltasSchema,
+  experimentCompareResponseSchema,
+  askCopilotResponseSchema,
+  copilotFeedbackRecordSchema,
+  replayResponseSchema,
+} from "./domain/advanced-responses.js";
 export {
   JudgeError,
   OpenAICompatibleJudge,
@@ -123,6 +147,7 @@ export {
   parseEvalSweepHours,
   parseBackfillMax,
   parseCopilotRpm,
+  parseEvaluatorRpm,
   parseIngestRpm,
   parseMaxIngestBytes,
   parseMaxDecompressedBytes,
@@ -130,10 +155,12 @@ export {
   parseHttpRequestTimeoutMs,
   parseShutdownDrainMs,
   parseProviderRetry,
+  parseProviderBreaker,
   type PoolConfig,
   type ProviderRetryConfig,
   DEFAULT_EVAL_BACKFILL_MAX,
   DEFAULT_COPILOT_RPM,
+  DEFAULT_EVALUATOR_RPM,
   DEFAULT_INGEST_RPM,
   DEFAULT_MAX_INGEST_BYTES,
   DEFAULT_MAX_DECOMPRESSED_BYTES,
@@ -313,3 +340,7 @@ export {
 export { sdkMessagesToOtlp, THEOKIT_SERVICE_NAME } from "./domain/theokit/sdk-messages-to-otlp.js";
 export type { OtlpTraces } from "./domain/theokit/sdk-messages-to-otlp.js";
 export type { SDKMessage, RunResult as TheokitRunResult } from "./domain/theokit/sdk-message.js";
+// M119 (D1) — the shared SDKMessage→OTLP mapper drift-guard fixture (TEST support): the 18 documented
+// behaviors imported by BOTH mapper test files (the SDK test resolves this via @usetheo/lens-core).
+export { MAPPER_VECTORS, flattenOtlp, T0 as MAPPER_VECTOR_T0 } from "./domain/theokit/theokit-vectors.js";
+export type { MapperVector, SdkMapper, OtlpTracesLike } from "./domain/theokit/theokit-vectors.js";

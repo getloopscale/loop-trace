@@ -1581,21 +1581,6 @@ describe("M93 ingest durability & backpressure", () => {
     JSON.stringify({ resourceSpans: [{ scopeSpans: [{ spans: [span] }] }] });
   const okSpan = { spanId: "d-a1", traceId: "d-t1", name: "op", startTimeUnixNano: "1", endTimeUnixNano: "2" };
 
-  it("post_body_over_cap_returns_413", async () => {
-    const app = createApp(repo, undefined, {}, undefined, undefined, undefined, undefined, {
-      maxBodyBytes: 64, // tiny cap
-    });
-    const big = envelope({ ...okSpan, name: "x".repeat(500) }); // > 64 bytes
-    const res = await app.request("/v1/traces", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: big,
-    });
-    expect(res.status).toBe(413);
-    expect(((await res.json()) as { code: string }).code).toBe("PAYLOAD_TOO_LARGE");
-    expect(repo.saveCalls).toHaveLength(0);
-  });
-
   it("post_gzip_bomb_over_decompressed_cap_returns_413", async () => {
     const app = createApp(repo, undefined, {}, undefined, undefined, undefined, undefined, {
       maxDecompressedBytes: 128,
@@ -1611,7 +1596,43 @@ describe("M93 ingest durability & backpressure", () => {
     expect(repo.saveCalls).toHaveLength(0);
   });
 
-  it("post_ingest_flood_past_window_returns_429_per_workspace", async () => {
+  // M119 (D3) — the 413 (bodyLimit) + 429 (per-workspace limiter) guards are byte-identical in intent
+  // for the two buffering ingest routes (`app.ts:298-316` mirrors `/v1/traces`), so the assertions are
+  // parameterized over the route set instead of duplicated. Each entry supplies the over-cap body and a
+  // valid-body factory for its route shape (OTLP envelope for /v1/traces, native SDKMessage batch for
+  // /v1/runs). A third buffering route later extends this table, never the corpus (rules/testing.md §6).
+  const INGEST_ROUTES = [
+    {
+      path: "/v1/traces",
+      overCapBody: envelope({ ...okSpan, name: "x".repeat(500) }), // > 64 bytes
+      validBody: () => envelope(okSpan),
+    },
+    {
+      path: "/v1/runs",
+      // A native /v1/runs body; padded with a large user message so it exceeds the tiny 64-byte cap.
+      overCapBody: JSON.stringify({
+        messages: [{ type: "user", agent_id: "a", run_id: "r", message: { role: "user", content: [{ type: "text", text: "x".repeat(500) }] } }],
+      }),
+      // An empty-but-well-formed run: 200, nothing to persist (the stub never saves) — reaches the limiter.
+      validBody: () => JSON.stringify({ messages: [] }),
+    },
+  ] as const;
+
+  it.each(INGEST_ROUTES)("post_body_over_cap_returns_413 [$path]", async ({ path, overCapBody }) => {
+    const app = createApp(repo, undefined, {}, undefined, undefined, undefined, undefined, {
+      maxBodyBytes: 64, // tiny cap
+    });
+    const res = await app.request(path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: overCapBody,
+    });
+    expect(res.status).toBe(413);
+    expect(((await res.json()) as { code: string }).code).toBe("PAYLOAD_TOO_LARGE");
+    expect(repo.saveCalls).toHaveLength(0);
+  });
+
+  it.each(INGEST_ROUTES)("post_ingest_flood_past_window_returns_429_per_workspace [$path]", async ({ path, validBody }) => {
     const { RateLimiter } = await import("@usetheo/lens-core");
     let now = 1_000_000;
     const app = createApp(repo, undefined, {}, undefined, undefined, undefined, undefined, {
@@ -1619,10 +1640,10 @@ describe("M93 ingest durability & backpressure", () => {
       now: () => now,
     });
     const send = () =>
-      app.request("/v1/traces", {
+      app.request(path, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: envelope(okSpan),
+        body: validBody(),
       });
     expect((await send()).status).toBe(200);
     expect((await send()).status).toBe(200);
@@ -1631,6 +1652,8 @@ describe("M93 ingest durability & backpressure", () => {
     expect(((await third.clone().json()) as { code: string }).code).toBe("RATE_LIMITED");
     // M94 — the 429 advises Retry-After (seconds until the window resets)
     expect(Number(third.headers.get("Retry-After"))).toBeGreaterThanOrEqual(1);
+    // The shared ingestRateLimited counter ticks exactly once for the shed request (pillar c). The
+    // beforeEach reset scopes this per test, so both routes assert a delta of 1.
     expect(ingestRateLimited.value).toBe(1);
     // a NEW window (advance the clock) resets the allowance
     now += 60_001;

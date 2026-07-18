@@ -302,7 +302,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["TraceCostResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -448,7 +448,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["AgentCatalogResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -594,7 +594,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["TraceListResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -810,7 +810,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["NorthStarResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -954,7 +954,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["EvaluatorsResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -1026,7 +1026,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["ScoresResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -1098,7 +1098,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["SpanFacetsResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -1244,7 +1244,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["SessionDetailResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -1318,7 +1318,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["TraceTagsResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -1508,7 +1508,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["AnnotationsResponse"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -1826,7 +1826,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["DatasetDetail"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -2163,7 +2163,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["LabelingQueuePage"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -2237,7 +2237,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": Record<string, never>;
+                        "application/json": components["schemas"]["LabelingQueueItem"];
                     };
                 };
                 /** @description Validation failure — see details[] */
@@ -2680,6 +2680,369 @@ export interface components {
                 annotatorKind: string;
                 updatedAt: string;
             }[];
+        };
+        TraceCostResponse: {
+            traceId: string;
+            costUsd: number;
+            inputTokens: number;
+            outputTokens: number;
+            totalTokens: number;
+        };
+        AgentCatalogResponse: {
+            agents: {
+                name: string;
+                firstSeenAt: string;
+                latestSeenAt: string;
+                runCount: number;
+                versions: string[];
+                versionCount: number;
+                tools: string[];
+                systemPrompt?: string;
+                stale: boolean;
+                highChurn: boolean;
+                anonymous: boolean;
+            }[];
+        };
+        NorthStarResponse: {
+            tracesPerDay: {
+                period: string;
+                count: number;
+            }[];
+            replaySessionsPerWeek: {
+                period: string;
+                count: number;
+            }[];
+        };
+        EvaluatorsResponse: {
+            evaluators: {
+                name: string;
+                count: number;
+                avgScore?: number;
+                labels: {
+                    [key: string]: number;
+                };
+            }[];
+        };
+        ScoresResponse: {
+            /** @enum {string} */
+            range: "1h" | "24h" | "7d" | "30d";
+            scores: {
+                periodStart: string;
+                name: string;
+                sampleCount: number;
+                avgScore?: number;
+                labels: {
+                    [key: string]: number;
+                };
+            }[];
+        };
+        SpanFacetsResponse: {
+            /** @enum {string} */
+            mode: "keys";
+            keys: {
+                key: string;
+                count: number;
+            }[];
+        } | {
+            /** @enum {string} */
+            mode: "values";
+            key: string;
+            values: {
+                value: string;
+                count: number;
+            }[];
+        };
+        SessionDetailResponse: {
+            sessionId: string;
+            firstSeenAt: string;
+            lastSeenAt: string;
+            traceCount: number;
+            costUsd: number;
+            totalTokens: number;
+            errorRate: number;
+            latencyP50Ms: number;
+            latencyP95Ms: number;
+            traces: {
+                traceId: string;
+                sessionId?: string;
+                name?: string;
+                startTimeUnixNano?: string;
+                durationMs?: number;
+                statusCode?: string;
+                totalTokens?: number;
+                model?: string;
+                costUsd?: number;
+                rootOperationName?: string;
+                rootToolName?: string;
+                endTimeUnixNano?: string;
+                inputPreview?: string;
+                outputPreview?: string;
+                evaluationsCount?: number;
+            }[];
+        };
+        LabelingQueuePage: {
+            items: {
+                id: string;
+                traceId: string;
+                spanId: string;
+                /** @enum {string} */
+                status: "pending" | "resolved";
+                label?: string;
+                score?: number;
+                note?: string;
+                createdBy: string;
+                resolvedBy?: string;
+                createdAt: string;
+                resolvedAt?: string;
+            }[];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        LabelingQueueItem: {
+            id: string;
+            traceId: string;
+            spanId: string;
+            /** @enum {string} */
+            status: "pending" | "resolved";
+            label?: string;
+            score?: number;
+            note?: string;
+            createdBy: string;
+            resolvedBy?: string;
+            createdAt: string;
+            resolvedAt?: string;
+        };
+        EvaluatorRecord: {
+            id: string;
+            createdAt: string;
+            name: string;
+            target: string;
+            enabled: boolean;
+            passLabel?: string;
+            failLabel?: string;
+            /** @enum {string} */
+            kind: "rule";
+            config: {
+                predicate: string;
+            };
+        } | {
+            id: string;
+            createdAt: string;
+            name: string;
+            target: string;
+            enabled: boolean;
+            passLabel?: string;
+            failLabel?: string;
+            /** @enum {string} */
+            kind: "llm_judge";
+            config: {
+                prompt: string;
+                model: string;
+            };
+        };
+        EvaluatorsListResponse: {
+            evaluators: ({
+                id: string;
+                createdAt: string;
+                name: string;
+                target: string;
+                enabled: boolean;
+                passLabel?: string;
+                failLabel?: string;
+                /** @enum {string} */
+                kind: "rule";
+                config: {
+                    predicate: string;
+                };
+            } | {
+                id: string;
+                createdAt: string;
+                name: string;
+                target: string;
+                enabled: boolean;
+                passLabel?: string;
+                failLabel?: string;
+                /** @enum {string} */
+                kind: "llm_judge";
+                config: {
+                    prompt: string;
+                    model: string;
+                };
+            })[];
+        };
+        GuardRecord: {
+            id: string;
+            createdAt: string;
+            evaluatorId: string;
+            /** @enum {string} */
+            operator: "lt" | "lte" | "gt" | "gte" | "eq" | "label_eq";
+            threshold?: number;
+            labelValue?: string;
+            enabled: boolean;
+        };
+        GuardsListResponse: {
+            guards: {
+                id: string;
+                createdAt: string;
+                evaluatorId: string;
+                /** @enum {string} */
+                operator: "lt" | "lte" | "gt" | "gte" | "eq" | "label_eq";
+                threshold?: number;
+                labelValue?: string;
+                enabled: boolean;
+            }[];
+        };
+        RunResultResponse: {
+            evaluator: string;
+            written: number;
+            skipped: number;
+            truncated: boolean;
+            errors: {
+                spanId: string;
+                reason: string;
+            }[];
+        };
+        ExperimentRun: {
+            id: string;
+            datasetId: string;
+            name: string;
+            variant: {
+                model?: string;
+                promptOverride?: string;
+            };
+            /** @enum {string} */
+            status: "completed" | "partial" | "failed";
+            truncated: boolean;
+            itemCount: number;
+            passCount: number;
+            avgScore?: number;
+            totalCostUsd: number;
+            createdBy: string;
+            createdAt: string;
+            items?: {
+                datasetItemTraceId: string;
+                inputSnapshot?: string;
+                output?: string;
+                promptTokens: number;
+                completionTokens: number;
+                totalTokens: number;
+                costUsd?: number;
+                latencyMs: number;
+                model: string;
+                scores: {
+                    name: string;
+                    score?: number;
+                    label?: string;
+                    explanation?: string;
+                }[];
+                error?: string;
+            }[];
+        };
+        ExperimentRunsListResponse: {
+            runs: {
+                id: string;
+                datasetId: string;
+                name: string;
+                variant: {
+                    model?: string;
+                    promptOverride?: string;
+                };
+                /** @enum {string} */
+                status: "completed" | "partial" | "failed";
+                truncated: boolean;
+                itemCount: number;
+                passCount: number;
+                avgScore?: number;
+                totalCostUsd: number;
+                createdBy: string;
+                createdAt: string;
+                items?: {
+                    datasetItemTraceId: string;
+                    inputSnapshot?: string;
+                    output?: string;
+                    promptTokens: number;
+                    completionTokens: number;
+                    totalTokens: number;
+                    costUsd?: number;
+                    latencyMs: number;
+                    model: string;
+                    scores: {
+                        name: string;
+                        score?: number;
+                        label?: string;
+                        explanation?: string;
+                    }[];
+                    error?: string;
+                }[];
+            }[];
+        };
+        ExperimentCompareResponse: {
+            runs: {
+                id: string;
+                datasetId: string;
+                name: string;
+                variant: {
+                    model?: string;
+                    promptOverride?: string;
+                };
+                /** @enum {string} */
+                status: "completed" | "partial" | "failed";
+                truncated: boolean;
+                itemCount: number;
+                passCount: number;
+                avgScore?: number;
+                totalCostUsd: number;
+                createdBy: string;
+                createdAt: string;
+                items?: {
+                    datasetItemTraceId: string;
+                    inputSnapshot?: string;
+                    output?: string;
+                    promptTokens: number;
+                    completionTokens: number;
+                    totalTokens: number;
+                    costUsd?: number;
+                    latencyMs: number;
+                    model: string;
+                    scores: {
+                        name: string;
+                        score?: number;
+                        label?: string;
+                        explanation?: string;
+                    }[];
+                    error?: string;
+                }[];
+            }[];
+            deltas: {
+                passCountDelta: number;
+                passRateDelta: number;
+                avgScoreDelta: number | null;
+                totalCostDelta: number;
+                avgLatencyDelta: number | null;
+            } | null;
+        };
+        AskCopilotResponse: {
+            answer: string;
+        };
+        CopilotFeedbackRecord: {
+            id: string;
+            traceId: string;
+            turnId: string;
+            spanId?: string;
+            /** @enum {string} */
+            label: "up" | "down";
+            question?: string;
+            updatedAt: string;
+        };
+        ReplayResponse: {
+            output: string;
+            promptTokens: number;
+            completionTokens: number;
+            totalTokens: number;
+            latencyMs: number;
+            model: string;
+            costUsd?: number;
         };
     };
     responses: never;

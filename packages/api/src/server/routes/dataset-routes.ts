@@ -16,7 +16,14 @@ import {
 } from "@usetheo/lens-core";
 
 import { getPrincipal, requireScopeOnPrincipal } from "../auth/middleware.js";
-import { datasetItemsAdded } from "../metrics.js";
+import {
+  datasetItemsAdded,
+  datasetsCreated,
+  datasetsRenamed,
+  datasetsDeleted,
+  datasetItemsRemoved,
+} from "../metrics.js";
+import { bodyLimit413, DATASET_ITEM_MAX_BYTES, DATASET_NAME_MAX_BYTES } from "../body-caps.js"; // M118 (D1)
 
 export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
   app.get("/v1/datasets", requireScopeOnPrincipal("observability:read"), async (c) => {
@@ -25,7 +32,7 @@ export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
     return c.json(datasetsResponseSchema.parse({ datasets }), 200);
   });
 
-  app.post("/v1/datasets", requireScopeOnPrincipal("observability:write"), async (c) => {
+  app.post("/v1/datasets", bodyLimit413(DATASET_NAME_MAX_BYTES), requireScopeOnPrincipal("observability:write"), async (c) => {
     // M26d: create-or-get a dataset by name (D1, idempotent). 400 on a blank name.
     let body: unknown;
     try {
@@ -38,6 +45,7 @@ export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
       return c.json(apiError("INVALID_BODY", "dataset name is required (1-120 chars after trim)"), 400);
     }
     const dataset = await repo.createDataset(name, getPrincipal(c).workspaceId);
+    datasetsCreated.add(1); // observable: dataset curation volume (pillar c)
     return c.json(datasetSchema.parse(dataset), 200);
   });
 
@@ -52,7 +60,7 @@ export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
       : c.json(apiError("NOT_FOUND", "not found"), 404);
   });
 
-  app.post("/v1/datasets/:datasetId/items", requireScopeOnPrincipal("observability:write"), async (c) => {
+  app.post("/v1/datasets/:datasetId/items", bodyLimit413(DATASET_ITEM_MAX_BYTES), requireScopeOnPrincipal("observability:write"), async (c) => {
     // M26d: add a trace to a dataset (snapshot at add-time, D2). 400 on a missing
     // traceId, 404 when the dataset OR the trace is absent (D3); idempotent otherwise.
     let body: unknown;
@@ -87,7 +95,7 @@ export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
     return c.json(datasetDetailSchema.parse(detail), 200);
   });
 
-  app.put("/v1/datasets/:datasetId", requireScopeOnPrincipal("observability:write"), async (c) => {
+  app.put("/v1/datasets/:datasetId", bodyLimit413(DATASET_NAME_MAX_BYTES), requireScopeOnPrincipal("observability:write"), async (c) => {
     // M82: rename a dataset. 400 on a blank name, 404 absent, 409 on a duplicate name (ADR-1).
     let body: unknown;
     try {
@@ -101,7 +109,9 @@ export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
     }
     try {
       const updated = await repo.renameDataset(c.req.param("datasetId"), name, getPrincipal(c).workspaceId);
-      return updated ? c.json(datasetSchema.parse(updated), 200) : c.json(apiError("NOT_FOUND", "not found"), 404);
+      if (!updated) return c.json(apiError("NOT_FOUND", "not found"), 404);
+      datasetsRenamed.add(1); // observable: dataset-rename volume (pillar c)
+      return c.json(datasetSchema.parse(updated), 200);
     } catch (err) {
       if (err instanceof NameConflictError) return c.json(apiError("NAME_CONFLICT", err.message), 409);
       throw err;
@@ -111,7 +121,9 @@ export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
   app.delete("/v1/datasets/:datasetId", requireScopeOnPrincipal("observability:delete"), async (c) => {
     // M82: delete a dataset + cascade its items and experiment runs (ADR-2). Idempotent: absent → 404.
     const ok = await repo.deleteDataset(c.req.param("datasetId"), getPrincipal(c).workspaceId);
-    return ok ? c.body(null, 204) : c.json(apiError("NOT_FOUND", "not found"), 404);
+    if (!ok) return c.json(apiError("NOT_FOUND", "not found"), 404);
+    datasetsDeleted.add(1); // observable: dataset-delete volume (pillar c)
+    return c.body(null, 204);
   });
 
   app.delete("/v1/datasets/:datasetId/items/:traceId", requireScopeOnPrincipal("observability:delete"), async (c) => {
@@ -121,8 +133,8 @@ export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
     const ws = getPrincipal(c).workspaceId;
     await repo.removeDatasetItem(datasetId, c.req.param("traceId"), ws);
     const detail = await repo.getDataset(datasetId, ws);
-    return detail
-      ? c.json(datasetDetailSchema.parse(detail), 200)
-      : c.json(apiError("NOT_FOUND", "not found"), 404);
+    if (!detail) return c.json(apiError("NOT_FOUND", "not found"), 404);
+    datasetItemsRemoved.add(1); // observable: dataset-item-remove volume (pillar c)
+    return c.json(datasetDetailSchema.parse(detail), 200);
   });
 }

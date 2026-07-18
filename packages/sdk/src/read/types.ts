@@ -37,6 +37,24 @@ export type TraceTagsResponse = Schemas["TraceTagsResponse"];
 /** `{ annotations: [...] }` — a trace's annotations after an annotate/delete write. */
 export type AnnotationsResponse = Schemas["AnnotationsResponse"];
 
+// ─── M117 read parity — GENERATED (zod-backed) response aliases (ADR D1). ───
+/** `GET /v1/traces/{id}/cost` — the trace's cost rollup. */
+export type TraceCostResponse = Schemas["TraceCostResponse"];
+/** `GET /v1/agents` — the derived agent catalog `{ agents: [...] }`. */
+export type AgentCatalogResponse = Schemas["AgentCatalogResponse"];
+/** `GET /v1/metrics/north-star` — the north-star aggregate. */
+export type NorthStarResponse = Schemas["NorthStarResponse"];
+/** `GET /v1/metrics/evaluators` — per-evaluator aggregate `{ evaluators: [...] }`. */
+export type EvaluatorMetricsResponse = Schemas["EvaluatorsResponse"];
+/** `GET /v1/metrics/scores` — per-evaluator score aggregation over time. */
+export type ScoresResponse = Schemas["ScoresResponse"];
+/** `GET /v1/metrics/span-attributes` — facet keys (no `key`) or values (`?key=`). */
+export type SpanFacetsResponse = Schemas["SpanFacetsResponse"];
+/** `GET /v1/sessions/{id}` — a single session's detail (traces). */
+export type SessionDetailResponse = Schemas["SessionDetailResponse"];
+/** `GET /v1/labeling-queue` — a server-paginated queue page `{ items, total, page, pageSize }`. */
+export type LabelingQueuePage = Schemas["LabelingQueuePage"];
+
 /** Options for {@link LensReadClient.listTraces} — map to snake_case query params. */
 export interface ListTracesOptions {
   status?: string;
@@ -61,6 +79,23 @@ export interface ObservabilityOptions {
 /** The aggregation period for cost analytics. */
 export interface CostByPeriodOptions {
   period?: string;
+}
+
+/** The rolling window for the evaluator/score metric reads (engine default `24h`). */
+export interface MetricsRangeOptions {
+  range?: string;
+}
+
+/** Options for {@link LensReadClient.getSpanAttributes} — omit `key` for the top keys; set it for that key's values. */
+export interface SpanAttributesOptions {
+  key?: string;
+}
+
+/** Options for {@link LensReadClient.listLabelingQueue} — server-paginated + optional status filter. */
+export interface ListLabelingQueueOptions {
+  page?: number;
+  pageSize?: number;
+  status?: "pending" | "resolved";
 }
 
 /**
@@ -166,20 +201,11 @@ export interface RunResult {
  * Labeling queue + copilot ask-feedback (M112). Hand-written (same rationale as M111 — the M114
  * contract test is the drift guard).
  */
-/** A labeling-queue item. */
-export interface LabelingQueueItem {
-  id: string;
-  traceId: string;
-  spanId: string;
-  status: "pending" | "resolved";
-  label?: string;
-  score?: number;
-  note?: string;
-  createdBy: string;
-  resolvedBy?: string;
-  createdAt: string;
-  resolvedAt?: string;
-}
+/**
+ * A labeling-queue item. GENERATED alias over the engine `labelingQueueItemSchema` (M117 wired it
+ * into `RESPONSE_FOR_ROUTE`) — was hand-authored in M112, now drift-gated from the same schema (DRY).
+ */
+export type LabelingQueueItem = Schemas["LabelingQueueItem"];
 /** Enqueue a span for human review. */
 export interface EnqueueLabelingBody {
   spanId: string;
@@ -291,6 +317,77 @@ export interface ReplaySessionBody {
 /** The ack for a recorded replay-open event. */
 export interface ReplaySessionAck {
   recorded: boolean;
+}
+
+// ─── M117 read parity — HAND (bare `c.json`, no zod schema) response types (ADR D1). ───
+// These 9 routes return a bare `c.json(record)` with no zod DTO to generate from, so the type is
+// hand-authored and pinned by the per-method hermetic contract test in
+// `read-parity-hand-contract.integration.test.ts` (T2.3 — the drift guard, per D1). Each REUSES an
+// existing element type (Span / EvaluatorRecord / GuardRecord / ExperimentRun) rather than
+// re-declaring its fields (DRY). The wrapper key mirrors the engine's `c.json({...})` key exactly (D3).
+
+/**
+ * `GET /v1/traces/{traceId}` — the reconstructed trace tree: a {@link Span} plus its recursive
+ * children (mirrors the engine `TraceTreeNode extends Span { children: TraceTreeNode[] }`).
+ */
+// M117→M118: hand-typed pending server-side zod.
+export interface TraceTree extends Span {
+  children: TraceTree[];
+}
+/** `GET /v1/evaluators` — `{ evaluators: EvaluatorRecord[] }`. */
+// M117→M118: hand-typed pending server-side zod.
+export interface ListEvaluatorsResponse {
+  evaluators: EvaluatorRecord[];
+}
+/** `GET /v1/guards` — `{ guards: GuardRecord[] }`. */
+// M117→M118: hand-typed pending server-side zod.
+export interface ListGuardsResponse {
+  guards: GuardRecord[];
+}
+/** `GET /v1/guards/{id}/breaches` — `{ traceIds: string[] }`. */
+// M117→M118: hand-typed pending server-side zod.
+export interface GuardBreachesResponse {
+  traceIds: string[];
+}
+/** `GET /v1/experiment-runs` — `{ runs: ExperimentRun[] }`. */
+// M117→M118: hand-typed pending server-side zod.
+export interface ListExperimentRunsResponse {
+  runs: ExperimentRun[];
+}
+/**
+ * The signed run-to-run aggregate deltas (A minus B) — mirrors the core `RunCompareDeltas`
+ * (`packages/core/src/domain/experiment.ts:110`); a metric absent on either side yields a `null` delta.
+ */
+// M117→M118: hand-typed pending server-side zod.
+export interface RunCompareDeltas {
+  passCountDelta: number;
+  passRateDelta: number;
+  avgScoreDelta: number | null;
+  totalCostDelta: number;
+  avgLatencyDelta: number | null;
+}
+/**
+ * `GET /v1/experiment-runs/compare?ids=a,b` — the compared runs (with items) + the signed `deltas` of
+ * the first two (`null` when fewer than two ids resolve).
+ */
+// M117→M118: hand-typed pending server-side zod.
+export interface CompareExperimentRunsResponse {
+  runs: ExperimentRun[];
+  deltas: RunCompareDeltas | null;
+}
+/**
+ * `POST /v1/traces/{traceId}/ask` request — the copilot question (required) + an optional span to
+ * anchor it to. Scoped `observability:read` but launches billable provider work.
+ */
+// M117→M118: hand-typed pending server-side zod.
+export interface AskCopilotBody {
+  question: string;
+  spanId?: string;
+}
+/** `POST /v1/traces/{traceId}/ask` response — `{ answer }`. */
+// M117→M118: hand-typed pending server-side zod.
+export interface AskCopilotResponse {
+  answer: string;
 }
 
 /**

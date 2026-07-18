@@ -706,3 +706,201 @@ describe("LensReadClient — experiment runs + replay (M113, billable non-idempo
     expect(ack.recorded).toBe(true);
   });
 });
+
+describe("LensReadClient — M117 read parity: GENERATED (zod-backed) reads (T1.2)", () => {
+  it("getTraceCost builds /v1/traces/{id}/cost (test_getTraceCost_builds_v1_traces_cost_url)", async () => {
+    const fetchFn = mockFetch({ traceId: "t1", totalCostUsd: 0, spanCount: 0 });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.getTraceCost("t1");
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/traces/t1/cost");
+    expect(methodOf(fetchFn)).toBe("GET");
+  });
+
+  it("getNorthStar composes /v1/lens/metrics/north-star when basePath is set (test_getNorthStar_composes_v1_lens_when_basePath_set)", async () => {
+    const fetchFn = mockFetch({});
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, basePath: "/v1/lens", fetch: fetchFn });
+    await client.getNorthStar();
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/lens/metrics/north-star");
+  });
+
+  it("listTraceTags builds /v1/traces/{id}/tags (GET)", async () => {
+    const fetchFn = mockFetch({ tags: [] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.listTraceTags("t1");
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/traces/t1/tags");
+    expect(methodOf(fetchFn)).toBe("GET");
+  });
+
+  it("listTraceAnnotations builds /v1/traces/{id}/annotations (GET)", async () => {
+    const fetchFn = mockFetch({ annotations: [] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.listTraceAnnotations("t1");
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/traces/t1/annotations");
+    expect(methodOf(fetchFn)).toBe("GET");
+  });
+
+  it("getAgents builds /v1/agents", async () => {
+    const fetchFn = mockFetch({ agents: [] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.getAgents();
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/agents");
+  });
+
+  it("getToolTraces path-escapes the tool name and builds /v1/analytics/tools/{tool}/traces", async () => {
+    const fetchFn = mockFetch({ traces: [], total: 0, limit: 0, offset: 0 });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.getToolTraces("Read/File");
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/analytics/tools/Read%2FFile/traces");
+  });
+
+  it("getEvaluatorMetrics builds /v1/metrics/evaluators", async () => {
+    const fetchFn = mockFetch({ evaluators: [] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.getEvaluatorMetrics();
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/metrics/evaluators");
+  });
+
+  it("getScores builds /v1/metrics/scores", async () => {
+    const fetchFn = mockFetch({ range: "24h", scores: [] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.getScores();
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/metrics/scores");
+  });
+
+  it("getSpanAttributes builds /v1/metrics/span-attributes and forwards ?key", async () => {
+    const fetchFn = mockFetch({ mode: "values", key: "k", values: [] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.getSpanAttributes({ key: "gen_ai.request.model" });
+    const url = new URL(calledUrl(fetchFn));
+    expect(url.pathname).toBe("/v1/metrics/span-attributes");
+    expect(url.searchParams.get("key")).toBe("gen_ai.request.model");
+  });
+
+  it("getSession builds /v1/sessions/{id}", async () => {
+    const fetchFn = mockFetch({ sessionId: "s1", traces: [] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.getSession("s1");
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/sessions/s1");
+  });
+
+  it("getDataset builds /v1/datasets/{id}", async () => {
+    const fetchFn = mockFetch({ id: "d1", name: "s", items: [] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.getDataset("d1");
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/datasets/d1");
+  });
+
+  it("listLabelingQueue builds /v1/labeling-queue and forwards page/pageSize/status", async () => {
+    const fetchFn = mockFetch({ items: [], total: 0, page: 1, pageSize: 50 });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.listLabelingQueue({ page: 2, pageSize: 25, status: "pending" });
+    const url = new URL(calledUrl(fetchFn));
+    expect(url.pathname).toBe("/v1/labeling-queue");
+    expect(url.searchParams.get("page")).toBe("2");
+    expect(url.searchParams.get("pageSize")).toBe("25");
+    expect(url.searchParams.get("status")).toBe("pending");
+  });
+
+  it("getLabelingItem builds /v1/labeling-queue/{id}", async () => {
+    const fetchFn = mockFetch({ id: "lq1", traceId: "t", spanId: "s", status: "pending", createdBy: "u", createdAt: "t" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.getLabelingItem("lq1");
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/labeling-queue/lq1");
+  });
+});
+
+describe("LensReadClient — M117 read parity: HAND (bare c.json) reads (T2.2)", () => {
+  it("getTrace path-escapes the traceId and builds /v1/traces/{id} (GET)", async () => {
+    const fetchFn = mockFetch({ spanId: "a1", traceId: "t/1", name: "x", children: [] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.getTrace("t/1");
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/traces/t%2F1");
+    expect(methodOf(fetchFn)).toBe("GET");
+  });
+
+  it("listEvaluators builds /v1/evaluators and returns the { evaluators } wrapper", async () => {
+    const fetchFn = mockFetch({ evaluators: [{ id: "ev1", name: "q", kind: "rule", config: { predicate: "status:ok" }, createdAt: "t", target: "span", enabled: true }] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const res = await client.listEvaluators();
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/evaluators");
+    expect(res.evaluators[0]?.id).toBe("ev1");
+  });
+
+  it("getEvaluator builds /v1/evaluators/{id}", async () => {
+    const fetchFn = mockFetch({ id: "ev1", name: "q", kind: "rule", config: { predicate: "status:ok" }, createdAt: "t", target: "span", enabled: true });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.getEvaluator("ev1");
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/evaluators/ev1");
+    expect(methodOf(fetchFn)).toBe("GET");
+  });
+
+  it("listGuards builds /v1/guards and returns the { guards } wrapper", async () => {
+    const fetchFn = mockFetch({ guards: [{ id: "g1", evaluatorId: "ev1", operator: "gte", threshold: 0.8, createdAt: "t", enabled: true }] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const res = await client.listGuards();
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/guards");
+    expect(res.guards[0]?.id).toBe("g1");
+  });
+
+  it("getGuardBreaches builds /v1/guards/{id}/breaches and returns { traceIds }", async () => {
+    const fetchFn = mockFetch({ traceIds: ["tr1", "tr2"] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const res = await client.getGuardBreaches("g1");
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/guards/g1/breaches");
+    expect(res.traceIds).toEqual(["tr1", "tr2"]);
+  });
+
+  it("listExperimentRuns builds /v1/experiment-runs and forwards ?datasetId", async () => {
+    const fetchFn = mockFetch({ runs: [] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.listExperimentRuns({ datasetId: "d1" });
+    const url = new URL(calledUrl(fetchFn));
+    expect(url.pathname).toBe("/v1/experiment-runs");
+    expect(url.searchParams.get("datasetId")).toBe("d1");
+  });
+
+  it("listExperimentRuns omits datasetId when not supplied", async () => {
+    const fetchFn = mockFetch({ runs: [] });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.listExperimentRuns();
+    const url = new URL(calledUrl(fetchFn));
+    expect(url.pathname).toBe("/v1/experiment-runs");
+    expect(url.searchParams.has("datasetId")).toBe(false);
+  });
+
+  it("getExperimentRun builds /v1/experiment-runs/{runId}", async () => {
+    const fetchFn = mockFetch({ id: "run1", datasetId: "d1", name: "e", variant: {}, status: "completed", truncated: false, itemCount: 0, passCount: 0, totalCostUsd: 0, createdBy: "u", createdAt: "t" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.getExperimentRun("run1");
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/experiment-runs/run1");
+  });
+
+  it("test_compareExperimentRuns_sends_run_ids_as_query", async () => {
+    const fetchFn = mockFetch({ runs: [], deltas: null });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.compareExperimentRuns(["a", "b"]);
+    const url = new URL(calledUrl(fetchFn));
+    // The id list lands in the QUERY string (?ids=a,b), NOT the path segment.
+    expect(url.pathname).toBe("/v1/experiment-runs/compare");
+    expect(url.searchParams.get("ids")).toBe("a,b");
+  });
+
+  it("askCopilot POSTs { question } to /v1/traces/{id}/ask and returns { answer }", async () => {
+    const fetchFn = mockFetch({ answer: "it retried once" });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const res = await client.askCopilot("tr1", { question: "why did it fail?" });
+    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/traces/tr1/ask");
+    expect(methodOf(fetchFn)).toBe("POST");
+    expect(bodyOf(fetchFn)).toEqual({ question: "why did it fail?" });
+    expect(res.answer).toBe("it retried once");
+  });
+
+  it("test_askCopilot_does_not_network_retry", async () => {
+    // A billable POST → a network reject must NOT be retried (retryNetwork:false), mirroring runEvaluator.
+    const fNet = seqFetch([new TypeError("boom"), ok({ answer: "never reached" })]);
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fNet, sleep: async () => {} });
+    await expect(client.askCopilot("tr1", { question: "q" })).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+    expect(fNet).toHaveBeenCalledTimes(1);
+    expect(new URL(calledUrl(fNet)).pathname).toBe("/v1/traces/tr1/ask");
+  });
+});

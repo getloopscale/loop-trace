@@ -16,11 +16,19 @@ import {
   type Evaluator,
   type EvaluatorRepository,
   type EngineDeps,
+  type RateLimiter,
   apiError,
   zodFieldErrors,
+  // M118 (D4) — response schemas parsed at the boundary (server-side single source of truth).
+  evaluatorRecordSchema,
+  evaluatorsListResponseSchema,
+  guardRecordSchema,
+  guardsListResponseSchema,
+  runResultResponseSchema,
 } from "@usetheo/lens-core";
 
 import { getPrincipal } from "../auth/middleware.js";
+import { evaluatorRunRateLimited, evaluatorRunsStarted, evaluatorsCreated, guardsCreated } from "../metrics.js";
 
 /**
  * M82 — a partial evaluator edit. `name` follows the same rule as create; `kind`+`config`, when present,
@@ -42,6 +50,11 @@ const evaluatorUpdateSchema = z
 export interface EvaluatorApiDeps {
   repo: EvaluatorRepository;
   engine: EngineDeps;
+  /** M118 — per-workspace billable-abuse guard for `POST /v1/evaluators/:id/run` (429). Optional so a
+   *  test app without it keeps the pre-M118 behavior (unbounded); the composition root always wires it. */
+  limiter?: RateLimiter;
+  /** Injected clock (ms) for the run limiter — defaults to Date.now (deterministic tests). */
+  now?: () => number;
 }
 
 async function readJson(c: Context): Promise<unknown | null> {
@@ -69,17 +82,18 @@ export async function createEvaluatorHandler(c: Context, deps: EvaluatorApiDeps)
     }
   }
   const rec = await deps.repo.createEvaluator(ev, getPrincipal(c).workspaceId);
-  return c.json(rec, 200);
+  evaluatorsCreated.add(1); // observable: evaluator-definition curation volume (pillar c)
+  return c.json(evaluatorRecordSchema.parse(rec), 200);
 }
 
 export async function listEvaluatorsHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
   const evaluators = await deps.repo.listEvaluators(getPrincipal(c).workspaceId);
-  return c.json({ evaluators }, 200);
+  return c.json(evaluatorsListResponseSchema.parse({ evaluators }), 200);
 }
 
 export async function getEvaluatorHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
   const rec = await deps.repo.getEvaluator(c.req.param("id") ?? "", getPrincipal(c).workspaceId);
-  return rec ? c.json(rec, 200) : c.json(apiError("EVALUATOR_NOT_FOUND", "not found"), 404);
+  return rec ? c.json(evaluatorRecordSchema.parse(rec), 200) : c.json(apiError("EVALUATOR_NOT_FOUND", "not found"), 404);
 }
 
 export async function updateEvaluatorHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
@@ -107,7 +121,7 @@ export async function updateEvaluatorHandler(c: Context, deps: EvaluatorApiDeps)
   }
   try {
     const rec = await deps.repo.updateEvaluator(c.req.param("id") ?? "", updates as Partial<Evaluator>, getPrincipal(c).workspaceId);
-    return rec ? c.json(rec, 200) : c.json(apiError("EVALUATOR_NOT_FOUND", "not found"), 404);
+    return rec ? c.json(evaluatorRecordSchema.parse(rec), 200) : c.json(apiError("EVALUATOR_NOT_FOUND", "not found"), 404);
   } catch (err) {
     if (err instanceof NameConflictError) return c.json(apiError("NAME_CONFLICT", err.message), 409);
     throw err;
@@ -121,6 +135,16 @@ export async function deleteEvaluatorHandler(c: Context, deps: EvaluatorApiDeps)
 
 export async function runEvaluatorHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
   const ws = getPrincipal(c).workspaceId;
+  // M118 — rate-limit FIRST (before any billable fan-out of up to backfillMax=500 judge calls). Per
+  // workspace (isolation), refusal → 429 + Retry-After, mirroring the replay/copilot billable guards.
+  if (deps.limiter) {
+    const nowMs = (deps.now ?? Date.now)();
+    if (!deps.limiter.tryAcquire(ws, nowMs)) {
+      evaluatorRunRateLimited.add(1); // observable: an abuse/spike is visible at runtime (pillar c)
+      c.header("Retry-After", String(deps.limiter.retryAfterSeconds(ws, nowMs)));
+      return c.json(apiError("RATE_LIMITED", "evaluator-run rate limit exceeded"), 429);
+    }
+  }
   const ev = await deps.repo.getEvaluator(c.req.param("id") ?? "", ws);
   if (ev === null) {
     return c.json(apiError("EVALUATOR_NOT_FOUND", "not found"), 404);
@@ -142,8 +166,9 @@ export async function runEvaluatorHandler(c: Context, deps: EvaluatorApiDeps): P
     }
     opts.limit = lim;
   }
+  evaluatorRunsStarted.add(1); // observable: billable evaluator-run volume (pillar c)
   const result = await runEvaluator(ev, opts, ws, deps.engine);
-  return c.json(result, 200);
+  return c.json(runResultResponseSchema.parse(result), 200);
 }
 
 export async function createGuardHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
@@ -161,12 +186,13 @@ export async function createGuardHandler(c: Context, deps: EvaluatorApiDeps): Pr
     return c.json(apiError("EVALUATOR_NOT_FOUND", "guard.evaluatorId not found in workspace"), 404);
   }
   const rec = await deps.repo.createGuard(parsed.data, ws);
-  return c.json(rec, 200);
+  guardsCreated.add(1); // observable: guard-definition curation volume (pillar c)
+  return c.json(guardRecordSchema.parse(rec), 200);
 }
 
 export async function listGuardsHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
   const guards = await deps.repo.listGuards(getPrincipal(c).workspaceId);
-  return c.json({ guards }, 200);
+  return c.json(guardsListResponseSchema.parse({ guards }), 200);
 }
 
 export async function deleteGuardHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {

@@ -1,24 +1,28 @@
 /**
- * `LensReadClient` — the typed read surface of `@usetheo/lens-sdk` (M103).
+ * `LensReadClient` — the typed read/write surface of `@usetheo/lens-sdk` (M103).
  *
- * A thin wrapper over the platform-native `fetch` (parsimony: no HTTP dependency) that exposes one
- * typed method per named-component read route. Responses are typed from the generated OpenAPI
- * (`../__generated__/openapi.ts`); requests map a small typed options object to the snake_case query.
+ * One typed method per route. Responses are typed from the generated OpenAPI
+ * (`../__generated__/openapi.ts`) for zod-backed routes, or hand-authored (drift-guarded by a contract
+ * test) for the bare-`c.json` routes; requests map a small typed options object to the snake_case query.
+ *
+ * The shared HTTP transport (constructor, edge-safe URL composition, bounded-retry `send`/`request`,
+ * typed error mapping) lives in {@link LensReadTransport} (`./transport.ts`, split out in M117 to keep
+ * this file under the size budget). This class extends it and adds one public method per route.
  *
  * Auth is a `theo_live_*` key sent as `Authorization: Bearer <key>`; the per-tenant key resolves the
  * workspace at the edge, so the client NEVER sends a workspace parameter (theo-data invariant 2/3).
- *
- * Failures surface as a typed {@link LensApiError} (M104); transient ones (408/429/5xx/network/timeout)
- * are retried with bounded exp-backoff honoring `Retry-After`, while a fatal 4xx fails fast. A request
- * timeout is enforced via `AbortController`.
  */
-import { errorFromReject, errorFromResponse, invalidBodyError } from "./errors.js";
+import { LensReadTransport } from "./transport.js";
 import type {
   AddDatasetItemBody,
+  AgentCatalogResponse,
   AnnotateBody,
   AnnotationsResponse,
+  AskCopilotBody,
+  AskCopilotResponse,
   AskFeedbackBody,
   Capabilities,
+  CompareExperimentRunsResponse,
   CopilotFeedbackRecord,
   CostByPeriodOptions,
   CostByPeriodResponse,
@@ -29,15 +33,24 @@ import type {
   DatasetDetail,
   DatasetsResponse,
   EnqueueLabelingBody,
+  EvaluatorMetricsResponse,
   EvaluatorRecord,
   EvaluatorUpdateBody,
   ExperimentRun,
   ExportLabelingBody,
   GuardBody,
+  GuardBreachesResponse,
   GuardRecord,
   LabelingQueueItem,
+  LabelingQueuePage,
+  ListEvaluatorsResponse,
+  ListExperimentRunsResponse,
+  ListGuardsResponse,
+  ListLabelingQueueOptions,
   ListSessionsOptions,
   ListTracesOptions,
+  MetricsRangeOptions,
+  NorthStarResponse,
   ObservabilityOptions,
   ObservabilityResponse,
   ReplaySessionAck,
@@ -47,193 +60,26 @@ import type {
   ResolveLabelingBody,
   RunEvaluatorBody,
   RunResult,
+  ScoresResponse,
+  SessionDetailResponse,
   SessionListResponse,
   Span,
+  SpanAttributesOptions,
+  SpanFacetsResponse,
   TagBody,
   ToolStatsResponse,
+  TraceCostResponse,
   TraceListResponse,
   TraceTagsResponse,
+  TraceTree,
   UpdateDatasetBody,
 } from "./types.js";
 
-export interface LensReadClientOptions {
-  /** Engine base URL, e.g. `https://api.usetheo.dev` (a trailing slash is tolerated). */
-  baseUrl: string;
-  /** A `theo_live_*` per-tenant key. Sent as `Authorization: Bearer <apiKey>`. */
-  apiKey: string;
-  /**
-   * The API version root the routes live under (default `/v1` — talking to the engine directly).
-   * A customer whose `theo_live_*` key reaches the capability through the **unified edge** sets this to
-   * the capability prefix (e.g. `/v1/lens`); the edge rewrites `/v1/lens/*` → `/v1/*` upstream. The SDK
-   * swaps the `/v1` root of every route for this value (see #49).
-   */
-  basePath?: string;
-  /** Injected transport (defaults to `globalThis.fetch`) — the seam unit tests drive. */
-  fetch?: typeof fetch;
-  /** Max retry attempts for a transient failure (default 2 → up to 3 total tries). */
-  maxRetries?: number;
-  /** Per-request timeout in ms before the socket is aborted (default 30_000). */
-  timeoutMs?: number;
-  /** Injectable backoff sleep (default real `setTimeout`) — the seam that keeps tests deterministic. */
-  sleep?: (ms: number) => Promise<void>;
-  /** Injectable jitter source in [0,1) (default `Math.random`) — deterministic backoff in tests. */
-  random?: () => number;
-}
+// Re-export so existing consumers of `LensReadClientOptions` from `@usetheo/lens-sdk` (and the barrel
+// `index.ts`, which imports it from this module) keep resolving after the M117 transport split.
+export type { LensReadClientOptions } from "./transport.js";
 
-/** A query value map; `undefined` entries are dropped, everything else is stringified. */
-type Query = Record<string, string | number | undefined>;
-
-const RETRY_BASE_MS = 500;
-const RETRY_CAP_MS = 20_000;
-const JITTER = 0.2; // ±20% symmetric
-
-/** Transient statuses worth another attempt (GET is idempotent → safe to retry). */
-function isRetryableStatus(status: number): boolean {
-  return status === 408 || status === 429 || status >= 500;
-}
-
-/** Parse a `Retry-After` header (seconds or HTTP-date) into ms, or undefined when absent/garbage. */
-function retryAfterMs(res: Response): number | undefined {
-  const raw = res.headers.get("retry-after");
-  if (raw === null) return undefined;
-  if (/^\d+$/.test(raw.trim())) return Number(raw.trim()) * 1000;
-  const at = Date.parse(raw);
-  if (Number.isNaN(at)) return undefined;
-  return Math.max(0, at - Date.now());
-}
-
-export class LensReadClient {
-  private readonly baseUrl: string;
-  private readonly basePath: string;
-  private readonly apiKey: string;
-  private readonly fetchImpl: typeof fetch;
-  private readonly maxRetries: number;
-  private readonly timeoutMs: number;
-  private readonly sleep: (ms: number) => Promise<void>;
-  private readonly random: () => number;
-
-  constructor(options: LensReadClientOptions) {
-    if (!options.baseUrl) throw new Error("LensReadClient: baseUrl is required");
-    if (!options.apiKey) throw new Error("LensReadClient: apiKey is required");
-    // Strip trailing slashes so a base path in baseUrl is preserved when the route path is appended.
-    this.baseUrl = options.baseUrl.replace(/\/+$/, "");
-    // Fail-fast at construction (fail-clear, error-handling.md) rather than a raw TypeError from the
-    // URL parser on the first request when baseUrl is relative / has no scheme.
-    try {
-      new URL(this.baseUrl);
-    } catch {
-      throw new Error(`LensReadClient: baseUrl is not an absolute URL: ${options.baseUrl}`);
-    }
-    // The version root every route hangs off (default /v1). Must be absolute (start with `/`); a
-    // trailing slash is stripped so `${basePath}${rest}` never doubles.
-    this.basePath = (options.basePath ?? "/v1").replace(/\/+$/, "");
-    if (!this.basePath.startsWith("/")) {
-      throw new Error(`LensReadClient: basePath must start with "/": ${options.basePath}`);
-    }
-    this.apiKey = options.apiKey;
-    this.fetchImpl = options.fetch ?? globalThis.fetch;
-    if (typeof this.fetchImpl !== "function") {
-      throw new Error("LensReadClient: no fetch implementation (pass options.fetch)");
-    }
-    this.maxRetries = options.maxRetries ?? 2;
-    this.timeoutMs = options.timeoutMs ?? 30_000;
-    this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
-    this.random = options.random ?? Math.random;
-  }
-
-  private buildUrl(path: string, query?: Query): string {
-    // Every method's `path` is engine-relative (`/v1/...`); swap the `/v1` root for `basePath` so an
-    // edge consumer (basePath `/v1/lens`) composes `/v1/lens/...` (the edge rewrites it back to `/v1/...`).
-    // Default basePath `/v1` makes this a no-op (direct-to-engine). Closes #49.
-    const routed = this.basePath === "/v1" ? path : path.replace(/^\/v1(?=\/|$)/, this.basePath);
-    const url = new URL(`${this.baseUrl}${routed}`);
-    if (query) {
-      for (const [key, value] of Object.entries(query)) {
-        if (value !== undefined) url.searchParams.set(key, String(value));
-      }
-    }
-    return url.toString();
-  }
-
-  /** Delay before the next retry: honor `Retry-After` (capped) else exp-backoff + ±20% jitter. */
-  private backoffMs(attempt: number, res?: Response): number {
-    const advised = res ? retryAfterMs(res) : undefined;
-    if (advised !== undefined) return Math.min(advised, RETRY_CAP_MS);
-    const base = Math.min(RETRY_BASE_MS * 2 ** attempt, RETRY_CAP_MS);
-    const jitter = 1 - JITTER + this.random() * (2 * JITTER); // [0.8, 1.2)
-    return Math.min(Math.round(base * jitter), RETRY_CAP_MS);
-  }
-
-  /** One `fetch` with an `AbortController` timeout; a fired abort rejects (→ mapped to TIMEOUT). */
-  private async fetchOnce(method: string, url: string, body?: unknown): Promise<Response> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-    const headers: Record<string, string> = {
-      authorization: `Bearer ${this.apiKey}`,
-      accept: "application/json",
-    };
-    const init: RequestInit = { method, headers, signal: controller.signal };
-    if (body !== undefined) {
-      headers["content-type"] = "application/json";
-      init.body = JSON.stringify(body);
-    }
-    try {
-      return await this.fetchImpl(url, init);
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  /** Parse a 2xx body; a 204 / empty body resolves to `undefined` (void deletes), never a parse crash. */
-  private async parseBody<T>(res: Response, method: string, path: string): Promise<T> {
-    if (res.status === 204) return undefined as T;
-    const text = await res.text();
-    if (text.length === 0) return undefined as T;
-    try {
-      return JSON.parse(text) as T;
-    } catch {
-      throw invalidBodyError(res.status, method, path);
-    }
-  }
-
-  /**
-   * The shared transport seam for every method. Retries a transient failure with bounded backoff.
-   * A server-signaled transient (408/429/5xx) is retried for ALL methods; `retryNetwork` additionally
-   * gates whether a NETWORK reject / timeout abort is retried — GET + idempotent writes pass `true`, a
-   * non-idempotent write (e.g. a synthetic dataset item) passes `false` so an ambiguous timeout is
-   * never silently re-applied.
-   */
-  private async send<T>(
-    method: string,
-    path: string,
-    opts: { query?: Query; body?: unknown; retryNetwork: boolean },
-  ): Promise<T> {
-    const url = this.buildUrl(path, opts.query);
-    for (let attempt = 0; ; attempt++) {
-      let res: Response;
-      try {
-        res = await this.fetchOnce(method, url, opts.body);
-      } catch (err) {
-        if (opts.retryNetwork && attempt < this.maxRetries) {
-          await this.sleep(this.backoffMs(attempt));
-          continue;
-        }
-        throw errorFromReject(err, method, path);
-      }
-      if (res.ok) return this.parseBody<T>(res, method, path);
-      if (isRetryableStatus(res.status) && attempt < this.maxRetries) {
-        await this.sleep(this.backoffMs(attempt, res));
-        continue;
-      }
-      throw await errorFromResponse(res, method, path);
-    }
-  }
-
-  /** A GET (idempotent → network retries enabled). */
-  private request<T>(path: string, query?: Query): Promise<T> {
-    return this.send<T>("GET", path, { retryNetwork: true, ...(query ? { query } : {}) });
-  }
-
+export class LensReadClient extends LensReadTransport {
   /** `GET /v1/traces` — paginated, filterable trace list. */
   listTraces(options: ListTracesOptions = {}): Promise<TraceListResponse> {
     return this.request<TraceListResponse>("/v1/traces", {
@@ -490,6 +336,148 @@ export class LensReadClient {
   /** `POST /v1/replay-sessions` — record a replay-open event (not retried — avoid double-counting). */
   createReplaySession(body: ReplaySessionBody): Promise<ReplaySessionAck> {
     return this.send<ReplaySessionAck>("POST", "/v1/replay-sessions", {
+      body,
+      retryNetwork: false,
+    });
+  }
+
+  // ─── M117 read parity — GENERATED (zod-backed) reads. ───
+  // Idempotent GETs → the `request` default (retryNetwork:true). Every path is engine-relative so the
+  // #49 basePath swap composes /v1/lens/... with no per-method work. Types are drift-gated aliases.
+
+  /** `GET /v1/traces/{traceId}/cost` — the trace's cost rollup. */
+  getTraceCost(traceId: string): Promise<TraceCostResponse> {
+    return this.request<TraceCostResponse>(`/v1/traces/${encodeURIComponent(traceId)}/cost`);
+  }
+
+  /** `GET /v1/traces/{traceId}/tags` — a trace's current tags (read side of tag/untag). */
+  listTraceTags(traceId: string): Promise<TraceTagsResponse> {
+    return this.request<TraceTagsResponse>(`/v1/traces/${encodeURIComponent(traceId)}/tags`);
+  }
+
+  /** `GET /v1/traces/{traceId}/annotations` — a trace's annotations (read side of annotate/delete). */
+  listTraceAnnotations(traceId: string): Promise<AnnotationsResponse> {
+    return this.request<AnnotationsResponse>(`/v1/traces/${encodeURIComponent(traceId)}/annotations`);
+  }
+
+  /** `GET /v1/agents` — the derived agent catalog `{ agents: [...] }`. */
+  getAgents(): Promise<AgentCatalogResponse> {
+    return this.request<AgentCatalogResponse>("/v1/agents");
+  }
+
+  /** `GET /v1/analytics/tools/{toolName}/traces` — traces that used a given tool. */
+  getToolTraces(toolName: string): Promise<TraceListResponse> {
+    return this.request<TraceListResponse>(
+      `/v1/analytics/tools/${encodeURIComponent(toolName)}/traces`,
+    );
+  }
+
+  /** `GET /v1/metrics/north-star` — the north-star aggregate. */
+  getNorthStar(): Promise<NorthStarResponse> {
+    return this.request<NorthStarResponse>("/v1/metrics/north-star");
+  }
+
+  /** `GET /v1/metrics/evaluators` — per-evaluator aggregate `{ evaluators: [...] }`. */
+  getEvaluatorMetrics(options: MetricsRangeOptions = {}): Promise<EvaluatorMetricsResponse> {
+    return this.request<EvaluatorMetricsResponse>("/v1/metrics/evaluators", { range: options.range });
+  }
+
+  /** `GET /v1/metrics/scores` — per-evaluator score aggregation over time. */
+  getScores(options: MetricsRangeOptions = {}): Promise<ScoresResponse> {
+    return this.request<ScoresResponse>("/v1/metrics/scores", { range: options.range });
+  }
+
+  /** `GET /v1/metrics/span-attributes` — facet keys (no `key`) or a key's values (`?key=`). */
+  getSpanAttributes(options: SpanAttributesOptions = {}): Promise<SpanFacetsResponse> {
+    return this.request<SpanFacetsResponse>("/v1/metrics/span-attributes", { key: options.key });
+  }
+
+  /** `GET /v1/sessions/{sessionId}` — a single session's detail (its traces). */
+  getSession(sessionId: string): Promise<SessionDetailResponse> {
+    return this.request<SessionDetailResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}`);
+  }
+
+  /** `GET /v1/datasets/{datasetId}` — a dataset + its items (the detail view). */
+  getDataset(datasetId: string): Promise<DatasetDetail> {
+    return this.request<DatasetDetail>(`/v1/datasets/${encodeURIComponent(datasetId)}`);
+  }
+
+  /** `GET /v1/labeling-queue` — the server-paginated queue page (read side of enqueue/resolve). */
+  listLabelingQueue(options: ListLabelingQueueOptions = {}): Promise<LabelingQueuePage> {
+    return this.request<LabelingQueuePage>("/v1/labeling-queue", {
+      page: options.page,
+      pageSize: options.pageSize,
+      status: options.status,
+    });
+  }
+
+  /** `GET /v1/labeling-queue/{itemId}` — a single queue item (read side of enqueue/resolve). */
+  getLabelingItem(itemId: string): Promise<LabelingQueueItem> {
+    return this.request<LabelingQueueItem>(`/v1/labeling-queue/${encodeURIComponent(itemId)}`);
+  }
+
+  // ─── M117 read parity — HAND (bare `c.json`, no zod schema) reads. ───
+  // The 8 GETs are idempotent → the `request` default (retryNetwork:true). `askCopilot` is a POST
+  // scoped observability:read but it launches BILLABLE provider work → `send(..., retryNetwork:false)`
+  // so a lost response is never auto-retried into a double-bill (the M108 lesson applied to runEvaluator).
+  // Types are hand-authored (no generated schema) and pinned by the T2.3 hermetic contract test.
+
+  /** `GET /v1/traces/{traceId}` — the reconstructed trace tree (root span + recursive children). */
+  getTrace(traceId: string): Promise<TraceTree> {
+    return this.request<TraceTree>(`/v1/traces/${encodeURIComponent(traceId)}`);
+  }
+
+  /** `GET /v1/evaluators` — the workspace's evaluators, wrapped as `{ evaluators: [...] }`. */
+  listEvaluators(): Promise<ListEvaluatorsResponse> {
+    return this.request<ListEvaluatorsResponse>("/v1/evaluators");
+  }
+
+  /** `GET /v1/evaluators/{id}` — a single evaluator (404 `EVALUATOR_NOT_FOUND` when absent). */
+  getEvaluator(id: string): Promise<EvaluatorRecord> {
+    return this.request<EvaluatorRecord>(`/v1/evaluators/${encodeURIComponent(id)}`);
+  }
+
+  /** `GET /v1/guards` — the workspace's guards, wrapped as `{ guards: [...] }`. */
+  listGuards(): Promise<ListGuardsResponse> {
+    return this.request<ListGuardsResponse>("/v1/guards");
+  }
+
+  /** `GET /v1/guards/{id}/breaches` — the trace ids a guard flagged, wrapped as `{ traceIds: [...] }`. */
+  getGuardBreaches(id: string): Promise<GuardBreachesResponse> {
+    return this.request<GuardBreachesResponse>(`/v1/guards/${encodeURIComponent(id)}/breaches`);
+  }
+
+  /** `GET /v1/experiment-runs?datasetId=` — the workspace's runs (optionally scoped to a dataset). */
+  listExperimentRuns(options: { datasetId?: string } = {}): Promise<ListExperimentRunsResponse> {
+    return this.request<ListExperimentRunsResponse>("/v1/experiment-runs", {
+      datasetId: options.datasetId,
+    });
+  }
+
+  /** `GET /v1/experiment-runs/{runId}` — a single run + its items (404 `RUN_NOT_FOUND` when absent). */
+  getExperimentRun(runId: string): Promise<ExperimentRun> {
+    return this.request<ExperimentRun>(`/v1/experiment-runs/${encodeURIComponent(runId)}`);
+  }
+
+  /**
+   * `GET /v1/experiment-runs/compare?ids=a,b` — compare 2-5 runs. The run-id list is joined into the
+   * `ids` QUERY param (comma-separated), NOT a path segment (the engine `?ids=a,b` contract); the engine
+   * returns a typed 400 `INVALID_BODY` when fewer than 2 ids are supplied.
+   */
+  compareExperimentRuns(ids: string[]): Promise<CompareExperimentRunsResponse> {
+    return this.request<CompareExperimentRunsResponse>("/v1/experiment-runs/compare", {
+      ids: ids.join(","),
+    });
+  }
+
+  /**
+   * `POST /v1/traces/{traceId}/ask` — ask the copilot about a trace (optionally a specific span).
+   * Scoped `observability:read` but it launches BILLABLE provider work → `retryNetwork:false`: a lost
+   * response surfaces a typed `LensApiError`, never an auto-retry into a double-bill (M108 lesson). The
+   * engine fails closed with `503 COPILOT_DISABLED` when no provider is configured.
+   */
+  askCopilot(traceId: string, body: AskCopilotBody): Promise<AskCopilotResponse> {
+    return this.send<AskCopilotResponse>("POST", `/v1/traces/${encodeURIComponent(traceId)}/ask`, {
       body,
       retryNetwork: false,
     });

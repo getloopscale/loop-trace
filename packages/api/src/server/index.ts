@@ -12,6 +12,7 @@ import {
   parseBackfillMax,
   parseEvalSweepHours,
   parseCopilotRpm,
+  parseEvaluatorRpm,
   parseIngestRpm,
   parseMaxIngestBytes,
   parseMaxDecompressedBytes,
@@ -104,6 +105,9 @@ export async function bootstrap(
   // M64: the experiment-run route reuses the replay provider client + a dedicated limiter + the
   // evaluator repo (rule-evaluator scoring). null client → the run fails closed (503).
   const experimentLimiter = new RateLimiter(parseCopilotRpm(process.env));
+  // M118: the billable POST /v1/evaluators/:id/run fans out up to backfillMax=500 judge calls per
+  // request — its own low-RPM per-workspace limiter (its own env knob, decoupled from copilot — UQ3).
+  const evaluatorRunLimiter = new RateLimiter(parseEvaluatorRpm(process.env));
   // M93: OTLP ingest backpressure — a dedicated, higher-rpm per-workspace limiter (ingest is the
   // high-volume write path) so a runaway producer sheds with 429 before the pool exhausts.
   const ingestLimiter = new RateLimiter(parseIngestRpm(process.env));
@@ -116,7 +120,7 @@ export async function bootstrap(
     repo,
     webDistDir,
     authOptions,
-    { repo: evaluatorRepo, engine },
+    { repo: evaluatorRepo, engine, limiter: evaluatorRunLimiter },
     { spanRepo: repo, chat, limiter: copilotLimiter },
     { spanRepo: repo, chat: replayClient, limiter: replayLimiter },
     { spanRepo: repo, evaluatorRepo, chat: replayClient, limiter: experimentLimiter },

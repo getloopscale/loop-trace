@@ -3,6 +3,7 @@
  * Mirrors the M23 `parseRetentionConfig` shape (default-OFF, fail-soft on bad input).
  */
 import type { JudgeConfig } from "./llm-judge.js";
+import { type ProviderBreakerConfig, DEFAULT_PROVIDER_BREAKER } from "./provider-breaker.js";
 
 /** Default per-backfill trace cap (ADR D7); override with THEOLENS_EVAL_BACKFILL_MAX. */
 export const DEFAULT_EVAL_BACKFILL_MAX = 500;
@@ -49,6 +50,17 @@ export function parseCopilotRpm(env: NodeJS.ProcessEnv = process.env): number {
   if (raw === undefined) return DEFAULT_COPILOT_RPM;
   const n = Number(raw);
   return Number.isInteger(n) && n > 0 ? n : DEFAULT_COPILOT_RPM;
+}
+
+/** M118: evaluator-run per-workspace requests/minute (billable fan-out guard, its own knob — UQ3, so
+ *  the run limit is decoupled from copilot's). `POST /v1/evaluators/:id/run` fans out up to
+ *  backfillMax=500 judge calls per request, so its RPM is deliberately low. Invalid/unset → 10; never ≤ 0. */
+export const DEFAULT_EVALUATOR_RPM = 10;
+export function parseEvaluatorRpm(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env["THEOLENS_EVALUATOR_RPM"];
+  if (raw === undefined) return DEFAULT_EVALUATOR_RPM;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : DEFAULT_EVALUATOR_RPM;
 }
 
 /** M93: OTLP ingest per-workspace requests/minute (backpressure). Far higher than copilot — ingest
@@ -128,6 +140,17 @@ export function parseHttpRequestTimeoutMs(env: NodeJS.ProcessEnv = process.env):
 export const DEFAULT_SHUTDOWN_DRAIN_MS = 10_000;
 export function parseShutdownDrainMs(env: NodeJS.ProcessEnv = process.env): number {
   return positiveIntEnv(env, "THEOLENS_SHUTDOWN_DRAIN_MS", DEFAULT_SHUTDOWN_DRAIN_MS);
+}
+
+/** M118: provider circuit-breaker policy (env-tunable, sibling of `parseProviderRetry`). `failureThreshold`
+ *  consecutive failures ⇒ OPEN (fast-fail 503 without calling the provider); after `cooldownMs` one
+ *  HALF-OPEN probe. Conservative defaults (5 failures / 30s) so a transient blip does not trip it. The
+ *  config shape + defaults are the canonical ones in `provider-breaker.ts` (DRY). */
+export function parseProviderBreaker(env: NodeJS.ProcessEnv = process.env): ProviderBreakerConfig {
+  return {
+    failureThreshold: positiveIntEnv(env, "THEOLENS_PROVIDER_BREAKER_THRESHOLD", DEFAULT_PROVIDER_BREAKER.failureThreshold),
+    cooldownMs: positiveIntEnv(env, "THEOLENS_PROVIDER_BREAKER_COOLDOWN_MS", DEFAULT_PROVIDER_BREAKER.cooldownMs),
+  };
 }
 
 /** M94: provider-call retry policy. A transient failure (429/5xx/timeout) is retried up to

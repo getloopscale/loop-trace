@@ -62,6 +62,27 @@ export const experimentRunsStarted = counter();
 export const experimentRowsScored = counter();
 export const experimentRunsUnavailable = counter();
 
+// M118 — runtime metrics on the advanced write routes that emitted none. Exported so integration tests
+// can assert `.value` deltas (wiring-triad pillar c); one `.add(1)` per route in the handler.
+// evaluator-run FIRST (billable — top priority): the run limiter shed count + the runs-started count.
+export const evaluatorRunRateLimited = counter();
+export const evaluatorRunsStarted = counter();
+// Evaluator / guard definition CRUD (create) — curation volume is observable at runtime.
+export const evaluatorsCreated = counter();
+export const guardsCreated = counter();
+// Dataset lifecycle mutations (create / rename / delete / item-remove) — the add path already has
+// `datasetItemsAdded`; these close the remaining mutating verbs.
+export const datasetsCreated = counter();
+export const datasetsRenamed = counter();
+export const datasetsDeleted = counter();
+export const datasetItemsRemoved = counter();
+// Tag add/remove + annotation remove (the annotation WRITE already has `annotationsWritten`).
+export const tagsAdded = counter();
+export const tagsRemoved = counter();
+export const annotationsRemoved = counter();
+// Replay-session north-star record (M8) — the mutating write emitted no counter until M118.
+export const replaySessionsRecorded = counter();
+
 /** Structured ingest log line on stderr (stdout stays clean for piping). */
 export function logIngest(spans: number, evals = 0): void {
   console.error(

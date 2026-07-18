@@ -78,4 +78,18 @@ suite("POST /v1/runs — native SDKMessage ingest (M116)", () => {
     const res = await postRun({ messages: [] });
     expect(res.status).toBe(200); // an empty run is well-formed — nothing to persist, no error
   });
+
+  it("test_runs_endpoint_out_of_range_startTimeMs_typed_400", async () => {
+    // M117: a hostile out-of-range `startTimeMs` (negative epoch / absurd future) is rejected at the
+    // boundary (fail-fast, error-handling.md §2) rather than minting absurd span timestamps. A
+    // non-number is still tolerated (ignored) — only an in-band but out-of-range number is a 400.
+    const neg = await postRun({ messages, result, startTimeMs: -1 });
+    expect(neg.status).toBe(400);
+    expect((await neg.json()).code).toBe("INVALID_BODY");
+    const future = await postRun({ messages, result, startTimeMs: Date.now() + 7 * 86_400_000 });
+    expect(future.status).toBe(400);
+    // A non-number is ignored (backward-compatible), not a 400 — the run still ingests.
+    const garbage = await postRun({ messages, result, startTimeMs: "nope" });
+    expect(garbage.status).toBe(200);
+  });
 });

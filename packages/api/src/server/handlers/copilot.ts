@@ -14,6 +14,12 @@ import {
   ChatError,
   normalizeAskFeedback,
   InvalidFeedbackError,
+  askCopilotResponseSchema,
+  copilotFeedbackRecordSchema,
+  ProviderBreakerOpenError,
+  errorBody,
+  apiError,
+  isErrorCode,
   type ChatClient,
   type SpanRepository,
   type RateLimiter,
@@ -45,32 +51,35 @@ export async function askHandler(c: Context, deps: CopilotApiDeps): Promise<Resp
   if (!deps.limiter.tryAcquire(ws, nowMs)) {
     copilotAsksRateLimited.add(1); // observable: an abuse/spike is visible at runtime (pillar c)
     c.header("Retry-After", String(deps.limiter.retryAfterSeconds(ws, nowMs))); // M94
-    return c.json({ code: "RATE_LIMITED", message: "copilot rate limit exceeded" }, 429);
+    return c.json(errorBody("RATE_LIMITED", "copilot rate limit exceeded"), 429);
   }
   // Fail-closed: no provider configured → disabled (D2).
   if (deps.chat === null) {
-    return c.json({ code: "COPILOT_DISABLED", message: "copilot is not configured" }, 503);
+    return c.json(errorBody("COPILOT_DISABLED", "copilot is not configured"), 503);
   }
 
   let body: { spanId?: unknown; question?: unknown };
   try {
     body = (await c.req.json()) as typeof body;
   } catch {
-    return c.json({ code: "INVALID_BODY", message: "invalid json body" }, 400);
+    return c.json(errorBody("INVALID_BODY", "invalid json body"), 400);
   }
 
   let question: string;
   try {
     question = validateQuestion(body.question); // EC-1
   } catch (err) {
-    const code = err instanceof CopilotError ? err.code : "INVALID_QUESTION";
-    return c.json({ code, message: (err as Error).message }, 400);
+    // The code is domain-supplied (CopilotError.code) — route it through the envelope, validating it is
+    // a known code (else the stable INVALID_QUESTION fallback), so no untyped literal escapes.
+    const raw = err instanceof CopilotError ? err.code : "INVALID_QUESTION";
+    const code = isErrorCode(raw) ? raw : "INVALID_QUESTION";
+    return c.json(errorBody(code, (err as Error).message), 400);
   }
 
   const traceId = c.req.param("traceId") ?? "";
   const tree = await deps.spanRepo.getTraceTree(traceId, ws);
   if (tree === null) {
-    return c.json({ code: "TRACE_NOT_FOUND", message: "trace not found" }, 404);
+    return c.json(errorBody("TRACE_NOT_FOUND", "trace not found"), 404);
   }
 
   const spanId = typeof body.spanId === "string" ? body.spanId : undefined;
@@ -79,7 +88,7 @@ export async function askHandler(c: Context, deps: CopilotApiDeps): Promise<Resp
     messages = buildCopilotPrompt(tree, spanId, question); // throws SPAN_NOT_FOUND (EC-2)
   } catch (err) {
     if (err instanceof CopilotError && err.code === "SPAN_NOT_FOUND") {
-      return c.json({ code: "SPAN_NOT_FOUND", message: err.message }, 404);
+      return c.json(errorBody("SPAN_NOT_FOUND", err.message), 404);
     }
     throw err;
   }
@@ -87,12 +96,18 @@ export async function askHandler(c: Context, deps: CopilotApiDeps): Promise<Resp
   try {
     const answer = await deps.chat.ask(messages);
     copilotAsksAnswered.add(1); // observable: healthy answered-ask volume (pillar c)
-    return c.json({ answer: capAnswer(answer) }, 200); // EC-6 cap
+    return c.json(askCopilotResponseSchema.parse({ answer: capAnswer(answer) }), 200); // EC-6 cap
   } catch (err) {
     // Fail-closed: surface the LLM failure, never a fabricated/empty answer (D2).
     copilotAsksUnavailable.add(1); // observable: a provider-outage spike is visible (pillar c)
+    // M118 — when the provider circuit breaker is OPEN we fast-fail with 503 (service unavailable —
+    // the provider is down, retry later) rather than 502 (the provider returned an error). Distinct so
+    // ops + clients can tell an outage-fast-fail from a per-call provider error.
+    if (err instanceof ProviderBreakerOpenError) {
+      return c.json(errorBody("COPILOT_UNAVAILABLE", "provider circuit open — temporarily unavailable"), 503);
+    }
     const reason = err instanceof ChatError ? err.message : String(err);
-    return c.json({ code: "COPILOT_UNAVAILABLE", message: reason }, 502);
+    return c.json(errorBody("COPILOT_UNAVAILABLE", reason), 502);
   }
 }
 
@@ -109,23 +124,25 @@ export async function askFeedbackHandler(c: Context, deps: CopilotApiDeps): Prom
   try {
     raw = await c.req.json();
   } catch {
-    return c.json({ code: "INVALID_BODY", message: "invalid json body" }, 400);
+    return c.json(errorBody("INVALID_BODY", "invalid json body"), 400);
   }
   let input;
   try {
     input = normalizeAskFeedback(raw); // EC: turnId + label ∈ {up,down}
   } catch (err) {
-    if (err instanceof InvalidFeedbackError) return c.json({ code: err.code, message: err.message }, 400);
+    // InvalidFeedbackError.code is a fixed domain code ("INVALID_FEEDBACK") — route it through the
+    // envelope (apiError accepts the domain-supplied string; the code is stable and in ERROR_CODES).
+    if (err instanceof InvalidFeedbackError) return c.json(apiError(err.code, err.message), 400);
     throw err;
   }
   const traceId = c.req.param("traceId") ?? "";
   const tree = await deps.spanRepo.getTraceTree(traceId, ws);
   if (tree === null) {
-    return c.json({ code: "TRACE_NOT_FOUND", message: "trace not found" }, 404);
+    return c.json(errorBody("TRACE_NOT_FOUND", "trace not found"), 404);
   }
   const record = await deps.spanRepo.recordAskFeedback(traceId, input, ws);
   copilotFeedbackRecorded.add(1); // observable: feedback volume is visible at runtime (pillar c)
-  return c.json(record, 200);
+  return c.json(copilotFeedbackRecordSchema.parse(record), 200);
 }
 
 /**
@@ -138,7 +155,7 @@ export async function deleteAskFeedbackHandler(c: Context, deps: CopilotApiDeps)
   const ws = getPrincipal(c).workspaceId;
   const turnId = (c.req.query("turnId") ?? "").trim();
   if (turnId.length === 0) {
-    return c.json({ code: "INVALID_FEEDBACK", message: "turnId query param is required" }, 400);
+    return c.json(errorBody("INVALID_FEEDBACK", "turnId query param is required"), 400);
   }
   const traceId = c.req.param("traceId") ?? "";
   await deps.spanRepo.deleteAskFeedback(traceId, turnId, ws);
