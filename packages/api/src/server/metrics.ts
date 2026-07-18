@@ -62,6 +62,11 @@ export const experimentRunsStarted = counter();
 export const experimentRowsScored = counter();
 export const experimentRunsUnavailable = counter();
 
+// M118 — runtime metrics on the advanced write routes that emitted none. Exported so integration tests
+// can assert `.value` deltas (wiring-triad pillar c); one `.add(1)` per route in the handler.
+// evaluator-run FIRST (billable — top priority): the run limiter shed count.
+export const evaluatorRunRateLimited = counter();
+
 /** Structured ingest log line on stderr (stdout stays clean for piping). */
 export function logIngest(spans: number, evals = 0): void {
   console.error(

@@ -16,11 +16,13 @@ import {
   type Evaluator,
   type EvaluatorRepository,
   type EngineDeps,
+  type RateLimiter,
   apiError,
   zodFieldErrors,
 } from "@usetheo/lens-core";
 
 import { getPrincipal } from "../auth/middleware.js";
+import { evaluatorRunRateLimited } from "../metrics.js";
 
 /**
  * M82 — a partial evaluator edit. `name` follows the same rule as create; `kind`+`config`, when present,
@@ -42,6 +44,11 @@ const evaluatorUpdateSchema = z
 export interface EvaluatorApiDeps {
   repo: EvaluatorRepository;
   engine: EngineDeps;
+  /** M118 — per-workspace billable-abuse guard for `POST /v1/evaluators/:id/run` (429). Optional so a
+   *  test app without it keeps the pre-M118 behavior (unbounded); the composition root always wires it. */
+  limiter?: RateLimiter;
+  /** Injected clock (ms) for the run limiter — defaults to Date.now (deterministic tests). */
+  now?: () => number;
 }
 
 async function readJson(c: Context): Promise<unknown | null> {
@@ -121,6 +128,16 @@ export async function deleteEvaluatorHandler(c: Context, deps: EvaluatorApiDeps)
 
 export async function runEvaluatorHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
   const ws = getPrincipal(c).workspaceId;
+  // M118 — rate-limit FIRST (before any billable fan-out of up to backfillMax=500 judge calls). Per
+  // workspace (isolation), refusal → 429 + Retry-After, mirroring the replay/copilot billable guards.
+  if (deps.limiter) {
+    const nowMs = (deps.now ?? Date.now)();
+    if (!deps.limiter.tryAcquire(ws, nowMs)) {
+      evaluatorRunRateLimited.add(1); // observable: an abuse/spike is visible at runtime (pillar c)
+      c.header("Retry-After", String(deps.limiter.retryAfterSeconds(ws, nowMs)));
+      return c.json(apiError("RATE_LIMITED", "evaluator-run rate limit exceeded"), 429);
+    }
+  }
   const ev = await deps.repo.getEvaluator(c.req.param("id") ?? "", ws);
   if (ev === null) {
     return c.json(apiError("EVALUATOR_NOT_FOUND", "not found"), 404);

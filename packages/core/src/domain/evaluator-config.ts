@@ -51,6 +51,17 @@ export function parseCopilotRpm(env: NodeJS.ProcessEnv = process.env): number {
   return Number.isInteger(n) && n > 0 ? n : DEFAULT_COPILOT_RPM;
 }
 
+/** M118: evaluator-run per-workspace requests/minute (billable fan-out guard, its own knob — UQ3, so
+ *  the run limit is decoupled from copilot's). `POST /v1/evaluators/:id/run` fans out up to
+ *  backfillMax=500 judge calls per request, so its RPM is deliberately low. Invalid/unset → 10; never ≤ 0. */
+export const DEFAULT_EVALUATOR_RPM = 10;
+export function parseEvaluatorRpm(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env["THEOLENS_EVALUATOR_RPM"];
+  if (raw === undefined) return DEFAULT_EVALUATOR_RPM;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : DEFAULT_EVALUATOR_RPM;
+}
+
 /** M93: OTLP ingest per-workspace requests/minute (backpressure). Far higher than copilot — ingest
  *  is the high-volume write path; a runaway producer sheds with 429 before pool exhaustion.
  *  Invalid/unset → default 600; never ≤ 0. */
