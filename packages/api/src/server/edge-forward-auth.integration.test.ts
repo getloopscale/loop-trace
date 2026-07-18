@@ -255,6 +255,51 @@ suite("M22 ForwardAuth edge contract (integration)", () => {
     expect(noKey.status).toBe(401);
   });
 
+  it("test_datasets_cross_tenant_isolation_through_edge (M119)", async () => {
+    // M119 (Phase 4, G4.2) — rotate ONE more surface (datasets) into the through-edge isolation proof
+    // (was traces/labeling-queue/experiment-runs), hardening the CWE-441 claim beyond the prior sample.
+    // Tenant B ingests a trace, then creates a dataset + item from it — all through the real ForwardAuth
+    // edge — and both are workspace-scoped; tenant A can never list B's dataset, and a no-key write is
+    // denied AT THE EDGE.
+    expect(
+      (await viaEdge(new Request("http://x/v1/traces", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-customer-key": "cust_bob" },
+        body: OTLP("b-trace", "b-span", "bob canary"),
+      }))).status,
+    ).toBe(200);
+    const ds = await viaEdge(new Request("http://x/v1/datasets", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-customer-key": "cust_bob" },
+      body: JSON.stringify({ name: "b-dataset" }),
+    }));
+    expect(ds.status).toBe(200);
+    const datasetId = ((await ds.json()) as { id: string }).id;
+    expect((await viaEdge(new Request(`http://x/v1/datasets/${datasetId}/items`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-customer-key": "cust_bob" },
+      body: JSON.stringify({ traceId: "b-trace" }),
+    }))).status).toBe(200);
+
+    // Tenant A lists datasets through the edge → MUST NOT see Bob's dataset (cross-tenant deny).
+    const aList = await viaEdge(new Request("http://x/v1/datasets", { headers: { "x-customer-key": "cust_alice" } }));
+    expect(aList.status).toBe(200);
+    expect(((await aList.json()) as { datasets: unknown[] }).datasets).toHaveLength(0);
+
+    // Tenant B lists → MUST see its own dataset (proves the path reaches data; A's empty is isolation).
+    const bList = await viaEdge(new Request("http://x/v1/datasets", { headers: { "x-customer-key": "cust_bob" } }));
+    expect(bList.status).toBe(200);
+    expect(((await bList.json()) as { datasets: { id: string }[] }).datasets.map((d) => d.id)).toContain(datasetId);
+
+    // A no-customer-key dataset write is DENIED at the edge (the billable write route is never reached).
+    const noKey = await viaEdge(new Request("http://x/v1/datasets", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "no-key-dataset" }),
+    }));
+    expect(noKey.status).toBe(401);
+  });
+
   it("test_customer_key_never_reaches_the_service", async () => {
     // The service rejects the raw customer key directly (it only honors minted
     // `theo_live_*` keys) — proving the edge MUST strip + mint, and a leaked
