@@ -16,6 +16,7 @@ import {
   InvalidFeedbackError,
   askCopilotResponseSchema,
   copilotFeedbackRecordSchema,
+  ProviderBreakerOpenError,
   type ChatClient,
   type SpanRepository,
   type RateLimiter,
@@ -93,6 +94,12 @@ export async function askHandler(c: Context, deps: CopilotApiDeps): Promise<Resp
   } catch (err) {
     // Fail-closed: surface the LLM failure, never a fabricated/empty answer (D2).
     copilotAsksUnavailable.add(1); // observable: a provider-outage spike is visible (pillar c)
+    // M118 — when the provider circuit breaker is OPEN we fast-fail with 503 (service unavailable —
+    // the provider is down, retry later) rather than 502 (the provider returned an error). Distinct so
+    // ops + clients can tell an outage-fast-fail from a per-call provider error.
+    if (err instanceof ProviderBreakerOpenError) {
+      return c.json({ code: "COPILOT_UNAVAILABLE", message: "provider circuit open — temporarily unavailable" }, 503);
+    }
     const reason = err instanceof ChatError ? err.message : String(err);
     return c.json({ code: "COPILOT_UNAVAILABLE", message: reason }, 502);
   }

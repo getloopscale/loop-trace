@@ -13,6 +13,7 @@ import type { Context } from "hono";
 import {
   ChatError,
   replayResponseSchema,
+  ProviderBreakerOpenError,
   type ChatMessage,
   type RateLimiter,
   type ReplayClient,
@@ -145,6 +146,10 @@ export async function replayHandler(c: Context, deps: ReplayApiDeps): Promise<Re
   } catch (err) {
     // Fail-closed: surface the provider failure, never a fabricated/empty result.
     replayUnavailable.add(1); // observable: a provider-outage spike is visible (pillar c)
+    // M118 — an OPEN provider circuit breaker fast-fails with 503 (provider down) vs 502 (per-call error).
+    if (err instanceof ProviderBreakerOpenError) {
+      return c.json({ code: "REPLAY_UNAVAILABLE", message: "provider circuit open — temporarily unavailable" }, 503);
+    }
     const reason = err instanceof ChatError ? err.message : String(err);
     return c.json({ code: "REPLAY_UNAVAILABLE", message: reason }, 502);
   }

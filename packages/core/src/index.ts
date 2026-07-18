@@ -111,6 +111,13 @@ export {
   MAX_ANSWER_BYTES,
 } from "./domain/copilot.js";
 export { RateLimiter } from "./domain/rate-limiter.js";
+// M118 (D2) — provider circuit breaker (hand-rolled closed/open/half-open, fast-fail 503 when OPEN).
+export {
+  ProviderBreaker,
+  ProviderBreakerOpenError,
+  type ProviderBreakerConfig,
+  DEFAULT_PROVIDER_BREAKER,
+} from "./domain/provider-breaker.js";
 // M118 (D4) — zod-at-the-boundary response schemas for the advanced write routes (server-side single
 // source of truth; lifted from the M117 SDK hand-types, wire shape unchanged).
 export {
@@ -146,6 +153,7 @@ export {
   parseHttpRequestTimeoutMs,
   parseShutdownDrainMs,
   parseProviderRetry,
+  parseProviderBreaker,
   type PoolConfig,
   type ProviderRetryConfig,
   DEFAULT_EVAL_BACKFILL_MAX,

@@ -7,7 +7,17 @@
  * content throws {@link ChatError} — never a fabricated answer.
  */
 
-import { parseProviderRetry, type ProviderRetryConfig } from "./evaluator-config.js";
+import { parseProviderRetry, parseProviderBreaker, type ProviderRetryConfig } from "./evaluator-config.js";
+import { ProviderBreaker, ProviderBreakerOpenError } from "./provider-breaker.js";
+
+/** Internal sentinel — a 5xx response is thrown inside the breaker so it counts as an outage, then
+ *  unwrapped outside to preserve the existing retry/fatal handling. Never leaves this module. */
+class ProviderOutage extends Error {
+  constructor(readonly response: Response) {
+    super(`provider ${response.status}`);
+    this.name = "ProviderOutage";
+  }
+}
 
 /** Typed error for any chat failure — fail-closed, never a silent answer. */
 export class ChatError extends Error {
@@ -21,6 +31,15 @@ export class ChatError extends Error {
 export interface RequestOpts {
   retry?: ProviderRetryConfig;
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * M118 — the circuit breaker guarding the provider fetch (D2). Passed by the production clients
+   * (`OpenAICompatibleChat`/`OpenAICompatibleReplay`), each holding one process-wide-per-provider
+   * breaker so a sustained outage trips once and every subsequent call fast-fails (503) without paying
+   * CHAT_TIMEOUT_MS×retry — which compounds badly with the 500-call evaluator fan-out. Absent (a raw
+   * `openaiChatCompletion` call with no breaker) → no breaker, so the pure request path carries no
+   * shared global state (testability + DIP).
+   */
+  breaker?: ProviderBreaker;
 }
 
 const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -69,6 +88,7 @@ async function requestChatCompletion(
   // (parseProviderRetry); the sleep is injectable for deterministic tests.
   const retry = opts?.retry ?? parseProviderRetry();
   const sleep = opts?.sleep ?? realSleep;
+  const breaker = opts?.breaker;
   const maxAttempts = Math.max(1, retry.maxAttempts);
   const body = JSON.stringify({
     model: config.model,
@@ -81,28 +101,50 @@ async function requestChatCompletion(
       : {}),
   });
 
+  const url = `${config.baseUrl.replace(/\/$/, "")}/chat/completions`;
+  const doFetch = (): Promise<Response> =>
+    fetchImpl(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {}),
+      },
+      body,
+      // A stalled provider aborts at the timeout → fetch rejects → retry/breaker (never a silent hang).
+      signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
+    });
+
   let lastError = new ChatError("chat request exhausted retries");
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     let resp: Response;
     try {
-      resp = await fetchImpl(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          ...(config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {}),
-        },
-        body,
-        // A stalled provider aborts at the timeout → fetch rejects → retry/ChatError (never a silent hang).
-        signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
-      });
+      // M118 — when a breaker is provided (production clients), the raw fetch runs THROUGH it. An
+      // "outage" (network/timeout or a 5xx) is signalled by throwing inside `run` so the breaker counts
+      // it; a 4xx (incl. 429) resolves the response normally (not an outage — the retry/fatal logic
+      // below handles it). When the breaker is OPEN it throws ProviderBreakerOpenError WITHOUT calling
+      // the provider → fast-fail (propagated). No breaker → a plain fetch (behavior unchanged).
+      resp = breaker
+        ? await breaker.run(async () => {
+            const r = await doFetch();
+            if (r.status >= 500) throw new ProviderOutage(r);
+            return r;
+          })
+        : await doFetch();
     } catch (err) {
-      // Network / timeout (AbortError) — retryable.
-      lastError = new ChatError(`chat request failed: ${String(err)}`);
-      if (attempt < maxAttempts) {
-        await sleep(Math.min(backoffMs(attempt, retry.baseDelayMs), retry.maxBackoffMs));
-        continue;
+      // OPEN breaker → fast-fail immediately (do NOT retry; the provider is down, retrying is pointless).
+      if (err instanceof ProviderBreakerOpenError) throw err;
+      // A 5xx outage sentinel unwraps to the underlying response → fall through to the non-2xx logic.
+      if (err instanceof ProviderOutage) {
+        resp = err.response;
+      } else {
+        // Network / timeout (AbortError) — retryable.
+        lastError = new ChatError(`chat request failed: ${String(err)}`);
+        if (attempt < maxAttempts) {
+          await sleep(Math.min(backoffMs(attempt, retry.baseDelayMs), retry.maxBackoffMs));
+          continue;
+        }
+        throw lastError;
       }
-      throw lastError;
     }
     if (resp.ok) {
       try {
@@ -196,15 +238,18 @@ export interface ChatClient {
   ask(messages: ChatMessage[]): Promise<string>;
 }
 
-/** OpenAI-compatible {@link ChatClient} over {@link openaiChatCompletion}. */
+/** OpenAI-compatible {@link ChatClient} over {@link openaiChatCompletion}. Holds one process-wide-per-
+ *  provider breaker (M118 D2) so a sustained outage fast-fails without paying CHAT_TIMEOUT_MS×retry. */
 export class OpenAICompatibleChat implements ChatClient {
+  private readonly breaker = new ProviderBreaker(parseProviderBreaker());
+
   constructor(
     private readonly config: ChatConfig,
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
   ask(messages: ChatMessage[]): Promise<string> {
-    return openaiChatCompletion(this.config, messages, this.fetchImpl);
+    return openaiChatCompletion(this.config, messages, this.fetchImpl, { breaker: this.breaker });
   }
 }
 
@@ -222,8 +267,11 @@ export interface ReplayClient {
   run(messages: ChatMessage[], modelOverride?: string, responseSchema?: object): Promise<ReplayResult>;
 }
 
-/** OpenAI-compatible {@link ReplayClient} over {@link openaiChatCompletionWithUsage}. */
+/** OpenAI-compatible {@link ReplayClient} over {@link openaiChatCompletionWithUsage}. Holds one
+ *  process-wide-per-provider breaker (M118 D2). */
 export class OpenAICompatibleReplay implements ReplayClient {
+  private readonly breaker = new ProviderBreaker(parseProviderBreaker());
+
   constructor(
     private readonly config: ChatConfig,
     private readonly fetchImpl: typeof fetch = fetch,
@@ -234,7 +282,7 @@ export class OpenAICompatibleReplay implements ReplayClient {
     // client can never redirect the call to a different endpoint). M62: an optional response schema is
     // forwarded as structured output (the provider enforces it).
     const model = modelOverride && modelOverride.trim() ? modelOverride.trim() : this.config.model;
-    const usage = await openaiChatCompletionWithUsage({ ...this.config, model }, messages, this.fetchImpl, responseSchema);
+    const usage = await openaiChatCompletionWithUsage({ ...this.config, model }, messages, this.fetchImpl, responseSchema, { breaker: this.breaker });
     return { ...usage, model };
   }
 }
