@@ -2,8 +2,6 @@ import { Hono } from "hono";
 import {
   type SpanRepository,
   type AuthVerifier,
-  sessionListResponseSchema,
-  sessionDetailResponseSchema,
   apiError,
   errorBody,
   sdkMessagesToOtlp,
@@ -30,6 +28,7 @@ import { registerExtraRoutes } from "./routes/register-extra-routes.js";
 import { registerTracesRoutes } from "./routes/traces-routes.js";
 import { registerAnalyticsRoutes } from "./routes/analytics-routes.js";
 import { registerMetricsRoutes } from "./routes/metrics-routes.js";
+import { registerSessionsRoutes } from "./routes/sessions-routes.js";
 import { registerDatasetRoutes } from "./routes/dataset-routes.js";
 import { registerLabelingQueueRoutes } from "./routes/labeling-queue-routes.js";
 import { registerExperimentRoutes } from "./routes/experiment-routes.js";
@@ -337,33 +336,12 @@ export function createApp(
     },
   );
 
-  app.get("/v1/sessions", requireScopeOnPrincipal("observability:read"), async (c) => {
-    // M81: server-side pagination — parse the (coerced) limit/offset the BFF forwards; the repo clamps
-    // and returns a workspace-scoped total. Invalid/absent params fall back to the repo defaults.
-    const limitRaw = Number.parseInt(c.req.query("limit") ?? "", 10);
-    const offsetRaw = Number.parseInt(c.req.query("offset") ?? "", 10);
-    const list = await repo.listSessions(getPrincipal(c).workspaceId, {
-      ...(Number.isFinite(limitRaw) ? { limit: limitRaw } : {}),
-      ...(Number.isFinite(offsetRaw) ? { offset: offsetRaw } : {}),
-    });
-    return c.json(sessionListResponseSchema.parse(list), 200);
-  });
-
-  app.get("/v1/sessions/:sessionId", requireScopeOnPrincipal("observability:read"), async (c) => {
-    const detail = await repo.getSessionDetail(
-      c.req.param("sessionId"),
-      getPrincipal(c).workspaceId,
-    );
-    return detail
-      ? c.json(sessionDetailResponseSchema.parse(detail), 200)
-      : c.json(apiError("NOT_FOUND", "not found"), 404);
-  });
-
   // M26d dataset routes + M36 evaluators + M33 copilot routes (extracted to keep
   // app.ts ≤ 500 — M33 D5). M121 (D1): traces/spans/cost/tree + tags + annotations.
   registerTracesRoutes(app, repo);
   registerAnalyticsRoutes(app, repo);
   registerMetricsRoutes(app, repo);
+  registerSessionsRoutes(app, repo);
   registerDatasetRoutes(app, repo);
   registerLabelingQueueRoutes(app, repo);
   registerExtraRoutes(app, { evaluators, copilot, replay });
