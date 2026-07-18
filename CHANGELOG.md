@@ -16,9 +16,13 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Removed
 
 ### Fixed
-- Web: the `@usetheo/lens-web` dashboard compiles again — its dashboard components now come from **`@usetheo/ui`** (`^0.28.2`), the Theo design system that owns them, instead of `@theokit/ui`. The `@theokit/ui` `1.x` line is a different product (an agent/chat UI kit) that dropped the dashboard component set the web bundle is built on, so the `^1.3.2` bump broke `web` typecheck with 37 `TS2305` "no exported member" errors (+63 cascading implicit-`any`). Migrated every production import of `DataTable`/`DataTableColumn`/`DataTableSort`/`Timestamp`/`Badge`/`Tabs`/`StatTile`/`TopNav`/`Sidebar`/`Dialog`/`Skeleton` to `@usetheo/ui`; `@theokit/ui` (`^1.3.2`) is retained only for the `ThemeProvider`/`violetForge` theme used in `main.tsx` + test render wrappers. `web` typecheck/lint/build + 309 tests all green. (#55)
 
 ### Security
+
+## [0.49.1] - 2026-07-18
+
+### Fixed
+- Web: the `@usetheo/lens-web` dashboard compiles again — its dashboard components now come from **`@usetheo/ui`** (`^0.28.2`), the Theo design system that owns them, instead of `@theokit/ui`. The `@theokit/ui` `1.x` line is a different product (an agent/chat UI kit) that dropped the dashboard component set the web bundle is built on, so the `^1.3.2` bump broke `web` typecheck with 37 `TS2305` "no exported member" errors (+63 cascading implicit-`any`). Migrated every production import of `DataTable`/`DataTableColumn`/`DataTableSort`/`Timestamp`/`Badge`/`Tabs`/`StatTile`/`TopNav`/`Sidebar`/`Dialog`/`Skeleton` to `@usetheo/ui`; `@theokit/ui` (`^1.3.2`) is retained only for the `ThemeProvider`/`violetForge` theme used in `main.tsx` + test render wrappers. `web` typecheck/lint/build + 309 tests all green. (#55)
 
 ## [0.49.0] - 2026-07-18
 
