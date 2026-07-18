@@ -14,6 +14,8 @@ import {
   ChatError,
   normalizeAskFeedback,
   InvalidFeedbackError,
+  askCopilotResponseSchema,
+  copilotFeedbackRecordSchema,
   type ChatClient,
   type SpanRepository,
   type RateLimiter,
@@ -87,7 +89,7 @@ export async function askHandler(c: Context, deps: CopilotApiDeps): Promise<Resp
   try {
     const answer = await deps.chat.ask(messages);
     copilotAsksAnswered.add(1); // observable: healthy answered-ask volume (pillar c)
-    return c.json({ answer: capAnswer(answer) }, 200); // EC-6 cap
+    return c.json(askCopilotResponseSchema.parse({ answer: capAnswer(answer) }), 200); // EC-6 cap
   } catch (err) {
     // Fail-closed: surface the LLM failure, never a fabricated/empty answer (D2).
     copilotAsksUnavailable.add(1); // observable: a provider-outage spike is visible (pillar c)
@@ -125,7 +127,7 @@ export async function askFeedbackHandler(c: Context, deps: CopilotApiDeps): Prom
   }
   const record = await deps.spanRepo.recordAskFeedback(traceId, input, ws);
   copilotFeedbackRecorded.add(1); // observable: feedback volume is visible at runtime (pillar c)
-  return c.json(record, 200);
+  return c.json(copilotFeedbackRecordSchema.parse(record), 200);
 }
 
 /**

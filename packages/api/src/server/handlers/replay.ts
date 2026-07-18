@@ -12,6 +12,7 @@ import type { Context } from "hono";
 
 import {
   ChatError,
+  replayResponseSchema,
   type ChatMessage,
   type RateLimiter,
   type ReplayClient,
@@ -128,7 +129,8 @@ export async function replayHandler(c: Context, deps: ReplayApiDeps): Promise<Re
     const latencyMs = Math.max(0, clock() - t0);
     replayRuns.add(1); // observable: healthy replay volume (pillar c)
     return c.json(
-      {
+      // M118 (D4) — parse at the boundary so the OpenAPI stays the single source of truth (no drift).
+      replayResponseSchema.parse({
         output: result.content,
         promptTokens: result.promptTokens,
         completionTokens: result.completionTokens,
@@ -137,7 +139,7 @@ export async function replayHandler(c: Context, deps: ReplayApiDeps): Promise<Re
         model: result.model,
         // M62: real provider cost when reported (undefined → omitted → the UI renders an em-dash).
         ...(result.costUsd !== undefined ? { costUsd: result.costUsd } : {}),
-      },
+      }),
       200,
     );
   } catch (err) {

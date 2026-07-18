@@ -14,6 +14,9 @@ import {
   aggregateRun,
   compareRuns,
   MAX_RUN_ITEMS,
+  experimentRunSchema,
+  experimentRunsListResponseSchema,
+  experimentCompareResponseSchema,
   type ReplayClient,
   type RateLimiter,
   type RunVariant,
@@ -129,7 +132,7 @@ export async function createExperimentRunHandler(c: Context, deps: ExperimentApi
       },
       ws,
     );
-    return c.json(run, 200);
+    return c.json(experimentRunSchema.parse(run), 200);
   } catch (err) {
     // A total run failure (e.g. the store) fails closed — surface it, never a fabricated run.
     experimentRunsUnavailable.add(1);
@@ -141,13 +144,13 @@ export async function listExperimentRunsHandler(c: Context, deps: ExperimentApiD
   const ws = getPrincipal(c).workspaceId;
   const datasetId = c.req.query("datasetId");
   const runs = await deps.spanRepo.listExperimentRuns(datasetId && datasetId.length > 0 ? datasetId : undefined, ws);
-  return c.json({ runs }, 200);
+  return c.json(experimentRunsListResponseSchema.parse({ runs }), 200);
 }
 
 export async function getExperimentRunHandler(c: Context, deps: ExperimentApiDeps): Promise<Response> {
   const ws = getPrincipal(c).workspaceId;
   const run = await deps.spanRepo.getExperimentRun(c.req.param("runId") ?? "", ws);
-  return run ? c.json(run, 200) : c.json({ code: "RUN_NOT_FOUND", message: "run not found" }, 404);
+  return run ? c.json(experimentRunSchema.parse(run), 200) : c.json({ code: "RUN_NOT_FOUND", message: "run not found" }, 404);
 }
 
 /**
@@ -167,7 +170,7 @@ export async function compareExperimentRunsHandler(c: Context, deps: ExperimentA
   );
   const [a, b] = runs;
   const deltas = a && b ? compareRuns(aggregateRun(a.items ?? []), aggregateRun(b.items ?? [])) : null;
-  return c.json({ runs, deltas }, 200);
+  return c.json(experimentCompareResponseSchema.parse({ runs, deltas }), 200);
 }
 
 export { MAX_RUN_ITEMS };

@@ -3499,6 +3499,962 @@
           "createdAt"
         ],
         "additionalProperties": false
+      },
+      "EvaluatorRecord": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9_-]{1,64}$"
+              },
+              "target": {
+                "type": "string"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "passLabel": {
+                "type": "string"
+              },
+              "failLabel": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "rule"
+                ]
+              },
+              "config": {
+                "type": "object",
+                "properties": {
+                  "predicate": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "predicate"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "createdAt",
+              "name",
+              "target",
+              "enabled",
+              "kind",
+              "config"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9_-]{1,64}$"
+              },
+              "target": {
+                "type": "string"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "passLabel": {
+                "type": "string"
+              },
+              "failLabel": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "llm_judge"
+                ]
+              },
+              "config": {
+                "type": "object",
+                "properties": {
+                  "prompt": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "model": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "prompt",
+                  "model"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "createdAt",
+              "name",
+              "target",
+              "enabled",
+              "kind",
+              "config"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "EvaluatorsListResponse": {
+        "type": "object",
+        "properties": {
+          "evaluators": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9_-]{1,64}$"
+                    },
+                    "target": {
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "passLabel": {
+                      "type": "string"
+                    },
+                    "failLabel": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "rule"
+                      ]
+                    },
+                    "config": {
+                      "type": "object",
+                      "properties": {
+                        "predicate": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "predicate"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "createdAt",
+                    "name",
+                    "target",
+                    "enabled",
+                    "kind",
+                    "config"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9_-]{1,64}$"
+                    },
+                    "target": {
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "passLabel": {
+                      "type": "string"
+                    },
+                    "failLabel": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "llm_judge"
+                      ]
+                    },
+                    "config": {
+                      "type": "object",
+                      "properties": {
+                        "prompt": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "model": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "prompt",
+                        "model"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "createdAt",
+                    "name",
+                    "target",
+                    "enabled",
+                    "kind",
+                    "config"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          }
+        },
+        "required": [
+          "evaluators"
+        ],
+        "additionalProperties": false
+      },
+      "GuardRecord": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "evaluatorId": {
+            "type": "string"
+          },
+          "operator": {
+            "type": "string",
+            "enum": [
+              "lt",
+              "lte",
+              "gt",
+              "gte",
+              "eq",
+              "label_eq"
+            ]
+          },
+          "threshold": {
+            "type": "number"
+          },
+          "labelValue": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "createdAt",
+          "evaluatorId",
+          "operator",
+          "enabled"
+        ],
+        "additionalProperties": false
+      },
+      "GuardsListResponse": {
+        "type": "object",
+        "properties": {
+          "guards": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "evaluatorId": {
+                  "type": "string"
+                },
+                "operator": {
+                  "type": "string",
+                  "enum": [
+                    "lt",
+                    "lte",
+                    "gt",
+                    "gte",
+                    "eq",
+                    "label_eq"
+                  ]
+                },
+                "threshold": {
+                  "type": "number"
+                },
+                "labelValue": {
+                  "type": "string"
+                },
+                "enabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "createdAt",
+                "evaluatorId",
+                "operator",
+                "enabled"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "guards"
+        ],
+        "additionalProperties": false
+      },
+      "RunResultResponse": {
+        "type": "object",
+        "properties": {
+          "evaluator": {
+            "type": "string"
+          },
+          "written": {
+            "type": "number"
+          },
+          "skipped": {
+            "type": "number"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "spanId": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "spanId",
+                "reason"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "evaluator",
+          "written",
+          "skipped",
+          "truncated",
+          "errors"
+        ],
+        "additionalProperties": false
+      },
+      "ExperimentRun": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "datasetId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "variant": {
+            "type": "object",
+            "properties": {
+              "model": {
+                "type": "string"
+              },
+              "promptOverride": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "partial",
+              "failed"
+            ]
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "itemCount": {
+            "type": "number"
+          },
+          "passCount": {
+            "type": "number"
+          },
+          "avgScore": {
+            "type": "number"
+          },
+          "totalCostUsd": {
+            "type": "number"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "datasetItemTraceId": {
+                  "type": "string"
+                },
+                "inputSnapshot": {
+                  "type": "string"
+                },
+                "output": {
+                  "type": "string"
+                },
+                "promptTokens": {
+                  "type": "number"
+                },
+                "completionTokens": {
+                  "type": "number"
+                },
+                "totalTokens": {
+                  "type": "number"
+                },
+                "costUsd": {
+                  "type": "number"
+                },
+                "latencyMs": {
+                  "type": "number"
+                },
+                "model": {
+                  "type": "string"
+                },
+                "scores": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "score": {
+                        "type": "number"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "explanation": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "error": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "datasetItemTraceId",
+                "promptTokens",
+                "completionTokens",
+                "totalTokens",
+                "latencyMs",
+                "model",
+                "scores"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id",
+          "datasetId",
+          "name",
+          "variant",
+          "status",
+          "truncated",
+          "itemCount",
+          "passCount",
+          "totalCostUsd",
+          "createdBy",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "ExperimentRunsListResponse": {
+        "type": "object",
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "datasetId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "variant": {
+                  "type": "object",
+                  "properties": {
+                    "model": {
+                      "type": "string"
+                    },
+                    "promptOverride": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "completed",
+                    "partial",
+                    "failed"
+                  ]
+                },
+                "truncated": {
+                  "type": "boolean"
+                },
+                "itemCount": {
+                  "type": "number"
+                },
+                "passCount": {
+                  "type": "number"
+                },
+                "avgScore": {
+                  "type": "number"
+                },
+                "totalCostUsd": {
+                  "type": "number"
+                },
+                "createdBy": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "datasetItemTraceId": {
+                        "type": "string"
+                      },
+                      "inputSnapshot": {
+                        "type": "string"
+                      },
+                      "output": {
+                        "type": "string"
+                      },
+                      "promptTokens": {
+                        "type": "number"
+                      },
+                      "completionTokens": {
+                        "type": "number"
+                      },
+                      "totalTokens": {
+                        "type": "number"
+                      },
+                      "costUsd": {
+                        "type": "number"
+                      },
+                      "latencyMs": {
+                        "type": "number"
+                      },
+                      "model": {
+                        "type": "string"
+                      },
+                      "scores": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "score": {
+                              "type": "number"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "explanation": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "error": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "datasetItemTraceId",
+                      "promptTokens",
+                      "completionTokens",
+                      "totalTokens",
+                      "latencyMs",
+                      "model",
+                      "scores"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "datasetId",
+                "name",
+                "variant",
+                "status",
+                "truncated",
+                "itemCount",
+                "passCount",
+                "totalCostUsd",
+                "createdBy",
+                "createdAt"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "runs"
+        ],
+        "additionalProperties": false
+      },
+      "ExperimentCompareResponse": {
+        "type": "object",
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "datasetId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "variant": {
+                  "type": "object",
+                  "properties": {
+                    "model": {
+                      "type": "string"
+                    },
+                    "promptOverride": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "completed",
+                    "partial",
+                    "failed"
+                  ]
+                },
+                "truncated": {
+                  "type": "boolean"
+                },
+                "itemCount": {
+                  "type": "number"
+                },
+                "passCount": {
+                  "type": "number"
+                },
+                "avgScore": {
+                  "type": "number"
+                },
+                "totalCostUsd": {
+                  "type": "number"
+                },
+                "createdBy": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "datasetItemTraceId": {
+                        "type": "string"
+                      },
+                      "inputSnapshot": {
+                        "type": "string"
+                      },
+                      "output": {
+                        "type": "string"
+                      },
+                      "promptTokens": {
+                        "type": "number"
+                      },
+                      "completionTokens": {
+                        "type": "number"
+                      },
+                      "totalTokens": {
+                        "type": "number"
+                      },
+                      "costUsd": {
+                        "type": "number"
+                      },
+                      "latencyMs": {
+                        "type": "number"
+                      },
+                      "model": {
+                        "type": "string"
+                      },
+                      "scores": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "score": {
+                              "type": "number"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "explanation": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "error": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "datasetItemTraceId",
+                      "promptTokens",
+                      "completionTokens",
+                      "totalTokens",
+                      "latencyMs",
+                      "model",
+                      "scores"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "datasetId",
+                "name",
+                "variant",
+                "status",
+                "truncated",
+                "itemCount",
+                "passCount",
+                "totalCostUsd",
+                "createdBy",
+                "createdAt"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "deltas": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "passCountDelta": {
+                "type": "number"
+              },
+              "passRateDelta": {
+                "type": "number"
+              },
+              "avgScoreDelta": {
+                "type": "number",
+                "nullable": true
+              },
+              "totalCostDelta": {
+                "type": "number"
+              },
+              "avgLatencyDelta": {
+                "type": "number",
+                "nullable": true
+              }
+            },
+            "required": [
+              "passCountDelta",
+              "passRateDelta",
+              "avgScoreDelta",
+              "totalCostDelta",
+              "avgLatencyDelta"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "runs",
+          "deltas"
+        ],
+        "additionalProperties": false
+      },
+      "AskCopilotResponse": {
+        "type": "object",
+        "properties": {
+          "answer": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "answer"
+        ],
+        "additionalProperties": false
+      },
+      "CopilotFeedbackRecord": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
+          },
+          "turnId": {
+            "type": "string"
+          },
+          "spanId": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down"
+            ]
+          },
+          "question": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "traceId",
+          "turnId",
+          "label",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "ReplayResponse": {
+        "type": "object",
+        "properties": {
+          "output": {
+            "type": "string"
+          },
+          "promptTokens": {
+            "type": "number"
+          },
+          "completionTokens": {
+            "type": "number"
+          },
+          "totalTokens": {
+            "type": "number"
+          },
+          "latencyMs": {
+            "type": "number"
+          },
+          "model": {
+            "type": "string"
+          },
+          "costUsd": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "output",
+          "promptTokens",
+          "completionTokens",
+          "totalTokens",
+          "latencyMs",
+          "model"
+        ],
+        "additionalProperties": false
       }
     },
     "parameters": {}

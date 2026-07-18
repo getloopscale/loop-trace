@@ -111,6 +111,21 @@ export {
   MAX_ANSWER_BYTES,
 } from "./domain/copilot.js";
 export { RateLimiter } from "./domain/rate-limiter.js";
+// M118 (D4) — zod-at-the-boundary response schemas for the advanced write routes (server-side single
+// source of truth; lifted from the M117 SDK hand-types, wire shape unchanged).
+export {
+  evaluatorRecordSchema,
+  evaluatorsListResponseSchema,
+  guardRecordSchema,
+  guardsListResponseSchema,
+  runResultResponseSchema,
+  experimentRunsListResponseSchema,
+  runCompareDeltasSchema,
+  experimentCompareResponseSchema,
+  askCopilotResponseSchema,
+  copilotFeedbackRecordSchema,
+  replayResponseSchema,
+} from "./domain/advanced-responses.js";
 export {
   JudgeError,
   OpenAICompatibleJudge,

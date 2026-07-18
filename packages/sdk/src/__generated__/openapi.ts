@@ -2813,6 +2813,237 @@ export interface components {
             createdAt: string;
             resolvedAt?: string;
         };
+        EvaluatorRecord: {
+            id: string;
+            createdAt: string;
+            name: string;
+            target: string;
+            enabled: boolean;
+            passLabel?: string;
+            failLabel?: string;
+            /** @enum {string} */
+            kind: "rule";
+            config: {
+                predicate: string;
+            };
+        } | {
+            id: string;
+            createdAt: string;
+            name: string;
+            target: string;
+            enabled: boolean;
+            passLabel?: string;
+            failLabel?: string;
+            /** @enum {string} */
+            kind: "llm_judge";
+            config: {
+                prompt: string;
+                model: string;
+            };
+        };
+        EvaluatorsListResponse: {
+            evaluators: ({
+                id: string;
+                createdAt: string;
+                name: string;
+                target: string;
+                enabled: boolean;
+                passLabel?: string;
+                failLabel?: string;
+                /** @enum {string} */
+                kind: "rule";
+                config: {
+                    predicate: string;
+                };
+            } | {
+                id: string;
+                createdAt: string;
+                name: string;
+                target: string;
+                enabled: boolean;
+                passLabel?: string;
+                failLabel?: string;
+                /** @enum {string} */
+                kind: "llm_judge";
+                config: {
+                    prompt: string;
+                    model: string;
+                };
+            })[];
+        };
+        GuardRecord: {
+            id: string;
+            createdAt: string;
+            evaluatorId: string;
+            /** @enum {string} */
+            operator: "lt" | "lte" | "gt" | "gte" | "eq" | "label_eq";
+            threshold?: number;
+            labelValue?: string;
+            enabled: boolean;
+        };
+        GuardsListResponse: {
+            guards: {
+                id: string;
+                createdAt: string;
+                evaluatorId: string;
+                /** @enum {string} */
+                operator: "lt" | "lte" | "gt" | "gte" | "eq" | "label_eq";
+                threshold?: number;
+                labelValue?: string;
+                enabled: boolean;
+            }[];
+        };
+        RunResultResponse: {
+            evaluator: string;
+            written: number;
+            skipped: number;
+            truncated: boolean;
+            errors: {
+                spanId: string;
+                reason: string;
+            }[];
+        };
+        ExperimentRun: {
+            id: string;
+            datasetId: string;
+            name: string;
+            variant: {
+                model?: string;
+                promptOverride?: string;
+            };
+            /** @enum {string} */
+            status: "completed" | "partial" | "failed";
+            truncated: boolean;
+            itemCount: number;
+            passCount: number;
+            avgScore?: number;
+            totalCostUsd: number;
+            createdBy: string;
+            createdAt: string;
+            items?: {
+                datasetItemTraceId: string;
+                inputSnapshot?: string;
+                output?: string;
+                promptTokens: number;
+                completionTokens: number;
+                totalTokens: number;
+                costUsd?: number;
+                latencyMs: number;
+                model: string;
+                scores: {
+                    name: string;
+                    score?: number;
+                    label?: string;
+                    explanation?: string;
+                }[];
+                error?: string;
+            }[];
+        };
+        ExperimentRunsListResponse: {
+            runs: {
+                id: string;
+                datasetId: string;
+                name: string;
+                variant: {
+                    model?: string;
+                    promptOverride?: string;
+                };
+                /** @enum {string} */
+                status: "completed" | "partial" | "failed";
+                truncated: boolean;
+                itemCount: number;
+                passCount: number;
+                avgScore?: number;
+                totalCostUsd: number;
+                createdBy: string;
+                createdAt: string;
+                items?: {
+                    datasetItemTraceId: string;
+                    inputSnapshot?: string;
+                    output?: string;
+                    promptTokens: number;
+                    completionTokens: number;
+                    totalTokens: number;
+                    costUsd?: number;
+                    latencyMs: number;
+                    model: string;
+                    scores: {
+                        name: string;
+                        score?: number;
+                        label?: string;
+                        explanation?: string;
+                    }[];
+                    error?: string;
+                }[];
+            }[];
+        };
+        ExperimentCompareResponse: {
+            runs: {
+                id: string;
+                datasetId: string;
+                name: string;
+                variant: {
+                    model?: string;
+                    promptOverride?: string;
+                };
+                /** @enum {string} */
+                status: "completed" | "partial" | "failed";
+                truncated: boolean;
+                itemCount: number;
+                passCount: number;
+                avgScore?: number;
+                totalCostUsd: number;
+                createdBy: string;
+                createdAt: string;
+                items?: {
+                    datasetItemTraceId: string;
+                    inputSnapshot?: string;
+                    output?: string;
+                    promptTokens: number;
+                    completionTokens: number;
+                    totalTokens: number;
+                    costUsd?: number;
+                    latencyMs: number;
+                    model: string;
+                    scores: {
+                        name: string;
+                        score?: number;
+                        label?: string;
+                        explanation?: string;
+                    }[];
+                    error?: string;
+                }[];
+            }[];
+            deltas: {
+                passCountDelta: number;
+                passRateDelta: number;
+                avgScoreDelta: number | null;
+                totalCostDelta: number;
+                avgLatencyDelta: number | null;
+            } | null;
+        };
+        AskCopilotResponse: {
+            answer: string;
+        };
+        CopilotFeedbackRecord: {
+            id: string;
+            traceId: string;
+            turnId: string;
+            spanId?: string;
+            /** @enum {string} */
+            label: "up" | "down";
+            question?: string;
+            updatedAt: string;
+        };
+        ReplayResponse: {
+            output: string;
+            promptTokens: number;
+            completionTokens: number;
+            totalTokens: number;
+            latencyMs: number;
+            model: string;
+            costUsd?: number;
+        };
     };
     responses: never;
     parameters: never;

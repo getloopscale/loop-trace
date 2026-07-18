@@ -19,6 +19,12 @@ import {
   type RateLimiter,
   apiError,
   zodFieldErrors,
+  // M118 (D4) — response schemas parsed at the boundary (server-side single source of truth).
+  evaluatorRecordSchema,
+  evaluatorsListResponseSchema,
+  guardRecordSchema,
+  guardsListResponseSchema,
+  runResultResponseSchema,
 } from "@usetheo/lens-core";
 
 import { getPrincipal } from "../auth/middleware.js";
@@ -77,17 +83,17 @@ export async function createEvaluatorHandler(c: Context, deps: EvaluatorApiDeps)
   }
   const rec = await deps.repo.createEvaluator(ev, getPrincipal(c).workspaceId);
   evaluatorsCreated.add(1); // observable: evaluator-definition curation volume (pillar c)
-  return c.json(rec, 200);
+  return c.json(evaluatorRecordSchema.parse(rec), 200);
 }
 
 export async function listEvaluatorsHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
   const evaluators = await deps.repo.listEvaluators(getPrincipal(c).workspaceId);
-  return c.json({ evaluators }, 200);
+  return c.json(evaluatorsListResponseSchema.parse({ evaluators }), 200);
 }
 
 export async function getEvaluatorHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
   const rec = await deps.repo.getEvaluator(c.req.param("id") ?? "", getPrincipal(c).workspaceId);
-  return rec ? c.json(rec, 200) : c.json(apiError("EVALUATOR_NOT_FOUND", "not found"), 404);
+  return rec ? c.json(evaluatorRecordSchema.parse(rec), 200) : c.json(apiError("EVALUATOR_NOT_FOUND", "not found"), 404);
 }
 
 export async function updateEvaluatorHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
@@ -115,7 +121,7 @@ export async function updateEvaluatorHandler(c: Context, deps: EvaluatorApiDeps)
   }
   try {
     const rec = await deps.repo.updateEvaluator(c.req.param("id") ?? "", updates as Partial<Evaluator>, getPrincipal(c).workspaceId);
-    return rec ? c.json(rec, 200) : c.json(apiError("EVALUATOR_NOT_FOUND", "not found"), 404);
+    return rec ? c.json(evaluatorRecordSchema.parse(rec), 200) : c.json(apiError("EVALUATOR_NOT_FOUND", "not found"), 404);
   } catch (err) {
     if (err instanceof NameConflictError) return c.json(apiError("NAME_CONFLICT", err.message), 409);
     throw err;
@@ -162,7 +168,7 @@ export async function runEvaluatorHandler(c: Context, deps: EvaluatorApiDeps): P
   }
   evaluatorRunsStarted.add(1); // observable: billable evaluator-run volume (pillar c)
   const result = await runEvaluator(ev, opts, ws, deps.engine);
-  return c.json(result, 200);
+  return c.json(runResultResponseSchema.parse(result), 200);
 }
 
 export async function createGuardHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
@@ -181,12 +187,12 @@ export async function createGuardHandler(c: Context, deps: EvaluatorApiDeps): Pr
   }
   const rec = await deps.repo.createGuard(parsed.data, ws);
   guardsCreated.add(1); // observable: guard-definition curation volume (pillar c)
-  return c.json(rec, 200);
+  return c.json(guardRecordSchema.parse(rec), 200);
 }
 
 export async function listGuardsHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
   const guards = await deps.repo.listGuards(getPrincipal(c).workspaceId);
-  return c.json({ guards }, 200);
+  return c.json(guardsListResponseSchema.parse({ guards }), 200);
 }
 
 export async function deleteGuardHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
