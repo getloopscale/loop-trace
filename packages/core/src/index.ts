@@ -169,6 +169,7 @@ export {
   DEFAULT_SHUTDOWN_DRAIN_MS,
   DEFAULT_PROVIDER_RETRY,
 } from "./domain/evaluator-config.js";
+export { positiveIntEnv } from "./domain/env.js";
 export {
   runEvaluator,
   runSweep,

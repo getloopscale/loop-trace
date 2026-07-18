@@ -4,6 +4,7 @@
  */
 import type { JudgeConfig } from "./llm-judge.js";
 import { type ProviderBreakerConfig, DEFAULT_PROVIDER_BREAKER } from "./provider-breaker.js";
+import { positiveIntEnv } from "./env.js";
 
 /** Default per-backfill trace cap (ADR D7); override with THEOLENS_EVAL_BACKFILL_MAX. */
 export const DEFAULT_EVAL_BACKFILL_MAX = 500;
@@ -91,15 +92,6 @@ export function parseMaxDecompressedBytes(env: NodeJS.ProcessEnv = process.env):
   if (raw === undefined) return DEFAULT_MAX_DECOMPRESSED_BYTES;
   const n = Number(raw);
   return Number.isInteger(n) && n > 0 ? n : DEFAULT_MAX_DECOMPRESSED_BYTES;
-}
-
-/** Read a positive-integer env var; an unset/invalid/≤0 value falls back to `def` (never breaks
- *  boot on a fat-fingered env — fail-safe, `error-handling.md`). Shared by the M94 resilience config. */
-function positiveIntEnv(env: NodeJS.ProcessEnv, key: string, def: number): number {
-  const raw = env[key];
-  if (raw === undefined) return def;
-  const n = Number(raw);
-  return Number.isInteger(n) && n > 0 ? n : def;
 }
 
 /** M94: node-pg Pool resilience config. A stuck query aborts at `statement_timeout` (freeing the
