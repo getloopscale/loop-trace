@@ -40,3 +40,5 @@ knowledge-base/references/*/
 
 # Stray QA/Playwright run log (never tracked)
 playwright-log.txt
+architect-output/
+.claude/codebase-architect-loop.local.md

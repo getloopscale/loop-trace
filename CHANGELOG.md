@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Roadmap: added phase v16 (`ROADMAP-sota-experience-v16.md`) — raise the architecture score from the `/loop-codebase-architect` audit's 74/100 ("Refactor Lightly") toward ~95 by executing the audit's own behavior-preserving Phase-5 remediation: M120 (sever the core `chat→evaluator-config→llm-judge` runtime circular dependency [#58] + extract the provider-client factory), M121 (complete the `app.ts` Front-Controller extraction, 705→<500 LoC + split `register-extra-routes`), M122 (move Drizzle concretes behind a `@usetheo/lens-core/infra` subpath — clean public boundary), M123 (by-feature grouping of the two flat dirs + naming cleanups). No behavior change — quality/maintainability work measured by the architecture score, `madge` cycle count, and `app.ts` LoC. (`/roadmap-feature`)
 
 ### Changed
 
