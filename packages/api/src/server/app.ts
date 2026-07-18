@@ -2,9 +2,6 @@ import { Hono } from "hono";
 import {
   type SpanRepository,
   type AuthVerifier,
-  traceListResponseSchema,
-  costByPeriodResponseSchema,
-  toolStatsResponseSchema,
   northStarResponseSchema,
   observabilityRangeSchema,
   observabilityResponseSchema,
@@ -14,7 +11,6 @@ import {
   isValidAttrKey,
   sessionListResponseSchema,
   sessionDetailResponseSchema,
-  agentCatalogResponseSchema,
   apiError,
   errorBody,
   sdkMessagesToOtlp,
@@ -39,6 +35,7 @@ import type { CopilotApiDeps } from "./handlers/copilot.js";
 import type { ReplayApiDeps } from "./handlers/replay.js";
 import { registerExtraRoutes } from "./routes/register-extra-routes.js";
 import { registerTracesRoutes } from "./routes/traces-routes.js";
+import { registerAnalyticsRoutes } from "./routes/analytics-routes.js";
 import { registerDatasetRoutes } from "./routes/dataset-routes.js";
 import { registerLabelingQueueRoutes } from "./routes/labeling-queue-routes.js";
 import { registerExperimentRoutes } from "./routes/experiment-routes.js";
@@ -349,39 +346,6 @@ export function createApp(
     },
   );
 
-  app.get("/v1/agents", requireScopeOnPrincipal("observability:read"), async (c) => {
-    // M32: the agents catalog (derived from `agent.*` span attributes), with health.
-    const agents = await repo.aggregateAgents(getPrincipal(c).workspaceId);
-    return c.json(agentCatalogResponseSchema.parse({ agents }), 200);
-  });
-
-  app.get("/v1/analytics/tools", requireScopeOnPrincipal("observability:read"), async (c) => {
-    const stats = await repo.aggregateToolStats(getPrincipal(c).workspaceId);
-    return c.json(toolStatsResponseSchema.parse(stats), 200);
-  });
-
-  app.get("/v1/analytics/tools/:toolName/traces", requireScopeOnPrincipal("observability:read"), async (c) => {
-    const list = await repo.listTracesForTool(
-      c.req.param("toolName"),
-      undefined,
-      getPrincipal(c).workspaceId,
-    );
-    return c.json(traceListResponseSchema.parse(list), 200);
-  });
-
-  app.get("/v1/analytics/cost", requireScopeOnPrincipal("observability:read"), async (c) => {
-    // Whitelist the period (fail-fast on anything but day/week, Rule 8); default day.
-    const raw = c.req.query("period");
-    if (raw !== undefined && raw !== "day" && raw !== "week") {
-      return c.json(apiError("INVALID_QUERY", "invalid period (use day or week)"), 400);
-    }
-    const result = await repo.aggregateCostByPeriod(
-      raw === "week" ? "week" : "day",
-      getPrincipal(c).workspaceId,
-    );
-    return c.json(costByPeriodResponseSchema.parse(result), 200);
-  });
-
   app.post("/v1/replay-sessions", bodyLimit413(DEFAULT_ADVANCED_MAX_BYTES), requireScopeOnPrincipal("observability:write"), async (c) => {
     // Record a replay-open event (M8 north-star). Fail-fast 400 on a missing
     // traceId (Rule 8); the UI calls this fire-and-forget so a 5xx never
@@ -498,6 +462,7 @@ export function createApp(
   // M26d dataset routes + M36 evaluators + M33 copilot routes (extracted to keep
   // app.ts ≤ 500 — M33 D5). M121 (D1): traces/spans/cost/tree + tags + annotations.
   registerTracesRoutes(app, repo);
+  registerAnalyticsRoutes(app, repo);
   registerDatasetRoutes(app, repo);
   registerLabelingQueueRoutes(app, repo);
   registerExtraRoutes(app, { evaluators, copilot, replay });
