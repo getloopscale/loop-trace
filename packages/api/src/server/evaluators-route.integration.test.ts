@@ -295,5 +295,11 @@ suite("M36 evaluators routes (integration)", () => {
     const yTraceIds = ((await yBreaches.json()) as { traceIds: string[] }).traceIds;
     expect(yTraceIds).not.toContain("x-trace");
     expect(yTraceIds).toHaveLength(0);
+
+    // A non-uuid guard id in the breaches read → empty (200), never a 500 (22P02) — same isUuid
+    // guard as deleteGuard/getEvaluator (M119 no-workaround fix).
+    const garbage = await req("GET", `/v1/guards/not-a-uuid/breaches`, "rw");
+    expect(garbage.status).toBe(200);
+    expect(((await garbage.json()) as { traceIds: string[] }).traceIds).toEqual([]);
   });
 });
