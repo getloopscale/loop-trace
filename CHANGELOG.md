@@ -11,12 +11,14 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - Roadmap: added phase v16 (`ROADMAP-sota-experience-v16.md`) — raise the architecture score from the `/loop-codebase-architect` audit's 74/100 ("Refactor Lightly") toward ~95 by executing the audit's own behavior-preserving Phase-5 remediation: M120 (sever the core `chat→evaluator-config→llm-judge` runtime circular dependency [#58] + extract the provider-client factory), M121 (complete the `app.ts` Front-Controller extraction, 705→<500 LoC + split `register-extra-routes`), M122 (move Drizzle concretes behind a `@usetheo/lens-core/infra` subpath — clean public boundary), M123 (by-feature grouping of the two flat dirs + naming cleanups). No behavior change — quality/maintainability work measured by the architecture score, `madge` cycle count, and `app.ts` LoC. (`/roadmap-feature`)
 
 ### Changed
+- Engine: the fail-closed provider-client construction (`judgeConfig ? new OpenAICompatible* : null` for judge/chat/replay) is centralized in one core factory, `createProviderClients(judgeConfig)` (`packages/core/src/domain/provider-clients.ts`), replacing the three verbatim repetitions in the api `bootstrap()` (a Rule-of-3 hit). Behavior-preserving: an unconfigured provider still yields a `null` client so every provider route 503s rather than fabricating an answer; the factory lives in the domain (DIP — the composition root only wires it). Proven by fail-closed (null→null) + configured (three instances) unit tests. (M120, #58)
 
 ### Deprecated
 
 ### Removed
 
 ### Fixed
+- Engine: severed the `@usetheo/lens-core` runtime **circular dependency** `chat → evaluator-config → llm-judge → chat` (`madge --circular packages/core/src` now reports **0 cycles**, was 1). The provider retry/breaker parsers moved to a new leaf `packages/core/src/domain/provider-config.ts` (imports only `env.ts` + `provider-breaker.ts`), the shared `positiveIntEnv` helper moved to a dependency-free `env.ts` leaf, `evaluator-config.ts` re-exports the moved provider symbols (zero caller churn), and `chat.ts` re-points its import at the leaf — removing the wrong-direction edge. `behavior_change: none` (a pure module move, proven by move-equivalence tests on the parsers). (M120, #58)
 
 ### Security
 
