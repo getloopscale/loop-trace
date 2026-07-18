@@ -24,6 +24,7 @@ import {
   DEFAULT_ANNOTATOR_KIND,
   agentCatalogResponseSchema,
   apiError,
+  errorBody,
   zodFieldErrors,
   sdkMessagesToOtlp,
   type SDKMessage,
@@ -224,10 +225,7 @@ export function createApp(
     bodyLimit({
       maxSize: ingest?.maxBodyBytes ?? DEFAULT_MAX_INGEST_BYTES,
       onError: (c) =>
-        c.json(
-          { code: "PAYLOAD_TOO_LARGE", message: "OTLP body exceeds the ingest size limit" },
-          413,
-        ),
+        c.json(errorBody("PAYLOAD_TOO_LARGE", "OTLP body exceeds the ingest size limit"), 413),
     }),
     requireScopeOnPrincipal("observability:write"),
     async (c) => {
@@ -236,10 +234,7 @@ export function createApp(
         !contentType.includes("application/json") &&
         !contentType.includes("application/x-protobuf")
       ) {
-        return c.json(
-          { code: "UNSUPPORTED_MEDIA_TYPE", message: "use application/json or application/x-protobuf" },
-          415,
-        );
+        return c.json(errorBody("UNSUPPORTED_MEDIA_TYPE", "use application/json or application/x-protobuf"), 415);
       }
 
       // M93 — per-workspace ingest backpressure: shed a runaway producer with 429 (before the pool
@@ -250,7 +245,7 @@ export function createApp(
         if (!ingest.limiter.tryAcquire(ws, nowMs)) {
           ingestRateLimited.add(1);
           c.header("Retry-After", String(ingest.limiter.retryAfterSeconds(ws, nowMs))); // M94
-          return c.json({ code: "RATE_LIMITED", message: "ingest rate limit exceeded for this workspace" }, 429);
+          return c.json(errorBody("RATE_LIMITED", "ingest rate limit exceeded for this workspace"), 429);
         }
       }
 
@@ -266,9 +261,9 @@ export function createApp(
       } catch (err) {
         // A gzip-bomb (decompresses past the bound) → 413; a corrupt/undecodable envelope → 400.
         if (err instanceof OtlpTooLargeError)
-          return c.json({ code: "PAYLOAD_TOO_LARGE", message: err.message }, 413);
+          return c.json(errorBody("PAYLOAD_TOO_LARGE", err.message), 413);
         if (err instanceof OtlpParseError)
-          return c.json({ code: "INVALID_OTLP", message: err.message }, 400);
+          return c.json(errorBody("INVALID_OTLP", err.message), 400);
         throw err;
       }
 
@@ -303,13 +298,13 @@ export function createApp(
     // Bound the RAW body BEFORE it is buffered (OOM guard, mirrors /v1/traces) — 413 on an oversized body.
     bodyLimit({
       maxSize: ingest?.maxBodyBytes ?? DEFAULT_MAX_INGEST_BYTES,
-      onError: (c) => c.json({ code: "PAYLOAD_TOO_LARGE", message: "run body exceeds the ingest size limit" }, 413),
+      onError: (c) => c.json(errorBody("PAYLOAD_TOO_LARGE", "run body exceeds the ingest size limit"), 413),
     }),
     requireScopeOnPrincipal("observability:write"),
     async (c) => {
     const contentType = (c.req.header("content-type") ?? "").toLowerCase();
     if (contentType !== "application/json" && !contentType.startsWith("application/json;")) {
-      return c.json({ code: "UNSUPPORTED_MEDIA_TYPE", message: "use application/json" }, 415);
+      return c.json(errorBody("UNSUPPORTED_MEDIA_TYPE", "use application/json"), 415);
     }
     const ws = getPrincipal(c).workspaceId;
     if (ingest?.limiter) {
@@ -317,7 +312,7 @@ export function createApp(
       if (!ingest.limiter.tryAcquire(ws, nowMs)) {
         ingestRateLimited.add(1);
         c.header("Retry-After", String(ingest.limiter.retryAfterSeconds(ws, nowMs)));
-        return c.json({ code: "RATE_LIMITED", message: "ingest rate limit exceeded for this workspace" }, 429);
+        return c.json(errorBody("RATE_LIMITED", "ingest rate limit exceeded for this workspace"), 429);
       }
     }
 
@@ -325,11 +320,11 @@ export function createApp(
     try {
       body = await c.req.json();
     } catch {
-      return c.json({ code: "INVALID_BODY", message: "invalid JSON body" }, 400);
+      return c.json(errorBody("INVALID_BODY", "invalid JSON body"), 400);
     }
     const b = body as { messages?: unknown; result?: unknown; startTimeMs?: unknown };
     if (!Array.isArray(b.messages)) {
-      return c.json({ code: "INVALID_BODY", message: "`messages` must be an array of SDKMessage events" }, 400);
+      return c.json(errorBody("INVALID_BODY", "`messages` must be an array of SDKMessage events"), 400);
     }
 
     // M117: honor an optional caller-supplied base timestamp so the native /v1/runs path and the OTLP
@@ -340,10 +335,7 @@ export function createApp(
     let startTimeMs: number | undefined;
     if (typeof b.startTimeMs === "number" && Number.isFinite(b.startTimeMs)) {
       if (b.startTimeMs < 0 || b.startTimeMs > Date.now() + 86_400_000) {
-        return c.json(
-          { code: "INVALID_BODY", message: "`startTimeMs` must be an epoch-ms in [0, now + 1 day]" },
-          400,
-        );
+        return c.json(errorBody("INVALID_BODY", "`startTimeMs` must be an epoch-ms in [0, now + 1 day]"), 400);
       }
       startTimeMs = b.startTimeMs;
     }

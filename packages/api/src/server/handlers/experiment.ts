@@ -17,6 +17,8 @@ import {
   experimentRunSchema,
   experimentRunsListResponseSchema,
   experimentCompareResponseSchema,
+  errorBody,
+  apiError,
   type ReplayClient,
   type RateLimiter,
   type RunVariant,
@@ -76,32 +78,33 @@ export async function createExperimentRunHandler(c: Context, deps: ExperimentApi
   const rlNow = clock();
   if (!deps.limiter.tryAcquire(ws, rlNow)) {
     c.header("Retry-After", String(deps.limiter.retryAfterSeconds(ws, rlNow))); // M94
-    return c.json({ code: "RATE_LIMITED", message: "experiment-run rate limit exceeded" }, 429);
+    return c.json(errorBody("RATE_LIMITED", "experiment-run rate limit exceeded"), 429);
   }
   if (deps.chat === null) {
-    return c.json({ code: "RUN_DISABLED", message: "experiment runs are not configured (no provider)" }, 503);
+    return c.json(errorBody("RUN_DISABLED", "experiment runs are not configured (no provider)"), 503);
   }
 
   let body: unknown;
   try {
     body = await c.req.json();
   } catch {
-    return c.json({ code: "INVALID_BODY", message: "invalid json body" }, 400);
+    return c.json(errorBody("INVALID_BODY", "invalid json body"), 400);
   }
   let parsed: { datasetId: string; name: string; variant: RunVariant };
   try {
     parsed = parseRunBody(body);
   } catch (code) {
-    return c.json({ code: typeof code === "string" ? code : "INVALID_BODY", message: "invalid run body" }, 400);
+    // `code` is the domain-thrown code string (INVALID_BODY) — surfaced via apiError (accepts a string).
+    return c.json(apiError(typeof code === "string" ? code : "INVALID_BODY", "invalid run body"), 400);
   }
 
   // Authorize + load the dataset (workspace-scoped; a foreign/absent dataset → 404, NO billable call).
   const dataset = await deps.spanRepo.getDataset(parsed.datasetId, ws);
   if (dataset === null) {
-    return c.json({ code: "DATASET_NOT_FOUND", message: "dataset not found" }, 404);
+    return c.json(errorBody("DATASET_NOT_FOUND", "dataset not found"), 404);
   }
   if (dataset.items.length === 0) {
-    return c.json({ code: "EMPTY_DATASET", message: "the dataset has no items to run" }, 400);
+    return c.json(errorBody("EMPTY_DATASET", "the dataset has no items to run"), 400);
   }
 
   const evaluators = await deps.evaluatorRepo.listEvaluators(ws);
@@ -136,7 +139,7 @@ export async function createExperimentRunHandler(c: Context, deps: ExperimentApi
   } catch (err) {
     // A total run failure (e.g. the store) fails closed — surface it, never a fabricated run.
     experimentRunsUnavailable.add(1);
-    return c.json({ code: "RUN_UNAVAILABLE", message: String(err) }, 502);
+    return c.json(errorBody("RUN_UNAVAILABLE", String(err)), 502);
   }
 }
 
@@ -150,7 +153,7 @@ export async function listExperimentRunsHandler(c: Context, deps: ExperimentApiD
 export async function getExperimentRunHandler(c: Context, deps: ExperimentApiDeps): Promise<Response> {
   const ws = getPrincipal(c).workspaceId;
   const run = await deps.spanRepo.getExperimentRun(c.req.param("runId") ?? "", ws);
-  return run ? c.json(experimentRunSchema.parse(run), 200) : c.json({ code: "RUN_NOT_FOUND", message: "run not found" }, 404);
+  return run ? c.json(experimentRunSchema.parse(run), 200) : c.json(errorBody("RUN_NOT_FOUND", "run not found"), 404);
 }
 
 /**
@@ -163,7 +166,7 @@ export async function compareExperimentRunsHandler(c: Context, deps: ExperimentA
   const ws = getPrincipal(c).workspaceId;
   const ids = (c.req.query("ids") ?? "").split(",").map((s) => s.trim()).filter(Boolean).slice(0, 5);
   if (ids.length < 2) {
-    return c.json({ code: "INVALID_BODY", message: "compare needs at least 2 run ids (?ids=a,b)" }, 400);
+    return c.json(errorBody("INVALID_BODY", "compare needs at least 2 run ids (?ids=a,b)"), 400);
   }
   const runs = (await Promise.all(ids.map((id) => deps.spanRepo.getExperimentRun(id, ws)))).filter(
     (r): r is NonNullable<typeof r> => r !== null,

@@ -17,6 +17,8 @@ export {
 } from "./domain/span-repository.js";
 export { NameConflictError, isUniqueViolation, isForeignKeyViolation } from "./domain/errors.js";
 export { type ApiErrorBody, type FieldIssue, apiError, zodFieldErrors } from "./domain/api-error.js";
+// M118 (D3) — the single typed error envelope: a stable code union + `errorBody` (shape == apiError).
+export { ERROR_CODES, type ErrorCode, isErrorCode, errorBody } from "./domain/error-envelope.js";
 export { type SqlResult, rowsAs } from "./domain/sql-rows.js";
 // M22: multi-tenant workspace-isolation domain types (ported from theo-memory).
 export {

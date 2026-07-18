@@ -8,6 +8,7 @@
  */
 import type { MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { errorBody } from "@usetheo/lens-core";
 
 /**
  * Per-route pre-parse ceilings (bytes). The value reuses each route's existing post-parse cap where one
@@ -36,6 +37,6 @@ export const DATASET_NAME_MAX_BYTES = 64 * 1024;
 export function bodyLimit413(maxSize: number, message = "request body exceeds the size limit"): MiddlewareHandler {
   return bodyLimit({
     maxSize,
-    onError: (c) => c.json({ code: "PAYLOAD_TOO_LARGE", message }, 413),
+    onError: (c) => c.json(errorBody("PAYLOAD_TOO_LARGE", message), 413),
   });
 }
