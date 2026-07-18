@@ -84,6 +84,11 @@ import {
   spansRejected,
   ingestRateLimited,
   logIngest,
+  // M118 — runtime metrics on the app.ts mutating routes that emitted none (wiring-triad pillar c).
+  tagsAdded,
+  tagsRemoved,
+  annotationsRemoved,
+  replaySessionsRecorded,
 } from "./metrics.js";
 import { mountStatic } from "./static.js";
 import { tracesToCsv } from "./csv.js";
@@ -491,6 +496,7 @@ export function createApp(
       return c.json(apiError("INVALID_BODY", "traceId is required"), 400);
     }
     await repo.recordReplaySession(traceId, getPrincipal(c).workspaceId);
+    replaySessionsRecorded.add(1); // observable: replay-session north-star write volume (pillar c)
     return c.json({ recorded: true }, 200);
   });
 
@@ -613,6 +619,7 @@ export function createApp(
     const ws = getPrincipal(c).workspaceId;
     const ok = await repo.addTag(traceId, tag, ws);
     if (!ok) return c.json(apiError("NOT_FOUND", "not found"), 404);
+    tagsAdded.add(1); // observable: tag-add volume (pillar c)
     const tags = await repo.listTags(traceId, ws);
     return c.json(traceTagsResponseSchema.parse({ tags }), 200);
   });
@@ -627,6 +634,7 @@ export function createApp(
     const traceId = c.req.param("traceId");
     const ws = getPrincipal(c).workspaceId;
     await repo.removeTag(traceId, tag, ws);
+    tagsRemoved.add(1); // observable: tag-remove volume (pillar c)
     const tags = await repo.listTags(traceId, ws);
     return c.json(traceTagsResponseSchema.parse({ tags }), 200);
   });
@@ -683,6 +691,7 @@ export function createApp(
       },
       ws,
     );
+    annotationsRemoved.add(1); // observable: annotation-remove volume (pillar c)
     const annotations = await repo.listAnnotations(traceId, ws);
     return c.json(annotationsResponseSchema.parse({ annotations }), 200);
   });

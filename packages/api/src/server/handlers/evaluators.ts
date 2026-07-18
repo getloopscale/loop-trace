@@ -22,7 +22,7 @@ import {
 } from "@usetheo/lens-core";
 
 import { getPrincipal } from "../auth/middleware.js";
-import { evaluatorRunRateLimited } from "../metrics.js";
+import { evaluatorRunRateLimited, evaluatorRunsStarted, evaluatorsCreated, guardsCreated } from "../metrics.js";
 
 /**
  * M82 — a partial evaluator edit. `name` follows the same rule as create; `kind`+`config`, when present,
@@ -76,6 +76,7 @@ export async function createEvaluatorHandler(c: Context, deps: EvaluatorApiDeps)
     }
   }
   const rec = await deps.repo.createEvaluator(ev, getPrincipal(c).workspaceId);
+  evaluatorsCreated.add(1); // observable: evaluator-definition curation volume (pillar c)
   return c.json(rec, 200);
 }
 
@@ -159,6 +160,7 @@ export async function runEvaluatorHandler(c: Context, deps: EvaluatorApiDeps): P
     }
     opts.limit = lim;
   }
+  evaluatorRunsStarted.add(1); // observable: billable evaluator-run volume (pillar c)
   const result = await runEvaluator(ev, opts, ws, deps.engine);
   return c.json(result, 200);
 }
@@ -178,6 +180,7 @@ export async function createGuardHandler(c: Context, deps: EvaluatorApiDeps): Pr
     return c.json(apiError("EVALUATOR_NOT_FOUND", "guard.evaluatorId not found in workspace"), 404);
   }
   const rec = await deps.repo.createGuard(parsed.data, ws);
+  guardsCreated.add(1); // observable: guard-definition curation volume (pillar c)
   return c.json(rec, 200);
 }
 
