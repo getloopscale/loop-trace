@@ -16,6 +16,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Removed
 
 ### Fixed
+- Web: the `@usetheo/lens-web` dashboard compiles again — pinned `@theokit/ui` back to `0.18.1`. The `@theokit/ui` `1.x` line is a different product (an agent/chat UI kit) that dropped the dashboard component set the web bundle is built on (`DataTable`, `Timestamp`, `Badge`, `Tabs`, `StatTile`, `TopNav`, `Sidebar`, `Dialog`, `Skeleton`, `DataTableColumn`/`DataTableSort`), so the `^1.3.2` bump broke `web` typecheck with 37 `TS2305` "no exported member" errors (+63 cascading implicit-`any`). `0.18.1` — the last version the web package was built against (M17) — exports every one of its 13 imported names; a proper migration to the `1.x` component API (or the components' return to `@theokit/ui`) is a separate future decision. (#55)
 
 ### Security
 
