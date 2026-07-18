@@ -7,7 +7,7 @@
  * content throws {@link ChatError} — never a fabricated answer.
  */
 
-import { parseProviderRetry, parseProviderBreaker, type ProviderRetryConfig } from "./evaluator-config.js";
+import { parseProviderRetry, parseProviderBreaker, type ProviderRetryConfig } from "./provider-config.js";
 import { ProviderBreaker, ProviderBreakerOpenError } from "./provider-breaker.js";
 
 /** Internal sentinel — a 5xx response is thrown inside the breaker so it counts as an outage, then
