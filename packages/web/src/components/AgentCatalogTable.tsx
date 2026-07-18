@@ -1,4 +1,4 @@
-import { Badge, DataTable, Timestamp, type DataTableColumn } from "@theokit/ui";
+import { Badge, DataTable, Timestamp, type DataTableColumn } from "@usetheo/ui";
 import type { Agent } from "../api/types.js";
 import { EmptyState } from "./states.js";
 

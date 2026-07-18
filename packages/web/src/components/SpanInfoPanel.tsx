@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Tabs } from "@theokit/ui";
+import { Tabs } from "@usetheo/ui";
 import type { SpanNodeData } from "../api/types.js";
 import { durationMs, formatDuration } from "../lib/duration.js";
 import { deriveKindFromSignals } from "../lib/span-kind.js";

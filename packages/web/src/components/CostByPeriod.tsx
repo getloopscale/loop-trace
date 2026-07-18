@@ -1,4 +1,4 @@
-import { DataTable, type DataTableColumn } from "@theokit/ui";
+import { DataTable, type DataTableColumn } from "@usetheo/ui";
 import type { CostBucket } from "../api/types.js";
 import { formatUsd } from "../lib/money.js";
 import { EmptyState } from "./states.js";

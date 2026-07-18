@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Dialog } from "@theokit/ui";
+import { Dialog } from "@usetheo/ui";
 
 interface Command {
   id: string;
