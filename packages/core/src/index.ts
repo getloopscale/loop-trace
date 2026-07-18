@@ -171,6 +171,10 @@ export {
 } from "./domain/evaluator-config.js";
 export { positiveIntEnv } from "./domain/env.js";
 export {
+  createProviderClients,
+  type ProviderClients,
+} from "./domain/provider-clients.js";
+export {
   runEvaluator,
   runSweep,
   type EngineDeps,

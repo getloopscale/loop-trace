@@ -7,7 +7,7 @@ import {
   migrateLatest,
   parseRetentionConfig,
   evaluatorRepoFromPool,
-  OpenAICompatibleJudge,
+  createProviderClients,
   parseJudgeConfig,
   parseBackfillMax,
   parseEvalSweepHours,
@@ -19,14 +19,9 @@ import {
   parseHttpRequestTimeoutMs,
   parseShutdownDrainMs,
   runSweep,
-  OpenAICompatibleChat,
-  OpenAICompatibleReplay,
   RateLimiter,
   DEFAULT_WORKSPACE_ID,
   type EngineDeps,
-  type JudgeClient,
-  type ChatClient,
-  type ReplayClient,
 } from "@usetheo/lens-core";
 import type pg from "pg";
 
@@ -83,24 +78,18 @@ export async function bootstrap(
   // the LLM-judge is enabled only when configured (else null → fail-closed per span).
   const evaluatorRepo = evaluatorRepoFromPool(pool);
   const judgeConfig = parseJudgeConfig(process.env);
-  const judge: JudgeClient | null =
-    judgeConfig !== null ? new OpenAICompatibleJudge(judgeConfig) : null;
+  // M120 (D3): the fail-closed judge/chat/replay construction (unconfigured provider → null client →
+  // route 503s) is centralized in one core factory (was repeated 3× verbatim here). M33: the copilot,
+  // M55: span replay, and the judge all reuse the SAME provider config (D1). Each surface keeps its own
+  // per-workspace rate limiter (the billable-abuse guard, D3).
+  const { judge, chat, replay: replayClient } = createProviderClients(judgeConfig);
   const engine: EngineDeps = {
     evaluatorRepo,
     spanRepo: repo,
     judge,
     backfillMax: parseBackfillMax(process.env),
   };
-  // M33: the "Ask about this step" copilot reuses the same provider config (D1); the
-  // chat client is null when unconfigured → the endpoint fails closed (503). Per-
-  // workspace rate limiter (D3).
-  const chat: ChatClient | null =
-    judgeConfig !== null ? new OpenAICompatibleChat(judgeConfig) : null;
   const copilotLimiter = new RateLimiter(parseCopilotRpm(process.env));
-  // M55: span replay reuses the SAME provider config (D1) — usage-capturing client (or null →
-  // fail-closed 503); its own per-workspace rate limiter (the billable-abuse guard, D3).
-  const replayClient: ReplayClient | null =
-    judgeConfig !== null ? new OpenAICompatibleReplay(judgeConfig) : null;
   const replayLimiter = new RateLimiter(parseCopilotRpm(process.env));
   // M64: the experiment-run route reuses the replay provider client + a dedicated limiter + the
   // evaluator repo (rule-evaluator scoring). null client → the run fails closed (503).
