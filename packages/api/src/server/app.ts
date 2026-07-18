@@ -24,7 +24,9 @@ import {
 import type { EvaluatorApiDeps } from "./handlers/evaluators.js";
 import type { CopilotApiDeps } from "./handlers/copilot.js";
 import type { ReplayApiDeps } from "./handlers/replay.js";
-import { registerExtraRoutes } from "./routes/register-extra-routes.js";
+import { registerEvaluatorRoutes } from "./routes/register-evaluator-routes.js";
+import { registerCopilotRoutes } from "./routes/register-copilot-routes.js";
+import { registerReplayRoutes } from "./routes/register-replay-routes.js";
 import { registerTracesRoutes } from "./routes/traces-routes.js";
 import { registerAnalyticsRoutes } from "./routes/analytics-routes.js";
 import { registerMetricsRoutes } from "./routes/metrics-routes.js";
@@ -344,7 +346,11 @@ export function createApp(
   registerSessionsRoutes(app, repo);
   registerDatasetRoutes(app, repo);
   registerLabelingQueueRoutes(app, repo);
-  registerExtraRoutes(app, { evaluators, copilot, replay });
+  // M121 (D3) — the former extra-routes registrar, split per domain (evaluator/copilot/replay). Each
+  // mounts only when its deps are wired by the composition root; per-verb scope unchanged.
+  registerEvaluatorRoutes(app, evaluators);
+  registerCopilotRoutes(app, copilot);
+  registerReplayRoutes(app, replay);
   // M64 experiments — the run route reuses the replay provider client + limiter + the evaluator repo.
   if (experiment !== undefined) registerExperimentRoutes(app, experiment);
 
