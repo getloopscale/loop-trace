@@ -8,6 +8,20 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.49.0] - 2026-07-18
+
+### Added
 - SDK: `@usetheo/lens-sdk` **read/write parity** — `LensReadClient` gains all 22 missing engine read methods so every write has its matching read (`createEvaluator`→`getEvaluator`/`listEvaluators`, `createGuard`→`listGuards`/`getGuardBreaches`, `createExperimentRun`→`getExperimentRun`/`listExperimentRuns`/`compareExperimentRuns`, `enqueueForLabeling`→`listLabelingQueue`/`getLabelingItem`, `askCopilot`) plus the pure-read conveniences (`getTrace`, `getTraceCost`, `listTraceTags`, `listTraceAnnotations`, `getAgents`, `getToolTraces`, `getNorthStar`, `getEvaluatorMetrics`, `getScores`, `getSpanAttributes`, `getSession`, `getDataset`). Every method is edge-safe (basePath `/v1 → /v1/lens` swap) and idempotency-correct (GETs retry; `askCopilot` — billable — does not). 13 response types are GENERATED from the engine OpenAPI (drift-gated); 9 bare-`c.json` routes are hand-typed and pinned by a per-method hermetic contract test. (M117)
 - SDK: `recordRun` now targets the native **`POST /v1/runs`** ingest endpoint (M116) when present, falling back to `POST /v1/traces` (OTLP) on a 404/405 so ingest still works against an older engine — read-back is byte-identical regardless of path (both go through the shared SDKMessage→spans mapper). (M117)
 - Engine: 13 read routes wired into `openapi.ts` `RESPONSE_FOR_ROUTE` so their zod DTOs surface as named OpenAPI components — additive, behavior-preserving (enriches `/openapi.json` only; the drift gate proves live routes unchanged). (M117)
@@ -19,15 +33,14 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - Engine: **provider circuit breaker** (`packages/core/src/domain/provider-breaker.ts`) — a hand-rolled closed/open/half-open state machine (no library, Rule 9) held per-provider by `OpenAICompatibleChat`/`OpenAICompatibleReplay`, wrapping the `chat.ts` provider fetch. On sustained provider outage (network/timeout/5xx) it OPENs and fast-fails **without calling the provider**, so a call no longer pays `CHAT_TIMEOUT_MS`×retry when the provider is down (which compounds with the 500-call evaluator fan-out); the copilot/replay handlers map the OPEN fast-fail to `503` (distinct from the `502` provider-returned-error). Clock-injected + env-tunable (`THEOLENS_PROVIDER_BREAKER_THRESHOLD` default 5, `THEOLENS_PROVIDER_BREAKER_COOLDOWN_MS` default 30s) via `parseProviderBreaker`. Proven by open/half-open/close unit tests + a concurrent "opens exactly once" race-aware test + a caller-wiring test. Behavior-preserving: a raw `openaiChatCompletion` call with no breaker is unchanged. (M118)
 - Tests: **advanced-surface test-depth backfill** levelling the advanced surface up to the core ingest surface's bar (mostly tests, no new capability): `/v1/runs` 413 (over-cap body) + 429 (per-workspace flood) now exercised by parameterizing the M93 block over `{ /v1/traces, /v1/runs }` (no duplication); the guards gain negative + isolation coverage — malformed-body 400 (`INVALID_BODY`/`INVALID_GUARD`), the cross-workspace **404 security branch** (ws-y cannot attach a guard to ws-x's evaluator — holds, no leak), delete-idempotency, and guard-breaches cross-tenant isolation (all against real Postgres); a shared 18-behavior `theokit-vectors.ts` fixture pins BOTH copies of the duplicated SDKMessage→OTLP mapper (SDK + core) plus a per-vector `coreMapper ≡ sdkMapper` equality (the two copies agree — no drift); a dedicated `registry.test.ts` for `selectAdapter` first-match-wins + fallback; and `datasets` rotated into the through-edge ForwardAuth isolation suite. (M119)
 
+
 ### Changed
 - Engine: **single typed error envelope** (`ERROR_CODES` union + `errorBody()` helper in `@usetheo/lens-core`) — the advanced write handlers (copilot, replay, experiment) and the ingest routes (`app.ts` `/v1/traces` + `/v1/runs`, bodyLimit caps) previously hand-wrote inline `{ code, message }` literals; they now all route through one helper with a compile-time-checked code from a stable union, so a typo'd code is a build error and every code is greppable in one place. Behavior-preserving: the wire shape (`{ code, message, details? }`) and the exact code strings are UNCHANGED (a client contract). The dynamic-code paths (a domain error's `.code` surfaced verbatim) keep using `apiError`. (M118)
 
-### Deprecated
-
-### Removed
 
 ### Fixed
 - Engine: **guard delete / breaches no longer 500 on a non-UUID id** — `DELETE /v1/guards/:id` and `GET /v1/guards/:id/breaches` passed the raw path param straight to a UUID column comparison, so a non-UUID id (e.g. a typo or a retrying client's stale id) raised a Postgres `22P02` → `500`. They now treat a non-UUID id as absent (delete: idempotent `204`; breaches: empty `200`), matching the `isUuid` guard the evaluator get/update/delete handlers already had (M82 review H-1) and Rule 8 (fail-fast, no leaked driver error). Surfaced by the M119 backfill; behavior-preserving for every valid-UUID path. (M119)
+
 
 ### Security
 - Engine: **pre-parse `bodyLimit` (413) on every advanced write route** — copilot ask/feedback, replay, experiment-run, evaluator/guard CRUD + run, dataset create/rename/item, labeling-queue enqueue/resolve/export, and the `app.ts` tags/annotations/replay-sessions POSTs now bound the RAW body BEFORE it is buffered (typed `413 PAYLOAD_TOO_LARGE`), closing the parse-before-cap OOM/DoS class on the last siblings the core ingest surface (`/v1/traces`, `/v1/runs`) already guarded. `maxSize` reuses each route's existing post-parse cap (cap-less small routes get 64 KiB) so the cap only moves earlier — behavior-preserving for every happy path. Proven by a parameterized 413-per-route table (over-cap → 413, at-cap → not 413). (M118)
