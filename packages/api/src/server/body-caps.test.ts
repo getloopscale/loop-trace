@@ -122,4 +122,22 @@ describe("M118 bodyLimit 413 on advanced write routes", () => {
       expect(res.status).not.toBe(413);
     });
   }
+
+  it("test_dataset_item_at_post_parse_max_input_is_not_pre_rejected (review MEDIUM)", async () => {
+    // A synthetic dataset item is valid post-parse with `input` up to 256K chars AND `output` up to 256K
+    // chars (dataset-routes.ts MAX). The pre-parse cap MUST exceed that combined budget so a legitimate
+    // max-size item is never shed with a 413 (D1: the cap moves earlier, it never SHRINKS the accepted
+    // payload). Before the fix the 256 KiB pre-parse cap 413'd this valid body.
+    const input = "x".repeat(256 * 1024);
+    const output = "y".repeat(256 * 1024);
+    const body = JSON.stringify({ input, output });
+    expect(Buffer.byteLength(body)).toBeGreaterThan(256 * 1024); // would have 413'd on the old 256 KiB cap
+    expect(Buffer.byteLength(body)).toBeLessThan(DATASET_ITEM_MAX_BYTES); // within the corrected ceiling
+    const res = await app.request("/v1/datasets/d1/items", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+    });
+    expect(res.status).not.toBe(413); // the size guard does NOT fire (stub repo → 404, never a 413)
+  });
 });

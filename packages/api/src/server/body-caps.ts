@@ -23,8 +23,15 @@ export const REPLAY_MAX_BYTES = 256 * 1024;
 export const EXPERIMENT_MAX_BYTES = 64 * 1024;
 /** Evaluator/guard config bodies (predicate / judge prompt) — a modest 64 KiB ceiling. */
 export const EVALUATOR_MAX_BYTES = 64 * 1024;
-/** Dataset item bodies reuse the route's post-parse 256 KiB input/output cap (`dataset-routes.ts` MAX). */
-export const DATASET_ITEM_MAX_BYTES = 256 * 1024;
+/**
+ * Dataset item bodies: the route accepts a synthetic item with `input` up to 256K chars AND `output`
+ * up to 256K chars post-parse (`dataset-routes.ts` MAX). The PRE-parse byte cap must EXCEED that
+ * combined character budget so a legitimate max-size item is never shed with a 413 (D1: the cap only
+ * moves EARLIER, it never SHRINKS the accepted payload). 2×256K chars at up to 3 UTF-8 bytes/char + the
+ * JSON envelope ≈ 1.5 MiB worst case → a 2 MiB ceiling clears any post-parse-valid body while still
+ * bounding memory. (A 256 KiB pre-parse cap wrongly 413'd a 256K-char input — M118 review MEDIUM.)
+ */
+export const DATASET_ITEM_MAX_BYTES = 2 * 1024 * 1024;
 /** Dataset create/rename bodies carry only a short name (120 chars) — the modest default. */
 export const DATASET_NAME_MAX_BYTES = 64 * 1024;
 

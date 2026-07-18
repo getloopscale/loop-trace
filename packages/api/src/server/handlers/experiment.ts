@@ -19,6 +19,7 @@ import {
   experimentCompareResponseSchema,
   errorBody,
   apiError,
+  ProviderBreakerOpenError,
   type ReplayClient,
   type RateLimiter,
   type RunVariant,
@@ -139,6 +140,11 @@ export async function createExperimentRunHandler(c: Context, deps: ExperimentApi
   } catch (err) {
     // A total run failure (e.g. the store) fails closed — surface it, never a fabricated run.
     experimentRunsUnavailable.add(1);
+    // Distinguish a circuit-open outage (503 — provider down, retry later) from a per-call provider/store
+    // error (502), consistent with the copilot/replay handlers (M118 review LOW).
+    if (err instanceof ProviderBreakerOpenError) {
+      return c.json(errorBody("RUN_UNAVAILABLE", "provider circuit open — temporarily unavailable"), 503);
+    }
     return c.json(errorBody("RUN_UNAVAILABLE", String(err)), 502);
   }
 }

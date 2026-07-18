@@ -79,21 +79,46 @@ describe("M118 ProviderBreaker", () => {
     let now = 4_000_000;
     const breaker = new ProviderBreaker(CFG, () => now);
     const p = stubProvider();
-    // Fire MANY concurrent failing calls at once (Promise.all). The transition to OPEN must happen
-    // exactly once (the open-timestamp set once), and once OPEN the remaining calls fast-fail without
-    // invoking the provider — so the provider is invoked at most `failureThreshold` times, never more.
+    // Fire MANY concurrent FAILING calls at once (Promise.allSettled). The breaker OPENs on failure, so
+    // the first concurrent burst is admitted and fails (unavoidable — the breaker learns from the
+    // failures, it does not shed concurrency; that is the rate limiter's job). The invariant proven here
+    // is "OPEN transition happens EXACTLY ONCE" despite N concurrent calls racing to trip().
     const N = 20;
     const results = await Promise.allSettled(Array.from({ length: N }, () => breaker.run(p.fn)));
     expect(results.every((r) => r.status === "rejected")).toBe(true);
-    // Atomic-counter invariant: the provider saw at most the threshold count (excess calls fast-failed).
-    expect(p.calls).toBeLessThanOrEqual(CFG.failureThreshold);
-    // The breaker records exactly one OPEN transition.
-    expect(breaker.openTransitions).toBe(1);
+    expect(breaker.openTransitions).toBe(1); // exactly one CLOSED→OPEN transition
+    // Now OPEN: a subsequent call fast-fails WITHOUT invoking the provider.
+    const callsAfterBurst = p.calls;
+    await expect(breaker.run(p.fn)).rejects.toBeInstanceOf(ProviderBreakerOpenError);
+    expect(p.calls).toBe(callsAfterBurst); // provider not called while OPEN
     // Under concurrent probes after cooldown, at most ONE probe is admitted.
     now += CFG.cooldownMs + 1;
     const probeCallsBefore = p.calls;
     await Promise.allSettled(Array.from({ length: N }, () => breaker.run(p.fn)));
     expect(p.calls - probeCallsBefore).toBeLessThanOrEqual(1);
+  });
+
+  it("test_breaker_stays_closed_under_concurrent_healthy_but_slow_calls", async () => {
+    // REGRESSION GUARD (M118 review HIGH): a burst of concurrent HEALTHY-but-slow calls must NOT trip
+    // the breaker. The breaker opens on FAILURE only — bounding concurrency is the rate limiter's job.
+    // The former `failures + inFlight >= threshold` admission budget wrongly OPENed here with ZERO
+    // errors, fast-failing every tenant with a 503 under normal load. This test fails on that design.
+    const now = 5_000_000;
+    const breaker = new ProviderBreaker(CFG, () => now);
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const slowOk = async (): Promise<string> => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight -= 1;
+      return "ok";
+    };
+    const N = 20;
+    const results = await Promise.allSettled(Array.from({ length: N }, () => breaker.run(slowOk)));
+    expect(results.every((r) => r.status === "fulfilled")).toBe(true); // ALL succeed — none shed
+    expect(maxInFlight).toBeGreaterThan(CFG.failureThreshold); // genuinely concurrent past the threshold
+    expect(breaker.openTransitions).toBe(0); // never tripped — zero failures
   });
 
   it("default_config_is_present_and_sane", () => {
