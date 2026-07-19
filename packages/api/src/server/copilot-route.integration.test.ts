@@ -1,12 +1,14 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   RateLimiter,
-  ChatError,
-  type ChatClient,
-  type ChatMessage,
   type Principal,
   type AuthVerifier,
 } from "@usetheo/lens-core";
+import {
+  ChatError,
+  type ChatClient,
+  type ChatMessage,
+} from "@usetheo/lens-core/provider";
 import { createSpanRepository, migrateLatest } from "@usetheo/lens-core/infra";
 import type pg from "pg";
 

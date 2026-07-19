@@ -4,11 +4,11 @@ import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import type pg from "pg";
 
-import { createPool, DrizzleSpanRepository } from "./drizzle-span-repository.js";
+import { createPool, DrizzleSpanRepository } from "../observability/drizzle-span-repository.js";
 import { DrizzleEvaluatorRepository } from "./drizzle-evaluator-repository.js";
-import { runEvaluator, runSweep, type EngineDeps } from "../../domain/evaluation/evaluator-engine.js";
-import { evaluatorSchema } from "../../domain/evaluation/evaluator.js";
-import type { Span } from "../../domain/observability/span.js";
+import { runEvaluator, runSweep, type EngineDeps } from "../../../domain/evaluation/evaluator-engine.js";
+import { evaluatorSchema } from "../../../domain/evaluation/evaluator.js";
+import type { Span } from "../../../domain/observability/span.js";
 
 const PG_URI = process.env["THEOLENS_PG_URI"];
 const MIGRATIONS = fileURLToPath(new URL("./migrations", import.meta.url));

@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { MAPPER_VECTORS, flattenOtlp } from "@usetheo/lens-core";
+// M128 — the shared drift-guard fixture is now behind the dedicated `@usetheo/lens-core/testing` subpath
+// (it was moved off the production root barrel; the prod API no longer ships test-only exports).
+import { MAPPER_VECTORS, flattenOtlp } from "@usetheo/lens-core/testing";
 import { sdkMessagesToOtlp } from "./theokit.js";
 
 /**

@@ -9,7 +9,8 @@
 import type { Hono } from "hono";
 
 import {
-  type SpanRepository,
+  type TraceReadRepository,
+  type AnnotationRepository,
   traceListResponseSchema,
   listTracesOptionsSchema,
   traceCostSchema,
@@ -28,7 +29,9 @@ import { bodyLimit413, DEFAULT_ADVANCED_MAX_BYTES } from "../body-caps.js"; // M
 import { tagsAdded, tagsRemoved, annotationsWritten, annotationsRemoved } from "../metrics.js";
 import { tracesToCsv } from "../csv.js";
 
-export function registerTracesRoutes(app: Hono, repo: SpanRepository): void {
+// M130 (ISP) — narrowed from the composite `SpanRepository` to the exact roles used:
+// trace-read (list/getBySpanId/cost/tree) + annotations (tags + human annotations).
+export function registerTracesRoutes(app: Hono, repo: TraceReadRepository & AnnotationRepository): void {
   app.get("/v1/traces", requireScopeOnPrincipal("observability:read"), async (c) => {
     // M9: whitelisted filter/sort/export. Validate query params at the boundary
     // (fail-fast 400, Rule 8) — a fixed enum whitelist, NOT a DSL (D1).

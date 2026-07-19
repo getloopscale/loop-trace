@@ -13,6 +13,22 @@
     "./infra": {
       "types": "./dist/infrastructure/db/index.d.ts",
       "default": "./dist/infrastructure/db/index.js"
+    },
+    "./testing": {
+      "types": "./dist/domain/theokit/theokit-vectors.d.ts",
+      "default": "./dist/domain/theokit/theokit-vectors.js"
+    },
+    "./observability": {
+      "types": "./dist/domain/observability/index.d.ts",
+      "default": "./dist/domain/observability/index.js"
+    },
+    "./evaluation": {
+      "types": "./dist/domain/evaluation/index.d.ts",
+      "default": "./dist/domain/evaluation/index.js"
+    },
+    "./provider": {
+      "types": "./dist/domain/provider/index.d.ts",
+      "default": "./dist/domain/provider/index.js"
     }
   },
   "engines": {

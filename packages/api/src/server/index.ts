@@ -4,7 +4,6 @@ import { serve } from "@hono/node-server";
 import type { Hono } from "hono";
 import {
   parseRetentionConfig,
-  createProviderClients,
   parseJudgeConfig,
   parseBackfillMax,
   parseEvalSweepHours,
@@ -20,6 +19,7 @@ import {
   DEFAULT_WORKSPACE_ID,
   type EngineDeps,
 } from "@usetheo/lens-core";
+import { createProviderClients } from "@usetheo/lens-core/provider";
 import {
   createSpanRepository,
   migrateLatest,

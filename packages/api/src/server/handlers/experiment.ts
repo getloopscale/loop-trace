@@ -19,13 +19,15 @@ import {
   experimentCompareResponseSchema,
   errorBody,
   apiError,
-  ProviderBreakerOpenError,
-  type ReplayClient,
   type RateLimiter,
   type RunVariant,
   type SpanRepository,
   type EvaluatorRepository,
 } from "@usetheo/lens-core";
+import {
+  ProviderBreakerOpenError,
+  type ReplayClient,
+} from "@usetheo/lens-core/provider";
 
 import { getPrincipal } from "../auth/middleware.js";
 import { experimentRunsStarted, experimentRowsScored, experimentRunsUnavailable } from "../metrics.js";

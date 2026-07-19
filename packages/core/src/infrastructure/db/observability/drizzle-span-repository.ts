@@ -3,52 +3,52 @@ import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
 
-import type { Span } from "../../domain/observability/span.js";
-import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
+import type { Span } from "../../../domain/observability/span.js";
+import { DEFAULT_WORKSPACE_ID } from "../../../domain/principal.js";
 import * as traceReadRepo from "./trace-read-repository.js";
 import * as aggregateRepo from "./aggregate-repository.js";
 import * as annotationRepo from "./annotation-repository.js";
-import * as retentionRepo from "./retention-repository.js";
+import * as retentionRepo from "../retention-repository.js";
 import * as sessionRepo from "./session-repository.js";
-import * as copilotFeedbackRepo from "./copilot-feedback-repository.js";
-import * as experimentRepo from "./experiment-repository.js";
-import * as datasetRepo from "./dataset-repository.js";
-import * as labelingRepo from "./labeling-queue-repository.js";
-import type { AskFeedbackInput, CopilotFeedbackRecord } from "../../domain/evaluation/copilot-feedback.js";
+import * as copilotFeedbackRepo from "../evaluation/copilot-feedback-repository.js";
+import * as experimentRepo from "../evaluation/experiment-repository.js";
+import * as datasetRepo from "../evaluation/dataset-repository.js";
+import * as labelingRepo from "../evaluation/labeling-queue-repository.js";
+import type { AskFeedbackInput, CopilotFeedbackRecord } from "../../../domain/evaluation/copilot-feedback.js";
 import type {
   SpanRepository,
-  TraceTreeNode } from "../../domain/observability/span-repository.js";
+  TraceTreeNode } from "../../../domain/observability/span-repository.js";
 import type {
   ListTracesOptions,
-  TraceListResponse } from "../../domain/observability/trace-list.js";
+  TraceListResponse } from "../../../domain/observability/trace-list.js";
 import type {
   LabelingQueueItem,
   LabelingQueuePage,
   LabelingQueueStatus,
-  NormalizedResolution } from "../../domain/evaluation/labeling-queue.js";
-import type { ExperimentRun } from "../../domain/evaluation/experiment.js";
-import {  type PriceTable } from "../../domain/observability/pricing.js";
-import { DEFAULT_PRICES } from "../../domain/observability/default-prices.js";
+  NormalizedResolution } from "../../../domain/evaluation/labeling-queue.js";
+import type { ExperimentRun } from "../../../domain/evaluation/experiment.js";
+import {  type PriceTable } from "../../../domain/observability/pricing.js";
+import { DEFAULT_PRICES } from "../../../domain/observability/default-prices.js";
 import type {
   CostByPeriodResponse,
   CostPeriod,
-  TraceCost } from "../../domain/observability/cost.js";
-import {   type ToolStatsResponse } from "../../domain/observability/tool-stats.js";
-import { parsePoolConfig, type PoolConfig } from "../../domain/evaluation/evaluator-config.js";
+  TraceCost } from "../../../domain/observability/cost.js";
+import {   type ToolStatsResponse } from "../../../domain/observability/tool-stats.js";
+import { parsePoolConfig, type PoolConfig } from "../../../domain/evaluation/evaluator-config.js";
 import {
-      type NorthStarResponse } from "../../domain/observability/north-star.js";
+      type NorthStarResponse } from "../../../domain/observability/north-star.js";
 import {
       type ObservabilityRange,
-  type ObservabilityResponse } from "../../domain/observability/observability.js";
+  type ObservabilityResponse } from "../../../domain/observability/observability.js";
 import {
     type SessionListResponse,
-  type SessionDetailResponse } from "../../domain/observability/session.js";
-import type { PruneStats } from "../../domain/observability/retention.js";
-import type { EvaluatorSummary, ScoreBucket } from "../../domain/evaluation/evaluation.js";
-import type { SpanAttributeKey, SpanAttributeValue } from "../../domain/observability/span-facets.js";
-import type { Annotation, NormalizedAnnotation } from "../../domain/observability/annotation.js";
-import type { Dataset, DatasetDetail } from "../../domain/evaluation/dataset.js";
-import {  type Agent } from "../../domain/observability/agent-catalog.js";
+  type SessionDetailResponse } from "../../../domain/observability/session.js";
+import type { PruneStats } from "../../../domain/observability/retention.js";
+import type { EvaluatorSummary, ScoreBucket } from "../../../domain/evaluation/evaluation.js";
+import type { SpanAttributeKey, SpanAttributeValue } from "../../../domain/observability/span-facets.js";
+import type { Annotation, NormalizedAnnotation } from "../../../domain/observability/annotation.js";
+import type { Dataset, DatasetDetail } from "../../../domain/evaluation/dataset.js";
+import {  type Agent } from "../../../domain/observability/agent-catalog.js";
 
 /** Build a pg connection pool for the given Postgres URI. M94: the pool carries resilience config
  *  (max + connect/idle/statement/query timeouts) so a stuck query self-aborts and frees its

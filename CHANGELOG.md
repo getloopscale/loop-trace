@@ -19,6 +19,24 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [0.52.0] - 2026-07-19
+
+### Added
+- Roadmap: added phase v18 (`ROADMAP-sota-experience-v18.md`) — architecture-audit remediation (M126–M130), the five actionable, behavior-preserving fixes from the 2026-07-19 `/loop-codebase-architect` audit (verdict 82.8/100 "Refactor Lightly"): M126 deterministic OpenAPI path+method sort (closes #59, snapshot regen baked in), M127 split `infrastructure/db/` by-feature to mirror the domain (closes the 2/5 cohesion dent, pure `git mv`), M128 `@usetheo/lens-core/testing` subpath (stop shipping test fixtures in the prod barrel), M129 domain sub-path barrels to shrink the ~151-export core god-hub (madge-guarded), M130 adopt the M97 ISP role interfaces in the route registrars (one-line param narrowing). All `behavior_change: none`; the 6th finding (light `domain/evaluation/` subgrouping) is deferred under YAGNI. (`/roadmap-feature`)
+
+
+### Changed
+- The 6 route registrars now type their repository parameter as the narrow ISP role interface they actually use (`registerSessionsRoutes` → `SessionRepository`, `registerDatasetRoutes` → `DatasetRepository`, `registerLabelingQueueRoutes` → `LabelingQueueRepository`, `registerMetricsRoutes` → `AggregateRepository`, `registerAnalyticsRoutes` → `TraceReadRepository & AggregateRepository`, `registerTracesRoutes` → `TraceReadRepository & AnnotationRepository`) instead of the 43-method composite `SpanRepository` — adopting the role interfaces authored in M97. Pure type narrowing, zero runtime change (the composition root still injects the concrete repo, which satisfies every role); `tsc` is the exhaustive proof. Realizes the ISP mockability benefit — a registrar can now be unit-tested with a mock that implements only its role's methods (demonstrated by the new `sessions-routes.test.ts`). (M130)
+- `@usetheo/lens-core` now exposes three domain sub-path barrels — `@usetheo/lens-core/observability`, `/evaluation`, `/provider` — so consumers can import a narrow domain surface instead of the whole root barrel. The `provider` domain is fully migrated off the root barrel (its 10 value exports — `ChatError`, `openaiChatCompletion(WithUsage)`, `OpenAICompatibleChat/Replay`, `ProviderBreaker(OpenError)`, `DEFAULT_PROVIDER_BREAKER`, `createProviderClients`, `positiveIntEnv` — now come from `/provider`; root barrel 158→148 runtime exports); observability/evaluation subpaths are additive (importers migrate incrementally). Behavior-preserving — identical symbols, only import paths change; madge stays 0 (the M120 severance did not reopen). (M129)
+- The shared SDKMessage→OTLP mapper drift-guard fixture (`MAPPER_VECTORS` / `flattenOtlp` / `MAPPER_VECTOR_T0` + its types) no longer ships on the `@usetheo/lens-core` production root barrel — it moved to a dedicated `@usetheo/lens-core/testing` subpath export, so the prod public API stops carrying test-only symbols (root barrel: 161→158 runtime exports). The SDK mapper-drift test imports it from `@usetheo/lens-core/testing`; core's own tests import it directly. Behavior-preserving — no prod code consumed these symbols. (M128)
+- `packages/core/src/infrastructure/db/` split by-feature into `db/observability/` (span/trace/session/aggregate/annotation repos) and `db/evaluation/` (evaluator/experiment/dataset/labeling-queue/copilot-feedback repos), mirroring the by-feature domain layout; the db-root kernel (`schema.ts`/`repo-shared.ts`/`uuid.ts`/`retention-repository.ts`/`index.ts`/`migrations/`) and co-located integration tests move with their repo. Pure `git mv` + relative-import rewire — file contents byte-identical (127/127 balanced import-only lines), the `@usetheo/lens-core/infra` public surface unchanged, madge 0 cycles. (M127)
+- OpenAPI document now emits `paths` and each path's method map in deterministic (sorted) order, so the generated `openapi.snapshot.json` / SDK types byte-order no longer tracks route-registration order — a route reorder can never again silently force a snapshot regeneration (closes the #59 regenerate-or-drift trap). Behavior-preserving: the served API is matched by Hono independently of the document; the regenerated snapshot is a pure reorder (same 28 paths, identical content). (M126)
+
+
+
+### Fixed
+- The `provider-config` structural gate (`test_provider_config_has_no_import_cycle`, which shells out to `madge` to assert the core graph stays acyclic) no longer flakes with a 5000ms timeout under parallel `pnpm -r test` load — madge cold-parses ~146 files in ~7-9s, so the test is given a 30s budget. The guarded invariant (0 cycles) was always satisfied; only the test timed out. (#63)
+
 ## [0.51.0] - 2026-07-19
 
 ### Added

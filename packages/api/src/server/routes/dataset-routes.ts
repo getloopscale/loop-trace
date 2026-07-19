@@ -6,7 +6,7 @@
 import type { Hono } from "hono";
 
 import {
-  type SpanRepository,
+  type DatasetRepository,
   datasetsResponseSchema,
   datasetSchema,
   datasetDetailSchema,
@@ -25,7 +25,8 @@ import {
 } from "../metrics.js";
 import { bodyLimit413, DATASET_ITEM_MAX_BYTES, DATASET_NAME_MAX_BYTES } from "../body-caps.js"; // M118 (D1)
 
-export function registerDatasetRoutes(app: Hono, repo: SpanRepository): void {
+// M130 (ISP) — narrowed from the composite `SpanRepository` to the single role used: datasets.
+export function registerDatasetRoutes(app: Hono, repo: DatasetRepository): void {
   app.get("/v1/datasets", requireScopeOnPrincipal("observability:read"), async (c) => {
     // M26d: all datasets with their item counts, newest-first.
     const datasets = await repo.listDatasets(getPrincipal(c).workspaceId);

@@ -11,10 +11,10 @@ export {
   createPool,
   createSpanRepository,
   migrateLatest,
-} from "./drizzle-span-repository.js";
+} from "./observability/drizzle-span-repository.js";
 export {
   DrizzleEvaluatorRepository,
   createEvaluatorRepository,
   evaluatorRepoFromPool,
-} from "./drizzle-evaluator-repository.js";
+} from "./evaluation/drizzle-evaluator-repository.js";
 export { spans, traces, sessions, replaySessions, evaluators, guards } from "./schema.js";

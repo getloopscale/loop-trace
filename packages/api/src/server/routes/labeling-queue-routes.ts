@@ -7,7 +7,7 @@
 import type { Hono } from "hono";
 
 import {
-  type SpanRepository,
+  type LabelingQueueRepository,
   labelingQueueItemSchema,
   labelingQueuePageSchema,
   normalizeLabelResolution,
@@ -21,7 +21,8 @@ import { bodyLimit413, DEFAULT_ADVANCED_MAX_BYTES } from "../body-caps.js"; // M
 
 const EXPORT_NAME_MAX = 120;
 
-export function registerLabelingQueueRoutes(app: Hono, repo: SpanRepository): void {
+// M130 (ISP) — narrowed from the composite `SpanRepository` to the single role used: labeling queue.
+export function registerLabelingQueueRoutes(app: Hono, repo: LabelingQueueRepository): void {
   app.get("/v1/labeling-queue", requireScopeOnPrincipal("observability:read"), async (c) => {
     // Server-paginated, optionally status-filtered. Params whitelisted; always workspace-scoped.
     const statusRaw = c.req.query("status");

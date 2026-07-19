@@ -7,7 +7,8 @@
 import type { Hono } from "hono";
 
 import {
-  type SpanRepository,
+  type TraceReadRepository,
+  type AggregateRepository,
   agentCatalogResponseSchema,
   toolStatsResponseSchema,
   traceListResponseSchema,
@@ -17,7 +18,9 @@ import {
 
 import { getPrincipal, requireScopeOnPrincipal } from "../auth/middleware.js";
 
-export function registerAnalyticsRoutes(app: Hono, repo: SpanRepository): void {
+// M130 (ISP) — narrowed from the composite `SpanRepository` to the exact roles used:
+// trace-read (listTracesForTool) + aggregates (agents/tool-stats/cost).
+export function registerAnalyticsRoutes(app: Hono, repo: TraceReadRepository & AggregateRepository): void {
   app.get("/v1/agents", requireScopeOnPrincipal("observability:read"), async (c) => {
     // M32: the agents catalog (derived from `agent.*` span attributes), with health.
     const agents = await repo.aggregateAgents(getPrincipal(c).workspaceId);

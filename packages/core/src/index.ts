@@ -92,19 +92,10 @@ export {
   type Verdict,
   type RunResult,
 } from "./domain/evaluation/evaluator.js";
-export {
-  ChatError,
-  openaiChatCompletion,
-  openaiChatCompletionWithUsage,
-  OpenAICompatibleChat,
-  OpenAICompatibleReplay,
-  type ChatClient,
-  type ChatCompletionWithUsage,
-  type ChatConfig,
-  type ChatMessage,
-  type ReplayClient,
-  type ReplayResult,
-} from "./domain/provider/chat.js";
+// M129: the `provider` domain (chat, breaker, env, client factory) is NO LONGER on the root barrel.
+// It moved behind the `@usetheo/lens-core/provider` subpath (packages/core/src/domain/provider/index.ts)
+// to shrink the root god-barrel; composition roots + handlers import provider symbols from there.
+// Guarded by barrel-public-surface.test.ts.
 export {
   buildCopilotPrompt,
   validateQuestion,
@@ -113,13 +104,8 @@ export {
   MAX_ANSWER_BYTES,
 } from "./domain/evaluation/copilot.js";
 export { RateLimiter } from "./domain/rate-limiter.js";
-// M118 (D2) — provider circuit breaker (hand-rolled closed/open/half-open, fast-fail 503 when OPEN).
-export {
-  ProviderBreaker,
-  ProviderBreakerOpenError,
-  type ProviderBreakerConfig,
-  DEFAULT_PROVIDER_BREAKER,
-} from "./domain/provider/provider-breaker.js";
+// M118 (D2) — provider circuit breaker (ProviderBreaker/ProviderBreakerOpenError/DEFAULT_PROVIDER_BREAKER)
+// moved to the `@usetheo/lens-core/provider` subpath in M129 (see the note above).
 // M118 (D4) — zod-at-the-boundary response schemas for the advanced write routes (server-side single
 // source of truth; lifted from the M117 SDK hand-types, wire shape unchanged).
 export {
@@ -169,11 +155,8 @@ export {
   DEFAULT_SHUTDOWN_DRAIN_MS,
   DEFAULT_PROVIDER_RETRY,
 } from "./domain/evaluation/evaluator-config.js";
-export { positiveIntEnv } from "./domain/provider/env.js";
-export {
-  createProviderClients,
-  type ProviderClients,
-} from "./domain/provider/provider-clients.js";
+// M129: positiveIntEnv (env leaf) + createProviderClients/ProviderClients (client factory) moved to the
+// `@usetheo/lens-core/provider` subpath (see the note above).
 export {
   runEvaluator,
   runSweep,
@@ -338,7 +321,8 @@ export {
 export { sdkMessagesToOtlp, THEOKIT_SERVICE_NAME } from "./domain/theokit/sdk-messages-to-otlp.js";
 export type { OtlpTraces } from "./domain/theokit/sdk-messages-to-otlp.js";
 export type { SDKMessage, RunResult as TheokitRunResult } from "./domain/theokit/sdk-message.js";
-// M119 (D1) — the shared SDKMessage→OTLP mapper drift-guard fixture (TEST support): the 18 documented
-// behaviors imported by BOTH mapper test files (the SDK test resolves this via @usetheo/lens-core).
-export { MAPPER_VECTORS, flattenOtlp, T0 as MAPPER_VECTOR_T0 } from "./domain/theokit/theokit-vectors.js";
-export type { MapperVector, SdkMapper, OtlpTracesLike } from "./domain/theokit/theokit-vectors.js";
+// M128 — the shared SDKMessage→OTLP mapper drift-guard fixture (MAPPER_VECTORS/flattenOtlp/… — TEST support)
+// is NO LONGER on the production root barrel. It now lives behind the dedicated `@usetheo/lens-core/testing`
+// subpath (see package.json `exports`), so the prod public API stops carrying test-only exports. The SDK
+// mapper-drift test imports it from `@usetheo/lens-core/testing`; core's own tests import it directly from
+// `./domain/theokit/theokit-vectors.js`.

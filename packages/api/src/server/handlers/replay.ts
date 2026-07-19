@@ -11,16 +11,18 @@
 import type { Context } from "hono";
 
 import {
-  ChatError,
   replayResponseSchema,
-  ProviderBreakerOpenError,
   errorBody,
   apiError,
-  type ChatMessage,
   type RateLimiter,
-  type ReplayClient,
   type SpanRepository,
 } from "@usetheo/lens-core";
+import {
+  ChatError,
+  ProviderBreakerOpenError,
+  type ChatMessage,
+  type ReplayClient,
+} from "@usetheo/lens-core/provider";
 
 import { getPrincipal } from "../auth/middleware.js";
 import { replayRuns, replayRateLimited, replayUnavailable } from "../metrics.js";
