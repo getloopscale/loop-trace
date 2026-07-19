@@ -1,0 +1,43 @@
+name: sdk-go
+
+# Scoped to the stdlib-only Go ingest client (M125) so the Go toolchain never runs on the
+# TS-only rest of the pnpm monorepo. This is the first workflow in the repo.
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - "packages/sdk-go/**"
+      - ".github/workflows/sdk-go.yml"
+  pull_request:
+    paths:
+      - "packages/sdk-go/**"
+      - ".github/workflows/sdk-go.yml"
+
+jobs:
+  build-test-lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/sdk-go
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.1
+          working-directory: packages/sdk-go
+
+      - name: Test (race)
+        run: go test -race ./...
