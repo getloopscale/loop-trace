@@ -10,10 +10,15 @@ import { fileURLToPath } from "node:url";
 export default defineConfig({
   resolve: {
     alias: {
-      // M122: specific-before-base — the subpath alias MUST precede the bare
-      // `@usetheo/lens-core` alias so vite's prefix matcher routes /infra correctly.
+      // M122/M128: specific-before-base — subpath aliases MUST precede the bare
+      // `@usetheo/lens-core` alias so vite's prefix matcher routes /infra + /testing correctly.
       "@usetheo/lens-core/infra": fileURLToPath(
         new URL("./packages/core/src/infrastructure/db/index.ts", import.meta.url),
+      ),
+      // M128 — the shared drift-guard fixture moved off the prod root barrel to the
+      // `@usetheo/lens-core/testing` subpath; the SDK mapper-drift test resolves it here.
+      "@usetheo/lens-core/testing": fileURLToPath(
+        new URL("./packages/core/src/domain/theokit/theokit-vectors.ts", import.meta.url),
       ),
       "@usetheo/lens-core": fileURLToPath(
         new URL("./packages/core/src/index.ts", import.meta.url),

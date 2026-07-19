@@ -13,6 +13,10 @@
     "./infra": {
       "types": "./dist/infrastructure/db/index.d.ts",
       "default": "./dist/infrastructure/db/index.js"
+    },
+    "./testing": {
+      "types": "./dist/domain/theokit/theokit-vectors.d.ts",
+      "default": "./dist/domain/theokit/theokit-vectors.js"
     }
   },
   "engines": {

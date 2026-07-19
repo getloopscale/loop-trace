@@ -6,7 +6,9 @@ import * as rootBarrel from "./index.js";
  * M123 findability regroup guard: the `@usetheo/lens-core` root barrel public
  * surface MUST stay byte-identical across the domain feature-subdir move. Only
  * the barrel's internal relative paths changed; every exported NAME is frozen
- * here (161 names, captured pre-move). A rename that drifts an export name fails.
+ * here (158 names — M128 moved 3 test-support values, MAPPER_VECTORS/MAPPER_VECTOR_T0/
+ * flattenOtlp, off the prod barrel to the `@usetheo/lens-core/testing` subpath). A
+ * rename that drifts an export name fails.
  */
 const EXPECTED_PUBLIC_SURFACE = [
   "AGENT_CHURN_THRESHOLD",
@@ -37,8 +39,8 @@ const EXPECTED_PUBLIC_SURFACE = [
   "JudgeError",
   "LABELING_QUEUE_STATUSES",
   "LIST_TRACES_LIMIT_CAP",
-  "MAPPER_VECTORS",
-  "MAPPER_VECTOR_T0",
+  // M128 — MAPPER_VECTORS / MAPPER_VECTOR_T0 / flattenOtlp moved OFF the prod root barrel to the
+  // `@usetheo/lens-core/testing` subpath (test-support fixture no longer ships on the public API).
   "MAX_ANSWER_BYTES",
   "MAX_RUN_ITEMS",
   "NameConflictError",
@@ -91,7 +93,6 @@ const EXPECTED_PUBLIC_SURFACE = [
   "extractEvaluations",
   "extractGenAi",
   "extractSpanEvents",
-  "flattenOtlp",
   "guardRecordSchema",
   "guardSchema",
   "guardsListResponseSchema",

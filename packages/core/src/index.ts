@@ -338,7 +338,8 @@ export {
 export { sdkMessagesToOtlp, THEOKIT_SERVICE_NAME } from "./domain/theokit/sdk-messages-to-otlp.js";
 export type { OtlpTraces } from "./domain/theokit/sdk-messages-to-otlp.js";
 export type { SDKMessage, RunResult as TheokitRunResult } from "./domain/theokit/sdk-message.js";
-// M119 (D1) — the shared SDKMessage→OTLP mapper drift-guard fixture (TEST support): the 18 documented
-// behaviors imported by BOTH mapper test files (the SDK test resolves this via @usetheo/lens-core).
-export { MAPPER_VECTORS, flattenOtlp, T0 as MAPPER_VECTOR_T0 } from "./domain/theokit/theokit-vectors.js";
-export type { MapperVector, SdkMapper, OtlpTracesLike } from "./domain/theokit/theokit-vectors.js";
+// M128 — the shared SDKMessage→OTLP mapper drift-guard fixture (MAPPER_VECTORS/flattenOtlp/… — TEST support)
+// is NO LONGER on the production root barrel. It now lives behind the dedicated `@usetheo/lens-core/testing`
+// subpath (see package.json `exports`), so the prod public API stops carrying test-only exports. The SDK
+// mapper-drift test imports it from `@usetheo/lens-core/testing`; core's own tests import it directly from
+// `./domain/theokit/theokit-vectors.js`.
