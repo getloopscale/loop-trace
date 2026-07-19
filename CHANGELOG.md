@@ -8,7 +8,22 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.50.0] - 2026-07-18
+
+### Added
 - Roadmap: added phase v16 (`ROADMAP-sota-experience-v16.md`) — raise the architecture score from the `/loop-codebase-architect` audit's 74/100 ("Refactor Lightly") toward ~95 by executing the audit's own behavior-preserving Phase-5 remediation: M120 (sever the core `chat→evaluator-config→llm-judge` runtime circular dependency [#58] + extract the provider-client factory), M121 (complete the `app.ts` Front-Controller extraction, 705→<500 LoC + split `register-extra-routes`), M122 (move Drizzle concretes behind a `@usetheo/lens-core/infra` subpath — clean public boundary), M123 (by-feature grouping of the two flat dirs + naming cleanups). No behavior change — quality/maintainability work measured by the architecture score, `madge` cycle count, and `app.ts` LoC. (`/roadmap-feature`)
+
 
 ### Changed
 - Engine: the fail-closed provider-client construction (`judgeConfig ? new OpenAICompatible* : null` for judge/chat/replay) is centralized in one core factory, `createProviderClients(judgeConfig)` (`packages/core/src/domain/provider-clients.ts`), replacing the three verbatim repetitions in the api `bootstrap()` (a Rule-of-3 hit). Behavior-preserving: an unconfigured provider still yields a `null` client so every provider route 503s rather than fabricating an answer; the factory lives in the domain (DIP — the composition root only wires it). Proven by fail-closed (null→null) + configured (three instances) unit tests. (M120, #58)
@@ -17,14 +32,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - Dev/build: regenerated the SDK OpenAPI snapshot + generated types (`packages/sdk/openapi.snapshot.json`, `src/__generated__/openapi.ts`) to re-sync their byte-order after the M121 route-registration reorder — **content-identical** (the order-insensitive `openapi-snapshot.test.ts` stayed green; sorted JSON is byte-equal), no schema/path/shape change; `verify-types` clean again. (M121/M122, #59)
 - Engine/Web: **findability regroup** of the two flat directories the architecture audit flagged. `packages/core/src/domain` (43 files) is now grouped by feature into `observability/` (span model + repository port, sessions, tags, annotations, retention, north-star, tool/agent stats, genai, pricing/prices/cost — 18), `evaluation/` (evaluators + engines, experiments, labeling, llm-judge, datasets, copilot, advanced-responses — 13) and `provider/` (chat, breaker, config, clients, env — 5), each with a feature-subdir barrel; the 7 cross-cutting leaves (api-error, error-envelope, errors, principal, sql-rows, attr-coerce, rate-limiter) plus `theokit/` and `adapters/` stay at the domain root. `packages/web/src/components` (37 files) is grouped into `trace/`, `filters/`, `charts/`, `annotations/`, `primitives/`, and the 2 kebab-case outliers were renamed to PascalCase (`kind-badge.tsx`→`primitives/KindBadge.tsx`, `states.tsx`→`primitives/States.tsx`). `behavior_change: none` — a pure `git mv` + import-path rewrite (intra-domain, the core root barrel, deep `infrastructure/` imports, and every web route/component/vi.mock importer); the `@usetheo/lens-core` public barrel surface is **byte-identical** (161 exports, frozen by `barrel-public-surface.test.ts`). Proven by the core (328) + api (466) + sdk (153, `verify-types` clean) + web (311) suites and the integration suite all green, with `madge --circular` reporting 0 cycles on both `core/src` and `web/src`. (#M123)
 
-### Deprecated
-
-### Removed
 
 ### Fixed
 - Engine: severed the `@usetheo/lens-core` runtime **circular dependency** `chat → evaluator-config → llm-judge → chat` (`madge --circular packages/core/src` now reports **0 cycles**, was 1). The provider retry/breaker parsers moved to a new leaf `packages/core/src/domain/provider-config.ts` (imports only `env.ts` + `provider-breaker.ts`), the shared `positiveIntEnv` helper moved to a dependency-free `env.ts` leaf, `evaluator-config.ts` re-exports the moved provider symbols (zero caller churn), and `chat.ts` re-points its import at the leaf — removing the wrong-direction edge. `behavior_change: none` (a pure module move, proven by move-equivalence tests on the parsers). (M120, #58)
-
-### Security
 
 ## [0.49.1] - 2026-07-18
 
