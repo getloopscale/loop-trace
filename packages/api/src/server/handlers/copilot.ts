@@ -11,19 +11,21 @@ import {
   validateQuestion,
   capAnswer,
   CopilotError,
-  ChatError,
   normalizeAskFeedback,
   InvalidFeedbackError,
   askCopilotResponseSchema,
   copilotFeedbackRecordSchema,
-  ProviderBreakerOpenError,
   errorBody,
   apiError,
   isErrorCode,
-  type ChatClient,
   type SpanRepository,
   type RateLimiter,
 } from "@usetheo/lens-core";
+import {
+  ChatError,
+  ProviderBreakerOpenError,
+  type ChatClient,
+} from "@usetheo/lens-core/provider";
 
 import { getPrincipal } from "../auth/middleware.js";
 import {

@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   RateLimiter,
-  type ChatClient,
   type EngineDeps,
   type ExperimentRunItem,
   type SpanRepository,
 } from "@usetheo/lens-core";
+import type { ChatClient } from "@usetheo/lens-core/provider";
 import {
   createSpanRepository,
   evaluatorRepoFromPool,

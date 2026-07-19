@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { RateLimiter, ERROR_CODES, type ChatClient } from "@usetheo/lens-core";
+import { RateLimiter, ERROR_CODES } from "@usetheo/lens-core";
+import type { ChatClient } from "@usetheo/lens-core/provider";
 
 import { createApp } from "./app.js";
 import type { CopilotApiDeps } from "./handlers/copilot.js";

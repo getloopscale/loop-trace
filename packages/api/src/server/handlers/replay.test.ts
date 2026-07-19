@@ -2,13 +2,15 @@ import { describe, it, expect } from "vitest";
 import type { Context } from "hono";
 import {
   RateLimiter,
+  type SpanRepository,
+} from "@usetheo/lens-core";
+import {
   ChatError,
   ProviderBreakerOpenError,
   type ChatMessage,
   type ReplayClient,
   type ReplayResult,
-  type SpanRepository,
-} from "@usetheo/lens-core";
+} from "@usetheo/lens-core/provider";
 
 import { replayHandler, type ReplayApiDeps } from "./replay.js";
 

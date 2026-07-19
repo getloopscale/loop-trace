@@ -4,16 +4,20 @@ import * as rootBarrel from "./index.js";
 
 /**
  * M123 findability regroup guard: the `@usetheo/lens-core` root barrel public
- * surface MUST stay byte-identical across the domain feature-subdir move. Only
- * the barrel's internal relative paths changed; every exported NAME is frozen
- * here (158 names — M128 moved 3 test-support values, MAPPER_VECTORS/MAPPER_VECTOR_T0/
- * flattenOtlp, off the prod barrel to the `@usetheo/lens-core/testing` subpath). A
- * rename that drifts an export name fails.
+ * surface is frozen here; a rename that drifts an export name fails.
+ * (148 names — M128 moved 3 test-support values, MAPPER_VECTORS/MAPPER_VECTOR_T0/
+ * flattenOtlp, off the prod barrel to the `@usetheo/lens-core/testing` subpath;
+ * M129 moved the 10 provider VALUE symbols — ChatError, openaiChatCompletion,
+ * openaiChatCompletionWithUsage, OpenAICompatibleChat, OpenAICompatibleReplay,
+ * ProviderBreaker, ProviderBreakerOpenError, DEFAULT_PROVIDER_BREAKER,
+ * createProviderClients, positiveIntEnv — to the `@usetheo/lens-core/provider`
+ * subpath. The evaluation-domain provider-adjacent names, e.g. OpenAICompatibleJudge,
+ * JudgeError, CopilotError, InvalidFeedbackError, parseProviderRetry/Breaker,
+ * DEFAULT_PROVIDER_RETRY, stay on the root barrel — they are NOT in domain/provider.)
  */
 const EXPECTED_PUBLIC_SURFACE = [
   "AGENT_CHURN_THRESHOLD",
   "AGENT_STALE_DAYS",
-  "ChatError",
   "CopilotError",
   "DATASET_NAME_MAX",
   "DEFAULT_ANNOTATION_NAME",
@@ -28,7 +32,6 @@ const EXPECTED_PUBLIC_SURFACE = [
   "DEFAULT_OWNER_USER_ID",
   "DEFAULT_POOL_CONFIG",
   "DEFAULT_PRICES",
-  "DEFAULT_PROVIDER_BREAKER",
   "DEFAULT_PROVIDER_RETRY",
   "DEFAULT_SHUTDOWN_DRAIN_MS",
   "DEFAULT_WORKSPACE_ID",
@@ -44,11 +47,7 @@ const EXPECTED_PUBLIC_SURFACE = [
   "MAX_ANSWER_BYTES",
   "MAX_RUN_ITEMS",
   "NameConflictError",
-  "OpenAICompatibleChat",
   "OpenAICompatibleJudge",
-  "OpenAICompatibleReplay",
-  "ProviderBreaker",
-  "ProviderBreakerOpenError",
   "RANGE_BUCKETS",
   "RESOLUTION_SCHEMA_VERSION",
   "RUN_STATUSES",
@@ -72,7 +71,6 @@ const EXPECTED_PUBLIC_SURFACE = [
   "copilotFeedbackRecordSchema",
   "costBucketSchema",
   "costByPeriodResponseSchema",
-  "createProviderClients",
   "datasetDetailSchema",
   "datasetItemSchema",
   "datasetSchema",
@@ -115,8 +113,6 @@ const EXPECTED_PUBLIC_SURFACE = [
   "northStarResponseSchema",
   "observabilityRangeSchema",
   "observabilityResponseSchema",
-  "openaiChatCompletion",
-  "openaiChatCompletionWithUsage",
   "parseBackfillMax",
   "parseCopilotRpm",
   "parseEvalSweepHours",
@@ -134,7 +130,6 @@ const EXPECTED_PUBLIC_SURFACE = [
   "parseShutdownDrainMs",
   "parseSpanQuery",
   "percentile",
-  "positiveIntEnv",
   "replayResponseSchema",
   "resolveModelPrice",
   "roleSatisfies",

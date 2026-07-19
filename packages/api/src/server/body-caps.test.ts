@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { RateLimiter, type ChatClient, type ReplayClient, type ReplayResult, type ChatMessage } from "@usetheo/lens-core";
+import { RateLimiter } from "@usetheo/lens-core";
+import type { ChatClient, ReplayClient, ReplayResult, ChatMessage } from "@usetheo/lens-core/provider";
 
 import { createApp } from "./app.js";
 import type { EvaluatorApiDeps } from "./handlers/evaluators.js";
