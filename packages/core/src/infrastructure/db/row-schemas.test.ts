@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { rowsAs } from "../../domain/sql-rows.js";
-import { sessionAggRowSchema, sessionListRowSchema } from "./session-repository.js";
+import { sessionAggRowSchema, sessionListRowSchema } from "./observability/session-repository.js";
 import {
   agentRowSchema,
   latencyRowSchema,
   tokensByModelRowSchema,
   trafficRowSchema,
-} from "./aggregate-repository.js";
+} from "./observability/aggregate-repository.js";
 
 /**
  * M100 (B-L1) — a negative test per raw SQL→DTO row schema: a renamed/omitted SELECT alias must throw

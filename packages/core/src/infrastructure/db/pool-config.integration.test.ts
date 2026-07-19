@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from "vitest";
 import type pg from "pg";
 
-import { createPool } from "./drizzle-span-repository.js";
+import { createPool } from "./observability/drizzle-span-repository.js";
 import { DEFAULT_POOL_CONFIG } from "../../domain/evaluation/evaluator-config.js";
 
 const PG_URI = process.env["THEOLENS_PG_URI"];

@@ -6,9 +6,9 @@
 import { and, eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
-import type { AskFeedbackInput, CopilotFeedbackRecord } from "../../domain/evaluation/copilot-feedback.js";
-import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
-import { copilotFeedback } from "./schema.js";
+import type { AskFeedbackInput, CopilotFeedbackRecord } from "../../../domain/evaluation/copilot-feedback.js";
+import { DEFAULT_WORKSPACE_ID } from "../../../domain/principal.js";
+import { copilotFeedback } from "../schema.js";
 
 export async function recordAskFeedback(
   db: NodePgDatabase,

@@ -8,12 +8,12 @@ import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
-import type { Dataset, DatasetDetail } from "../../domain/evaluation/dataset.js";
-import { NameConflictError, isForeignKeyViolation, isUniqueViolation } from "../../domain/errors.js";
-import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
-import { isoTimestamp } from "../../domain/observability/session.js";
-import { datasetItems, datasets, experimentRunItems, experimentRuns, spans } from "./schema.js";
-import { isUuid } from "./uuid.js";
+import type { Dataset, DatasetDetail } from "../../../domain/evaluation/dataset.js";
+import { NameConflictError, isForeignKeyViolation, isUniqueViolation } from "../../../domain/errors.js";
+import { DEFAULT_WORKSPACE_ID } from "../../../domain/principal.js";
+import { isoTimestamp } from "../../../domain/observability/session.js";
+import { datasetItems, datasets, experimentRunItems, experimentRuns, spans } from "../schema.js";
+import { isUuid } from "../uuid.js";
 
 function datasetRow(r: { id: string; name: string; createdAt: Date; itemCount: number }): Dataset {
   return {
