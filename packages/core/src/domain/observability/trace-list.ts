@@ -14,7 +14,7 @@ export const traceListItemSchema = z
     durationMs: z.number().nonnegative().optional(),
     statusCode: z.string().optional(),
     totalTokens: z.number().int().optional(),
-    // M18 — enriched columns for the Arize-style dense table. costUsd +
+    // M18 — enriched columns for the dense executions table. costUsd +
     // endTimeUnixNano come from existing `traces` columns; model + the root span's
     // gen_ai operation/tool signals are derived from the trace's ROOT span (no
     // migration). The semantic span-kind (llm/tool/retriever/…) is derived CLIENT-SIDE
@@ -55,7 +55,7 @@ export const LIST_TRACES_LIMIT_CAP = 500;
 /**
  * Whitelisted filter/sort options for the executions list (M9 ADR D1). Fixed
  * enums validated at the route boundary — NOT a query DSL (we deliberately defer
- * a DSL; both Phoenix and Braintrust have one). `limit` is coerced (query params
+ * a full query DSL, a known pattern in the observability space). `limit` is coerced (query params
  * arrive as strings) and capped to bound the export. All optional → no opts means
  * the legacy "newest 50 by updated_at" behavior.
  */

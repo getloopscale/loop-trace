@@ -80,7 +80,7 @@ export async function save(
         sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId + ":" + traceId}))`,
       );
       // Trace-level status = 'error' if ANY span errored (error propagates from
-      // child to parent — Phoenix convention), else 'ok'. This populates the
+      // child to parent — the common error-propagation convention), else 'ok'. This populates the
       // previously-unset traces.status_code so the list can surface + filter it
       // (M9); error tokens are the same constant the UI/tool-stats use.
       const errorList = ERROR_STATUS_CODES.map((c) => `'${c}'`).join(", ");
@@ -387,7 +387,7 @@ export async function listTraces(
     .as("root");
 
   // M35: the I/O PREVIEW comes from a representative span — the root when it has
-  // I/O (demo/langfuse, unchanged), else the earliest span in the trace with a
+  // I/O (the demo fixture, unchanged), else the earliest span in the trace with a
   // non-null input/output. A Claude Code trace's root is `claude_code.llm_request`
   // (no I/O); its first `claude_code.tool` child carries the command + result.
   // Kind stays root-derived (above); only the I/O sourcing differs.

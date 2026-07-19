@@ -10,6 +10,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 ### Changed
+- Neutralized third-party vendor names in the code comments of the npm-publishable path (`@usetheo/lens-core`, `@usetheo/lens-sdk`) — prior-art study citations that named specific reference/competitor projects (langfuse/Phoenix/Arize/Braintrust, with source line numbers) are reworded to the underlying concept or open standard (OTel / OpenInference), so a future published bundle carries no vendor name. Comment-only, behavior-preserving; surfaced by the `/loop-check-licence` audit (the only flagged item — a `shipped`-surface vendor mention; all packages remain `private: true`). Legitimate Apache-2.0 provenance attributions (e.g. the laminar OTLP-proto citation in the private server) are kept.
 
 ### Deprecated
 
