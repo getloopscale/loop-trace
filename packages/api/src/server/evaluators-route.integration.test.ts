@@ -1,12 +1,14 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
-  createSpanRepository,
-  migrateLatest,
-  evaluatorRepoFromPool,
   type EngineDeps,
   type Principal,
   type AuthVerifier,
 } from "@usetheo/lens-core";
+import {
+  createSpanRepository,
+  migrateLatest,
+  evaluatorRepoFromPool,
+} from "@usetheo/lens-core/infra";
 import type pg from "pg";
 
 import { createApp } from "./app.js";

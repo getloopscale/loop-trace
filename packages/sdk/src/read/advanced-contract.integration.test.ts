@@ -1,12 +1,14 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
-  createSpanRepository,
-  evaluatorRepoFromPool,
-  migrateLatest,
   RateLimiter,
   type EngineDeps,
   type SpanRepository,
 } from "@usetheo/lens-core";
+import {
+  createSpanRepository,
+  evaluatorRepoFromPool,
+  migrateLatest,
+} from "@usetheo/lens-core/infra";
 import { createApp } from "@usetheo/lens-api";
 import type pg from "pg";
 

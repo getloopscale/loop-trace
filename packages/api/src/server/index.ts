@@ -3,10 +3,7 @@ import { pathToFileURL } from "node:url";
 import { serve } from "@hono/node-server";
 import type { Hono } from "hono";
 import {
-  createSpanRepository,
-  migrateLatest,
   parseRetentionConfig,
-  evaluatorRepoFromPool,
   createProviderClients,
   parseJudgeConfig,
   parseBackfillMax,
@@ -23,6 +20,11 @@ import {
   DEFAULT_WORKSPACE_ID,
   type EngineDeps,
 } from "@usetheo/lens-core";
+import {
+  createSpanRepository,
+  migrateLatest,
+  evaluatorRepoFromPool,
+} from "@usetheo/lens-core/infra";
 import type pg from "pg";
 
 import { createApp } from "./app.js";

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { createSpanRepository, migrateLatest, evaluatorRepoFromPool, RateLimiter } from "@usetheo/lens-core";
+import { RateLimiter } from "@usetheo/lens-core";
+import { createSpanRepository, migrateLatest, evaluatorRepoFromPool } from "@usetheo/lens-core/infra";
 import { createHash, randomBytes } from "node:crypto";
 import type pg from "pg";
 import { createApp } from "./app.js";

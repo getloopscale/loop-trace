@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { createSpanRepository, migrateLatest } from "@usetheo/lens-core";
+import { createSpanRepository, migrateLatest } from "@usetheo/lens-core/infra";
 import type pg from "pg";
 import { createApp } from "./app.js";
 import { ApiKeyAuthVerifier } from "./auth/api-key-verifier.js";

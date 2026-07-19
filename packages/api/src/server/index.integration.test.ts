@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createPool } from "@usetheo/lens-core";
+import { createPool } from "@usetheo/lens-core/infra";
 import type pg from "pg";
 
 import { bootstrap } from "./index.js";
