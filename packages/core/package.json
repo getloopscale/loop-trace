@@ -21,7 +21,8 @@
   "scripts": {
     "test": "pnpm --dir ../.. exec vitest run -c vitest.contract.config.ts packages/core/src",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "export:vectors": "tsx scripts/export-theokit-vectors.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.0",

@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "theo-lens-sdk"
+version = "0.1.0"
+description = "Thin, stdlib-only Python client that records a Claude Code / @theokit/sdk SDKMessage run to Theo Lens via the native POST /v1/runs (the engine maps it to spans — zero client-side OTLP)."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Theo" }]
+keywords = ["theo", "observability", "otel", "agents", "llm"]
+# ZERO runtime dependencies — stdlib urllib + json only (ADR D2).
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "ruff>=0.5", "mypy>=1.8"]
+
+[project.urls]
+Homepage = "https://usetheo.dev"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+theo_lens_sdk = ["py.typed"]
+
+[tool.ruff]
+line-length = 110
+src = ["src", "tests", "examples"]
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "TID", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# Inline SDKMessage JSON fixtures / example payloads read best on one line.
+"tests/**" = ["E501"]
+"examples/**" = ["E501"]
+
+[tool.mypy]
+python_version = "3.9"
+strict = true
+files = ["src", "tests", "examples"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

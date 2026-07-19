@@ -1,0 +1,13 @@
+# golangci-lint config scoped to the stdlib-only Go ingest client (M125).
+# v2 schema. The `standard` default set = errcheck, govet, ineffassign, staticcheck, unused.
+version: "2"
+
+run:
+  timeout: 3m
+
+linters:
+  default: standard
+
+formatters:
+  enable:
+    - gofmt
