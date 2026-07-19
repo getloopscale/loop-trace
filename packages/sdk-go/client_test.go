@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -34,9 +35,11 @@ func (c *capture) record(r *http.Request, body []byte) {
 
 func readBody(t *testing.T, r *http.Request) []byte {
 	t.Helper()
-	var buf [1 << 20]byte
-	n, _ := r.Body.Read(buf[:])
-	return buf[:n]
+	b, err := io.ReadAll(r.Body)
+	if err != nil {
+		t.Fatalf("reading request body: %v", err)
+	}
+	return b
 }
 
 func sampleRun() ([]SDKMessage, *RunResult) {
