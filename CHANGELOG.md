@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Roadmap: added phase v18 (`ROADMAP-sota-experience-v18.md`) — architecture-audit remediation (M126–M130), the five actionable, behavior-preserving fixes from the 2026-07-19 `/loop-codebase-architect` audit (verdict 82.8/100 "Refactor Lightly"): M126 deterministic OpenAPI path+method sort (closes #59, snapshot regen baked in), M127 split `infrastructure/db/` by-feature to mirror the domain (closes the 2/5 cohesion dent, pure `git mv`), M128 `@usetheo/lens-core/testing` subpath (stop shipping test fixtures in the prod barrel), M129 domain sub-path barrels to shrink the ~151-export core god-hub (madge-guarded), M130 adopt the M97 ISP role interfaces in the route registrars (one-line param narrowing). All `behavior_change: none`; the 6th finding (light `domain/evaluation/` subgrouping) is deferred under YAGNI. (`/roadmap-feature`)
 
 ### Changed
 
