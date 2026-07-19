@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Roadmap: added phase v17 (`ROADMAP-sota-experience-v17.md`) — Python + Go SDK ingest clients (revisits the v14–v16 out-of-scope carve-out): M124 (`packages/sdk-py` — a thin Python client that POSTs a Claude Code / `@theokit/sdk` `SDKMessage` run as `{messages, result}` to the native `POST /v1/runs`, engine maps it, zero client-side OTLP) + M125 (`packages/sdk-go` — the Go sibling via stdlib `net/http`). Locked decisions: native `/v1/runs` endpoint (thin clients, no OTLP encoding); packages live inside theo-lens; the M119 `theokit-vectors.ts` fixture is exported once as a language-neutral `theokit-vectors.json` cross-language contract (one behavior spec, three languages). Ingest-only (no read client); adds pip + go toolchains to the lens CI. (`/roadmap-feature`)
 
 ### Changed
 
