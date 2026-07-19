@@ -185,11 +185,6 @@ export type {
   EvaluatorRecord,
   GuardRecord,
 } from "./domain/evaluator-repository.js";
-export {
-  DrizzleEvaluatorRepository,
-  createEvaluatorRepository,
-  evaluatorRepoFromPool,
-} from "./infrastructure/db/drizzle-evaluator-repository.js";
 // M26b: human-feedback annotations (write-path).
 export {
   normalizeAnnotation,
@@ -333,13 +328,11 @@ export {
   type RetentionConfig,
   parseRetentionConfig,
 } from "./domain/retention.js";
-export { spans, traces, sessions, replaySessions, evaluators, guards } from "./infrastructure/db/schema.js";
-export {
-  DrizzleSpanRepository,
-  createPool,
-  createSpanRepository,
-  migrateLatest,
-} from "./infrastructure/db/drizzle-span-repository.js";
+// M122: the infra concretes (Drizzle repos + raw table schemas) are NOT part of the
+// domain public API — they live behind the @usetheo/lens-core/infra subpath
+// (packages/core/src/infrastructure/db/index.ts). Composition roots import them from
+// there; the root barrel exposes domain ports/types/DTOs only. Guarded by
+// barrel-surface.test.ts (test_root_barrel_exports_no_infra_symbol).
 
 // M116 — the core copy of the SDKMessage→OTLP mapper powering the native POST /v1/runs endpoint.
 export { sdkMessagesToOtlp, THEOKIT_SERVICE_NAME } from "./domain/theokit/sdk-messages-to-otlp.js";
