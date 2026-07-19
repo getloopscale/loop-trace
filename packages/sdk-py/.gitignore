@@ -1,0 +1,10 @@
+# Python build + tool caches (scoped to the Python SDK package).
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
