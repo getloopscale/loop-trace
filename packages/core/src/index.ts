@@ -104,7 +104,7 @@ export {
   type ChatMessage,
   type ReplayClient,
   type ReplayResult,
-} from "./domain/chat.js";
+} from "./domain/provider/chat.js";
 export {
   buildCopilotPrompt,
   validateQuestion,
@@ -119,7 +119,7 @@ export {
   ProviderBreakerOpenError,
   type ProviderBreakerConfig,
   DEFAULT_PROVIDER_BREAKER,
-} from "./domain/provider-breaker.js";
+} from "./domain/provider/provider-breaker.js";
 // M118 (D4) — zod-at-the-boundary response schemas for the advanced write routes (server-side single
 // source of truth; lifted from the M117 SDK hand-types, wire shape unchanged).
 export {
@@ -169,11 +169,11 @@ export {
   DEFAULT_SHUTDOWN_DRAIN_MS,
   DEFAULT_PROVIDER_RETRY,
 } from "./domain/evaluation/evaluator-config.js";
-export { positiveIntEnv } from "./domain/env.js";
+export { positiveIntEnv } from "./domain/provider/env.js";
 export {
   createProviderClients,
   type ProviderClients,
-} from "./domain/provider-clients.js";
+} from "./domain/provider/provider-clients.js";
 export {
   runEvaluator,
   runSweep,

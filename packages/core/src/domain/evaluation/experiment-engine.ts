@@ -1,5 +1,5 @@
-import type { ChatMessage, ReplayClient } from "../chat.js";
-import { ChatError } from "../chat.js";
+import type { ChatMessage, ReplayClient } from "../provider/chat.js";
+import { ChatError } from "../provider/chat.js";
 import { evaluateRule } from "./evaluator.js";
 import type { EvaluatorRecord } from "./evaluator-repository.js";
 import type { Span } from "../observability/span.js";
