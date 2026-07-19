@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Tabs } from "@usetheo/ui";
 import { useCostByPeriod } from "../hooks/useCost.js";
-import { CostByPeriod } from "../components/CostByPeriod.js";
-import { AutoRefreshControl } from "../components/AutoRefreshControl.js";
-import { Loading, ErrorState } from "../components/states.js";
+import { CostByPeriod } from "../components/charts/CostByPeriod.js";
+import { AutoRefreshControl } from "../components/filters/AutoRefreshControl.js";
+import { Loading, ErrorState } from "../components/primitives/States.js";
 
 /** Cost analytics view: day/week period buckets with a Tabs toggle (M5 DoD #2). */
 export function AnalyticsPage() {

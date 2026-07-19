@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { useCopilot } from "../hooks/useCopilot.js";
 import { ApiError } from "../api/client.js";
-import { MarkdownText } from "../components/MarkdownText.js";
+import { MarkdownText } from "../components/primitives/MarkdownText.js";
 
 /** Map a copilot ApiError to an operator-facing message (fail-closed states, D2). */
 function errorMessage(err: unknown): string {

@@ -1,7 +1,7 @@
 import { useSessions } from "../hooks/useSessions.js";
-import { SessionTable } from "../components/SessionTable.js";
-import { AutoRefreshControl } from "../components/AutoRefreshControl.js";
-import { Loading, ErrorState } from "../components/states.js";
+import { SessionTable } from "../components/trace/SessionTable.js";
+import { AutoRefreshControl } from "../components/filters/AutoRefreshControl.js";
+import { Loading, ErrorState } from "../components/primitives/States.js";
 
 /** Sessions list view (M13; M20 Arize DataTable led by the first message). */
 export function SessionsListPage() {

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { DataTable, type DataTableColumn } from "@usetheo/ui";
 
 import { useEvaluatorDefs } from "../hooks/useEvaluatorDefs.js";
-import { Loading, ErrorState, EmptyState } from "../components/states.js";
+import { Loading, ErrorState, EmptyState } from "../components/primitives/States.js";
 import type { EvaluatorRecordDTO } from "../api/types.js";
 
 /**

@@ -4,10 +4,10 @@ import { Activity, Clock, Coins, DollarSign, TrendingUp } from "lucide-react";
 import { useObservability } from "../hooks/useObservability.js";
 import { useNorthStar } from "../hooks/useNorthStar.js";
 import { useRange } from "../hooks/useRange.js";
-import { AutoRefreshControl } from "../components/AutoRefreshControl.js";
-import { PinnedChartCard } from "../components/PinnedChartCard.js";
-import { MetricChart, type ChartMode } from "../components/MetricChart.js";
-import { Loading } from "../components/states.js";
+import { AutoRefreshControl } from "../components/filters/AutoRefreshControl.js";
+import { PinnedChartCard } from "../components/charts/PinnedChartCard.js";
+import { MetricChart, type ChartMode } from "../components/charts/MetricChart.js";
+import { Loading } from "../components/primitives/States.js";
 import { formatDuration } from "../lib/duration.js";
 import { formatUsd } from "../lib/money.js";
 import type {

@@ -1,4 +1,4 @@
-import { AgentFlowView } from "../components/AgentFlowView.js";
+import { AgentFlowView } from "../components/trace/AgentFlowView.js";
 import { buildAgentGraph } from "../lib/agent-graph.js";
 
 /**
