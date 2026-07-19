@@ -7,7 +7,7 @@
 import type { Hono } from "hono";
 
 import {
-  type SpanRepository,
+  type SessionRepository,
   sessionListResponseSchema,
   sessionDetailResponseSchema,
   apiError,
@@ -15,7 +15,8 @@ import {
 
 import { getPrincipal, requireScopeOnPrincipal } from "../auth/middleware.js";
 
-export function registerSessionsRoutes(app: Hono, repo: SpanRepository): void {
+// M130 (ISP) — narrowed from the composite `SpanRepository` to the single role used: sessions.
+export function registerSessionsRoutes(app: Hono, repo: SessionRepository): void {
   app.get("/v1/sessions", requireScopeOnPrincipal("observability:read"), async (c) => {
     // M81: server-side pagination — parse the (coerced) limit/offset the BFF forwards; the repo clamps
     // and returns a workspace-scoped total. Invalid/absent params fall back to the repo defaults.
