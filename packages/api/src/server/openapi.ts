@@ -248,6 +248,17 @@ function generateOpenApiDocument(routes: MountedRoute[], version: string): Recor
     (paths[path] ??= {})[r.method.toLowerCase()] = op;
   }
 
+  // M126 (#59) — emit `paths` and each path's method map in a DETERMINISTIC (sorted) order so the generated
+  // snapshot byte-order never tracks route-registration order. Hono matches the served routes independently
+  // of this document, so sorting is behavior-preserving for the API and only stabilizes the generated artifact.
+  const sortedPaths: Record<string, Record<string, unknown>> = {};
+  for (const path of Object.keys(paths).sort()) {
+    const methods = paths[path]!;
+    const sortedMethods: Record<string, unknown> = {};
+    for (const method of Object.keys(methods).sort()) sortedMethods[method] = methods[method];
+    sortedPaths[path] = sortedMethods;
+  }
+
   return {
     openapi: "3.0.3",
     info: {
@@ -259,7 +270,7 @@ function generateOpenApiDocument(routes: MountedRoute[], version: string): Recor
         "JSON response fields are camelCase. A 400 covers both syntactic and semantic validation " +
         "failures at the engine boundary (the edge/BFF maps browser-actionable upstreams separately).",
     },
-    paths,
+    paths: sortedPaths,
     components: components.components,
   };
 }
