@@ -1,4 +1,4 @@
-import type { GenAiFields } from "../genai-attributes.js";
+import type { GenAiFields } from "../observability/genai-attributes.js";
 
 /**
  * A span event as seen by an adapter — the parsed `{name, attributes}` shape

@@ -1,7 +1,7 @@
 import type { AgentAdapter, AdapterSpanEvent } from "./agent-adapter.js";
 import { serviceNameOf, stripContextWindowSuffix } from "./agent-adapter.js";
 import { defaultAdapter } from "./default-adapter.js";
-import type { GenAiFields } from "../genai-attributes.js";
+import type { GenAiFields } from "../observability/genai-attributes.js";
 import { toInt, capStringAttr } from "../attr-coerce.js";
 
 /**

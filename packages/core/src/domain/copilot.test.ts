@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildCopilotPrompt, validateQuestion, capAnswer, CopilotError, MAX_ANSWER_BYTES } from "./copilot.js";
-import type { TraceTreeNode } from "./span-repository.js";
+import type { TraceTreeNode } from "./observability/span-repository.js";
 
 function node(over: Partial<TraceTreeNode> & { spanId: string }): TraceTreeNode {
   return {

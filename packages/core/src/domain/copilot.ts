@@ -5,7 +5,7 @@
  */
 import type { ChatMessage } from "./chat.js";
 import { deriveKind } from "./evaluator.js";
-import type { TraceTreeNode } from "./span-repository.js";
+import type { TraceTreeNode } from "./observability/span-repository.js";
 
 /** Typed error for copilot request problems (surfaced as 4xx/5xx by the handler). */
 export class CopilotError extends Error {

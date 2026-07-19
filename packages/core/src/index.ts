@@ -1,7 +1,7 @@
 /**
  * @usetheo/lens-core barrel — domain types, repository port, and Drizzle adapter.
  */
-export { type Span, spanSchema } from "./domain/span.js";
+export { type Span, spanSchema } from "./domain/observability/span.js";
 export {
   type SpanRepository,
   type TraceTreeNode,
@@ -14,7 +14,7 @@ export {
   type LabelingQueueRepository,
   type ExperimentRepository,
   type RetentionRepository,
-} from "./domain/span-repository.js";
+} from "./domain/observability/span-repository.js";
 export { NameConflictError, isUniqueViolation, isForeignKeyViolation } from "./domain/errors.js";
 export { type ApiErrorBody, type FieldIssue, apiError, zodFieldErrors } from "./domain/api-error.js";
 // M118 (D3) — the single typed error envelope: a stable code union + `errorBody` (shape == apiError).
@@ -39,8 +39,8 @@ export {
   type TraceListItem,
   type TraceListResponse,
   type ListTracesOptions,
-} from "./domain/trace-list.js";
-export { extractGenAi, type GenAiFields } from "./domain/genai-attributes.js";
+} from "./domain/observability/trace-list.js";
+export { extractGenAi, type GenAiFields } from "./domain/observability/genai-attributes.js";
 export {
   type AgentAdapter,
   serviceNameOf,
@@ -52,7 +52,7 @@ export { selectAdapter } from "./domain/adapters/registry.js";
 // Only extractSpanEvents has a cross-package consumer (the OTLP ingest parser);
 // the caps + capText + SpanEvent type stay module-internal (YAGNI — no orphan
 // public exports). Tests import them via relative path.
-export { extractSpanEvents } from "./domain/span-events.js";
+export { extractSpanEvents } from "./domain/observability/span-events.js";
 // M26: online-eval extraction (ingest) + types (consumed by the OTLP parser + API).
 export {
   extractEvaluations,
@@ -71,8 +71,8 @@ export {
   type SpanFacetsResponse,
   type SpanAttributeKey,
   type SpanAttributeValue,
-} from "./domain/span-facets.js";
-export { isValidAttrKey, parseSpanQuery, type SpanClause, type SpanQuery } from "./domain/span-query.js";
+} from "./domain/observability/span-facets.js";
+export { isValidAttrKey, parseSpanQuery, type SpanClause, type SpanQuery } from "./domain/observability/span-query.js";
 // M36: online evaluators (compute/write path) — types + pure rule/guard engines.
 export {
   EVALUATOR_KINDS,
@@ -195,7 +195,7 @@ export {
   type Annotation,
   type AnnotationsResponse,
   type NormalizedAnnotation,
-} from "./domain/annotation.js";
+} from "./domain/observability/annotation.js";
 // M26d: curated datasets.
 export {
   normalizeDatasetName,
@@ -263,7 +263,7 @@ export {
   type Agent,
   type AgentCatalogResponse,
   type RawAgent,
-} from "./domain/agent-catalog.js";
+} from "./domain/observability/agent-catalog.js";
 export {
   percentile,
   computeToolStats,
@@ -272,15 +272,15 @@ export {
   type ToolSample,
   type ToolStat,
   type ToolStatsResponse,
-} from "./domain/tool-stats.js";
+} from "./domain/observability/tool-stats.js";
 export {
   computeTraceCost,
   resolveModelPrice,
   type ModelPrice,
   type PriceTable,
   type ModelUsage,
-} from "./domain/pricing.js";
-export { DEFAULT_PRICES } from "./domain/default-prices.js";
+} from "./domain/observability/pricing.js";
+export { DEFAULT_PRICES } from "./domain/observability/default-prices.js";
 export {
   traceCostSchema,
   costBucketSchema,
@@ -289,14 +289,14 @@ export {
   type CostBucket,
   type CostByPeriodResponse,
   type CostPeriod,
-} from "./domain/cost.js";
+} from "./domain/observability/cost.js";
 export {
   northStarBucketSchema,
   northStarResponseSchema,
   shapeNorthStarBuckets,
   type NorthStarBucket,
   type NorthStarResponse,
-} from "./domain/north-star.js";
+} from "./domain/observability/north-star.js";
 export {
   observabilityRangeSchema,
   observabilityResponseSchema,
@@ -305,7 +305,7 @@ export {
   type ObservabilityRange,
   type ObservabilityResponse,
   type RawObservability,
-} from "./domain/observability.js";
+} from "./domain/observability/observability.js";
 export {
   sessionListItemSchema,
   sessionListResponseSchema,
@@ -316,18 +316,18 @@ export {
   type SessionListResponse,
   type SessionDetailResponse,
   type RawSessionDetail,
-} from "./domain/session.js";
+} from "./domain/observability/session.js";
 export {
   traceTagsResponseSchema,
   normalizeTag,
   TAG_MAX_LENGTH,
   type TraceTagsResponse,
-} from "./domain/tags.js";
+} from "./domain/observability/tags.js";
 export {
   type PruneStats,
   type RetentionConfig,
   parseRetentionConfig,
-} from "./domain/retention.js";
+} from "./domain/observability/retention.js";
 // M122: the infra concretes (Drizzle repos + raw table schemas) are NOT part of the
 // domain public API — they live behind the @usetheo/lens-core/infra subpath
 // (packages/core/src/infrastructure/db/index.ts). Composition roots import them from

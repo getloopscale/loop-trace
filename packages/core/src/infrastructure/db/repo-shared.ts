@@ -5,10 +5,10 @@
  */
 import { sql } from "drizzle-orm";
 
-import type { Span } from "../../domain/span.js";
-import { ERROR_STATUS_CODES } from "../../domain/tool-stats.js";
-import type { SpanClause } from "../../domain/span-query.js";
-import type { TraceListItem } from "../../domain/trace-list.js";
+import type { Span } from "../../domain/observability/span.js";
+import { ERROR_STATUS_CODES } from "../../domain/observability/tool-stats.js";
+import type { SpanClause } from "../../domain/observability/span-query.js";
+import type { TraceListItem } from "../../domain/observability/trace-list.js";
 import { spans, traces } from "./schema.js";
 
 /** `s.status_code IN ('2','ERROR',…)` fragment (M30 — same error vocabulary as the trace aggregate). */

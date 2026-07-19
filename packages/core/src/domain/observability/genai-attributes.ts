@@ -1,4 +1,4 @@
-import { toInt, capStringAttr } from "./attr-coerce.js";
+import { toInt, capStringAttr } from "../attr-coerce.js";
 
 /**
  * Extract GenAI semantic-convention attributes from a span's flattened attribute

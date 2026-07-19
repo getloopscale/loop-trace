@@ -15,8 +15,8 @@ import type { EvaluatorRecord, EvaluatorRepository } from "./evaluator-repositor
 import type { JudgeClient } from "./llm-judge.js";
 import { JudgeError } from "./llm-judge.js";
 import { DEFAULT_WORKSPACE_ID } from "./principal.js";
-import type { Span } from "./span.js";
-import type { SpanRepository, TraceTreeNode } from "./span-repository.js";
+import type { Span } from "./observability/span.js";
+import type { SpanRepository, TraceTreeNode } from "./observability/span-repository.js";
 
 export interface EngineDeps {
   evaluatorRepo: EvaluatorRepository;

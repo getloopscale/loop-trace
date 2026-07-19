@@ -6,20 +6,20 @@ import type { NorthStarResponse } from "./north-star.js";
 import type { ObservabilityRange, ObservabilityResponse } from "./observability.js";
 import type { SessionListResponse, SessionDetailResponse } from "./session.js";
 import type { PruneStats } from "./retention.js";
-import type { EvaluatorSummary, ScoreBucket } from "./evaluation.js";
+import type { EvaluatorSummary, ScoreBucket } from "../evaluation.js";
 import type { SpanAttributeKey, SpanAttributeValue } from "./span-facets.js";
 import type { Annotation, NormalizedAnnotation } from "./annotation.js";
-import type { Dataset, DatasetDetail } from "./dataset.js";
+import type { Dataset, DatasetDetail } from "../dataset.js";
 import type {
   LabelingQueueItem,
   LabelingQueuePage,
   LabelingQueueStatus,
   NormalizedResolution,
-} from "./labeling-queue.js";
-import type { ExperimentRun, ExperimentRunItem, RunVariant } from "./experiment.js";
-import type { RunStatus } from "./experiment.js";
+} from "../labeling-queue.js";
+import type { ExperimentRun, ExperimentRunItem, RunVariant } from "../experiment.js";
+import type { RunStatus } from "../experiment.js";
 import type { Agent } from "./agent-catalog.js";
-import type { AskFeedbackInput, CopilotFeedbackRecord } from "./copilot-feedback.js";
+import type { AskFeedbackInput, CopilotFeedbackRecord } from "../copilot-feedback.js";
 
 /** A span plus its reconstructed children — the trace tree node. */
 export interface TraceTreeNode extends Span {

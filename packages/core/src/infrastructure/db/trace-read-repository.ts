@@ -7,13 +7,13 @@
 import { and, asc, desc, eq, getTableColumns, gte, inArray, isNull, lte, or, notInArray, sql, type SQL } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
-import { ERROR_STATUS_CODES } from "../../domain/tool-stats.js";
-import { computeTraceCost, type PriceTable } from "../../domain/pricing.js";
-import { parseSpanQuery } from "../../domain/span-query.js";
-import type { Span } from "../../domain/span.js";
-import type { ListTracesOptions, TraceListResponse } from "../../domain/trace-list.js";
-import type { TraceCost } from "../../domain/cost.js";
-import type { TraceTreeNode } from "../../domain/span-repository.js";
+import { ERROR_STATUS_CODES } from "../../domain/observability/tool-stats.js";
+import { computeTraceCost, type PriceTable } from "../../domain/observability/pricing.js";
+import { parseSpanQuery } from "../../domain/observability/span-query.js";
+import type { Span } from "../../domain/observability/span.js";
+import type { ListTracesOptions, TraceListResponse } from "../../domain/observability/trace-list.js";
+import type { TraceCost } from "../../domain/observability/cost.js";
+import type { TraceTreeNode } from "../../domain/observability/span-repository.js";
 import { spans, traces, traceTags, spanEvaluations } from "./schema.js";
 import { spanClauseSql, toRow, fromRow, traceRowToItem } from "./repo-shared.js";
 

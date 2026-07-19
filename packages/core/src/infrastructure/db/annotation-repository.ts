@@ -6,8 +6,8 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
-import type { Annotation, NormalizedAnnotation } from "../../domain/annotation.js";
-import { DEFAULT_ANNOTATOR_KIND } from "../../domain/annotation.js";
+import type { Annotation, NormalizedAnnotation } from "../../domain/observability/annotation.js";
+import { DEFAULT_ANNOTATOR_KIND } from "../../domain/observability/annotation.js";
 import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
 import { annotations, traceTags, traces } from "./schema.js";
 

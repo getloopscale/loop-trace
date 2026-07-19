@@ -2,7 +2,7 @@ import type { ChatMessage, ReplayClient } from "./chat.js";
 import { ChatError } from "./chat.js";
 import { evaluateRule } from "./evaluator.js";
 import type { EvaluatorRecord } from "./evaluator-repository.js";
-import type { Span } from "./span.js";
+import type { Span } from "./observability/span.js";
 import type { ExperimentRunItem, RunScore, RunStatus, RunVariant } from "./experiment.js";
 import { aggregateRun } from "./experiment.js";
 
