@@ -1,0 +1,40 @@
+name: sdk-py
+
+# Scoped Python job for packages/sdk-py (M124). The repo had no CI workflows before this — this is
+# additive and only runs when the SDK or its shared fixture changes. The hermetic engine e2e
+# (tests/test_e2e_engine.py) skips here (its THEO_LENS_E2E_* env vars are unset).
+on:
+  push:
+    paths:
+      - "packages/sdk-py/**"
+      - "packages/core/src/domain/theokit/theokit-vectors.json"
+      - ".github/workflows/sdk-py.yml"
+  pull_request:
+    paths:
+      - "packages/sdk-py/**"
+      - "packages/core/src/domain/theokit/theokit-vectors.json"
+      - ".github/workflows/sdk-py.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.12"]
+    defaults:
+      run:
+        working-directory: packages/sdk-py
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install (editable + dev)
+        run: pip install -e '.[dev]'
+      - name: Ruff
+        run: ruff check .
+      - name: Mypy
+        run: mypy .
+      - name: Pytest
+        run: python -m pytest -q
