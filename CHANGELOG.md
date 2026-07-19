@@ -19,6 +19,12 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [0.52.1] - 2026-07-19
+
+### Fixed
+- `sdk-go` — `Client.RecordRun` no longer misreports a truncated or malformed 2xx response to a billable run POST as a clean success: the `io.ReadAll` error is now surfaced as a transport error, and `parseOutcome` returns an error on a non-empty unparseable body (an empty 2xx body remains a clean OK). A partial-span rejection can no longer be silently swallowed on a broken read. (#65)
+- `sdk-py` — the default `urllib_transport` now catches `http.client.HTTPException` (e.g. `IncompleteRead` from a truncated body) and re-raises it as `TheoLensTransportError`, honoring the typed-error boundary instead of leaking a bare stdlib exception. (#66)
+
 ## [0.52.0] - 2026-07-19
 
 ### Added

@@ -118,23 +118,36 @@ func (c *Client) RecordRun(ctx context.Context, messages []SDKMessage, result *R
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, readErr := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		return parseOutcome(respBody), nil
+		// #65 — a billable run POST is never retried, so the response body is the ONLY rejected-span
+		// signal. A truncated read (readErr) or a malformed body must surface, never degrade to a clean OK.
+		if readErr != nil {
+			return nil, wrapTransport(url, fmt.Errorf("reading run response body: %w", readErr))
+		}
+		return parseOutcome(url, respBody)
 	}
+	// Non-2xx: a partial error body still yields a best-effort typed envelope (readErr is tolerated here —
+	// the status code alone already makes this an error).
 	return nil, toError(resp, respBody)
 }
 
-// parseOutcome extracts {rejectedSpans, errorMessage} from a 2xx partialSuccess body.
-func parseOutcome(body []byte) *RunOutcome {
+// parseOutcome extracts {rejectedSpans, errorMessage} from a 2xx partialSuccess body. An EMPTY body is a
+// clean success (the engine sends {partialSuccess:{}} on full success); a non-empty UNPARSEABLE body is a
+// malformed response and surfaces as a transport error rather than a fabricated clean OK (#65).
+func parseOutcome(url string, body []byte) (*RunOutcome, error) {
 	var env struct {
 		PartialSuccess struct {
 			RejectedSpans int    `json:"rejectedSpans"`
 			ErrorMessage  string `json:"errorMessage"`
 		} `json:"partialSuccess"`
 	}
-	_ = json.Unmarshal(body, &env) // an unparseable 2xx body degrades to a clean OK outcome
-	return &RunOutcome{RejectedSpans: env.PartialSuccess.RejectedSpans, ErrorMessage: env.PartialSuccess.ErrorMessage}
+	if len(body) > 0 {
+		if err := json.Unmarshal(body, &env); err != nil {
+			return nil, wrapTransport(url, fmt.Errorf("parsing run response body: %w", err))
+		}
+	}
+	return &RunOutcome{RejectedSpans: env.PartialSuccess.RejectedSpans, ErrorMessage: env.PartialSuccess.ErrorMessage}, nil
 }
 
 // toError builds a *TheoLensError from a non-2xx response, parsing the {code,message} envelope and
