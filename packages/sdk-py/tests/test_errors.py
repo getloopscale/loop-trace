@@ -76,6 +76,32 @@ def test_urllib_transport_maps_oserror_to_transport_error() -> None:
         )
 
 
+def test_urllib_transport_maps_incomplete_read_to_transport_error() -> None:
+    # #66 — a truncated body raises http.client.IncompleteRead (an HTTPException, NOT an OSError) from
+    # resp.read(); the default transport must still honor the typed-error boundary, not leak the bare
+    # stdlib exception.
+    import http.client
+
+    resp = mock.MagicMock()
+    resp.status = 200
+    resp.headers = {}
+    resp.read.side_effect = http.client.IncompleteRead(b"partial")
+    cm = mock.MagicMock()
+    cm.__enter__.return_value = resp
+    cm.__exit__.return_value = False
+    with (
+        mock.patch("urllib.request.urlopen", return_value=cm),
+        pytest.raises(TheoLensTransportError),
+    ):
+        urllib_transport(
+            url="http://engine.test/v1/runs",
+            method="POST",
+            headers={"content-type": "application/json"},
+            body=b"{}",
+            timeout=1.0,
+        )
+
+
 def test_partial_success_returns_rejected_count_not_error() -> None:
     body = b'{"partialSuccess":{"rejectedSpans":2,"errorMessage":"invalid OTLP span"}}'
     transport = CapturingTransport(response=Response(200, {}, body))

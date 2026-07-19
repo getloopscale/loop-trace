@@ -7,6 +7,7 @@ A billable run POST is non-idempotent and is NEVER retried on an ambiguous timeo
 
 from __future__ import annotations
 
+import http.client
 import json
 import urllib.error
 import urllib.request
@@ -88,6 +89,10 @@ def urllib_transport(
         return Response(status=exc.code, headers=_normalize_headers(exc.headers), body=exc.read())
     except OSError as exc:  # URLError, TimeoutError, ConnectionResetError all subclass OSError
         raise TheoLensTransportError(f"transport failure POSTing to {url}: {exc}") from exc
+    except http.client.HTTPException as exc:
+        # #66 — a truncated body raises http.client.IncompleteRead (an HTTPException, NOT an OSError) from
+        # resp.read(); honor the typed-error boundary instead of leaking the bare stdlib exception.
+        raise TheoLensTransportError(f"transport failure reading response from {url}: {exc}") from exc
 
 
 def record_run(
