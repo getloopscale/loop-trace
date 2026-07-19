@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { kindColor } from "./kind-color.js";
-import { kindColorClass } from "../components/SankeyDiagram.js";
+import { kindColorClass } from "../components/charts/SankeyDiagram.js";
 import type { SpanKind } from "./span-kind.js";
 
 const ALL_KINDS: SpanKind[] = [

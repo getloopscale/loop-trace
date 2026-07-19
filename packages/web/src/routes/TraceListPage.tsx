@@ -2,16 +2,16 @@ import { useMemo, useState } from "react";
 import type { DataTableSort } from "@usetheo/ui";
 import { useTraceList } from "../hooks/useTraces.js";
 import { useRange, rangeToWindow } from "../hooks/useRange.js";
-import { TraceTable, TOGGLEABLE_COLUMNS } from "../components/TraceTable.js";
-import { TraceFilters } from "../components/TraceFilters.js";
-import { ColumnToggle } from "../components/ColumnToggle.js";
-import { SavedViewSelector } from "../components/SavedViewSelector.js";
+import { TraceTable, TOGGLEABLE_COLUMNS } from "../components/trace/TraceTable.js";
+import { TraceFilters } from "../components/filters/TraceFilters.js";
+import { ColumnToggle } from "../components/filters/ColumnToggle.js";
+import { SavedViewSelector } from "../components/filters/SavedViewSelector.js";
 import { useColumnVisibility } from "../hooks/useColumnVisibility.js";
 import { useSpanQuery } from "../hooks/useSpanQuery.js";
 import { useAutoRefresh } from "../hooks/useAutoRefresh.js";
-import { TraceSummaryStrip } from "../components/TraceSummaryStrip.js";
-import { AutoRefreshControl } from "../components/AutoRefreshControl.js";
-import { ErrorState } from "../components/states.js";
+import { TraceSummaryStrip } from "../components/trace/TraceSummaryStrip.js";
+import { AutoRefreshControl } from "../components/filters/AutoRefreshControl.js";
+import { ErrorState } from "../components/primitives/States.js";
 import type { ListTracesQuery } from "../api/types.js";
 
 /** Map the M9 query sort ↔ the DataTable controlled sort (start column = recency). */

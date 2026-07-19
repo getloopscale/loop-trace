@@ -1,7 +1,7 @@
 /**
  * @usetheo/lens-core barrel — domain types, repository port, and Drizzle adapter.
  */
-export { type Span, spanSchema } from "./domain/span.js";
+export { type Span, spanSchema } from "./domain/observability/span.js";
 export {
   type SpanRepository,
   type TraceTreeNode,
@@ -14,7 +14,7 @@ export {
   type LabelingQueueRepository,
   type ExperimentRepository,
   type RetentionRepository,
-} from "./domain/span-repository.js";
+} from "./domain/observability/span-repository.js";
 export { NameConflictError, isUniqueViolation, isForeignKeyViolation } from "./domain/errors.js";
 export { type ApiErrorBody, type FieldIssue, apiError, zodFieldErrors } from "./domain/api-error.js";
 // M118 (D3) — the single typed error envelope: a stable code union + `errorBody` (shape == apiError).
@@ -39,8 +39,8 @@ export {
   type TraceListItem,
   type TraceListResponse,
   type ListTracesOptions,
-} from "./domain/trace-list.js";
-export { extractGenAi, type GenAiFields } from "./domain/genai-attributes.js";
+} from "./domain/observability/trace-list.js";
+export { extractGenAi, type GenAiFields } from "./domain/observability/genai-attributes.js";
 export {
   type AgentAdapter,
   serviceNameOf,
@@ -52,7 +52,7 @@ export { selectAdapter } from "./domain/adapters/registry.js";
 // Only extractSpanEvents has a cross-package consumer (the OTLP ingest parser);
 // the caps + capText + SpanEvent type stay module-internal (YAGNI — no orphan
 // public exports). Tests import them via relative path.
-export { extractSpanEvents } from "./domain/span-events.js";
+export { extractSpanEvents } from "./domain/observability/span-events.js";
 // M26: online-eval extraction (ingest) + types (consumed by the OTLP parser + API).
 export {
   extractEvaluations,
@@ -65,14 +65,14 @@ export {
   type EvaluatorsResponse,
   type ScoreBucket,
   type ScoresResponse,
-} from "./domain/evaluation.js";
+} from "./domain/evaluation/evaluation.js";
 export {
   spanFacetsResponseSchema,
   type SpanFacetsResponse,
   type SpanAttributeKey,
   type SpanAttributeValue,
-} from "./domain/span-facets.js";
-export { isValidAttrKey, parseSpanQuery, type SpanClause, type SpanQuery } from "./domain/span-query.js";
+} from "./domain/observability/span-facets.js";
+export { isValidAttrKey, parseSpanQuery, type SpanClause, type SpanQuery } from "./domain/observability/span-query.js";
 // M36: online evaluators (compute/write path) — types + pure rule/guard engines.
 export {
   EVALUATOR_KINDS,
@@ -91,7 +91,7 @@ export {
   type Guard,
   type Verdict,
   type RunResult,
-} from "./domain/evaluator.js";
+} from "./domain/evaluation/evaluator.js";
 export {
   ChatError,
   openaiChatCompletion,
@@ -104,14 +104,14 @@ export {
   type ChatMessage,
   type ReplayClient,
   type ReplayResult,
-} from "./domain/chat.js";
+} from "./domain/provider/chat.js";
 export {
   buildCopilotPrompt,
   validateQuestion,
   capAnswer,
   CopilotError,
   MAX_ANSWER_BYTES,
-} from "./domain/copilot.js";
+} from "./domain/evaluation/copilot.js";
 export { RateLimiter } from "./domain/rate-limiter.js";
 // M118 (D2) — provider circuit breaker (hand-rolled closed/open/half-open, fast-fail 503 when OPEN).
 export {
@@ -119,7 +119,7 @@ export {
   ProviderBreakerOpenError,
   type ProviderBreakerConfig,
   DEFAULT_PROVIDER_BREAKER,
-} from "./domain/provider-breaker.js";
+} from "./domain/provider/provider-breaker.js";
 // M118 (D4) — zod-at-the-boundary response schemas for the advanced write routes (server-side single
 // source of truth; lifted from the M117 SDK hand-types, wire shape unchanged).
 export {
@@ -134,14 +134,14 @@ export {
   askCopilotResponseSchema,
   copilotFeedbackRecordSchema,
   replayResponseSchema,
-} from "./domain/advanced-responses.js";
+} from "./domain/evaluation/advanced-responses.js";
 export {
   JudgeError,
   OpenAICompatibleJudge,
   parseJudgeVerdict,
   type JudgeClient,
   type JudgeConfig,
-} from "./domain/llm-judge.js";
+} from "./domain/evaluation/llm-judge.js";
 export {
   parseJudgeConfig,
   parseEvalSweepHours,
@@ -168,23 +168,23 @@ export {
   DEFAULT_HTTP_REQUEST_TIMEOUT_MS,
   DEFAULT_SHUTDOWN_DRAIN_MS,
   DEFAULT_PROVIDER_RETRY,
-} from "./domain/evaluator-config.js";
+} from "./domain/evaluation/evaluator-config.js";
+export { positiveIntEnv } from "./domain/provider/env.js";
+export {
+  createProviderClients,
+  type ProviderClients,
+} from "./domain/provider/provider-clients.js";
 export {
   runEvaluator,
   runSweep,
   type EngineDeps,
   type RunOptions,
-} from "./domain/evaluator-engine.js";
+} from "./domain/evaluation/evaluator-engine.js";
 export type {
   EvaluatorRepository,
   EvaluatorRecord,
   GuardRecord,
-} from "./domain/evaluator-repository.js";
-export {
-  DrizzleEvaluatorRepository,
-  createEvaluatorRepository,
-  evaluatorRepoFromPool,
-} from "./infrastructure/db/drizzle-evaluator-repository.js";
+} from "./domain/evaluation/evaluator-repository.js";
 // M26b: human-feedback annotations (write-path).
 export {
   normalizeAnnotation,
@@ -195,7 +195,7 @@ export {
   type Annotation,
   type AnnotationsResponse,
   type NormalizedAnnotation,
-} from "./domain/annotation.js";
+} from "./domain/observability/annotation.js";
 // M26d: curated datasets.
 export {
   normalizeDatasetName,
@@ -208,7 +208,7 @@ export {
   type DatasetItem,
   type DatasetsResponse,
   type DatasetDetail,
-} from "./domain/dataset.js";
+} from "./domain/evaluation/dataset.js";
 // M83: copilot answer feedback.
 export {
   normalizeAskFeedback,
@@ -216,7 +216,7 @@ export {
   type FeedbackLabel,
   type AskFeedbackInput,
   type CopilotFeedbackRecord,
-} from "./domain/copilot-feedback.js";
+} from "./domain/evaluation/copilot-feedback.js";
 // M63: labeling queues (human-in-the-loop review).
 export {
   normalizeLabelResolution,
@@ -228,7 +228,7 @@ export {
   type LabelingQueuePage,
   type LabelingQueueStatus,
   type NormalizedResolution,
-} from "./domain/labeling-queue.js";
+} from "./domain/evaluation/labeling-queue.js";
 // M64: experiments (regression-dataset-run + compare).
 export {
   aggregateRun,
@@ -243,7 +243,7 @@ export {
   type RunStatus,
   type RunScore,
   type RunAggregate,
-} from "./domain/experiment.js";
+} from "./domain/evaluation/experiment.js";
 export {
   runExperiment,
   MAX_RUN_ITEMS,
@@ -251,7 +251,7 @@ export {
   type RunDeps,
   type RunOutput,
   type RunDatasetItem,
-} from "./domain/experiment-engine.js";
+} from "./domain/evaluation/experiment-engine.js";
 // M32: agents catalog (derived).
 export {
   classifyAgentHealth,
@@ -263,7 +263,7 @@ export {
   type Agent,
   type AgentCatalogResponse,
   type RawAgent,
-} from "./domain/agent-catalog.js";
+} from "./domain/observability/agent-catalog.js";
 export {
   percentile,
   computeToolStats,
@@ -272,15 +272,15 @@ export {
   type ToolSample,
   type ToolStat,
   type ToolStatsResponse,
-} from "./domain/tool-stats.js";
+} from "./domain/observability/tool-stats.js";
 export {
   computeTraceCost,
   resolveModelPrice,
   type ModelPrice,
   type PriceTable,
   type ModelUsage,
-} from "./domain/pricing.js";
-export { DEFAULT_PRICES } from "./domain/default-prices.js";
+} from "./domain/observability/pricing.js";
+export { DEFAULT_PRICES } from "./domain/observability/default-prices.js";
 export {
   traceCostSchema,
   costBucketSchema,
@@ -289,14 +289,14 @@ export {
   type CostBucket,
   type CostByPeriodResponse,
   type CostPeriod,
-} from "./domain/cost.js";
+} from "./domain/observability/cost.js";
 export {
   northStarBucketSchema,
   northStarResponseSchema,
   shapeNorthStarBuckets,
   type NorthStarBucket,
   type NorthStarResponse,
-} from "./domain/north-star.js";
+} from "./domain/observability/north-star.js";
 export {
   observabilityRangeSchema,
   observabilityResponseSchema,
@@ -305,7 +305,7 @@ export {
   type ObservabilityRange,
   type ObservabilityResponse,
   type RawObservability,
-} from "./domain/observability.js";
+} from "./domain/observability/observability.js";
 export {
   sessionListItemSchema,
   sessionListResponseSchema,
@@ -316,25 +316,23 @@ export {
   type SessionListResponse,
   type SessionDetailResponse,
   type RawSessionDetail,
-} from "./domain/session.js";
+} from "./domain/observability/session.js";
 export {
   traceTagsResponseSchema,
   normalizeTag,
   TAG_MAX_LENGTH,
   type TraceTagsResponse,
-} from "./domain/tags.js";
+} from "./domain/observability/tags.js";
 export {
   type PruneStats,
   type RetentionConfig,
   parseRetentionConfig,
-} from "./domain/retention.js";
-export { spans, traces, sessions, replaySessions, evaluators, guards } from "./infrastructure/db/schema.js";
-export {
-  DrizzleSpanRepository,
-  createPool,
-  createSpanRepository,
-  migrateLatest,
-} from "./infrastructure/db/drizzle-span-repository.js";
+} from "./domain/observability/retention.js";
+// M122: the infra concretes (Drizzle repos + raw table schemas) are NOT part of the
+// domain public API — they live behind the @usetheo/lens-core/infra subpath
+// (packages/core/src/infrastructure/db/index.ts). Composition roots import them from
+// there; the root barrel exposes domain ports/types/DTOs only. Guarded by
+// barrel-surface.test.ts (test_root_barrel_exports_no_infra_symbol).
 
 // M116 — the core copy of the SDKMessage→OTLP mapper powering the native POST /v1/runs endpoint.
 export { sdkMessagesToOtlp, THEOKIT_SERVICE_NAME } from "./domain/theokit/sdk-messages-to-otlp.js";

@@ -1,7 +1,7 @@
 import { useAgents } from "../hooks/useAgents.js";
-import { AgentCatalogTable } from "../components/AgentCatalogTable.js";
-import { AutoRefreshControl } from "../components/AutoRefreshControl.js";
-import { Loading, ErrorState } from "../components/states.js";
+import { AgentCatalogTable } from "../components/trace/AgentCatalogTable.js";
+import { AutoRefreshControl } from "../components/filters/AutoRefreshControl.js";
+import { Loading, ErrorState } from "../components/primitives/States.js";
 
 /** Agents catalog page (M32): the versioned-lifecycle registry of agents. */
 export function AgentsListPage() {

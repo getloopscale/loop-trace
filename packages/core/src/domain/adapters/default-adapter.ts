@@ -1,5 +1,5 @@
 import type { AgentAdapter } from "./agent-adapter.js";
-import { extractGenAi } from "../genai-attributes.js";
+import { extractGenAi } from "../observability/genai-attributes.js";
 
 /**
  * The generic adapter (M15 D1): the existing `gen_ai.*` / OpenInference `llm.*`

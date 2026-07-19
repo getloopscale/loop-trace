@@ -1,6 +1,7 @@
 import { pathToFileURL } from "node:url";
 
-import { createSpanRepository, parseRetentionConfig } from "@usetheo/lens-core";
+import { parseRetentionConfig } from "@usetheo/lens-core";
+import { createSpanRepository } from "@usetheo/lens-core/infra";
 
 import { runPrune } from "../server/retention-run.js";
 

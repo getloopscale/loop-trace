@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { rowsAs } from "../../domain/sql-rows.js";
 import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
-import { round3 } from "../../domain/tool-stats.js";
+import { round3 } from "../../domain/observability/tool-stats.js";
 import {
   isoTimestamp,
   shapeSessionDetail,
@@ -17,7 +17,7 @@ import {
   type SessionDetailResponse,
   type SessionListItem,
   type SessionListResponse,
-} from "../../domain/session.js";
+} from "../../domain/observability/session.js";
 import { LATENCY_MS_EXPR, preview, traceRowToItem } from "./repo-shared.js";
 import { sessions, traces } from "./schema.js";
 

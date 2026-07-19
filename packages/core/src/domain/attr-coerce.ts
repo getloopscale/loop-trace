@@ -1,4 +1,4 @@
-import { capText } from "./span-events.js";
+import { capText } from "./observability/span-events.js";
 
 /**
  * Shared attribute-coercion plumbing used by `extractGenAi` and the agent adapters

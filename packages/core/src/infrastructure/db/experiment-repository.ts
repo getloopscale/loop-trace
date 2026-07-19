@@ -7,8 +7,8 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
-import { aggregateRun } from "../../domain/experiment.js";
-import type { ExperimentRun, ExperimentRunItem, RunStatus, RunVariant } from "../../domain/experiment.js";
+import { aggregateRun } from "../../domain/evaluation/experiment.js";
+import type { ExperimentRun, ExperimentRunItem, RunStatus, RunVariant } from "../../domain/evaluation/experiment.js";
 import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
 import { experimentRunItems, experimentRuns } from "./schema.js";
 import { isUuid } from "./uuid.js";

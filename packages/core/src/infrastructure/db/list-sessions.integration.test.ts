@@ -4,8 +4,8 @@ import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import type pg from "pg";
 
-import type { Span } from "../../domain/span.js";
-import { sessionListItemSchema } from "../../domain/session.js";
+import type { Span } from "../../domain/observability/span.js";
+import { sessionListItemSchema } from "../../domain/observability/session.js";
 import { createPool, DrizzleSpanRepository } from "./drizzle-span-repository.js";
 
 const PG_URI = process.env["THEOLENS_PG_URI"];

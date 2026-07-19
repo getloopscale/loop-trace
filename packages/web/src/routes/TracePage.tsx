@@ -6,13 +6,13 @@ import { useTraceCost } from "../hooks/useCost.js";
 import { buildReplaySteps, initialStepIndex } from "../lib/replay.js";
 import { formatUsd } from "../lib/money.js";
 import { ApiError, recordReplaySession } from "../api/client.js";
-import { SpanTree } from "../components/SpanTree.js";
-import { SpanInfoPanel } from "../components/SpanInfoPanel.js";
-import { SpanIOPanel } from "../components/SpanIOPanel.js";
-import { TraceTags } from "../components/TraceTags.js";
-import { ReplayControls } from "../components/ReplayControls.js";
+import { SpanTree } from "../components/trace/SpanTree.js";
+import { SpanInfoPanel } from "../components/trace/SpanInfoPanel.js";
+import { SpanIOPanel } from "../components/trace/SpanIOPanel.js";
+import { TraceTags } from "../components/trace/TraceTags.js";
+import { ReplayControls } from "../components/trace/ReplayControls.js";
 import { AskPanel } from "./AskPanel.js";
-import { Loading, ErrorState } from "../components/states.js";
+import { Loading, ErrorState } from "../components/primitives/States.js";
 
 /**
  * Trace view + Session Replay (M4). The replay step index IS the selection: the

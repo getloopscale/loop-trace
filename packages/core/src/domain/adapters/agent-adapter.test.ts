@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { stripContextWindowSuffix, serviceNameOf } from "./agent-adapter.js";
 import { defaultAdapter } from "./default-adapter.js";
 import { selectAdapter } from "./registry.js";
-import { extractGenAi } from "../genai-attributes.js";
+import { extractGenAi } from "../observability/genai-attributes.js";
 
 describe("agent adapter seam (M15 D1)", () => {
   it("test_default_adapter_extracts_identically_to_extractGenAi", () => {

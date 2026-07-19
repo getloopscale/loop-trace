@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { bucketRowSchema as bucketSchema } from "./north-star.js";
+import { bucketRowSchema as bucketSchema } from "./observability/north-star.js";
 import { rowsAs } from "./sql-rows.js";
 
 describe("rowsAs", () => {

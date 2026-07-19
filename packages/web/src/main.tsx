@@ -18,7 +18,7 @@ import { AgentPathView } from "./routes/AgentPathView.js";
 import { SessionsListPage } from "./routes/SessionsListPage.js";
 import { SessionDetailPage } from "./routes/SessionDetailPage.js";
 import { PlaceholderPage } from "./routes/PlaceholderPage.js";
-import { AppShell } from "./components/AppShell.js";
+import { AppShell } from "./components/primitives/AppShell.js";
 import { ThemeProvider, violetForge } from "@theokit/ui";
 import { AutoRefreshProvider } from "./hooks/useAutoRefresh.js";
 import { RangeProvider } from "./hooks/useRange.js";

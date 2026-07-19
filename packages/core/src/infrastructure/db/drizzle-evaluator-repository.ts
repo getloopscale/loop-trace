@@ -9,15 +9,15 @@ import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
 
 import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
-import { parsePoolConfig } from "../../domain/evaluator-config.js";
+import { parsePoolConfig } from "../../domain/evaluation/evaluator-config.js";
 import { NameConflictError, isUniqueViolation } from "../../domain/errors.js";
 import { isUuid } from "./uuid.js";
-import type { Evaluator, Guard, Verdict } from "../../domain/evaluator.js";
+import type { Evaluator, Guard, Verdict } from "../../domain/evaluation/evaluator.js";
 import type {
   EvaluatorRepository,
   EvaluatorRecord,
   GuardRecord,
-} from "../../domain/evaluator-repository.js";
+} from "../../domain/evaluation/evaluator-repository.js";
 import { evaluators, guards, spanEvaluations } from "./schema.js";
 
 type EvaluatorRow = typeof evaluators.$inferSelect;

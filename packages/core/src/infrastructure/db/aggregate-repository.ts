@@ -10,21 +10,21 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { z } from "zod";
 
 import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
-import { isoTimestamp } from "../../domain/session.js";
-import { round3, ERROR_STATUS_CODES } from "../../domain/tool-stats.js";
-import type { ToolStatsResponse } from "../../domain/tool-stats.js";
-import { type PriceTable } from "../../domain/pricing.js";
-import type { CostByPeriodResponse, CostPeriod } from "../../domain/cost.js";
-import { shapeNorthStarBuckets, bucketRowSchema, type NorthStarResponse } from "../../domain/north-star.js";
+import { isoTimestamp } from "../../domain/observability/session.js";
+import { round3, ERROR_STATUS_CODES } from "../../domain/observability/tool-stats.js";
+import type { ToolStatsResponse } from "../../domain/observability/tool-stats.js";
+import { type PriceTable } from "../../domain/observability/pricing.js";
+import type { CostByPeriodResponse, CostPeriod } from "../../domain/observability/cost.js";
+import { shapeNorthStarBuckets, bucketRowSchema, type NorthStarResponse } from "../../domain/observability/north-star.js";
 import {
   shapeObservability,
   RANGE_BUCKETS,
   type RawObservability,
   type ObservabilityRange,
-  type ObservabilityResponse } from "../../domain/observability.js";
-import type { EvaluatorSummary, ScoreBucket } from "../../domain/evaluation.js";
-import type { SpanAttributeKey, SpanAttributeValue } from "../../domain/span-facets.js";
-import { shapeAgent, type Agent, type RawAgent } from "../../domain/agent-catalog.js";
+  type ObservabilityResponse } from "../../domain/observability/observability.js";
+import type { EvaluatorSummary, ScoreBucket } from "../../domain/evaluation/evaluation.js";
+import type { SpanAttributeKey, SpanAttributeValue } from "../../domain/observability/span-facets.js";
+import { shapeAgent, type Agent, type RawAgent } from "../../domain/observability/agent-catalog.js";
 import {   replaySessions } from "./schema.js";
 import {
     LATENCY_MS_EXPR,

@@ -7,7 +7,7 @@
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
-import type { PruneStats } from "../../domain/retention.js";
+import type { PruneStats } from "../../domain/observability/retention.js";
 
 export async function prune(db: NodePgDatabase, olderThan: Date): Promise<PruneStats> {
   // M23 trace-granular hard-delete cascade, atomic in one transaction (the tables have NO DB foreign

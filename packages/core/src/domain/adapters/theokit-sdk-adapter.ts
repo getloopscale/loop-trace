@@ -1,7 +1,7 @@
 import type { AgentAdapter } from "./agent-adapter.js";
 import { serviceNameOf } from "./agent-adapter.js";
 import { defaultAdapter } from "./default-adapter.js";
-import type { GenAiFields } from "../genai-attributes.js";
+import type { GenAiFields } from "../observability/genai-attributes.js";
 import { toInt } from "../attr-coerce.js";
 
 /**

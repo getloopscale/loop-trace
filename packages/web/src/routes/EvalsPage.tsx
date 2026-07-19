@@ -1,8 +1,8 @@
 import { Gauge } from "lucide-react";
 import { useRange } from "../hooks/useRange.js";
 import { useEvaluators } from "../hooks/useEvaluators.js";
-import { PinnedChartCard } from "../components/PinnedChartCard.js";
-import { Loading, ErrorState, EmptyState } from "../components/states.js";
+import { PinnedChartCard } from "../components/charts/PinnedChartCard.js";
+import { Loading, ErrorState, EmptyState } from "../components/primitives/States.js";
 import type { EvaluatorSummary } from "../api/types.js";
 
 /** Average score rendered to 2 decimals, or "—" when the evaluator emits no numeric score. */

@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider, violetForge } from "@theokit/ui";
-import { AppShell } from "../components/AppShell.js";
+import { AppShell } from "../components/primitives/AppShell.js";
 import { AutoRefreshProvider } from "../hooks/useAutoRefresh.js";
 import { TraceListPage } from "./TraceListPage.js";
 import { PlaceholderPage } from "./PlaceholderPage.js";

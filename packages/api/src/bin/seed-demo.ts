@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
 
-import { createSpanRepository, migrateLatest } from "@usetheo/lens-core";
+import { createSpanRepository, migrateLatest } from "@usetheo/lens-core/infra";
 
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
 import {

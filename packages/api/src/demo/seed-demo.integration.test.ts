@@ -1,10 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
-  createSpanRepository,
-  migrateLatest,
   type SpanRepository,
   type TraceTreeNode,
 } from "@usetheo/lens-core";
+import { createSpanRepository, migrateLatest } from "@usetheo/lens-core/infra";
 import type pg from "pg";
 
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";

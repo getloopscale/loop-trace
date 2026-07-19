@@ -6,9 +6,9 @@ import type pg from "pg";
 
 import { createPool, DrizzleSpanRepository } from "./drizzle-span-repository.js";
 import { DrizzleEvaluatorRepository } from "./drizzle-evaluator-repository.js";
-import { runEvaluator, runSweep, type EngineDeps } from "../../domain/evaluator-engine.js";
-import { evaluatorSchema } from "../../domain/evaluator.js";
-import type { Span } from "../../domain/span.js";
+import { runEvaluator, runSweep, type EngineDeps } from "../../domain/evaluation/evaluator-engine.js";
+import { evaluatorSchema } from "../../domain/evaluation/evaluator.js";
+import type { Span } from "../../domain/observability/span.js";
 
 const PG_URI = process.env["THEOLENS_PG_URI"];
 const MIGRATIONS = fileURLToPath(new URL("./migrations", import.meta.url));

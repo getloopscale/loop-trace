@@ -1,7 +1,7 @@
 import { useToolStats } from "../hooks/useTools.js";
-import { ToolRanking } from "../components/ToolRanking.js";
-import { AutoRefreshControl } from "../components/AutoRefreshControl.js";
-import { Loading, ErrorState } from "../components/states.js";
+import { ToolRanking } from "../components/charts/ToolRanking.js";
+import { AutoRefreshControl } from "../components/filters/AutoRefreshControl.js";
+import { Loading, ErrorState } from "../components/primitives/States.js";
 
 /** Tool analytics view: per-tool ranking over a recent window (M6 DoD #2). */
 export function ToolAnalyticsPage() {

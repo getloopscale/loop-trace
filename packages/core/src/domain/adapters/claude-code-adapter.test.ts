@@ -2,9 +2,9 @@ import { describe, it, expect } from "vitest";
 import { claudeCodeAdapter } from "./claude-code-adapter.js";
 import { defaultAdapter } from "./default-adapter.js";
 import { selectAdapter } from "./registry.js";
-import { computeTraceCost } from "../pricing.js";
-import { resolveModelPrice } from "../pricing.js";
-import { DEFAULT_PRICES } from "../default-prices.js";
+import { computeTraceCost } from "../observability/pricing.js";
+import { resolveModelPrice } from "../observability/pricing.js";
+import { DEFAULT_PRICES } from "../observability/default-prices.js";
 
 describe("claudeCodeAdapter (M15 D2/D3)", () => {
   it("test_claude_adapter_maps_bare_tokens", () => {

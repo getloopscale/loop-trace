@@ -1,7 +1,7 @@
 import { useParams } from "react-router-dom";
 import { useTracesForTool } from "../hooks/useTools.js";
-import { TraceTable } from "../components/TraceTable.js";
-import { Loading, ErrorState } from "../components/states.js";
+import { TraceTable } from "../components/trace/TraceTable.js";
+import { Loading, ErrorState } from "../components/primitives/States.js";
 
 /** Drill-down: the executions that called a given tool (M6 DoD #3, dark DataTable). */
 export function ToolTracesPage() {
