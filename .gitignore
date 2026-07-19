@@ -42,3 +42,4 @@ knowledge-base/references/*/
 playwright-log.txt
 architect-output/
 .claude/codebase-architect-loop.local.md
+code-review-output/
