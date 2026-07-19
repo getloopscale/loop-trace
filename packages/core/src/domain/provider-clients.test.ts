@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest";
 
 import { createProviderClients } from "./provider-clients.js";
-import { OpenAICompatibleJudge } from "./llm-judge.js";
+import { OpenAICompatibleJudge } from "./evaluation/llm-judge.js";
 import { OpenAICompatibleChat, OpenAICompatibleReplay } from "./chat.js";
-import type { JudgeConfig } from "./llm-judge.js";
+import type { JudgeConfig } from "./evaluation/llm-judge.js";
 
 describe("createProviderClients", () => {
   test("test_create_provider_clients_fail_closed_when_config_null", () => {

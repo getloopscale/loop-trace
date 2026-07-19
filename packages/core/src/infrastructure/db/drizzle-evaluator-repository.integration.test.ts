@@ -6,7 +6,7 @@ import type pg from "pg";
 
 import { createPool } from "./drizzle-span-repository.js";
 import { DrizzleEvaluatorRepository } from "./drizzle-evaluator-repository.js";
-import { evaluatorSchema, guardSchema } from "../../domain/evaluator.js";
+import { evaluatorSchema, guardSchema } from "../../domain/evaluation/evaluator.js";
 
 const PG_URI = process.env["THEOLENS_PG_URI"];
 const MIGRATIONS = fileURLToPath(new URL("./migrations", import.meta.url));

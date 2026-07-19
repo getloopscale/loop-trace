@@ -22,7 +22,7 @@ import {
   type RawObservability,
   type ObservabilityRange,
   type ObservabilityResponse } from "../../domain/observability/observability.js";
-import type { EvaluatorSummary, ScoreBucket } from "../../domain/evaluation.js";
+import type { EvaluatorSummary, ScoreBucket } from "../../domain/evaluation/evaluation.js";
 import type { SpanAttributeKey, SpanAttributeValue } from "../../domain/observability/span-facets.js";
 import { shapeAgent, type Agent, type RawAgent } from "../../domain/observability/agent-catalog.js";
 import {   replaySessions } from "./schema.js";

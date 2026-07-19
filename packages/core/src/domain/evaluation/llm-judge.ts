@@ -13,7 +13,7 @@ import {
   ChatError,
   openaiChatCompletion,
   type ChatConfig,
-} from "./chat.js";
+} from "../chat.js";
 
 /** Typed error for any judge failure — fail-closed, never a silent verdict. */
 export class JudgeError extends Error {

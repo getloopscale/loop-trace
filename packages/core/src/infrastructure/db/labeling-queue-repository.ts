@@ -7,13 +7,13 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
-import type { Dataset } from "../../domain/dataset.js";
+import type { Dataset } from "../../domain/evaluation/dataset.js";
 import type {
   LabelingQueueItem,
   LabelingQueuePage,
   LabelingQueueStatus,
   NormalizedResolution,
-} from "../../domain/labeling-queue.js";
+} from "../../domain/evaluation/labeling-queue.js";
 import { DEFAULT_WORKSPACE_ID } from "../../domain/principal.js";
 import * as datasetRepo from "./dataset-repository.js";
 import { labelingQueueItems } from "./schema.js";

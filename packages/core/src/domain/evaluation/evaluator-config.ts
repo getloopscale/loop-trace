@@ -3,7 +3,7 @@
  * Mirrors the M23 `parseRetentionConfig` shape (default-OFF, fail-soft on bad input).
  */
 import type { JudgeConfig } from "./llm-judge.js";
-import { positiveIntEnv } from "./env.js";
+import { positiveIntEnv } from "../env.js";
 
 /** Default per-backfill trace cap (ADR D7); override with THEOLENS_EVAL_BACKFILL_MAX. */
 export const DEFAULT_EVAL_BACKFILL_MAX = 500;
@@ -144,4 +144,4 @@ export {
   parseProviderBreaker,
   DEFAULT_PROVIDER_RETRY,
   type ProviderRetryConfig,
-} from "./provider-config.js";
+} from "../provider-config.js";

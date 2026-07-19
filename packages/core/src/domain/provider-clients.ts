@@ -6,7 +6,7 @@
  * core and the fail-closed rule is a core business policy (DIP — the domain defines it, the composition
  * root only wires it). `behavior_change: none` — same construction, one home.
  */
-import { OpenAICompatibleJudge, type JudgeClient, type JudgeConfig } from "./llm-judge.js";
+import { OpenAICompatibleJudge, type JudgeClient, type JudgeConfig } from "./evaluation/llm-judge.js";
 import {
   OpenAICompatibleChat,
   OpenAICompatibleReplay,

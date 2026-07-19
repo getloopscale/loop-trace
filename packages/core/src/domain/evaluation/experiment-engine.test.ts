@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 
-import type { ChatMessage, ReplayClient, ReplayResult } from "./chat.js";
-import { ChatError } from "./chat.js";
+import type { ChatMessage, ReplayClient, ReplayResult } from "../chat.js";
+import { ChatError } from "../chat.js";
 import type { EvaluatorRecord } from "./evaluator-repository.js";
 import { runExperiment, MAX_RUN_ITEMS, type RunInput } from "./experiment-engine.js";
 

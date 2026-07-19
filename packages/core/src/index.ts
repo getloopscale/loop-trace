@@ -65,7 +65,7 @@ export {
   type EvaluatorsResponse,
   type ScoreBucket,
   type ScoresResponse,
-} from "./domain/evaluation.js";
+} from "./domain/evaluation/evaluation.js";
 export {
   spanFacetsResponseSchema,
   type SpanFacetsResponse,
@@ -91,7 +91,7 @@ export {
   type Guard,
   type Verdict,
   type RunResult,
-} from "./domain/evaluator.js";
+} from "./domain/evaluation/evaluator.js";
 export {
   ChatError,
   openaiChatCompletion,
@@ -111,7 +111,7 @@ export {
   capAnswer,
   CopilotError,
   MAX_ANSWER_BYTES,
-} from "./domain/copilot.js";
+} from "./domain/evaluation/copilot.js";
 export { RateLimiter } from "./domain/rate-limiter.js";
 // M118 (D2) — provider circuit breaker (hand-rolled closed/open/half-open, fast-fail 503 when OPEN).
 export {
@@ -134,14 +134,14 @@ export {
   askCopilotResponseSchema,
   copilotFeedbackRecordSchema,
   replayResponseSchema,
-} from "./domain/advanced-responses.js";
+} from "./domain/evaluation/advanced-responses.js";
 export {
   JudgeError,
   OpenAICompatibleJudge,
   parseJudgeVerdict,
   type JudgeClient,
   type JudgeConfig,
-} from "./domain/llm-judge.js";
+} from "./domain/evaluation/llm-judge.js";
 export {
   parseJudgeConfig,
   parseEvalSweepHours,
@@ -168,7 +168,7 @@ export {
   DEFAULT_HTTP_REQUEST_TIMEOUT_MS,
   DEFAULT_SHUTDOWN_DRAIN_MS,
   DEFAULT_PROVIDER_RETRY,
-} from "./domain/evaluator-config.js";
+} from "./domain/evaluation/evaluator-config.js";
 export { positiveIntEnv } from "./domain/env.js";
 export {
   createProviderClients,
@@ -179,12 +179,12 @@ export {
   runSweep,
   type EngineDeps,
   type RunOptions,
-} from "./domain/evaluator-engine.js";
+} from "./domain/evaluation/evaluator-engine.js";
 export type {
   EvaluatorRepository,
   EvaluatorRecord,
   GuardRecord,
-} from "./domain/evaluator-repository.js";
+} from "./domain/evaluation/evaluator-repository.js";
 // M26b: human-feedback annotations (write-path).
 export {
   normalizeAnnotation,
@@ -208,7 +208,7 @@ export {
   type DatasetItem,
   type DatasetsResponse,
   type DatasetDetail,
-} from "./domain/dataset.js";
+} from "./domain/evaluation/dataset.js";
 // M83: copilot answer feedback.
 export {
   normalizeAskFeedback,
@@ -216,7 +216,7 @@ export {
   type FeedbackLabel,
   type AskFeedbackInput,
   type CopilotFeedbackRecord,
-} from "./domain/copilot-feedback.js";
+} from "./domain/evaluation/copilot-feedback.js";
 // M63: labeling queues (human-in-the-loop review).
 export {
   normalizeLabelResolution,
@@ -228,7 +228,7 @@ export {
   type LabelingQueuePage,
   type LabelingQueueStatus,
   type NormalizedResolution,
-} from "./domain/labeling-queue.js";
+} from "./domain/evaluation/labeling-queue.js";
 // M64: experiments (regression-dataset-run + compare).
 export {
   aggregateRun,
@@ -243,7 +243,7 @@ export {
   type RunStatus,
   type RunScore,
   type RunAggregate,
-} from "./domain/experiment.js";
+} from "./domain/evaluation/experiment.js";
 export {
   runExperiment,
   MAX_RUN_ITEMS,
@@ -251,7 +251,7 @@ export {
   type RunDeps,
   type RunOutput,
   type RunDatasetItem,
-} from "./domain/experiment-engine.js";
+} from "./domain/evaluation/experiment-engine.js";
 // M32: agents catalog (derived).
 export {
   classifyAgentHealth,

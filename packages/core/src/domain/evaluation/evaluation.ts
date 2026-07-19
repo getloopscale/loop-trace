@@ -11,7 +11,7 @@
  */
 import { z } from "zod";
 
-import { observabilityRangeSchema } from "./observability/observability.js";
+import { observabilityRangeSchema } from "../observability/observability.js";
 
 export interface SpanEvaluation {
   name: string;

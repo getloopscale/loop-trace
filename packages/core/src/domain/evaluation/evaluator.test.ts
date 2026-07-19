@@ -9,7 +9,7 @@ import {
   deriveKind,
   type Evaluator,
 } from "./evaluator.js";
-import type { Span } from "./observability/span.js";
+import type { Span } from "../observability/span.js";
 
 function span(over: Partial<Span> & Pick<Span, "spanId" | "traceId">): Span {
   return {

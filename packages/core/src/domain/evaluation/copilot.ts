@@ -3,9 +3,9 @@
  * grounding an LLM answer in a selected span (or the trace) + the operator's question.
  * The HTTP call is the shared {@link ChatClient} (chat.ts); persistence is none (D4).
  */
-import type { ChatMessage } from "./chat.js";
+import type { ChatMessage } from "../chat.js";
 import { deriveKind } from "./evaluator.js";
-import type { TraceTreeNode } from "./observability/span-repository.js";
+import type { TraceTreeNode } from "../observability/span-repository.js";
 
 /** Typed error for copilot request problems (surfaced as 4xx/5xx by the handler). */
 export class CopilotError extends Error {

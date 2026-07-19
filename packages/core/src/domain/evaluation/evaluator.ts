@@ -12,8 +12,8 @@
  */
 import { z } from "zod";
 
-import { parseSpanQuery, type SpanClause } from "./observability/span-query.js";
-import type { Span } from "./observability/span.js";
+import { parseSpanQuery, type SpanClause } from "../observability/span-query.js";
+import type { Span } from "../observability/span.js";
 
 /** The evaluator seam (grill Q1). */
 export const EVALUATOR_KINDS = ["rule", "llm_judge"] as const;

@@ -4,7 +4,7 @@ import { runEvaluator, type EngineDeps } from "./evaluator-engine.js";
 import { evaluatorSchema } from "./evaluator.js";
 import type { EvaluatorRecord } from "./evaluator-repository.js";
 import type { JudgeClient } from "./llm-judge.js";
-import type { SpanRepository, TraceTreeNode } from "./observability/span-repository.js";
+import type { SpanRepository, TraceTreeNode } from "../observability/span-repository.js";
 
 function rec(over: Record<string, unknown>): EvaluatorRecord {
   const ev = evaluatorSchema.parse({
