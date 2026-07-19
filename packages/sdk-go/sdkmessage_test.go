@@ -12,13 +12,13 @@ func TestOpaqueRawMessageFieldsPassThroughUnvalidated(t *testing.T) {
 	weirdArgs := json.RawMessage(`{"weird":[1,{}]}`)
 	msgs := []SDKMessage{
 		{
-			Type:   "totally_unknown_variant", // unknown discriminator carried through
+			Type:    "totally_unknown_variant", // unknown discriminator carried through
 			AgentID: "a",
-			RunID:  "r",
-			CallID: "c1",
-			Name:   "X",
-			Status: "completed",
-			Args:   weirdArgs,
+			RunID:   "r",
+			CallID:  "c1",
+			Name:    "X",
+			Status:  "completed",
+			Args:    weirdArgs,
 			// Result left nil → must be omitted by omitempty.
 		},
 	}
