@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Roadmap amended: added **M52 — Observability cost accuracy (cache-token pricing + opus-4-8 rate + span cost display)** to `ROADMAP-edge-integration.md` (`/roadmap-feature observability-cost-accuracy`). Fixes theo-lens#71: `computeTraceCost` excludes cache_read/cache_creation tokens (Claude Code caches heavily → cost understated), `claude-opus-4-8` likely mispriced 3× (resolves to claude-opus-4 $5/$25 vs opus-4-1 $15/$75), and the trace-detail span cost shows `$0.0000` instead of `—`. Depends on M50 + M51 (both [x]). Grill: `.claude/knowledge-base/grills/observability-cost-accuracy-feature-grill.md`.
 
 ### Changed
 
