@@ -19,7 +19,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
-## [0.42.0] - 2026-07-20
+## [0.53.0] - 2026-07-20
 
 ### Added
 - **M50 FULL end-to-end LIVE proof — edge Model-B + dashboard render (real Claude Code data)** — on the canonical theo-workspace local edge stack: theo-lens durable container → traefik `:8090` → `lens-up.sh` Model-B wiring → key via the REAL dashboard flow (`POST /v1/api-keys/`) → `POST /v1/lens/traces` real CC OTLP → **200** (un-keyed → 401); the customer key is swapped for a per-tenant key (trace persists under workspace `tn-fd1b0654fe76e6c3`, customer key never reaches theo-lens); the Observability **Traces** screen renders it (`Showing 1–1 of 1`: `claude_code.interaction`, 4.0s, 4,338 tokens, $0.02, OK). Screenshot + write-up in `.claude/knowledge-base/audits/m50-live-proof-2026-07-20.md` + `m50-dashboard-render-2026-07-20.png`. The remote dev-public droplet shows the same chain only after infra bug theo-cloud#238 (split-brain) is fixed.
