@@ -31,6 +31,10 @@ import { registerTracesRoutes } from "./routes/traces-routes.js";
 import { registerAnalyticsRoutes } from "./routes/analytics-routes.js";
 import { registerMetricsRoutes } from "./routes/metrics-routes.js";
 import { registerSessionsRoutes } from "./routes/sessions-routes.js";
+import {
+  registerSessionCoherenceRoutes,
+  type SessionCoherenceApiDeps,
+} from "./routes/session-coherence-routes.js";
 import { registerDatasetRoutes } from "./routes/dataset-routes.js";
 import { registerLabelingQueueRoutes } from "./routes/labeling-queue-routes.js";
 import { registerExperimentRoutes } from "./routes/experiment-routes.js";
@@ -115,6 +119,7 @@ export function createApp(
   experiment?: ExperimentApiDeps,
   ingest?: IngestApiDeps,
   health?: HealthApiDeps,
+  sessionCoherence?: SessionCoherenceApiDeps,
 ): Hono {
   const app = new Hono();
 
@@ -344,6 +349,9 @@ export function createApp(
   registerAnalyticsRoutes(app, repo);
   registerMetricsRoutes(app, repo);
   registerSessionsRoutes(app, repo);
+  // M131 B4 — Session Coherence run/read routes (opt-in; only mounted when the composition root wires
+  // the judge + verdict store). Absent in a bare test app (keeps the pre-M131 surface).
+  if (sessionCoherence) registerSessionCoherenceRoutes(app, repo, sessionCoherence);
   registerDatasetRoutes(app, repo);
   registerLabelingQueueRoutes(app, repo);
   // M121 (D3) — the former extra-routes registrar, split per domain (evaluator/copilot/replay). Each

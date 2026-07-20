@@ -189,7 +189,9 @@ export {
 export {
   upsertSessionVerdict,
   getSessionVerdict,
+  sessionVerdictStoreFromPool,
   type SessionVerdictRecord,
+  type SessionVerdictStore,
 } from "./infrastructure/db/evaluation/session-evaluation-repository.js";
 // M26b: human-feedback annotations (write-path).
 export {
@@ -316,11 +318,13 @@ export {
   sessionListItemSchema,
   sessionListResponseSchema,
   sessionDetailResponseSchema,
+  sessionCoherenceResponseSchema,
   shapeSessionDetail,
   isoTimestamp,
   type SessionListItem,
   type SessionListResponse,
   type SessionDetailResponse,
+  type SessionCoherenceResponse,
   type RawSessionDetail,
 } from "./domain/observability/session.js";
 export {

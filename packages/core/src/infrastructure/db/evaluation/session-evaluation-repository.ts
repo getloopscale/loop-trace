@@ -4,9 +4,14 @@
  * re-judge overwrites in place; `session_version` lets the runner (B3) skip the judge on a cache hit.
  */
 import { and, eq, sql } from "drizzle-orm";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import type pg from "pg";
 
 import { DEFAULT_WORKSPACE_ID } from "../../../domain/principal.js";
+import type {
+  CachedSessionVerdict,
+  SessionVerdictWrite,
+} from "../../../domain/evaluation/session-coherence-runner.js";
 import { sessionEvaluations } from "../schema.js";
 
 export interface SessionVerdictRecord {
@@ -78,5 +83,26 @@ export async function getSessionVerdict(
     reasoning: r.reasoning,
     model: r.model,
     sessionVersion: r.sessionVersion,
+  };
+}
+
+/** The workspace-parameterized verdict store the API route deps need (mirrors `evaluatorRepoFromPool`). */
+export interface SessionVerdictStore {
+  getCached: (workspaceId: string, sessionId: string, name: string) => Promise<CachedSessionVerdict | null>;
+  saveVerdict: (workspaceId: string, rec: SessionVerdictWrite) => Promise<void>;
+}
+
+/**
+ * M131 B4 — bind the session-verdict repo functions to a pool so the API composition root wires the
+ * store without importing Drizzle (keeps drizzle-orm a core-only dependency; mirrors evaluatorRepoFromPool).
+ */
+export function sessionVerdictStoreFromPool(pool: pg.Pool): SessionVerdictStore {
+  const db = drizzle(pool);
+  return {
+    getCached: async (workspaceId, sessionId, name) => {
+      const v = await getSessionVerdict(db, sessionId, name, workspaceId);
+      return v ? { sessionVersion: v.sessionVersion, verdict: v.verdict, score: v.score, reasoning: v.reasoning } : null;
+    },
+    saveVerdict: (workspaceId, rec) => upsertSessionVerdict(db, rec, workspaceId),
   };
 }

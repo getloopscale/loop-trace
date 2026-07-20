@@ -74,6 +74,22 @@ export const sessionDetailResponseSchema = z
   })
   .strict();
 
+/**
+ * M131 B4 — the Session Coherence verdict response (GET/POST /v1/sessions/:id/coherence).
+ * `verdict` is null when the session was never judged (badge → "pending"/em-dash). `cached`
+ * tells the caller whether the judge ran (POST) or the stored verdict was reused.
+ */
+export const sessionCoherenceResponseSchema = z
+  .object({
+    verdict: z.enum(["coherent", "incoherent"]).nullable(),
+    score: z.number().min(0).max(1).optional(),
+    reasoning: z.string().optional(),
+    cached: z.boolean().optional(),
+  })
+  .strict();
+
+export type SessionCoherenceResponse = z.infer<typeof sessionCoherenceResponseSchema>;
+
 export type SessionListItem = z.infer<typeof sessionListItemSchema>;
 export type SessionListResponse = z.infer<typeof sessionListResponseSchema>;
 export type SessionDetailResponse = z.infer<typeof sessionDetailResponseSchema>;
