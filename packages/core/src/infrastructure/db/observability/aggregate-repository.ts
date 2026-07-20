@@ -228,7 +228,9 @@ export async function aggregateObservability(
            percentile_cont(0.99) WITHIN GROUP (ORDER BY ${sql.raw(LATENCY_MS_EXPR)})::double precision AS p99
     FROM spans
     WHERE ingested_at >= now() - ${sql.raw(`interval '${interval}'`)} AND workspace_id = ${workspaceId}
-      AND name LIKE '%llm_request%'
+      -- exact substring match via position(): a LIKE %llm_request% would treat the literal _ as a
+      -- single-char wildcard (also matching llm<x>request); position() is an exact substring test.
+      AND position('llm_request' in name) > 0
       AND start_time_unix_nano ~ '^\\d+$' AND end_time_unix_nano ~ '^\\d+$'
     GROUP BY bucket
     ORDER BY bucket ASC
