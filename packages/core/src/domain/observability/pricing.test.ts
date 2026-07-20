@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeTraceCost, type PriceTable } from "./pricing.js";
+import { computeTraceCost, resolveModelPrice, type PriceTable } from "./pricing.js";
 import { DEFAULT_PRICES } from "./default-prices.js";
 import { traceCostSchema, costByPeriodResponseSchema } from "./cost.js";
 
@@ -113,6 +113,29 @@ describe("default price table cache rates", () => {
     expect(opus.inputPerToken).toBe(5e-6); // Finding 2 WITHDRAWN — $5/M is the correct opus-4-8 rate
     expect(opus.cacheReadPerToken).toBeCloseTo(0.5e-6, 12);
     expect(opus.cacheCreationPerToken).toBeCloseTo(6.25e-6, 12);
+  });
+});
+
+describe("opus-4-8 rate resolution (theo-lens#71 Finding 2 — DoD regression)", () => {
+  // The dated / context-window opus ids resolve to the current base key "claude-opus-4" = $5/$25 per M
+  // via longest-prefix. A wrong constant (e.g. accidentally repricing to the legacy $15/$75) fails here.
+  it("resolves_claude_opus_4_8_to_5_25_per_million", () => {
+    const p = resolveModelPrice("claude-opus-4-8", DEFAULT_PRICES);
+    expect(p?.inputPerToken).toBe(5e-6);
+    expect(p?.outputPerToken).toBe(25e-6);
+  });
+
+  it("resolves_claude_opus_4_8_1m_context_variant_to_the_same_rate", () => {
+    const p = resolveModelPrice("claude-opus-4-8[1m]", DEFAULT_PRICES);
+    expect(p?.inputPerToken).toBe(5e-6);
+    expect(p?.outputPerToken).toBe(25e-6);
+  });
+
+  it("legacy_claude_opus_4_1_still_routes_to_15_75_via_longer_key", () => {
+    // Longest-prefix must NOT collapse the legacy Opus 4.1 into the current base rate.
+    const p = resolveModelPrice("claude-opus-4-1-20250805", DEFAULT_PRICES);
+    expect(p?.inputPerToken).toBe(15e-6);
+    expect(p?.outputPerToken).toBe(75e-6);
   });
 });
 
