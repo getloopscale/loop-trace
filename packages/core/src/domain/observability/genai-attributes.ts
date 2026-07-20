@@ -2,8 +2,8 @@ import { toInt, capStringAttr } from "../attr-coerce.js";
 
 /**
  * Extract GenAI semantic-convention attributes from a span's flattened attribute
- * bag into typed fields. Attribute names are anchored on what langfuse actually
- * reads (OtelIngestionProcessor.ts) — both current and legacy token names — since
+ * bag into typed fields. Attribute names are anchored on the OTel / OpenInference
+ * GenAI semantic conventions — both current and legacy token names — since
  * the OTel GenAI conventions moved to a separate repo (blueprint EC-1).
  */
 /**
@@ -30,7 +30,7 @@ export interface GenAiFields {
   cacheCreationTokens?: number;
 }
 
-// Model resolution order (langfuse OtelIngestionProcessor.ts:2237-2242).
+// Model resolution order — the current OTel GenAI response/request model key first, then legacy fallbacks.
 const MODEL_KEYS = [
   "gen_ai.response.model",
   "gen_ai.request.model",
@@ -58,7 +58,7 @@ export function extractGenAi(attributes: unknown): GenAiFields {
 
   const model = firstString(attrs, MODEL_KEYS);
   const provider = firstString(attrs, ["gen_ai.system", "gen_ai.provider.name"]);
-  // current name first, then legacy (langfuse OtelIngestionProcessor.ts:2298-2322)
+  // current name first, then legacy (OTel GenAI token-usage convention)
   const inputTokens = toInt(
     attrs["gen_ai.usage.input_tokens"] ?? attrs["gen_ai.usage.prompt_tokens"],
   );
