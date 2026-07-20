@@ -29,6 +29,11 @@ export const spanSchema = z.object({
   ttftMs: z.number().int().optional(),
   cacheReadTokens: z.number().int().optional(),
   cacheCreationTokens: z.number().int().optional(),
+  // M53 / theo-lens#73: the trace-detail TREE root carries the trace's stored `traces.cost_usd`
+  // here so the detail header matches the list (both read the same authoritative number), instead
+  // of re-summing per-span costs that are absent for interaction/tool spans. Optional + only set on
+  // the root by `getTraceTree`; a trace with no computed cost leaves it undefined (→ em-dash).
+  costUsd: z.number().optional(),
   events: z
     .array(
       z.object({

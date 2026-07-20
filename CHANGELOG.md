@@ -7,6 +7,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.56.0] - 2026-07-20
+
+### Fixed
+- **M53 — observability metrics trustworthiness (theo-lens#73/#74/#76)** — four data-trust defects from the end-user UX pass. **#73:** the trace-detail tree root now carries the trace's STORED `traces.cost_usd` (`getTraceTree` + optional `costUsd` on the span schema) so the detail header matches the list (both read the authoritative number) instead of the client re-summing per-span costs (absent for interaction/tool spans → a misleading `$0.0000`). **#74:** `aggregateObservability` latency p50/p75/p95/p99 is now computed from `llm_request` **spans** (real model-call latency, seconds), NOT trace/interaction wall-clock — an interaction's minutes-long wall-clock was poisoning the Overview P95 (read "32m"). **#76:** the trace-list `model` is derived from the **dominant child-span model** (most tokens, deterministic tie-break, page-bounded subquery) with a root-span fallback, so `interaction` traces (whose root span has no model) show their model instead of `—`. Integration tests: trace-tree cost, dominant model, and a discriminating latency test (40-min interaction + 5s request → p95 ≈ 5s). Bundled with the theo-cloud dashboard changes (#73 header prefers `root.costUsd`; #74 list column relabeled `Duration`; #75 metric-card hint names the trend).
+
 ## [0.55.0] - 2026-07-20
 
 ### Added
