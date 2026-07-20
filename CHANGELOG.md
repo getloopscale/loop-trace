@@ -7,6 +7,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.58.0] - 2026-07-20
+
 ### Added
 - Roadmap amended: added **M132 — Session Conversation replay (inline Human→AI turn view on the session detail)** to `ROADMAP-edge-integration.md` (`/roadmap-feature session-conversation-replay`). Prompted by a LIVE Arize AX session-detail re-benchmark (`knowledge-base/references/arize-session-conversation-replay.png`) that validated M131 (Session Coherence badge + User ID) and revealed the last session-detail gap: the inline turn-by-turn conversational replay (each trace as Human input → AI output), which theo-lens does not render today (it shows SessionSummary + SessionTimeline). Depends on M131 (`[x]`) + M54 (`[x]`); reuses the M131 trace fetch — no new instrumentation. Open design question (full I/O vs 120-char previews) carried to `/to-plan`. Grill: `knowledge-base/grills/session-conversation-replay-feature-grill.md`.
 
