@@ -43,3 +43,7 @@ playwright-log.txt
 architect-output/
 .claude/codebase-architect-loop.local.md
 code-review-output/
+
+# loop-check-licence plugin local state (not versioned)
+.claude/check-licence-evidence.db
+.claude/check-licence-loop.local.md
