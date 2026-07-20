@@ -11,6 +11,15 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+### Fixed
+
+## [0.54.0] - 2026-07-20
+
+### Added
+- **M51 observability E2E UX/DX validation (real Claude Code data)** — CORE journeys LIVE-validated on the canonical local stack: Overview/Traces/Agents screens render the real CC trace (`claude_code`, 4,338 tokens, $0.02); 7 BFF read surfaces 200 with real data; mutating actions (create dataset persisted + tag trace) 2xx with observable state change; negative/zero-trust (un-keyed/bad-token → 401, malformed evaluator/guard payload → 400 fail-fast). Evidence: `.claude/knowledge-base/audits/m51-observability-e2e-2026-07-20.md` + screenshots. Depends on M50 (v0.53.0). dev-public droplet parity gated on theo-cloud#238.
+
+### Changed
+
 ### Deprecated
 
 ### Removed
