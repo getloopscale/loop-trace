@@ -33,6 +33,10 @@ export const sessionListRowSchema = z.object({
   errorCount: z.number(),
   evaluationsCount: z.number(),
   firstMessageRaw: z.string().nullable(),
+  // M131 A1/A2/A3 — Arize-parity residual columns (correlated scalar subqueries, N+1-free).
+  lastMessageRaw: z.string().nullable(),
+  durationMs: z.number().nullable(),
+  userIdRaw: z.string().nullable(),
 });
 
 /** M100 (B-L1) — the raw session-detail aggregate row. */
@@ -80,7 +84,33 @@ export async function listSessions(
                AND sp.parent_span_id IS NULL
                AND sp.start_time_unix_nano ~ '^\\d+$'
              ORDER BY sp.start_time_unix_nano::numeric ASC
-             LIMIT 1) AS "firstMessageRaw"
+             LIMIT 1) AS "firstMessageRaw",
+           -- M131 A1 — last message = LATEST root span's output (final assistant reply), symmetric to first.
+           (SELECT sp.output_value
+              FROM spans sp
+              JOIN traces tt ON tt.trace_id = sp.trace_id AND tt.workspace_id = ${workspaceId}
+             WHERE tt.session_id = s.session_id
+               AND sp.workspace_id = ${workspaceId}
+               AND sp.parent_span_id IS NULL
+               AND sp.start_time_unix_nano ~ '^\\d+$'
+             ORDER BY sp.start_time_unix_nano::numeric DESC
+             LIMIT 1) AS "lastMessageRaw",
+           -- M131 A2 — duration = span event-time (max end − min start) over member spans, ms, clamped ≥0.
+           (SELECT greatest(0, (max(sp.end_time_unix_nano::numeric) - min(sp.start_time_unix_nano::numeric)) / 1e6)::double precision
+              FROM spans sp
+              JOIN traces tt ON tt.trace_id = sp.trace_id AND tt.workspace_id = ${workspaceId}
+             WHERE tt.session_id = s.session_id
+               AND sp.workspace_id = ${workspaceId}
+               AND sp.start_time_unix_nano ~ '^\\d+$'
+               AND sp.end_time_unix_nano ~ '^\\d+$') AS "durationMs",
+           -- M131 A3 — user id = best-effort attributes->>'user.id' (fallback gen_ai.user.id); NULL → em-dash.
+           (SELECT coalesce(sp.attributes->>'user.id', sp.attributes->>'gen_ai.user.id')
+              FROM spans sp
+              JOIN traces tt ON tt.trace_id = sp.trace_id AND tt.workspace_id = ${workspaceId}
+             WHERE tt.session_id = s.session_id
+               AND sp.workspace_id = ${workspaceId}
+               AND coalesce(sp.attributes->>'user.id', sp.attributes->>'gen_ai.user.id') IS NOT NULL
+             LIMIT 1) AS "userIdRaw"
     FROM sessions s
     LEFT JOIN traces t ON t.session_id = s.session_id AND t.workspace_id = s.workspace_id
     WHERE s.workspace_id = ${workspaceId}
@@ -105,6 +135,14 @@ export async function listSessions(
     }
     // M26d: per-session eval count (>0 → shown; 0 → omitted, no "0" column).
     if (r.evaluationsCount > 0) item.evaluationsCount = r.evaluationsCount;
+    // M131 A1 — last message (final assistant reply), truncated; omitted when null/whitespace (EC).
+    if (r.lastMessageRaw != null && r.lastMessageRaw.trim() !== "") {
+      item.lastMessagePreview = preview(r.lastMessageRaw);
+    }
+    // M131 A2 — session duration in ms (span event-time); omitted when no numeric-bound spans (→ em-dash).
+    if (r.durationMs != null) item.durationMs = round3(r.durationMs);
+    // M131 A3 — best-effort user id; omitted when absent (→ em-dash), never fabricated.
+    if (r.userIdRaw != null && r.userIdRaw.trim() !== "") item.userId = r.userIdRaw;
     return item;
   });
   // M81: workspace-scoped total (one row per session — matches the GROUP BY grain).

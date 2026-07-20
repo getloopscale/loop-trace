@@ -30,6 +30,21 @@ export const sessionListItemSchema = z
      * Optional + omitted when 0 so `.strict()` stays additive.
      */
     evaluationsCount: z.number().int().nonnegative().optional(),
+    /**
+     * M131 A1 — the session's last assistant reply (latest root-span output, ≤120 chars).
+     * Optional + omitted when the latest root has null/empty output (EC). Additive; `.strict()` preserved.
+     */
+    lastMessagePreview: z.string().optional(),
+    /**
+     * M131 A2 — session duration in ms (span event-time: max end − min start over member spans).
+     * Optional + omitted when no numeric-bound spans (→ em-dash). A real 0 is shown.
+     */
+    durationMs: z.number().nonnegative().optional(),
+    /**
+     * M131 A3 — best-effort user id from `attributes->>'user.id'` (fallback `gen_ai.user.id`).
+     * Optional + omitted when absent (→ em-dash), never fabricated. Producer-emit is out of M131 scope.
+     */
+    userId: z.string().optional(),
   })
   .strict();
 
