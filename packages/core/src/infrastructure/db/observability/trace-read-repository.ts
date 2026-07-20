@@ -122,16 +122,24 @@ export async function save(
       const usage = await tx.execute(sql`
         SELECT model,
                coalesce(sum(input_tokens), 0)::int AS i,
-               coalesce(sum(output_tokens), 0)::int AS o
+               coalesce(sum(output_tokens), 0)::int AS o,
+               coalesce(sum(cache_read_tokens), 0)::int AS cr,
+               coalesce(sum(cache_creation_tokens), 0)::int AS cc
         FROM spans WHERE trace_id = ${traceId} AND workspace_id = ${workspaceId} AND model IS NOT NULL
         GROUP BY model
       `);
+      // M52 / theo-lens#71 Finding 1: include cache_read + cache_creation tokens in the cost
+      // — Claude Code caches heavily, so excluding them understated cost by ~14× on real traces.
       const cost = computeTraceCost(
-        (usage.rows as { model: string; i: number; o: number }[]).map((r) => ({
-          model: r.model,
-          inputTokens: r.i,
-          outputTokens: r.o,
-        })),
+        (usage.rows as { model: string; i: number; o: number; cr: number; cc: number }[]).map(
+          (r) => ({
+            model: r.model,
+            inputTokens: r.i,
+            outputTokens: r.o,
+            cacheReadTokens: r.cr,
+            cacheCreationTokens: r.cc,
+          }),
+        ),
         priceTable,
       );
       await tx.execute(

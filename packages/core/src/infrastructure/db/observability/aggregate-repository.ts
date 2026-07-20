@@ -47,6 +47,9 @@ export const tokensByModelRowSchema = z.object({
   model: z.string(),
   inputTokens: z.number(),
   outputTokens: z.number(),
+  // M52 / theo-lens#71 Finding 1 — cache tokens are billable and must feed the cost trend.
+  cacheReadTokens: z.number().optional(),
+  cacheCreationTokens: z.number().optional(),
 });
 /** M100 (B-L1) — the raw agents-catalog row. */
 export const agentRowSchema = z.object({
@@ -234,7 +237,9 @@ export async function aggregateObservability(
     SELECT date_trunc(${trunc}, ingested_at) AS bucket,
            model,
            coalesce(sum(input_tokens), 0)::int AS "inputTokens",
-           coalesce(sum(output_tokens), 0)::int AS "outputTokens"
+           coalesce(sum(output_tokens), 0)::int AS "outputTokens",
+           coalesce(sum(cache_read_tokens), 0)::int AS "cacheReadTokens",
+           coalesce(sum(cache_creation_tokens), 0)::int AS "cacheCreationTokens"
     FROM spans
     WHERE ingested_at >= now() - ${sql.raw(`interval '${interval}'`)}
       AND model IS NOT NULL AND workspace_id = ${workspaceId}
