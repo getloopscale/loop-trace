@@ -114,6 +114,12 @@ export async function bootstrap(
   const sessionCoherenceLimiter = new RateLimiter(parseEvaluatorRpm(process.env));
   const sessionCoherenceDeps = {
     judge,
+    // the preview-bearing trace source (listTraces populates input/output previews; getSessionDetail
+    // does not). Empty → null so the route 404s "no traces to judge".
+    getTraces: async (ws: string, sid: string) => {
+      const res = await repo.listTraces({ sessionId: sid }, ws);
+      return res.traces.length > 0 ? res.traces : null;
+    },
     getCached: coherenceStore.getCached,
     saveVerdict: coherenceStore.saveVerdict,
     ...(judgeConfig?.model != null ? { judgeModel: judgeConfig.model } : {}),

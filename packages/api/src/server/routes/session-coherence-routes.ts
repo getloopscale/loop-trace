@@ -9,9 +9,9 @@
 import type { Hono } from "hono";
 
 import {
-  type SessionRepository,
   type JudgeClient,
   type RateLimiter,
+  type TraceListItem,
   type CachedSessionVerdict,
   type SessionVerdictWrite,
   type SessionCoherenceDeps,
@@ -26,6 +26,12 @@ import { getPrincipal, requireScopeOnPrincipal } from "../auth/middleware.js";
 export interface SessionCoherenceApiDeps {
   /** the pinned judge, or null when unconfigured (route → 503, fail-closed). */
   judge: JudgeClient | null;
+  /**
+   * the session's ordered member traces WITH input/output previews (built at the composition root
+   * from `repo.listTraces({ sessionId })` — the preview-bearing path; `getSessionDetail`'s member
+   * traces carry no previews). Returns null when the session has no traces → route 404.
+   */
+  getTraces: (workspaceId: string, sessionId: string) => Promise<TraceListItem[] | null>;
   getCached: (workspaceId: string, sessionId: string, name: string) => Promise<CachedSessionVerdict | null>;
   saveVerdict: (workspaceId: string, rec: SessionVerdictWrite) => Promise<void>;
   /** the judge model name recorded on the verdict (for the benchmark). */
@@ -36,11 +42,7 @@ export interface SessionCoherenceApiDeps {
   now?: () => number;
 }
 
-export function registerSessionCoherenceRoutes(
-  app: Hono,
-  repo: SessionRepository,
-  deps: SessionCoherenceApiDeps,
-): void {
+export function registerSessionCoherenceRoutes(app: Hono, deps: SessionCoherenceApiDeps): void {
   // Read the cached verdict (null when never judged). Cheap — no judge call.
   app.get("/v1/sessions/:sessionId/coherence", requireScopeOnPrincipal("observability:read"), async (c) => {
     const ws = getPrincipal(c).workspaceId;
@@ -74,10 +76,7 @@ export function registerSessionCoherenceRoutes(
     const sessionId = c.req.param("sessionId");
     const runnerDeps: SessionCoherenceDeps = {
       judge: deps.judge,
-      getTraces: async (sid) => {
-        const detail = await repo.getSessionDetail(sid, ws);
-        return detail ? detail.traces : null;
-      },
+      getTraces: (sid) => deps.getTraces(ws, sid),
       getCached: (sid, name) => deps.getCached(ws, sid, name),
       saveVerdict: (rec) => deps.saveVerdict(ws, rec),
       ...(deps.judgeModel != null ? { judgeModel: deps.judgeModel } : {}),

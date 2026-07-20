@@ -351,7 +351,7 @@ export function createApp(
   registerSessionsRoutes(app, repo);
   // M131 B4 — Session Coherence run/read routes (opt-in; only mounted when the composition root wires
   // the judge + verdict store). Absent in a bare test app (keeps the pre-M131 surface).
-  if (sessionCoherence) registerSessionCoherenceRoutes(app, repo, sessionCoherence);
+  if (sessionCoherence) registerSessionCoherenceRoutes(app, sessionCoherence);
   registerDatasetRoutes(app, repo);
   registerLabelingQueueRoutes(app, repo);
   // M121 (D3) — the former extra-routes registrar, split per domain (evaluator/copilot/replay). Each
