@@ -37,7 +37,11 @@ if [ -n "$KEY" ]; then
   # message rather than emitting a recipe that will 401 at ingest time.
   case "$KEY" in
     theo_live_*) : ;;
-    *) echo "theo-instrument-claude: key must be a Theo platform key (theo_live_*), got '${KEY%%_*}_…'" >&2; exit 1 ;;
+    # SECURITY (M50 review LOW): show only a fixed-length prefix, NEVER a
+    # delimiter-based truncation — a rejected key without an underscore (e.g. an
+    # OpenAI `sk-...` fat-fingered into arg 2) would otherwise echo the FULL
+    # secret to stderr via `${KEY%%_*}`.
+    *) echo "theo-instrument-claude: key must be a Theo platform key (theo_live_*), got '${KEY:0:8}…'" >&2; exit 1 ;;
   esac
   TRACES_PATH="/v1/lens/traces"
   AUTH_LINE="export OTEL_EXPORTER_OTLP_HEADERS=\"Authorization=Bearer ${KEY}\""
