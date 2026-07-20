@@ -180,6 +180,34 @@ suite("listSessions first-message enrichment (integration, M20 T1.1)", () => {
     expect(() => sessionListItemSchema.parse(sd)).not.toThrow();
   });
 
+  // M131 (review M2) — the 3 new correlated subqueries MUST filter workspace_id on BOTH spans and
+  // traces: a colliding (session_id, trace_id) in another tenant must NEVER leak its user.id / last
+  // message into this tenant's row. trace_id is non-global (M22), so this is the load-bearing guard.
+  it("list_sessions_columns_do_not_leak_across_workspaces (M131 review M2)", async () => {
+    const WS_B = "ws-bob";
+    // same session_id AND trace_id in two workspaces; WS_B carries a user.id + a distinctive last output.
+    await repo.save([
+      span({ spanId: "a", traceId: "shared", sessionId: "S1", inputValue: "A-first", outputValue: "A-last" }),
+    ]);
+    await repo.save(
+      [
+        span({
+          spanId: "b",
+          traceId: "shared",
+          sessionId: "S1",
+          attributes: { "user.id": "LEAK-FROM-B" },
+          inputValue: "B-first",
+          outputValue: "B-LAST-LEAK",
+        }),
+      ],
+      WS_B,
+    );
+    const { sessions } = await repo.listSessions(); // default workspace = A
+    const s1 = sessions.find((s) => s.sessionId === "S1")!;
+    expect(s1.userId).toBeUndefined(); // WS_B's user.id MUST NOT leak into A
+    expect(s1.lastMessagePreview).toBe("A-last"); // A's own last message, never B's "B-LAST-LEAK"
+  });
+
   // M131 A3 — User ID: best-effort `attributes->>'user.id'` (fallback gen_ai.user.id), em-dash when absent.
   it("list_sessions_extracts_user_id_best_effort_from_attributes (M131 A3)", async () => {
     await repo.save([

@@ -49,10 +49,18 @@ export interface SessionCoherenceResult extends SessionCoherenceVerdict {
   cached: boolean;
 }
 
-/** Content hash of the session: sorted (traceId:endTime) — changes iff a trace is added/re-ingested. */
+/**
+ * Content hash of the session: sorted (traceId : endTime : input-preview : output-preview). Includes
+ * the previews the judge actually reads (M131 review L1) so an edited-and-re-ingested turn — same
+ * end-time but changed content — INVALIDATES the cache and re-judges, not just an added/removed trace.
+ * Order-independent (`.sort()`).
+ */
 export function sessionVersion(traces: TraceListItem[]): string {
   const sig = traces
-    .map((t) => `${t.traceId}:${t.endTimeUnixNano ?? t.startTimeUnixNano ?? ""}`)
+    .map(
+      (t) =>
+        `${t.traceId}:${t.endTimeUnixNano ?? t.startTimeUnixNano ?? ""}:${t.inputPreview ?? ""}:${t.outputPreview ?? ""}`,
+    )
     .sort()
     .join("|");
   return createHash("sha256").update(sig).digest("hex").slice(0, 16);

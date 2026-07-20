@@ -115,6 +115,21 @@ suite("session-coherence persistence + runner (integration, M131 B1+B3)", () => 
     expect(judge.judge).toHaveBeenCalledTimes(2);
   });
 
+  it("session_verdict_is_workspace_isolated (M131 review M2)", async () => {
+    // same (session_id, name) in two workspaces → two distinct rows (unique key is workspace-leading).
+    await upsertSessionVerdict(db, {
+      sessionId: "S1", name: SESSION_COHERENCE_NAME, verdict: "coherent", score: 0.9,
+      reasoning: null, model: "m", sessionVersion: "vA",
+    });
+    await upsertSessionVerdict(
+      db,
+      { sessionId: "S1", name: SESSION_COHERENCE_NAME, verdict: "incoherent", score: 0.1, reasoning: "B", model: "m", sessionVersion: "vB" },
+      "ws-bob",
+    );
+    expect((await getSessionVerdict(db, "S1", SESSION_COHERENCE_NAME))?.verdict).toBe("coherent"); // workspace A
+    expect((await getSessionVerdict(db, "S1", SESSION_COHERENCE_NAME, "ws-bob"))?.verdict).toBe("incoherent"); // B
+  });
+
   it("absent_session_returns_null_no_verdict_written", async () => {
     const judge: JudgeClient = { judge: vi.fn() };
     const r = await runSessionCoherence(deps(judge), "missing");

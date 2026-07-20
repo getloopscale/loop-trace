@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
-import type { JudgeClient, TraceListItem, SessionVerdictWrite } from "@usetheo/lens-core";
+import type { JudgeClient, TraceListItem, SessionVerdictWrite, RateLimiter } from "@usetheo/lens-core";
 
 import { registerSessionCoherenceRoutes, type SessionCoherenceApiDeps } from "./session-coherence-routes.js";
 
@@ -51,6 +51,19 @@ describe("session-coherence routes (M131 B4)", () => {
     registerSessionCoherenceRoutes(app, makeDeps(null, [{ traceId: "t1" }]));
     const res = await app.request("/v1/sessions/S1/coherence", { method: "POST" });
     expect(res.status).toBe(503);
+  });
+
+  it("POST_rate_limited_is_429_with_retry_after (review M3 — billable-spend guard)", async () => {
+    const judge: JudgeClient = { judge: vi.fn() };
+    const deps = makeDeps(judge, [{ traceId: "t1", startTimeUnixNano: "1" }]);
+    // a limiter that always denies → the run is shed BEFORE any judge call.
+    deps.limiter = { tryAcquire: () => false, retryAfterSeconds: () => 30 } as unknown as RateLimiter;
+    const app = new Hono();
+    registerSessionCoherenceRoutes(app, deps);
+    const res = await app.request("/v1/sessions/S1/coherence", { method: "POST" });
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("30");
+    expect(judge.judge).not.toHaveBeenCalled(); // no LLM spend when rate-limited
   });
 
   it("POST_judge_failure_is_502_and_writes_no_verdict (fail-closed)", async () => {
