@@ -7,6 +7,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Roadmap amended: added **M131 — Sessions Arize-parity residual (last message · duration · user id + Session Coherence eval)** to `ROADMAP-edge-integration.md` (`/roadmap-feature sessions-arize-parity-residual`). A LIVE re-benchmark against Arize AX (2026-07-20) confirmed the full parity surface is already delivered (trace waterfall + span kinds = M58 `[x]`; traces-list eval columns = M59 `[x]`; Overview KPI/trend strip = M60 `[x]`; Agent Graph = M67 `[x]`; Labeling/Experiments/Custom-Dashboards = M63/M64/M66 `[x]`). Only **two** gaps survive, both on the M54 Sessions surface: the list lacks Last Message / Duration / User ID columns, and there is no session-grain evaluation (Arize's "Session Coherence" badge). M131 closes both — the residual after M57–M67, NOT a re-do. Depends on M54 (`[x]`) + the M63/M64 evaluator plumbing (Rule 9). Grill + reconciliation: `knowledge-base/grills/sessions-arize-parity-residual-feature-grill.md`; evidence: `knowledge-base/discoveries/blueprints/arize-ux-screen-by-screen.md`.
+
 ## [0.56.0] - 2026-07-20
 
 ### Fixed
