@@ -30,6 +30,21 @@ export const sessionListItemSchema = z
      * Optional + omitted when 0 so `.strict()` stays additive.
      */
     evaluationsCount: z.number().int().nonnegative().optional(),
+    /**
+     * M131 A1 — the session's last assistant reply (latest root-span output, ≤120 chars).
+     * Optional + omitted when the latest root has null/empty output (EC). Additive; `.strict()` preserved.
+     */
+    lastMessagePreview: z.string().optional(),
+    /**
+     * M131 A2 — session duration in ms (span event-time: max end − min start over member spans).
+     * Optional + omitted when no numeric-bound spans (→ em-dash). A real 0 is shown.
+     */
+    durationMs: z.number().nonnegative().optional(),
+    /**
+     * M131 A3 — best-effort user id from `attributes->>'user.id'` (fallback `gen_ai.user.id`).
+     * Optional + omitted when absent (→ em-dash), never fabricated. Producer-emit is out of M131 scope.
+     */
+    userId: z.string().optional(),
   })
   .strict();
 
@@ -58,6 +73,22 @@ export const sessionDetailResponseSchema = z
     traces: z.array(traceListItemSchema),
   })
   .strict();
+
+/**
+ * M131 B4 — the Session Coherence verdict response (GET/POST /v1/sessions/:id/coherence).
+ * `verdict` is null when the session was never judged (badge → "pending"/em-dash). `cached`
+ * tells the caller whether the judge ran (POST) or the stored verdict was reused.
+ */
+export const sessionCoherenceResponseSchema = z
+  .object({
+    verdict: z.enum(["coherent", "incoherent"]).nullable(),
+    score: z.number().min(0).max(1).optional(),
+    reasoning: z.string().optional(),
+    cached: z.boolean().optional(),
+  })
+  .strict();
+
+export type SessionCoherenceResponse = z.infer<typeof sessionCoherenceResponseSchema>;
 
 export type SessionListItem = z.infer<typeof sessionListItemSchema>;
 export type SessionListResponse = z.infer<typeof sessionListResponseSchema>;

@@ -9,7 +9,7 @@ import { sessionListItemSchema } from "../../../domain/observability/session.js"
 import { createPool, DrizzleSpanRepository } from "./drizzle-span-repository.js";
 
 const PG_URI = process.env["THEOLENS_PG_URI"];
-const MIGRATIONS = fileURLToPath(new URL("./migrations", import.meta.url));
+const MIGRATIONS = fileURLToPath(new URL("../migrations", import.meta.url));
 const suite = PG_URI ? describe : describe.skip;
 
 function span(overrides: Partial<Span> & Pick<Span, "spanId" | "traceId">): Span {
@@ -113,5 +113,113 @@ suite("listSessions first-message enrichment (integration, M20 T1.1)", () => {
     // the two pages are disjoint (offset advances the window)
     const p1 = new Set(page1.sessions.map((s) => s.sessionId));
     expect(page2.sessions.every((s) => !p1.has(s.sessionId))).toBe(true);
+  });
+
+  // M131 A1 — Last Message: the session's final assistant reply = the LATEST root span's output,
+  // symmetric to firstMessagePreview (earliest root span input). Truncated, omitted when absent.
+  it("list_sessions_enriches_last_message_preview (M131 A1)", async () => {
+    await repo.save([
+      span({
+        spanId: "e",
+        traceId: "t-e",
+        sessionId: "S1",
+        startTimeUnixNano: "1700000000000000000",
+        inputValue: "hi",
+        outputValue: "FIRST REPLY",
+      }),
+    ]);
+    await repo.save([
+      span({
+        spanId: "l",
+        traceId: "t-l",
+        sessionId: "S1",
+        startTimeUnixNano: "1700000000900000000",
+        inputValue: "fix the bug",
+        outputValue: "LAST REPLY",
+      }),
+    ]);
+    const { sessions } = await repo.listSessions();
+    const s1 = sessions.find((s) => s.sessionId === "S1")!;
+    expect(s1.lastMessagePreview).toBe("LAST REPLY");
+    expect(() => sessionListItemSchema.parse(s1)).not.toThrow();
+  });
+
+  it("list_sessions_last_message_absent_is_omitted (M131 A1 EC)", async () => {
+    // a session whose latest root span has NULL output → lastMessagePreview omitted (no garbage).
+    await repo.save([span({ spanId: "no", traceId: "t-no", sessionId: "Sno", inputValue: "q" })]);
+    const { sessions } = await repo.listSessions();
+    const sno = sessions.find((s) => s.sessionId === "Sno")!;
+    expect(sno.lastMessagePreview).toBeUndefined();
+    expect(() => sessionListItemSchema.parse(sno)).not.toThrow();
+  });
+
+  // M131 A2 — Duration: span event-time (max end − min start) over member spans, in ms, clamped ≥0.
+  it("list_sessions_computes_duration_ms_from_span_event_time (M131 A2)", async () => {
+    await repo.save([
+      span({
+        spanId: "d1",
+        traceId: "t-d1",
+        sessionId: "Sd",
+        startTimeUnixNano: "1700000000000000000",
+        endTimeUnixNano: "1700000000100000000",
+      }),
+    ]);
+    await repo.save([
+      span({
+        spanId: "d2",
+        traceId: "t-d2",
+        sessionId: "Sd",
+        startTimeUnixNano: "1700000000500000000",
+        endTimeUnixNano: "1700000002000000000",
+      }),
+    ]);
+    const { sessions } = await repo.listSessions();
+    const sd = sessions.find((s) => s.sessionId === "Sd")!;
+    // max end 1_700_000_002_000_000_000 − min start 1_700_000_000_000_000_000 = 2e9 ns = 2000 ms
+    expect(sd.durationMs).toBe(2000);
+    expect(() => sessionListItemSchema.parse(sd)).not.toThrow();
+  });
+
+  // M131 (review M2) — the 3 new correlated subqueries MUST filter workspace_id on BOTH spans and
+  // traces: a colliding (session_id, trace_id) in another tenant must NEVER leak its user.id / last
+  // message into this tenant's row. trace_id is non-global (M22), so this is the load-bearing guard.
+  it("list_sessions_columns_do_not_leak_across_workspaces (M131 review M2)", async () => {
+    const WS_B = "ws-bob";
+    // same session_id AND trace_id in two workspaces; WS_B carries a user.id + a distinctive last output.
+    await repo.save([
+      span({ spanId: "a", traceId: "shared", sessionId: "S1", inputValue: "A-first", outputValue: "A-last" }),
+    ]);
+    await repo.save(
+      [
+        span({
+          spanId: "b",
+          traceId: "shared",
+          sessionId: "S1",
+          attributes: { "user.id": "LEAK-FROM-B" },
+          inputValue: "B-first",
+          outputValue: "B-LAST-LEAK",
+        }),
+      ],
+      WS_B,
+    );
+    const { sessions } = await repo.listSessions(); // default workspace = A
+    const s1 = sessions.find((s) => s.sessionId === "S1")!;
+    expect(s1.userId).toBeUndefined(); // WS_B's user.id MUST NOT leak into A
+    expect(s1.lastMessagePreview).toBe("A-last"); // A's own last message, never B's "B-LAST-LEAK"
+  });
+
+  // M131 A3 — User ID: best-effort `attributes->>'user.id'` (fallback gen_ai.user.id), em-dash when absent.
+  it("list_sessions_extracts_user_id_best_effort_from_attributes (M131 A3)", async () => {
+    await repo.save([
+      span({ spanId: "u1", traceId: "t-u", sessionId: "Su", attributes: { "user.id": "u-123" } }),
+    ]);
+    await repo.save([span({ spanId: "n1", traceId: "t-n", sessionId: "Sn", inputValue: "no user" })]);
+    const { sessions } = await repo.listSessions();
+    const su = sessions.find((s) => s.sessionId === "Su")!;
+    const sn = sessions.find((s) => s.sessionId === "Sn")!;
+    expect(su.userId).toBe("u-123");
+    expect(sn.userId).toBeUndefined(); // best-effort: absent → omitted (em-dash in UI)
+    expect(() => sessionListItemSchema.parse(su)).not.toThrow();
+    expect(() => sessionListItemSchema.parse(sn)).not.toThrow();
   });
 });

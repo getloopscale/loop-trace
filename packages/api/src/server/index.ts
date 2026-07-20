@@ -9,6 +9,7 @@ import {
   parseEvalSweepHours,
   parseCopilotRpm,
   parseEvaluatorRpm,
+  sessionVerdictStoreFromPool,
   parseIngestRpm,
   parseMaxIngestBytes,
   parseMaxDecompressedBytes,
@@ -107,6 +108,23 @@ export async function bootstrap(
     maxBodyBytes: parseMaxIngestBytes(process.env),
     maxDecompressedBytes: parseMaxDecompressedBytes(process.env),
   };
+  // M131 B4 — session-coherence run/read. Reuses the SAME judge (D1, null → route 503) + a dedicated
+  // per-workspace billable limiter; the verdict store is the session_evaluations repo over the pool.
+  const coherenceStore = sessionVerdictStoreFromPool(pool);
+  const sessionCoherenceLimiter = new RateLimiter(parseEvaluatorRpm(process.env));
+  const sessionCoherenceDeps = {
+    judge,
+    // the preview-bearing trace source (listTraces populates input/output previews; getSessionDetail
+    // does not). Empty → null so the route 404s "no traces to judge".
+    getTraces: async (ws: string, sid: string) => {
+      const res = await repo.listTraces({ sessionId: sid }, ws);
+      return res.traces.length > 0 ? res.traces : null;
+    },
+    getCached: coherenceStore.getCached,
+    saveVerdict: coherenceStore.saveVerdict,
+    ...(judgeConfig?.model != null ? { judgeModel: judgeConfig.model } : {}),
+    limiter: sessionCoherenceLimiter,
+  };
   const app = createApp(
     repo,
     webDistDir,
@@ -124,6 +142,7 @@ export async function bootstrap(
         await pool.query("SELECT 1");
       },
     },
+    sessionCoherenceDeps,
   );
 
   // M36: opt-in periodic evaluator sweep (default OFF, D5). v1 sweeps the `default`

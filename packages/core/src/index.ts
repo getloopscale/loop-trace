@@ -168,6 +168,31 @@ export type {
   EvaluatorRecord,
   GuardRecord,
 } from "./domain/evaluation/evaluator-repository.js";
+// M131 B2/B3 — session-level Session Coherence evaluator + cached runner (reuses the M36 JudgeClient).
+export {
+  evaluateSessionCoherence,
+  assembleSessionTranscript,
+  shapeCoherenceVerdict,
+  SESSION_COHERENCE_NAME,
+  SESSION_COHERENCE_PROMPT,
+  COHERENCE_THRESHOLD,
+  type SessionCoherenceVerdict,
+} from "./domain/evaluation/session-coherence.js";
+export {
+  runSessionCoherence,
+  sessionVersion,
+  type SessionCoherenceDeps,
+  type SessionCoherenceResult,
+  type CachedSessionVerdict,
+  type SessionVerdictWrite,
+} from "./domain/evaluation/session-coherence-runner.js";
+export {
+  upsertSessionVerdict,
+  getSessionVerdict,
+  sessionVerdictStoreFromPool,
+  type SessionVerdictRecord,
+  type SessionVerdictStore,
+} from "./infrastructure/db/evaluation/session-evaluation-repository.js";
 // M26b: human-feedback annotations (write-path).
 export {
   normalizeAnnotation,
@@ -293,11 +318,13 @@ export {
   sessionListItemSchema,
   sessionListResponseSchema,
   sessionDetailResponseSchema,
+  sessionCoherenceResponseSchema,
   shapeSessionDetail,
   isoTimestamp,
   type SessionListItem,
   type SessionListResponse,
   type SessionDetailResponse,
+  type SessionCoherenceResponse,
   type RawSessionDetail,
 } from "./domain/observability/session.js";
 export {
