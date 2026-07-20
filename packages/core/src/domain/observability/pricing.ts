@@ -1,7 +1,15 @@
-/** Per-model USD price, per single token, split by input vs output (M5 ADR D1). */
+/**
+ * Per-model USD price, per single token, split by input vs output (M5 ADR D1).
+ * Cache rates (M52 / theo-lens#71 Finding 1) are OPTIONAL for backward compatibility:
+ * a price row without them prices cache tokens at 0. Authoritative Anthropic multipliers
+ * (claude-api pricing ref): cache-read = 0.1× input, cache-creation (ephemeral 5-min,
+ * which Claude Code uses) = 1.25× input.
+ */
 export interface ModelPrice {
   inputPerToken: number;
   outputPerToken: number;
+  cacheReadPerToken?: number;
+  cacheCreationPerToken?: number;
 }
 
 /** Configurable price table: model name → price. Injectable (DIP) for risk #1. */
@@ -12,6 +20,8 @@ export interface ModelUsage {
   model: string;
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
 }
 
 /**
@@ -36,10 +46,13 @@ export function resolveModelPrice(
 }
 
 /**
- * Total USD cost of a trace: `Σ (inputTokens·inputPerToken + outputTokens·outputPerToken)`
- * over each model's usage. Pure + deterministic (no clock/IO). A model with no matching
- * price (exact or prefix) contributes 0 (documented degradation — risk #1). Rounded to 6
- * decimals to bound float drift in storage/display.
+ * Total USD cost of a trace: `Σ (inputTokens·inputPerToken + outputTokens·outputPerToken
+ * + cacheReadTokens·cacheReadPerToken + cacheCreationTokens·cacheCreationPerToken)` over
+ * each model's usage (M52 / theo-lens#71 Finding 1 — cache tokens were previously excluded,
+ * materially understating cost for cache-heavy agents like Claude Code). Pure + deterministic
+ * (no clock/IO). A model with no matching price (exact or prefix) contributes 0 (documented
+ * degradation — risk #1); a cache token count with no matching cache rate also contributes 0
+ * (backward compat). Rounded to 6 decimals to bound float drift in storage/display.
  */
 export function computeTraceCost(usage: ModelUsage[], table: PriceTable): number {
   let total = 0;
@@ -47,6 +60,12 @@ export function computeTraceCost(usage: ModelUsage[], table: PriceTable): number
     const price = resolveModelPrice(u.model, table);
     if (price === undefined) continue;
     total += u.inputTokens * price.inputPerToken + u.outputTokens * price.outputPerToken;
+    if (price.cacheReadPerToken !== undefined) {
+      total += (u.cacheReadTokens ?? 0) * price.cacheReadPerToken;
+    }
+    if (price.cacheCreationPerToken !== undefined) {
+      total += (u.cacheCreationTokens ?? 0) * price.cacheCreationPerToken;
+    }
   }
   return Math.round(total * 1e6) / 1e6;
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { computeTraceCost, type PriceTable } from "./pricing.js";
+import { DEFAULT_PRICES } from "./default-prices.js";
 import { traceCostSchema, costByPeriodResponseSchema } from "./cost.js";
 
 const table: PriceTable = {
@@ -51,6 +52,67 @@ describe("computeTraceCost", () => {
     const t: PriceTable = { m: { inputPerToken: 1e-9, outputPerToken: 0 } };
     // 1234 * 1e-9 = 0.000001234 → round6 → 0.000001
     expect(computeTraceCost([{ model: "m", inputTokens: 1234, outputTokens: 0 }], t)).toBe(0.000001);
+  });
+
+  it("compute_trace_cost_includes_cache_read_and_creation_tokens", () => {
+    // theo-lens#71 Finding 1: Claude Code caches heavily; cache tokens MUST be priced.
+    // opus rates: input $5/M, output $25/M, cacheRead 0.1× input = $0.5/M, cacheCreation 1.25× = $6.25/M
+    const t: PriceTable = {
+      opus: {
+        inputPerToken: 5e-6,
+        outputPerToken: 25e-6,
+        cacheReadPerToken: 0.5e-6,
+        cacheCreationPerToken: 6.25e-6,
+      },
+    };
+    // real trace shape (span cc50: 2 in / 529 out / 753582 cache-read / 976 cache-creation)
+    // 2*5e-6 + 529*25e-6 + 753582*0.5e-6 + 976*6.25e-6
+    // = 0.00001 + 0.013225 + 0.376791 + 0.0061 = 0.396126
+    expect(
+      computeTraceCost(
+        [
+          {
+            model: "opus",
+            inputTokens: 2,
+            outputTokens: 529,
+            cacheReadTokens: 753582,
+            cacheCreationTokens: 976,
+          },
+        ],
+        t,
+      ),
+    ).toBe(0.396126);
+  });
+
+  it("compute_trace_cost_omits_cache_when_price_lacks_cache_rate", () => {
+    // Backward compat: a legacy price row without cache fields prices cache tokens at 0
+    // (no crash, no NaN) — only input+output contribute.
+    const t: PriceTable = { m: { inputPerToken: 5e-6, outputPerToken: 25e-6 } };
+    expect(
+      computeTraceCost(
+        [{ model: "m", inputTokens: 100, outputTokens: 0, cacheReadTokens: 1_000_000 }],
+        t,
+      ),
+    ).toBe(0.0005); // 100*5e-6 only; the 1M cache-read tokens contribute 0 (no rate)
+  });
+
+  it("compute_trace_cost_treats_missing_cache_tokens_as_zero", () => {
+    // A priced-with-cache model but a usage with no cache token counts → cache contributes 0.
+    const t: PriceTable = {
+      m: { inputPerToken: 5e-6, outputPerToken: 25e-6, cacheReadPerToken: 0.5e-6 },
+    };
+    expect(computeTraceCost([{ model: "m", inputTokens: 100, outputTokens: 0 }], t)).toBe(0.0005);
+  });
+});
+
+describe("default price table cache rates", () => {
+  it("default_prices_derive_cache_rates_from_input_read_0_1x_creation_1_25x", () => {
+    // theo-lens#71 Finding 1: authoritative Anthropic multipliers (claude-api pricing ref):
+    // cache-read = 0.1× input, cache-creation (ephemeral 5-min) = 1.25× input.
+    const opus = DEFAULT_PRICES["claude-opus-4"];
+    expect(opus.inputPerToken).toBe(5e-6); // Finding 2 WITHDRAWN — $5/M is the correct opus-4-8 rate
+    expect(opus.cacheReadPerToken).toBeCloseTo(0.5e-6, 12);
+    expect(opus.cacheCreationPerToken).toBeCloseTo(6.25e-6, 12);
   });
 });
 
