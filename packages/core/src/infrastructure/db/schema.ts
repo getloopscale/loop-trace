@@ -251,6 +251,34 @@ export const spanEvaluations = pgTable(
 );
 
 /**
+ * M131 B1 — session-level Session Coherence verdicts (the session twin of span_evaluations).
+ * Keyed (workspace, session_id, name); `session_version` (content hash of ordered trace-ids +
+ * max ingested_at) makes a re-run a CACHE HIT when the session is unchanged (M131 B3). UPSERT —
+ * one verdict per (session, name); re-judging a changed session overwrites. workspace-leading so a
+ * (session_id, name) collision across tenants stays two rows.
+ */
+export const sessionEvaluations = pgTable(
+  "session_evaluations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceIdCol(),
+    sessionId: text("session_id").notNull(),
+    name: text("name").notNull(),
+    verdict: text("verdict").notNull(),
+    score: doublePrecision("score"),
+    reasoning: text("reasoning"),
+    model: text("model"),
+    sessionVersion: text("session_version").notNull(),
+    evaluatedAt: timestamp("evaluated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    unique("session_evaluations_session_id_name_uq").on(t.workspaceId, t.sessionId, t.name),
+    index("session_evaluations_name_idx").on(t.name),
+    index("session_evaluations_workspace_session_idx").on(t.workspaceId, t.sessionId),
+  ],
+);
+
+/**
  * M26b: human-feedback annotations (write-path). A human attaches a 👍/👎 `label`
  * and/or a free-text `note` to a trace (`span_id = ''` sentinel) or a span
  * (`span_id` set), on a `name` channel, authored by `annotator_kind`. UPSERT — one
