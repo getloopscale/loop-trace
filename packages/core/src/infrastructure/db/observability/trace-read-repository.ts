@@ -248,6 +248,20 @@ export async function getTraceTree(
     if (node === primary) continue;
     (effectiveParent(node) ?? primary).children.push(node);
   }
+
+  // M53 / theo-lens#73: surface the trace's STORED cost on the root so the detail header matches
+  // the list (both read the authoritative `traces.cost_usd`), instead of the client re-summing
+  // per-span costs (absent for interaction/tool spans → a misleading $0.0000). Only a real positive
+  // cost is attached; 0/absent leaves `costUsd` undefined so the UI renders an em-dash.
+  if (primary.costUsd === undefined) {
+    const costRows = await db
+      .select({ costUsd: traces.costUsd })
+      .from(traces)
+      .where(and(eq(traces.traceId, traceId), eq(traces.workspaceId, workspaceId)));
+    const storedCost = costRows[0]?.costUsd;
+    if (typeof storedCost === "number" && storedCost > 0) primary.costUsd = storedCost;
+  }
+
   return primary;
 }
 
@@ -422,7 +436,18 @@ export async function listTraces(
   const rows = await db
     .select({
       ...getTableColumns(traces),
-      rootModel: root.model,
+      // M53 / theo-lens#76: attribute a MODEL to `interaction` traces (whose root span has none —
+      // the model lives on child `llm_request` spans). Take the DOMINANT model (most tokens) across
+      // the trace's spans, deterministic tie-break by name; fall back to the root-span model. This
+      // correlated subquery runs per RETURNED row (page-bounded by `limit`), not per total trace.
+      rootModel: sql<string | null>`coalesce(
+        (SELECT s.model FROM spans s
+           WHERE s.trace_id = ${traces.traceId} AND s.workspace_id = ${workspaceId} AND s.model IS NOT NULL
+           GROUP BY s.model
+           ORDER BY sum(coalesce(s.input_tokens, 0) + coalesce(s.output_tokens, 0)) DESC, s.model ASC
+           LIMIT 1),
+        ${root.model}
+      )`.as("root_model"),
       rootOperationName: root.operationName,
       rootToolName: root.toolName,
       rootInputValue: repr.inputValue,

@@ -8,7 +8,7 @@ import type { Span } from "../../../domain/observability/span.js";
 import { createPool, DrizzleSpanRepository } from "./drizzle-span-repository.js";
 
 const PG_URI = process.env["THEOLENS_PG_URI"];
-const MIGRATIONS = fileURLToPath(new URL("./migrations", import.meta.url));
+const MIGRATIONS = fileURLToPath(new URL("../migrations", import.meta.url));
 const suite = PG_URI ? describe : describe.skip;
 
 function span(overrides: Partial<Span> & Pick<Span, "spanId" | "traceId">): Span {
@@ -61,15 +61,16 @@ suite("aggregateObservability (integration, M11)", () => {
   });
 
   it("test_aggregate_observability_latency_percentiles_clamp_skew", async () => {
-    // Three traces in ONE bucket via a single statement-level now() (deterministic,
-    // no hour-boundary flake): 10ms, 900ms, and a skewed end<start row. The skew row
-    // passes the numeric-bound regex (both bounds are digits) so it is INCLUDED and
-    // clamped to 0ms — durations = {0, 10, 900}.
+    // M53 / #74: latency is measured on `llm_request` SPANS now (not trace wall-clock). Three
+    // llm_request spans in ONE bucket via a single statement-level now() (deterministic, no
+    // hour-boundary flake): 10ms, 900ms, and a skewed end<start span. The skew span passes the
+    // numeric-bound regex (both bounds are digits) so it is INCLUDED and clamped to 0ms —
+    // durations = {0, 10, 900}.
     await pool.query(
-      `INSERT INTO traces (trace_id, status_code, start_time_unix_nano, end_time_unix_nano, updated_at) VALUES
-        ('t-f','ok','1700000000000000000','1700000000010000000', now()),
-        ('t-s','ok','1700000000000000000','1700000000900000000', now()),
-        ('t-skew','ok','1700000000900000000','1700000000000000000', now())`,
+      `INSERT INTO spans (span_id, trace_id, name, status_code, start_time_unix_nano, end_time_unix_nano, ingested_at) VALUES
+        ('s-f','t-f','claude_code.llm_request','ok','1700000000000000000','1700000000010000000', now()),
+        ('s-s','t-s','claude_code.llm_request','ok','1700000000000000000','1700000000900000000', now()),
+        ('s-skew','t-skew','claude_code.llm_request','ok','1700000000900000000','1700000000000000000', now())`,
     );
     const obs = await repo.aggregateObservability("24h");
     expect(obs.latency).toHaveLength(1);
@@ -84,18 +85,48 @@ suite("aggregateObservability (integration, M11)", () => {
     expect(b.p99Ms).toBeGreaterThanOrEqual(b.p50Ms);
   });
 
-  it("test_aggregate_observability_latency_excludes_null_bound_trace", async () => {
-    // a normal 500ms trace + a raw half-open trace (NULL end) inserted directly.
+  it("test_aggregate_observability_latency_excludes_non_numeric_bound_span", async () => {
+    // M53 / #74: a normal 500ms llm_request span + a span with a NON-NUMERIC end bound inserted
+    // directly (spans.end_time_unix_nano is NOT NULL, so garbage — not NULL — is the failure mode).
+    // The numeric-bound regex excludes the garbage span so it can't drag the percentile to 0.
     await repo.save([
-      span({ spanId: "n", traceId: "t-n", startTimeUnixNano: "1700000000000000000", endTimeUnixNano: "1700000000500000000" }),
+      span({ spanId: "n", traceId: "t-n", name: "claude_code.llm_request", startTimeUnixNano: "1700000000000000000", endTimeUnixNano: "1700000000500000000" }),
     ]);
     await pool.query(
-      "INSERT INTO traces (trace_id, status_code, start_time_unix_nano, end_time_unix_nano, updated_at) VALUES ('t-open','ok','1700000000000000000', NULL, now())",
+      "INSERT INTO spans (span_id, trace_id, name, start_time_unix_nano, end_time_unix_nano, ingested_at) VALUES ('bad','t-bad','claude_code.llm_request','1700000000000000000','notanumber', now())",
     );
     const obs = await repo.aggregateObservability("24h");
-    // The half-open trace is excluded (EC-1): p50 reflects the 500ms trace, not a 0.
+    // The garbage-bound span is excluded (EC-1): p50 reflects the 500ms span, not a spurious 0.
     const p50s = obs.latency.map((b) => b.p50Ms);
     expect(p50s.some((p) => p >= 400)).toBe(true); // ~500ms, not dragged to 0
+  });
+
+  it("test_latency_reflects_llm_request_spans_not_interaction_wall_clock", async () => {
+    // M53 / theo-lens#74: an interaction trace's wall-clock is minutes (human thinking/typing) — that
+    // is NOT request latency. The metric must reflect the child `llm_request` spans (real model-call
+    // latency), so a 40-min interaction with a 5s request yields a p95 of ~5s, not ~40min.
+    await repo.save([
+      span({
+        spanId: "root",
+        traceId: "ti",
+        name: "claude_code.interaction",
+        startTimeUnixNano: "1700000000000000000",
+        endTimeUnixNano: "1700002400000000000", // +2400s = 40 min
+      }),
+      span({
+        spanId: "req",
+        traceId: "ti",
+        parentSpanId: "root",
+        name: "claude_code.llm_request",
+        model: "claude-opus-4-8",
+        startTimeUnixNano: "1700000000000000000",
+        endTimeUnixNano: "1700000005000000000", // +5s
+      }),
+    ]);
+    const obs = await repo.aggregateObservability("24h");
+    const p95 = Math.max(0, ...obs.latency.map((b) => b.p95Ms));
+    expect(p95).toBeLessThan(60_000); // < 1 min — NOT the 40-min interaction (2,400,000 ms)
+    expect(p95).toBeGreaterThan(4_000); // ~5 s request latency
   });
 
   it("test_aggregate_observability_tokens_and_cost_by_model", async () => {

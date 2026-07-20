@@ -214,17 +214,21 @@ export async function aggregateObservability(
     ORDER BY bucket ASC
   `);
 
-  // Latency percentiles over clamped duration (ms). EC-1: only rows with BOTH
-  // bounds present AND numeric enter the percentile (a NULL/garbage bound must
-  // not error the cast nor count as a spurious 0ms); skew clamped via greatest.
+  // Latency percentiles over clamped duration (ms). M53 / theo-lens#74: the metric measures REAL
+  // model-call latency — the duration of `llm_request` spans — NOT a trace's wall-clock. An
+  // `interaction` trace's wall-clock is minutes (human thinking/typing) and would poison the
+  // percentile (a p95 of "32m"); `llm_request` spans are the actual request latency (seconds).
+  // EC-1: only rows with BOTH bounds present AND numeric enter the percentile (a NULL/garbage bound
+  // must not error the cast nor count as a spurious 0ms); skew clamped via greatest.
   const latencyRes = await db.execute(sql`
-    SELECT date_trunc(${trunc}, updated_at) AS bucket,
+    SELECT date_trunc(${trunc}, ingested_at) AS bucket,
            percentile_cont(0.5)  WITHIN GROUP (ORDER BY ${sql.raw(LATENCY_MS_EXPR)})::double precision AS p50,
            percentile_cont(0.75) WITHIN GROUP (ORDER BY ${sql.raw(LATENCY_MS_EXPR)})::double precision AS p75,
            percentile_cont(0.95) WITHIN GROUP (ORDER BY ${sql.raw(LATENCY_MS_EXPR)})::double precision AS p95,
            percentile_cont(0.99) WITHIN GROUP (ORDER BY ${sql.raw(LATENCY_MS_EXPR)})::double precision AS p99
-    FROM traces
-    WHERE updated_at >= now() - ${sql.raw(`interval '${interval}'`)} AND workspace_id = ${workspaceId}
+    FROM spans
+    WHERE ingested_at >= now() - ${sql.raw(`interval '${interval}'`)} AND workspace_id = ${workspaceId}
+      AND name LIKE '%llm_request%'
       AND start_time_unix_nano ~ '^\\d+$' AND end_time_unix_nano ~ '^\\d+$'
     GROUP BY bucket
     ORDER BY bucket ASC
