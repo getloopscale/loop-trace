@@ -1,0 +1,27 @@
+# Deploy override for the dev host — run the API from the GHCR-published image (built once on the
+# CI runner) instead of building on the box. Layered on top of docker-compose.yaml by
+# scripts/deploy-dev.sh:
+#
+#   docker compose -f docker-compose.yaml -f docker-compose.deploy.yml pull api
+#   docker compose -f docker-compose.yaml -f docker-compose.deploy.yml up -d postgres api
+#
+# `postgres` is INHERITED UNCHANGED from the base file. On the dev host that container already
+# exists with real data — monitors, evaluators, months of traces — and its named volume
+# (theolens_pgdata) survives every recreation of the API. The deploy pulls and restarts one
+# service; the database is not its business.
+services:
+  api:
+    image: ghcr.io/usetheodev/theo-lens:develop
+    # Without this, a `:develop` tag that already exists locally is reused and the deploy silently
+    # ships the previous build. The version gate in deploy-dev.sh would catch it — but catching a
+    # failure you can prevent is the worse of the two.
+    pull_policy: always
+    build: !reset null
+    environment:
+      # Surfaced by GET /v1/version. Written into the host .env by the deploy job, so a human can
+      # answer "what is live?" without reading a log. The GATE itself compares the image's OCI
+      # revision label, which is stronger: this proves the container restarted with the right
+      # config, the label proves it is the right IMAGE.
+      THEOLENS_GIT_SHA: ${THEOLENS_GIT_SHA:-unknown}
+      THEOLENS_VERSION: ${THEOLENS_VERSION:-dev}
+      THEOLENS_BUILD_TIME: ${THEOLENS_BUILD_TIME:-unknown}

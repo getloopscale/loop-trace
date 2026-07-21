@@ -149,6 +149,11 @@ export async function bootstrap(
     // it throwing → /ready 503 so the edge drains a DB-unreachable node.
     {
       version: process.env["THEOLENS_VERSION"] ?? "dev",
+      // Stamped by the deploy: THEOLENS_GIT_SHA is what a human compares against the commit
+      // they pushed. The gate itself uses the image's OCI label, which is stronger — but only
+      // a machine reads that, and "what is live?" is a question humans ask too.
+      gitSha: process.env["THEOLENS_GIT_SHA"] ?? "unknown",
+      builtAt: process.env["THEOLENS_BUILD_TIME"] ?? "unknown",
       pingDb: async () => {
         await pool.query("SELECT 1");
       },

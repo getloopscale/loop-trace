@@ -7,6 +7,16 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- CD pipeline groundwork (playbook Phases 1-2): `docker-compose.deploy.yml` runs the API from the GHCR image, and `scripts/deploy-dev.sh` gates a deploy on two assertions — the running image's OCI revision label equals the deployed commit, and both liveness and readiness are green.
+- `GET /v1/version` now reports `{name, version, git_sha, built_at, node}` so "what is live?" has an answer a human can read.
+
+### Changed
+
+- **BREAKING:** the probes moved to the CD playbook's canonical paths — `/health` → `/v1/healthz`, `/ready` → `/v1/healthz/ready`, `/version` → `/v1/version`. Migrated cleanly with no alias; the only in-repo consumer (`seed-post-cleanroom-all.sh`) moves in the same commit. Readiness now reports `not_ready` instead of `unavailable`, and wraps the DB probe in a 2s timeout so a hung database cannot hang the probe itself.
+
+
 ### Fixed
 
 - The `monitors` primary key is no longer named `guards_pkey` (M136 follow-up). Found by the LIVE deploy: migration `0030` renamed the table and its three indexes but left the PK on the old name. The test that should have caught it asserted that *some* unique index existed — and `guards_pkey` is unique, so it passed over the very object it was meant to flag.

@@ -162,7 +162,7 @@ function toOpenApiPath(honoPath: string): { path: string; params: string[] } {
 }
 
 /** Routes that are not part of the documented public data surface. */
-const EXCLUDED = new Set(["/health", "/ready", "/openapi.json", "/v1", "/version", "/*"]);
+const EXCLUDED = new Set(["/v1/healthz", "/v1/healthz/ready", "/openapi.json", "/v1", "/v1/version", "/*"]);
 
 /**
  * A route excluded from the PUBLIC spec. Beyond the infra/discovery set, the admin key-lifecycle
