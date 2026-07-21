@@ -24,9 +24,30 @@ export interface AutoEvalSweepDeps {
   /** Free claims whose worker died, then claim up to `batchSize` runnable jobs. */
   reclaim: () => Promise<number>;
   claimNext: (limit: number) => Promise<ClaimedJob[]>;
-  /** Score the job. MUST use `job.workspaceId` — never a default tenant (EC-5). */
-  runJob: (job: ClaimedJob) => Promise<void>;
-  complete: (job: ClaimedJob) => Promise<void>;
+  /**
+   * Score the job. MUST use `job.workspaceId` — never a default tenant (EC-5).
+   *
+   * Returns whether evaluation actually RAN. A job whose evaluator was deleted
+   * between enqueue and claim has nothing to run; it must still be settled so
+   * it is not re-claimed forever, but reporting it as a completed evaluation
+   * would inflate the milestone's own success metric with work that never
+   * happened.
+   */
+  runJob: (job: ClaimedJob) => Promise<{ ran: boolean }>;
+  /** Settle the job. `ran` distinguishes "scored" from "nothing to score". */
+  complete: (job: ClaimedJob, ran: boolean) => Promise<void>;
+  /**
+   * Refresh the claim on an in-flight job.
+   *
+   * Without it a job that outlives the stale window is reclaimed and re-run
+   * WHILE STILL RUNNING — duplicate judge spend on the exact path the milestone
+   * exists to bound, and a burned attempt budget. That window is reachable: one
+   * trace's spans judged at RUN_CONCURRENCY against a slow provider can exceed
+   * two minutes.
+   */
+  heartbeat?: (job: ClaimedJob) => Promise<void>;
+  /** Gap between heartbeats. Must be well under the stale-claim window. */
+  heartbeatMs?: number;
   fail: (job: ClaimedJob, reason: string) => Promise<void>;
   batchSize: number;
   /** Cap on concurrent judge fan-out. Reuses M133's `RUN_CONCURRENCY` by default. */
@@ -66,9 +87,23 @@ export async function sweepOnce(deps: AutoEvalSweepDeps): Promise<void> {
   if (jobs.length === 0) return;
 
   await mapPool(jobs, deps.concurrency, async (job) => {
+    // Keep the claim fresh for as long as this job runs. The interval is
+    // cleared in `finally` so a throwing job cannot leak a timer.
+    const beat = deps.heartbeat;
+    const timer =
+      beat === undefined
+        ? undefined
+        : setInterval(() => {
+            void beat(job).catch(() => {
+              // A failed refresh is not fatal — the job keeps running and the
+              // worst case is the reclaim it was preventing. Logging every miss
+              // would be noise; losing the claim shows up as a re-run.
+            });
+          }, deps.heartbeatMs ?? 30_000);
+
     try {
-      await deps.runJob(job);
-      await deps.complete(job);
+      const { ran } = await deps.runJob(job);
+      await deps.complete(job, ran);
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       // Recorded on the row (with an attempt budget behind it), not just logged —
@@ -82,6 +117,8 @@ export async function sweepOnce(deps: AutoEvalSweepDeps): Promise<void> {
         attempts: job.attempts,
         error: reason,
       });
+    } finally {
+      if (timer !== undefined) clearInterval(timer);
     }
   });
 }

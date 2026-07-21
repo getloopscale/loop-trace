@@ -40,8 +40,23 @@ export interface ClaimedJob {
  */
 export const MAX_ATTEMPTS = 3;
 
-/** Terminal statuses — never claimed again. */
-const TERMINAL = ["done", "failed"] as const;
+/**
+ * Statuses a sweep may claim.
+ *
+ * Stated POSITIVELY, and that is required rather than cosmetic. The predicate
+ * was originally `status <> ALL('{done,failed}')`, which a btree cannot use as
+ * a scan bound — measured on 200k rows, the planner fell back to a parallel seq
+ * scan plus a top-N sort (2707 buffers, 23.8 ms) and never touched the index.
+ *
+ * Nor can Postgres derive `status IN ('queued','running')` from the negated
+ * form to match a partial index: `status` is plain text with no CHECK, so the
+ * domain is open and a hypothetical 'paused' satisfies one and not the other.
+ * Leave the query negated and the partial index is simply never chosen.
+ *
+ * With the positive form against the partial index the same query is an
+ * index-ordered top-N: 22 buffers, 0.083 ms.
+ */
+const RUNNABLE = ["queued", "running"] as const;
 
 function toClaimedJob(r: Record<string, unknown>): ClaimedJob {
   return {
@@ -85,7 +100,7 @@ export async function claimNextJobs(
        attempts = attempts + 1
      WHERE id IN (
        SELECT id FROM eval_jobs
-       WHERE status <> ALL($2::text[])
+       WHERE status = ANY($2::text[])
          AND run_after <= now()
          AND attempts < $3
          AND (claimed_at IS NULL OR claimed_at < now() - ($4 || ' seconds')::interval)
@@ -95,7 +110,7 @@ export async function claimNextJobs(
        -- Re-checked under the row lock. THIS is the compare-and-swap.
        AND (claimed_at IS NULL OR claimed_at < now() - ($4 || ' seconds')::interval)
      RETURNING id, workspace_id, evaluator_id, trace_id, attempts`,
-    [workerId, TERMINAL, MAX_ATTEMPTS, String(staleSeconds), limit],
+    [workerId, RUNNABLE, MAX_ATTEMPTS, String(staleSeconds), limit],
   );
   return rows.map(toClaimedJob);
 }
@@ -107,29 +122,48 @@ export async function claimNextJobs(
  * reclaim path must not be able to silently take it back, because another
  * worker may already be running it.
  *
+ * Keyed on the job's UUID primary key ONLY. An earlier version also matched
+ * `trace_id`, which is NOT unique across tenants — the table's uniqueness is
+ * (workspace_id, evaluator_id, trace_id) and trace ids are client-supplied via
+ * OTLP. One process legitimately owns running rows in many workspaces at once,
+ * so `claimed_by` is not a tenant boundary either. Under that shape, tenant A
+ * could pin tenant B's job in `running` forever by re-ingesting a colliding
+ * trace id — denial of evaluation for B, attributable to nobody. The UUID key
+ * closes it by construction.
+ *
  * Returns whether the claim was still ours.
  */
 export async function heartbeat(
   q: Queryable,
-  traceIdOrJobId: string,
+  jobId: string,
   workerId: string,
 ): Promise<boolean> {
   const { rowCount } = await q.query(
     `UPDATE eval_jobs SET claimed_at = now()
-     WHERE (id::text = $1 OR trace_id = $1)
+     WHERE id = $1
        AND claimed_by = $2
        AND status = 'running'`,
-    [traceIdOrJobId, workerId],
+    [jobId, workerId],
   );
   return (rowCount ?? 0) > 0;
 }
 
-/** Mark a job done. Terminal — no sweep picks it up again. */
-export async function completeJob(q: Queryable, jobId: string): Promise<void> {
+/**
+ * Mark a job done. Terminal — no sweep picks it up again.
+ *
+ * Scoped to the claiming worker: a worker whose claim went stale and was
+ * reclaimed mid-flight must NOT be able to settle the job afterwards, or it
+ * clobbers the state of the worker now legitimately running it.
+ */
+export async function completeJob(
+  q: Queryable,
+  jobId: string,
+  workerId: string,
+): Promise<void> {
   await q.query(
     `UPDATE eval_jobs SET status = 'done', claimed_by = NULL, claimed_at = NULL
-     WHERE id = $1`,
-    [jobId],
+     WHERE id = $1 AND claimed_by = $2`,
+    [jobId, workerId],
   );
 }
 
@@ -146,6 +180,7 @@ export async function failJob(
   q: Queryable,
   jobId: string,
   reason: string,
+  workerId: string,
 ): Promise<void> {
   await q.query(
     `UPDATE eval_jobs SET
@@ -153,8 +188,8 @@ export async function failJob(
        last_error = $3,
        claimed_by = NULL,
        claimed_at = NULL
-     WHERE id = $1`,
-    [jobId, MAX_ATTEMPTS, reason],
+     WHERE id = $1 AND claimed_by = $4`,
+    [jobId, MAX_ATTEMPTS, reason, workerId],
   );
 }
 

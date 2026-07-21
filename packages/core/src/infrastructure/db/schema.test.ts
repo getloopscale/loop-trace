@@ -85,9 +85,13 @@ describe("M134 auto-eval schema (T1.1)", () => {
     // EC-5: the claim loop spans workspaces, so every claim must be scoped.
     const cfg = getTableConfig(evalJobs);
     expect(cfg.columns.find((c) => c.name === "workspace_id")).toBeDefined();
+    // The claim index is now PARTIAL and keyed on run_after alone — measured on
+    // 200k rows, the old composite (status, run_after, claimed_at) was never
+    // chosen because the claim's status predicate gave btree no scan bound.
     const idx = cfg.indexes.find((i) =>
-      i.config.name?.includes("eval_jobs_claim"),
+      i.config.name?.includes("eval_jobs_runnable"),
     );
     expect(idx).toBeDefined();
+    expect(idx!.config.where).toBeDefined(); // partial — terminal rows excluded
   });
 });

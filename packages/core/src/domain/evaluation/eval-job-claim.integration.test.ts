@@ -171,12 +171,12 @@ suite("eval job claim protocol (integration, M134 T3.1)", () => {
 
   it("test_heartbeat_extends_claim_so_a_live_worker_is_never_stolen_from", async () => {
     await enqueue("t-beat");
-    await claimNextJobs(pool, "w1", 10, STALE_MS);
+    const [beatJob] = await claimNextJobs(pool, "w1", 10, STALE_MS);
     await pool.query(
       "UPDATE eval_jobs SET claimed_at = now() - interval '10 minutes' WHERE trace_id = 't-beat'",
     );
 
-    const ok = await heartbeat(pool, "t-beat", "w1");
+    const ok = await heartbeat(pool, beatJob!.id, "w1");
     expect(ok).toBe(true);
 
     // With the claim refreshed, another worker must not take it.
@@ -187,16 +187,65 @@ suite("eval job claim protocol (integration, M134 T3.1)", () => {
     // A worker that lost its claim to the reclaim path must not be able to
     // silently take it back.
     await enqueue("t-foreign");
-    await claimNextJobs(pool, "w1", 10, STALE_MS);
+    const [foreignJob] = await claimNextJobs(pool, "w1", 10, STALE_MS);
 
-    expect(await heartbeat(pool, "t-foreign", "w2")).toBe(false);
+    expect(await heartbeat(pool, foreignJob!.id, "w2")).toBe(false);
+  });
+
+  it("test_a_worker_that_lost_its_claim_cannot_settle_the_job", async () => {
+    // F-wire-2 (review). completeJob/failJob keyed on `id` alone, so a worker
+    // whose claim was reclaimed mid-flight could still mark the job done —
+    // clobbering the state of the worker now legitimately running it.
+    await enqueue("t-lost");
+    const [job] = await claimNextJobs(pool, "w1", 10, STALE_MS);
+    // w1 stalls; its claim goes stale and w2 takes over.
+    await pool.query(
+      "UPDATE eval_jobs SET claimed_at = now() - interval '10 minutes' WHERE trace_id = 't-lost'",
+    );
+    await claimNextJobs(pool, "w2", 10, STALE_MS);
+
+    // w1 finally finishes and tries to settle a job it no longer owns.
+    await completeJob(pool, job!.id, "w1");
+
+    // The job is still w2's, still running — not silently marked done.
+    const { rows } = await pool.query(
+      "SELECT status, claimed_by FROM eval_jobs WHERE trace_id = 't-lost'",
+    );
+    expect(rows[0].status).toBe("running");
+    expect(rows[0].claimed_by).toBe("w2");
+  });
+
+  it("test_heartbeat_is_scoped_to_the_job_id_not_the_trace_id", async () => {
+    // F-wire-5 (review). heartbeat matched `id::text = $1 OR trace_id = $1`, and
+    // trace_id is NOT unique across tenants — the table's uniqueness is
+    // (workspace_id, evaluator_id, trace_id), and trace ids are client-supplied
+    // via OTLP. One process owns running rows in many workspaces at once, so
+    // `claimed_by` is not a tenant boundary either.
+    //
+    // Attack: tenant A ingests trace id X; tenant B independently has a job for
+    // its own trace X. A heartbeat made on A's behalf also refreshed B's row,
+    // letting A pin B's job in `running` indefinitely so the orphan scan never
+    // frees it — denial of evaluation for B, with nothing attributing it to A.
+    await enqueue("t-collide", { workspaceId: "ws-a" });
+    await enqueue("t-collide", { workspaceId: "ws-b" });
+    const claimed = await claimNextJobs(pool, "w1", 10, STALE_MS);
+    expect(claimed).toHaveLength(2);
+    const jobA = claimed.find((j) => j.workspaceId === "ws-a")!;
+
+    await pool.query("UPDATE eval_jobs SET claimed_at = now() - interval '10 minutes'");
+    await heartbeat(pool, jobA.id, "w1");
+
+    // Only A's row was refreshed; B's is still stale and therefore reclaimable.
+    const reclaimable = await claimNextJobs(pool, "w2", 10, STALE_MS);
+    expect(reclaimable).toHaveLength(1);
+    expect(reclaimable[0]!.workspaceId).toBe("ws-b");
   });
 
   it("test_completed_job_is_terminal", async () => {
     await enqueue("t-done");
     const [job] = await claimNextJobs(pool, "w1", 10, STALE_MS);
 
-    await completeJob(pool, job!.id);
+    await completeJob(pool, job!.id, "w1");
 
     expect(await statusOf("t-done")).toBe("done");
     expect(await claimNextJobs(pool, "w2", 10, STALE_MS)).toHaveLength(0);
@@ -206,7 +255,7 @@ suite("eval job claim protocol (integration, M134 T3.1)", () => {
     await enqueue("t-retry");
     const [job] = await claimNextJobs(pool, "w1", 10, STALE_MS);
 
-    await failJob(pool, job!.id, "provider timeout");
+    await failJob(pool, job!.id, "provider timeout", "w1");
 
     // Back to queued, with the reason recorded — the Failure-scenarios table
     // promised a reason and v1.0 of the plan had nowhere to put it.
@@ -228,7 +277,7 @@ suite("eval job claim protocol (integration, M134 T3.1)", () => {
     for (let i = 0; i < MAX_ATTEMPTS; i += 1) {
       const [job] = await claimNextJobs(pool, `w${i}`, 10, STALE_MS);
       expect(job).toBeDefined();
-      await failJob(pool, job!.id, `attempt ${i + 1} failed`);
+      await failJob(pool, job!.id, `attempt ${i + 1} failed`, `w${i}`);
     }
 
     expect(await statusOf("t-doomed")).toBe("failed");

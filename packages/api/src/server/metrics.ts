@@ -106,3 +106,13 @@ export const autoEvalJobsFailed = counter();
  * This counter is what makes the drop observable.
  */
 export const autoEvalEnqueueFailures = counter();
+/**
+ * Jobs settled without evaluating — the evaluator was deleted between enqueue
+ * and claim.
+ *
+ * Deliberately NOT folded into `autoEvalJobsCompleted`. The milestone's success
+ * metric is that counter; letting it absorb work that never ran would make the
+ * one number the goal rests on quietly untrue. A rising value here is also a
+ * real signal on its own: evaluators being deleted while their work is queued.
+ */
+export const autoEvalJobsOrphaned = counter();

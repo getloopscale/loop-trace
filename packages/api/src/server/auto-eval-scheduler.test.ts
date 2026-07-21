@@ -31,7 +31,7 @@ function job(over: Partial<ClaimedJob> = {}): ClaimedJob {
 function deps(over: Partial<AutoEvalSweepDeps> = {}): AutoEvalSweepDeps {
   return {
     claimNext: vi.fn(async () => []),
-    runJob: vi.fn(async () => {}),
+    runJob: vi.fn(async () => ({ ran: true })),
     complete: vi.fn(async () => {}),
     fail: vi.fn(async () => {}),
     reclaim: vi.fn(async () => 0),
@@ -66,6 +66,7 @@ describe("sweepOnce (M134 T4.1)", () => {
       ]),
       runJob: vi.fn(async (j: ClaimedJob) => {
         seen.push(j.workspaceId);
+        return { ran: true };
       }),
     });
 
@@ -79,6 +80,7 @@ describe("sweepOnce (M134 T4.1)", () => {
       claimNext: vi.fn(async () => [job({ id: "ok" }), job({ id: "bad" })]),
       runJob: vi.fn(async (j: ClaimedJob) => {
         if (j.id === "bad") throw new Error("judge exploded");
+        return { ran: true };
       }),
     });
 
@@ -108,6 +110,7 @@ describe("sweepOnce (M134 T4.1)", () => {
         peak = Math.max(peak, inFlight);
         await new Promise((r) => setTimeout(r, 5));
         inFlight -= 1;
+        return { ran: true };
       }),
     });
 
@@ -115,6 +118,96 @@ describe("sweepOnce (M134 T4.1)", () => {
 
     expect(peak).toBeLessThanOrEqual(3);
     expect(peak).toBeGreaterThan(1); // proves it is actually parallel
+  });
+
+  it("test_a_job_that_did_not_run_is_not_counted_as_completed", async () => {
+    // The milestone's own success metric is `autoEvalJobsCompleted > 0`. If a
+    // job whose evaluator was deleted between enqueue and claim is reported as
+    // completed, that metric counts work which never happened — the one number
+    // the goal rests on becomes untrustworthy. `ran: false` must reach
+    // `complete` so the caller can settle the row WITHOUT claiming a score.
+    const completions: boolean[] = [];
+    const d = deps({
+      claimNext: vi.fn(async () => [job()]),
+      runJob: vi.fn(async () => ({ ran: false })),
+      complete: vi.fn(async (_job: ClaimedJob, ran: boolean) => {
+        completions.push(ran);
+      }),
+    });
+
+    await sweepOnce(d);
+
+    // Settled (the row must not be re-claimed forever) but NOT counted as a run.
+    expect(d.complete).toHaveBeenCalledTimes(1);
+    expect(completions).toEqual([false]);
+  });
+
+  it("test_a_job_that_ran_is_reported_as_having_run", async () => {
+    const completions: boolean[] = [];
+    const d = deps({
+      claimNext: vi.fn(async () => [job()]),
+      runJob: vi.fn(async () => ({ ran: true })),
+      complete: vi.fn(async (_job: ClaimedJob, ran: boolean) => {
+        completions.push(ran);
+      }),
+    });
+
+    await sweepOnce(d);
+
+    expect(completions).toEqual([true]);
+  });
+
+  it("test_an_in_flight_job_is_heartbeaten_until_it_finishes", async () => {
+    // F-wire-2 (review). Without this, a job outliving the stale window is
+    // reclaimed and re-run WHILE STILL RUNNING — duplicate judge spend on the
+    // exact path this milestone exists to bound.
+    const beats: string[] = [];
+    let release: (() => void) | undefined;
+    const d = deps({
+      claimNext: vi.fn(async () => [job()]),
+      heartbeatMs: 5,
+      heartbeat: vi.fn(async (j: ClaimedJob) => {
+        beats.push(j.id);
+      }),
+      runJob: vi.fn(
+        () =>
+          new Promise<{ ran: boolean }>((res) => {
+            release = () => res({ ran: true });
+          }),
+      ),
+    });
+
+    const sweep = sweepOnce(d);
+    await new Promise((r) => setTimeout(r, 24));
+    expect(beats.length).toBeGreaterThanOrEqual(2);
+
+    release?.();
+    await sweep;
+
+    // And it STOPS once the job settles — a leaked timer would keep refreshing
+    // a claim nobody holds.
+    const after = beats.length;
+    await new Promise((r) => setTimeout(r, 20));
+    expect(beats.length).toBe(after);
+  });
+
+  it("test_heartbeat_timer_is_cleared_even_when_the_job_throws", async () => {
+    const beats: string[] = [];
+    const d = deps({
+      claimNext: vi.fn(async () => [job()]),
+      heartbeatMs: 5,
+      heartbeat: vi.fn(async (j: ClaimedJob) => {
+        beats.push(j.id);
+      }),
+      runJob: vi.fn(async () => {
+        throw new Error("judge exploded");
+      }),
+    });
+
+    await sweepOnce(d);
+    const after = beats.length;
+    await new Promise((r) => setTimeout(r, 20));
+    expect(beats.length).toBe(after);
   });
 
   it("test_stale_claims_are_reclaimed_before_claiming", async () => {
@@ -162,7 +255,7 @@ describe("startAutoEvalScheduler lifecycle (M134 T4.1)", () => {
     const d = deps({
       claimNext: vi.fn(async () => [job()]),
       runJob: vi.fn(
-        () => new Promise<void>((res) => { release = res; }),
+        () => new Promise<{ ran: boolean }>((res) => { release = () => res({ ran: true }); }),
       ),
     });
 

@@ -197,6 +197,31 @@ describe("M134 write-time filter validation (T2.3)", () => {
     expect(updated).toHaveLength(0);
   });
 
+  it("test_update_persists_the_auto_eval_knobs", async () => {
+    // F-wire-1 (review). PATCH {autoEnabled:true} was accepted and validated by
+    // the handler, built an EMPTY update set in the repository, hit the
+    // "nothing to change" early return, and answered 200 with the OLD record.
+    //
+    // The consequence is not cosmetic: enabling auto-evaluation on an existing
+    // evaluator was impossible through the API — delete-and-recreate was the
+    // only path. The milestone's own goal is unreachable for any evaluator a
+    // user already has.
+    const { deps: d, updated } = writeDeps();
+
+    const res = await updateEvaluatorHandler(
+      ctx({ body: { autoEnabled: true, sampling: 0.25, filter: [VALID] } }),
+      d,
+    );
+
+    expect(res.status).toBe(200);
+    expect(updated).toHaveLength(1);
+    expect(updated[0]).toMatchObject({
+      autoEnabled: true,
+      sampling: 0.25,
+      filter: [VALID],
+    });
+  });
+
   it("test_sampling_out_of_range_is_rejected", async () => {
     // The rate is the cost lever; a nonsense value must not reach the row.
     const { deps: d } = writeDeps();

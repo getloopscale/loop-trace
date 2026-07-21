@@ -692,8 +692,16 @@ export const evalJobs = pgTable(
       t.evaluatorId,
       t.traceId,
     ),
-    // Supports the claim query: queued/stale rows whose run_after has elapsed.
-    index("eval_jobs_claim_idx").on(t.status, t.runAfter, t.claimedAt),
+    // Partial, on run_after alone, covering ONLY runnable rows. Measured on
+    // 200k rows: the previous composite (status, run_after, claimed_at) was
+    // never chosen — the claim's negated status predicate gives btree no scan
+    // bound — so the planner seq-scanned and sorted (2707 buffers, 23.8 ms).
+    // This one turns the same query into an index-ordered top-N (22 buffers,
+    // 0.083 ms) and, because terminal rows fall OUT of the index, keeps claim
+    // cost proportional to PENDING work rather than to lifetime volume.
+    index("eval_jobs_runnable_idx")
+      .on(t.runAfter)
+      .where(sql`${t.status} IN ('queued', 'running')`),
     index("eval_jobs_workspace_id_idx").on(t.workspaceId),
   ],
 );

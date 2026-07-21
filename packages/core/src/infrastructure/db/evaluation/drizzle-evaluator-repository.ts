@@ -138,6 +138,19 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
     if (updates.failLabel !== undefined) set.failLabel = updates.failLabel ?? null;
     if (updates.enabled !== undefined) set.enabled = updates.enabled ? 1 : 0;
     if ("kind" in updates && updates.kind !== undefined) set.kind = updates.kind;
+    // M134 — without these three the auto-eval knobs were accepted and validated
+    // by the handler, built an EMPTY set, hit the "nothing to change" return
+    // below, and answered 200 with the OLD row. Enabling auto-evaluation on an
+    // existing evaluator was therefore impossible through the API: delete and
+    // recreate was the only path.
+    const m134 = updates as {
+      autoEnabled?: boolean;
+      sampling?: number;
+      filter?: unknown;
+    };
+    if (m134.autoEnabled !== undefined) set.autoEnabled = m134.autoEnabled ? 1 : 0;
+    if (m134.sampling !== undefined) set.sampling = m134.sampling;
+    if (m134.filter !== undefined) set.filter = m134.filter;
     if (Object.keys(set).length === 0) return this.getEvaluator(id, workspaceId); // nothing to change
     let rows: EvaluatorRow[];
     try {
