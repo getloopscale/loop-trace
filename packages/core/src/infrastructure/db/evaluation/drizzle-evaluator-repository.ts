@@ -273,8 +273,17 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
    * semantically about traces anyway, matching both the observability series
    * and how retention prunes.
    *
-   * The breach predicate MIRRORS `listBreachingTraces` above and the canonical
-   * `evaluateGuard`; all three must stay in lock-step.
+   * The breach predicate MIRRORS `listBreachingTraces` above and the canonical `evaluateGuard`;
+   * all three must stay in lock-step. That is enforced, not merely asked for — see
+   * `breach-predicate-lockstep.test.ts`.
+   *
+   * KNOWN, DELIBERATE ASYMMETRY vs `listBreachingTraces`: this method joins `traces` and that one
+   * does not, so a verdict whose trace has no `traces` row (an M26 `eval.<name>.*` verdict arriving
+   * before recompute, or a trace pruned by retention while its verdicts remain) counts in the
+   * drill-down list but not in the windowed count. This is not a bug to fix: the window predicate
+   * IS `traces.updated_at`, so a verdict with no trace has no timestamp and cannot be placed in any
+   * window. Counting it would mean asserting it happened at a time we do not know. Recorded here so
+   * the next reader does not "align" the two relations and silently start counting untimed rows.
    */
   async guardBreachWindow(
     guardId: string,
