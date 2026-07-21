@@ -18,7 +18,7 @@ const cases: Array<{ ctx: string; schema: Parameters<typeof rowsAs>[1]; validRow
   {
     ctx: "listSessions",
     schema: sessionListRowSchema,
-    validRow: { sessionId: "s", firstSeenAt: new Date(), lastSeenAt: new Date(), traceCount: 1, costUsd: 0, totalTokens: 0, errorCount: 0, evaluationsCount: 0, firstMessageRaw: null },
+    validRow: { sessionId: "s", firstSeenAt: new Date(), lastSeenAt: new Date(), traceCount: 1, costUsd: 0, totalTokens: 0, errorCount: 0, evaluationsCount: 0, firstMessageRaw: null, lastMessageRaw: null, durationMs: null, userIdRaw: null },
     dropped: "sessionId",
   },
   {
@@ -57,7 +57,7 @@ const cases: Array<{ ctx: string; schema: Parameters<typeof rowsAs>[1]; validRow
  *  STRINGS, so the schema MUST accept `string` too. This guards the exact over-strictness bug M100 hit
  *  (a bare `z.date()` regression) in the fast tier, not only via the real-pg integration suite. */
 const stringTimestampCases: Array<{ ctx: string; schema: Parameters<typeof rowsAs>[1]; row: Record<string, unknown> }> = [
-  { ctx: "listSessions", schema: sessionListRowSchema, row: { sessionId: "s", firstSeenAt: "2026-01-01T00:00:00.000Z", lastSeenAt: "2026-01-02T00:00:00.000Z", traceCount: 1, costUsd: 0, totalTokens: 0, errorCount: 0, evaluationsCount: 0, firstMessageRaw: null } },
+  { ctx: "listSessions", schema: sessionListRowSchema, row: { sessionId: "s", firstSeenAt: "2026-01-01T00:00:00.000Z", lastSeenAt: "2026-01-02T00:00:00.000Z", traceCount: 1, costUsd: 0, totalTokens: 0, errorCount: 0, evaluationsCount: 0, firstMessageRaw: null, lastMessageRaw: null, durationMs: null, userIdRaw: null } },
   { ctx: "observability.traffic", schema: trafficRowSchema, row: { bucket: "2026-01-01T00:00:00.000Z", traceCount: 1, errorCount: 0 } },
   { ctx: "aggregateAgents", schema: agentRowSchema, row: { name: "a", first_seen: "2026-01-01T00:00:00.000Z", last_seen: "2026-01-02T00:00:00.000Z", run_count: 1, versions: null, system_prompt: null, tools: null } },
 ];
