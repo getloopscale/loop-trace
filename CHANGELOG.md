@@ -7,6 +7,14 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.59.0] - 2026-07-21
+
+### Changed
+- **M64 experiment runs now score `llm_judge` evaluators (real quality A/B).** The experiment engine (`experiment-engine.ts`) previously scored only `rule` evaluators over the replayed output (the M64 D2 rule-only slice), so an A/B experiment never surfaced a real quality signal — only pass/fail rule verdicts. The engine now takes an optional injected `judge` (DIP): when present, `llm_judge` evaluators ALSO score the replayed output via the SAME provider judge reused by copilot/replay (D1), so an experiment's mean-score and compare deltas reflect real LLM-judged quality. Fail semantics stay layered — a judge error fails open per-evaluator (that score drops, the run stays `completed`), while a replay error still fails the item (`partial`). With no judge injected the engine stays rule-only (backward compatible). Wired end-to-end: `ExperimentApiDeps.judge` → composition root passes the pinned judge. Engine tests 8/8 (llm_judge scored-with-judge / skipped-without-judge / judge-error fail-open).
+
+### Fixed
+- **Boot no longer crashes resolving migrations.** `migrateLatest` runs from `db/observability/`, but the migrations live one level up at `db/migrations`; the module resolved `./migrations` (a nonexistent `db/observability/migrations`), so a fresh boot failed with `Can't find meta/_journal.json` (the `main` branch only "worked" because its stale `dist` still carried the old module at `db/`). Now resolves `../migrations` and exports `MIGRATIONS_DIR` for a regression test that asserts the resolved path ends at `infrastructure/db/migrations` and that `meta/_journal.json` exists on disk.
+
 ## [0.58.0] - 2026-07-20
 
 ### Added

@@ -95,7 +95,8 @@ export async function bootstrap(
   const copilotLimiter = new RateLimiter(parseCopilotRpm(process.env));
   const replayLimiter = new RateLimiter(parseCopilotRpm(process.env));
   // M64: the experiment-run route reuses the replay provider client + a dedicated limiter + the
-  // evaluator repo (rule-evaluator scoring). null client → the run fails closed (503).
+  // evaluator repo. Rule evaluators score via the pure engine; llm_judge evaluators score the replayed
+  // output via the SAME judge (D1) so a run shows a real quality A/B. null client → run fails closed (503).
   const experimentLimiter = new RateLimiter(parseCopilotRpm(process.env));
   // M118: the billable POST /v1/evaluators/:id/run fans out up to backfillMax=500 judge calls per
   // request — its own low-RPM per-workspace limiter (its own env knob, decoupled from copilot — UQ3).
@@ -132,7 +133,7 @@ export async function bootstrap(
     { repo: evaluatorRepo, engine, limiter: evaluatorRunLimiter },
     { spanRepo: repo, chat, limiter: copilotLimiter },
     { spanRepo: repo, chat: replayClient, limiter: replayLimiter },
-    { spanRepo: repo, evaluatorRepo, chat: replayClient, limiter: experimentLimiter },
+    { spanRepo: repo, evaluatorRepo, chat: replayClient, judge, limiter: experimentLimiter },
     ingestDeps,
     // M94: readiness probe — a bounded `SELECT 1` (the pool's connectionTimeoutMillis bounds it);
     // it throwing → /ready 503 so the edge drains a DB-unreachable node.
