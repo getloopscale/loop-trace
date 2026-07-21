@@ -7,6 +7,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- The `monitors` primary key is no longer named `guards_pkey` (M136 follow-up). Found by the LIVE deploy: migration `0030` renamed the table and its three indexes but left the PK on the old name. The test that should have caught it asserted that *some* unique index existed — and `guards_pkey` is unique, so it passed over the very object it was meant to flag.
+
+
 
 ## [0.62.0] - 2026-07-21
 

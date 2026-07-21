@@ -1,0 +1,13 @@
+-- M136 follow-up — the primary key constraint the first rename forgot.
+--
+-- Found by the LIVE deploy, not by the test suite: `0030` renamed the table and its three indexes
+-- but left the PK named `guards_pkey` on a table called `monitors`. That is exactly the mixed
+-- vocabulary 0030's own comment argued against.
+--
+-- The reason the test missed it is worth recording: it asserted
+-- `pg_indexes WHERE tablename='monitors' AND indexdef ILIKE '%UNIQUE%'`, and `guards_pkey` IS
+-- unique — so the assertion passed over the very object it should have flagged. A check that looks
+-- for a property rather than a name cannot detect a wrong name.
+--
+-- Cosmetic in behaviour, not in intent: this milestone is about a name.
+ALTER INDEX IF EXISTS guards_pkey RENAME TO monitors_pkey;
