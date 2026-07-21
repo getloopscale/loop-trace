@@ -145,4 +145,45 @@ suite("guard breach window (integration, M135 T2.1)", () => {
 
     expect(r.hasData).toBe(false);
   });
+
+  // ── The distinction the first draft of this endpoint could not express ─────────────────────────
+  //
+  // An unknown guard and a real guard with an empty window BOTH returned {hasData:false, 0, 0}.
+  // theo-cloud then built two mechanisms on a 404 this endpoint never emits: create-time ownership
+  // validation, and auto-disabling a rule whose guard was deleted. Both were dead code, and the
+  // second produced exactly the state it claimed to prevent — an armed rule that can never fire.
+  //
+  // The fix is NOT a 404. A 404 would confirm the id exists to a caller in another workspace, which
+  // is the anti-enumeration property deliberately pinned in evaluators-route.integration.test.ts.
+  // `guardExists: false` covers BOTH "no such guard" and "belongs to another workspace", so it
+  // leaks nothing while giving the consumer the definitive answer it needs.
+  it("test_unknown_guard_is_distinguishable_from_a_real_guard_with_an_empty_window", async () => {
+    const real = (await guardOver("ge", "lt", 0.5)).g.id;
+    const unknown = "00000000-0000-0000-0000-0000000000ff";
+
+    const emptyWindow = await evaluatorRepo.guardBreachWindow(real, 3600, WS);
+    const noSuchGuard = await evaluatorRepo.guardBreachWindow(unknown, 3600, WS);
+
+    // Both are hasData:false — neither has anything to evaluate. That is NOT the distinction.
+    expect(emptyWindow.hasData).toBe(false);
+    expect(noSuchGuard.hasData).toBe(false);
+
+    // The distinction is whether the guard is there at all.
+    expect(emptyWindow.guardExists).toBe(true);
+    expect(noSuchGuard.guardExists).toBe(false);
+  });
+
+  it("test_a_guard_in_another_workspace_reads_as_absent_not_as_existing", async () => {
+    // Cross-tenant: same collapse as "no such guard", deliberately. Distinguishing them would
+    // confirm another workspace's id.
+    const real = (await guardOver("ge", "lt", 0.5)).g.id;
+    const fromOtherWs = await evaluatorRepo.guardBreachWindow(real, 3600, "ws-other");
+    expect(fromOtherWs.guardExists).toBe(false);
+  });
+
+  it("test_a_non_uuid_id_reads_as_absent_rather_than_crashing", async () => {
+    const res = await evaluatorRepo.guardBreachWindow("not-a-uuid", 3600, WS);
+    expect(res.guardExists).toBe(false);
+    expect(res.hasData).toBe(false);
+  });
 });

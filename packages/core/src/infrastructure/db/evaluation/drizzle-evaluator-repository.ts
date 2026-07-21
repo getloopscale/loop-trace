@@ -281,13 +281,13 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
     windowSeconds: number,
     workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<GuardBreachWindow> {
-    const absent = { breachCount: 0, evaluatedCount: 0, hasData: false };
+    const absent = { breachCount: 0, evaluatedCount: 0, hasData: false, guardExists: false };
     // Mirrors listBreachingTraces: a non-uuid path param is absence, not a 500 (22P02).
     if (!isUuid(guardId)) return absent;
 
     const rows = await this.db.execute(sql`
       SELECT
-        count(DISTINCT se.trace_id) FILTER (
+        count(DISTINCT t.trace_id) FILTER (
           WHERE CASE g.operator
             WHEN 'lt'  THEN se.score IS NOT NULL AND se.score <  g.threshold
             WHEN 'lte' THEN se.score IS NOT NULL AND se.score <= g.threshold
@@ -298,19 +298,26 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
             ELSE false
           END
         )::int AS breach_count,
-        count(DISTINCT se.trace_id)::int AS evaluated_count
+        count(DISTINCT t.trace_id)::int AS evaluated_count,
+        -- Existence needs its own aggregate. An aggregate query with no GROUP BY returns exactly
+        -- one row even when the FROM matches nothing, so row-presence proves nothing — that is
+        -- precisely how the first draft of this method reported a deleted guard as a healthy one.
+        count(g.id)::int AS guard_rows
       FROM guards g
-      JOIN evaluators e ON e.id = g.evaluator_id AND e.workspace_id = g.workspace_id
-      JOIN span_evaluations se ON se.name = e.name AND se.workspace_id = g.workspace_id
-      JOIN traces t ON t.trace_id = se.trace_id AND t.workspace_id = se.workspace_id
-      WHERE g.id = ${guardId} AND g.workspace_id = ${workspaceId}
+      -- LEFT joins, deliberately: an INNER join makes a guard with no verdicts indistinguishable
+      -- from a guard that does not exist, which is the whole distinction this method carries.
+      LEFT JOIN evaluators e ON e.id = g.evaluator_id AND e.workspace_id = g.workspace_id
+      LEFT JOIN span_evaluations se ON se.name = e.name AND se.workspace_id = g.workspace_id
+      LEFT JOIN traces t ON t.trace_id = se.trace_id AND t.workspace_id = se.workspace_id
         AND t.updated_at >= now() - (${String(Math.max(0, Math.floor(windowSeconds)))} || ' seconds')::interval
+      WHERE g.id = ${guardId} AND g.workspace_id = ${workspaceId}
     `);
 
-    const row = (rows.rows as { breach_count: number; evaluated_count: number }[])[0];
-    if (row === undefined) return absent;
+    const row = (rows.rows as { breach_count: number; evaluated_count: number; guard_rows: number }[])[0];
+    if (row === undefined || Number(row.guard_rows) === 0) return absent;
     const evaluatedCount = Number(row.evaluated_count);
     return {
+      guardExists: true,
       breachCount: Number(row.breach_count),
       evaluatedCount,
       // Absence is "nothing was evaluated", NOT "nothing breached".

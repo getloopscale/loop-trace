@@ -70,4 +70,15 @@ export interface GuardBreachWindow {
   evaluatedCount: number;
   /** False when the window held nothing to evaluate — absence, not a zero. */
   hasData: boolean;
+  /**
+   * False when no guard with this id exists IN THIS WORKSPACE — covering both "no such guard" and
+   * "belongs to another workspace", deliberately collapsed so the answer cannot be used to confirm
+   * another tenant's id.
+   *
+   * This is NOT hasData. A real guard whose window is empty is `{guardExists: true, hasData: false}`;
+   * a deleted guard is `{guardExists: false, hasData: false}`. The consumer must be able to tell
+   * "nothing happened" from "the thing you are monitoring is gone" — the first self-heals, the
+   * second never does, and treating them alike leaves an armed rule that can never fire.
+   */
+  guardExists: boolean;
 }
