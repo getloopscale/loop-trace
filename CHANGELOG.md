@@ -7,6 +7,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.60.0] - 2026-07-21
+
 ### Added
 
 - Automatic evaluation of new traces (M134): an evaluator marked auto now scores qualifying newly-ingested traces without an operator. Opt-in per evaluator (`autoEnabled`, default off) and per deployment (`THEOLENS_AUTO_EVAL=1`), with a sampling rate and a trace filter to bound cost. Scoring never touches the ingest path — the enqueue is fire-and-forget and its failures are counted, so an eval-side outage can never fail or slow an ingest.
