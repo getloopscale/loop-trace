@@ -16,8 +16,7 @@ import type { Evaluator, Guard, Verdict } from "../../../domain/evaluation/evalu
 import type {
   EvaluatorRepository,
   EvaluatorRecord,
-  GuardRecord,
-} from "../../../domain/evaluation/evaluator-repository.js";
+  GuardRecord, GuardBreachWindow } from "../../../domain/evaluation/evaluator-repository.js";
 import { evaluators, guards, spanEvaluations } from "../schema.js";
 
 type EvaluatorRow = typeof evaluators.$inferSelect;
@@ -264,6 +263,59 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
           explanation: verdict.explanation ?? null,
         },
       });
+  }
+
+  /**
+   * M135 — the windowed breach summary the scheduled evaluator reads.
+   *
+   * Windowed on the TRACE's `updated_at`, not the verdict's, because
+   * `span_evaluations` carries no timestamp — and because the window is
+   * semantically about traces anyway, matching both the observability series
+   * and how retention prunes.
+   *
+   * The breach predicate MIRRORS `listBreachingTraces` above and the canonical
+   * `evaluateGuard`; all three must stay in lock-step.
+   */
+  async guardBreachWindow(
+    guardId: string,
+    windowSeconds: number,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<GuardBreachWindow> {
+    const absent = { breachCount: 0, evaluatedCount: 0, hasData: false };
+    // Mirrors listBreachingTraces: a non-uuid path param is absence, not a 500 (22P02).
+    if (!isUuid(guardId)) return absent;
+
+    const rows = await this.db.execute(sql`
+      SELECT
+        count(DISTINCT se.trace_id) FILTER (
+          WHERE CASE g.operator
+            WHEN 'lt'  THEN se.score IS NOT NULL AND se.score <  g.threshold
+            WHEN 'lte' THEN se.score IS NOT NULL AND se.score <= g.threshold
+            WHEN 'gt'  THEN se.score IS NOT NULL AND se.score >  g.threshold
+            WHEN 'gte' THEN se.score IS NOT NULL AND se.score >= g.threshold
+            WHEN 'eq'  THEN se.score IS NOT NULL AND se.score =  g.threshold
+            WHEN 'label_eq' THEN se.label IS NOT NULL AND se.label = g.label_value
+            ELSE false
+          END
+        )::int AS breach_count,
+        count(DISTINCT se.trace_id)::int AS evaluated_count
+      FROM guards g
+      JOIN evaluators e ON e.id = g.evaluator_id AND e.workspace_id = g.workspace_id
+      JOIN span_evaluations se ON se.name = e.name AND se.workspace_id = g.workspace_id
+      JOIN traces t ON t.trace_id = se.trace_id AND t.workspace_id = se.workspace_id
+      WHERE g.id = ${guardId} AND g.workspace_id = ${workspaceId}
+        AND t.updated_at >= now() - (${String(Math.max(0, Math.floor(windowSeconds)))} || ' seconds')::interval
+    `);
+
+    const row = (rows.rows as { breach_count: number; evaluated_count: number }[])[0];
+    if (row === undefined) return absent;
+    const evaluatedCount = Number(row.evaluated_count);
+    return {
+      breachCount: Number(row.breach_count),
+      evaluatedCount,
+      // Absence is "nothing was evaluated", NOT "nothing breached".
+      hasData: evaluatedCount > 0,
+    };
   }
 
   async listBreachingTraces(
