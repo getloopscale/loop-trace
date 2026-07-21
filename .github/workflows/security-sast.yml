@@ -1,0 +1,45 @@
+# Static security analysis over the production TypeScript surface (OWASP A05 / CWE-1059).
+# Adopted from the ecosystem CD playbook — theo-rag is the reference implementation.
+#
+# Third-party study material under .claude/knowledge-base/references/ is excluded: it is other
+# projects' code, cloned to read, and its findings are not ours to fix.
+name: Security SAST
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sast-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semgrep:
+    name: semgrep (TypeScript / OWASP)
+    # Self-hosted — GitHub-hosted minutes are billing-blocked org-wide, so `ubuntu-latest` jobs
+    # never dispatch (they fail in seconds with no runner).
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Run semgrep
+        # `docker run`, NOT a job-level `container:`. A container job runs EVERY step as root —
+        # including actions/checkout — leaving root-owned files in the shared self-hosted `_work`
+        # that break the NEXT job's checkout with "insufficient permission … .git/objects". Here
+        # the checkout stays on the host (runner-owned) and only the scan is containerised.
+        run: |
+          docker run --rm -v "$PWD:/src" semgrep/semgrep \
+            semgrep scan \
+              --config p/typescript \
+              --config p/javascript \
+              --config p/owasp-top-ten \
+              --error \
+              --exclude '.claude/knowledge-base/references' \
+              --exclude node_modules \
+              --exclude dist \
+              --exclude '**/*.test.ts' \
+              /src

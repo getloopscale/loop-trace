@@ -1,0 +1,93 @@
+# Build, publish, and deploy — the two triggers of the ecosystem CD playbook.
+#
+#   develop push  → build → GHCR :develop → deploy dev (three gates)
+#   tag v* push   → build → GHCR :X.Y.Z :latest → SBOM + keyless cosign → deploy SKIPPED
+#
+# A tag NEVER touches the dev host. The production host is provisioned separately, and a release
+# build that silently redeployed dev would make "what is on dev?" unanswerable.
+name: Publish
+
+on:
+  push:
+    branches: [develop]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false # never cancel a half-pushed image
+
+jobs:
+  image:
+    uses: usetheodev/theo/.github/workflows/build-publish.yml@develop
+    with:
+      image: theo-lens
+      dockerfile: ./Dockerfile
+      trivy: true
+      # Signing is release-only: a keyless cosign signature is a claim about a released artifact,
+      # and signing every develop build would make the signature mean nothing.
+      sign: ${{ startsWith(github.ref, 'refs/tags/v') }}
+      verify: ${{ startsWith(github.ref, 'refs/tags/v') }}
+      runner: '["self-hosted","linux","x64"]'
+
+  deploy-dev:
+    needs: image
+    # A tag build stops here. `needs: image` rather than `workflow_run` because `workflow_run` only
+    # fires from the DEFAULT branch (main), so a develop-only deploy wired that way never runs at
+    # all — a documented failure from theo-rag's pipeline.
+    if: ${{ github.ref == 'refs/heads/develop' }}
+    runs-on: [self-hosted, linux, x64]
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Configure SSH deploy key
+        run: |
+          install -m700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.DEV_SSH_KEY }}" > ~/.ssh/k
+          chmod 600 ~/.ssh/k
+          ssh-keyscan -H "${{ vars.DEV_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Provision runtime env
+        # Written over STDIN, never argv: an argument is visible in the host's process list to
+        # every other tenant of this shared box.
+        run: |
+          SHA='${{ github.sha }}'
+          BUILT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          ssh -i ~/.ssh/k root@"${{ vars.DEV_HOST }}" 'cat > ${{ vars.DEV_DEPLOY_DIR }}/.env' <<EOF
+          THEOLENS_API_PORT=18084
+          THEOLENS_PG_PORT=5434
+          THEOLENS_REQUIRE_CREDENTIAL=true
+          THEOLENS_PLATFORM_ADMIN_BOOTSTRAP=${{ secrets.THEOLENS_PLATFORM_ADMIN_BOOTSTRAP }}
+          THEOLENS_JUDGE_BASE_URL=${{ vars.THEOLENS_JUDGE_BASE_URL }}
+          THEOLENS_JUDGE_API_KEY=${{ secrets.THEOLENS_JUDGE_API_KEY }}
+          DISABLE_ERROR_REPORTING=1
+          THEOLENS_GIT_SHA=${SHA}
+          THEOLENS_VERSION=develop-${SHA:0:7}
+          THEOLENS_BUILD_TIME=${BUILT}
+          EOF
+
+      - name: Sync checkout, log into GHCR, deploy
+        run: |
+          ssh -i ~/.ssh/k root@"${{ vars.DEV_HOST }}" bash -s <<'REMOTE'
+          set -euo pipefail
+          DIR='${{ vars.DEV_DEPLOY_DIR }}'
+          # root operating a user-owned checkout; without this git refuses with "dubious ownership".
+          git config --global --add safe.directory "$DIR"
+          cd "$DIR"
+          # The deploy script lives in the repo, so the checkout must reach the published commit
+          # BEFORE it is invoked — otherwise the box runs the previous version of its own deploy.
+          git fetch -q origin develop
+          git reset --hard -q '${{ github.sha }}'
+          echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+          EXPECTED_SHA='${{ github.sha }}' bash scripts/deploy-dev.sh
+          REMOTE
+
+      - name: Remove deploy key
+        if: always()
+        run: rm -f ~/.ssh/k
