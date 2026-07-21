@@ -14,6 +14,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [0.60.0] - 2026-07-21
 
 ### Added
+- M135 T3.0: `GET /v1/guards/:id/breach-window` — the windowed carrier over HTTP. `window` is validated, never defaulted on garbage.
 - M135 T2.1: `guardBreachWindow` — per-guard breach counts over a window, distinguishing a measured zero (`hasData: true, breachCount: 0`) from absence (`hasData: false`). The distinction theo-cloud#247 lacked.
 
 - Automatic evaluation of new traces (M134): an evaluator marked auto now scores qualifying newly-ingested traces without an operator. Opt-in per evaluator (`autoEnabled`, default off) and per deployment (`THEOLENS_AUTO_EVAL=1`), with a sampling rate and a trace filter to bound cost. Scoring never touches the ingest path — the enqueue is fire-and-forget and its failures are counted, so an eval-side outage can never fail or slow an ingest.
