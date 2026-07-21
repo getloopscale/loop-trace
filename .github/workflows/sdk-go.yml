@@ -15,7 +15,10 @@ on:
 
 jobs:
   build-test-lint:
-    runs-on: ubuntu-latest
+    # Self-hosted — GitHub-hosted minutes are billing-blocked org-wide, so an ubuntu-latest job
+    # never starts ("The job was not started because recent account payments have failed").
+    # These two lanes had been silently red on every commit for that reason alone.
+    runs-on: [self-hosted, linux, x64]
     defaults:
       run:
         working-directory: packages/sdk-go
