@@ -7,6 +7,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Guard breaches now notify (M135). A guard threshold used to be computed only when a human opened the screen; a guard-backed alert rule (`metric: guard_breach`) is evaluated on the existing 60s cadence and fires through the existing anti-storm state machine and webhook path.
+- `GET /v1/guards/:id/breach-window` — per-guard breach counts over a window. It distinguishes three states the previous read-side query could not: a measured zero (`hasData: true, breachCount: 0`), an empty window (`hasData: false`), and a guard that does not exist in your workspace (`guardExists: false`). Collapsing the first two is theo-cloud#247; collapsing the last two leaves an alert rule armed against something that is gone.
+
 
 ### Fixed
 
@@ -14,8 +19,6 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [0.60.0] - 2026-07-21
 
 ### Added
-- M135 T3.0: `GET /v1/guards/:id/breach-window` — the windowed carrier over HTTP. `window` is validated, never defaulted on garbage.
-- M135 T2.1: `guardBreachWindow` — per-guard breach counts over a window, distinguishing a measured zero (`hasData: true, breachCount: 0`) from absence (`hasData: false`). The distinction theo-cloud#247 lacked.
 
 - Automatic evaluation of new traces (M134): an evaluator marked auto now scores qualifying newly-ingested traces without an operator. Opt-in per evaluator (`autoEnabled`, default off) and per deployment (`THEOLENS_AUTO_EVAL=1`), with a sampling rate and a trace filter to bound cost. Scoring never touches the ingest path — the enqueue is fire-and-forget and its failures are counted, so an eval-side outage can never fail or slow an ingest.
 - Auto-evaluation groundwork (M134 T1.1): `evaluators` gains `auto_enabled` (default OFF, so upgrading starts no judge spend), `sampling` and `filter`; new `eval_jobs` table is the claim-a-row work queue (ADR D1 — chosen over Redis-backed queues because it needs no new infrastructure and cannot lose accepted work). Dedup is a DB unique constraint rather than application logic, and `eval_jobs` joins the retention cascade so it neither grows without bound nor leaves rows that outlive their traces.
