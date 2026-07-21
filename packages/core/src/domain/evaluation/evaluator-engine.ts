@@ -56,7 +56,12 @@ function spanIO(span: Span): string {
  * unbounded `Promise.all`. `fn` records its own per-item errors (fail-open) and must not
  * throw. Node's single-threaded loop makes the shared-`result` mutations inside `fn` safe.
  */
-async function mapPool<T>(
+/**
+ * Bounded-concurrency map (M133). Exported for M134 (EC-2): the auto-eval daemon
+ * lives in `packages/api` and must reuse this rather than introduce a second
+ * concurrency mechanism — two independent caps would silently multiply.
+ */
+export async function mapPool<T>(
   items: T[],
   concurrency: number,
   fn: (item: T) => Promise<void>,

@@ -89,3 +89,20 @@ export function logIngest(spans: number, evals = 0): void {
     JSON.stringify({ level: "info", msg: "spans_ingested", spans, evals }),
   );
 }
+
+// M134 auto-evaluation. Label-less counters asserted from tests, exactly like
+// `spansIngested` — this repo has no /metrics endpoint and no label dimension,
+// and inventing one would have added a runtime dependency the plan forbids (EC-1).
+/** Auto-eval jobs that finished successfully. The milestone's success metric. */
+export const autoEvalJobsCompleted = counter();
+/** Auto-eval jobs that failed. Distinguishes "not running" from "running badly". */
+export const autoEvalJobsFailed = counter();
+/**
+ * Enqueues dropped at ingest.
+ *
+ * The enqueue is deliberately fire-and-forget so it can never fail an ingest
+ * (D5), which means a drop is otherwise INVISIBLE — exactly blueprint AP-3,
+ * where the reference logs and returns and the eval is silently lost forever.
+ * This counter is what makes the drop observable.
+ */
+export const autoEvalEnqueueFailures = counter();

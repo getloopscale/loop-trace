@@ -5,7 +5,7 @@ import * as rootBarrel from "./index.js";
 /**
  * M123 findability regroup guard: the `@usetheo/lens-core` root barrel public
  * surface is frozen here; a rename that drifts an export name fails.
- * (171 names — M134 added 5 auto-eval predicates (shouldSample, matchesFilter + its column registry) because the claim daemon lives in `packages/api` and core never imports api; M128 moved 3 test-support values, MAPPER_VECTORS/MAPPER_VECTOR_T0/
+ * (178 names — M134 added 5 auto-eval predicates (shouldSample, matchesFilter + its column registry) because the claim daemon lives in `packages/api` and core never imports api; M128 moved 3 test-support values, MAPPER_VECTORS/MAPPER_VECTOR_T0/
  * flattenOtlp, off the prod barrel to the `@usetheo/lens-core/testing` subpath;
  * M129 moved the 10 provider VALUE symbols — ChatError, openaiChatCompletion,
  * openaiChatCompletionWithUsage, OpenAICompatibleChat, OpenAICompatibleReplay,
@@ -28,10 +28,12 @@ const EXPECTED_PUBLIC_SURFACE = [
   "assembleSessionTranscript",
   "buildCopilotPrompt",
   "capAnswer",
+  "claimNextJobs",
   "classifyAgentHealth",
   "claudeCodeAdapter",
   "COHERENCE_THRESHOLD",
   "compareRuns",
+  "completeJob",
   "computeToolStats",
   "computeTraceCost",
   "CopilotError",
@@ -79,11 +81,13 @@ const EXPECTED_PUBLIC_SURFACE = [
   "extractEvaluations",
   "extractGenAi",
   "extractSpanEvents",
+  "failJob",
   "getSessionVerdict",
   "GUARD_OPERATORS",
   "guardRecordSchema",
   "guardSchema",
   "guardsListResponseSchema",
+  "heartbeat",
   "InvalidFeedbackError",
   "isErrorCode",
   "isForeignKeyViolation",
@@ -100,8 +104,10 @@ const EXPECTED_PUBLIC_SURFACE = [
   "LIST_TRACES_LIMIT_CAP",
   "listTracesOptionsSchema",
   "makeVerifyShim",
+  "mapPool",
   "matchesFilter",
   "MAX_ANSWER_BYTES",
+  "MAX_ATTEMPTS",
   "MAX_RUN_ITEMS",
   "NameConflictError",
   "normalizeAnnotation",
@@ -133,6 +139,7 @@ const EXPECTED_PUBLIC_SURFACE = [
   "percentile",
   "RANGE_BUCKETS",
   "RateLimiter",
+  "reclaimStale",
   "replayResponseSchema",
   "RESOLUTION_SCHEMA_VERSION",
   "resolveModelPrice",

@@ -161,6 +161,7 @@ export {
 export {
   runEvaluator,
   runSweep,
+  mapPool,
   RUN_CONCURRENCY,
   type EngineDeps,
   type RunOptions,
@@ -169,6 +170,16 @@ export {
 // M134 — auto-evaluation of new traces. The daemon lives in `packages/api`, so
 // these domain predicates must be reachable from the barrel (core never imports api).
 export { shouldSample } from "./domain/evaluation/should-sample.js";
+export {
+  claimNextJobs,
+  completeJob,
+  failJob,
+  heartbeat,
+  reclaimStale,
+  MAX_ATTEMPTS,
+  type ClaimedJob,
+  type Queryable,
+} from "./domain/evaluation/eval-job-claim.js";
 export {
   matchesFilter,
   validateFilter,

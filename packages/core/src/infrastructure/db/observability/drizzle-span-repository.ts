@@ -316,3 +316,15 @@ export const MIGRATIONS_DIR = fileURLToPath(new URL("../migrations", import.meta
 export async function migrateLatest(pool: pg.Pool): Promise<void> {
   await migrate(drizzle(pool), { migrationsFolder: MIGRATIONS_DIR });
 }
+
+/**
+ * Build a span repository from a raw pool.
+ *
+ * Completes the `…FromPool` convention this package already uses for the
+ * evaluator repo and the session-verdict store. Without it, a caller holding a
+ * pool has to construct a drizzle instance itself — which means declaring
+ * `drizzle-orm` in a package that has no runtime need for it.
+ */
+export function spanRepoFromPool(pool: pg.Pool): DrizzleSpanRepository {
+  return new DrizzleSpanRepository(drizzle(pool));
+}

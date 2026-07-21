@@ -35,6 +35,7 @@ import { parseRequireCredentialEnv } from "./auth/middleware.js";
 import { ApiKeyAuthVerifier } from "./auth/api-key-verifier.js";
 import { runPrune } from "./retention-run.js";
 import { startRetentionScheduler } from "./retention-scheduler.js";
+import { makeEnqueueAutoEval, startAutoEval } from "./auto-eval-wiring.js";
 
 const HOUR_MS = 3_600_000;
 
@@ -108,7 +109,12 @@ export async function bootstrap(
   // M93: OTLP ingest backpressure — a dedicated, higher-rpm per-workspace limiter (ingest is the
   // high-volume write path) so a runaway producer sheds with 429 before the pool exhausts.
   const ingestLimiter = new RateLimiter(parseIngestRpm(process.env));
+  const enqueueAutoEval = makeEnqueueAutoEval(pool, (ws) =>
+    evaluatorRepo.listEvaluators(ws),
+  );
   const ingestDeps = {
+    // M134 — auto-eval enqueue (ADR D5: fire-and-forget, counted on failure).
+    enqueueAutoEval,
     limiter: ingestLimiter,
     maxBodyBytes: parseMaxIngestBytes(process.env),
     maxDecompressedBytes: parseMaxDecompressedBytes(process.env),
@@ -165,6 +171,21 @@ export async function bootstrap(
     evalSweepTimer.unref();
   }
 
+  // M134 — automatic evaluation of new traces. Opt-in per deployment:
+  // THEOLENS_AUTO_EVAL=1 starts the claim daemon. The ingest hook is wired
+  // regardless (it is a no-op for a workspace with no auto evaluators), so
+  // enabling the daemon later still finds the work that arrived meanwhile —
+  // the queue is a table, not an in-memory buffer (ADR D1).
+  let stopAutoEval = (): void => {};
+  if (process.env["THEOLENS_AUTO_EVAL"] === "1") {
+    console.error(JSON.stringify({ level: "info", msg: "auto_eval enabled" }));
+    stopAutoEval = startAutoEval(
+      pool,
+      engine,
+      (id, ws) => evaluatorRepo.getEvaluator(id, ws),
+    ).stop;
+  }
+
   const retention = parseRetentionConfig(process.env);
   if (retention.warning) {
     console.error(JSON.stringify({ level: "warn", msg: retention.warning }));
@@ -188,11 +209,15 @@ export async function bootstrap(
     });
     stop = handle.stop;
   }
-  // Compose retention stop with the eval-sweep timer clear (graceful shutdown/tests).
+  // Compose retention stop with the eval-sweep timer clear + the M134 auto-eval
+  // daemon (graceful shutdown/tests). A background loop with no shutdown path
+  // keeps sweeping after the server is torn down — in tests that means an open
+  // handle against a closed pool.
   const retentionStop = stop;
   stop = (): void => {
     retentionStop();
     if (evalSweepTimer !== undefined) clearInterval(evalSweepTimer);
+    stopAutoEval();
   };
   return { app, pool, stop };
 }

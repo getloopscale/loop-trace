@@ -30,6 +30,11 @@ function toEvaluatorRecord(row: EvaluatorRow): EvaluatorRecord {
     target: row.target,
     enabled: row.enabled === 1,
     createdAt: row.createdAt.toISOString(),
+    // M134 — auto-evaluation. Read back so the ingest hook can decide whether
+    // this evaluator wants new traces, at what rate, and for which of them.
+    autoEnabled: row.autoEnabled === 1,
+    sampling: row.sampling,
+    filter: (row.filter ?? []) as unknown[],
     ...(row.passLabel != null ? { passLabel: row.passLabel } : {}),
     ...(row.failLabel != null ? { failLabel: row.failLabel } : {}),
   };
@@ -69,6 +74,12 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
       passLabel: ev.passLabel ?? null,
       failLabel: ev.failLabel ?? null,
       enabled: ev.enabled ? 1 : 0,
+      // M134 — persisted with the same backward-compatible defaults as the
+      // column defaults, so an older client that omits them keeps today's
+      // behaviour (auto OFF, no judge spend on upgrade).
+      autoEnabled: (ev as { autoEnabled?: boolean }).autoEnabled ? 1 : 0,
+      sampling: (ev as { sampling?: number }).sampling ?? 1,
+      filter: ((ev as { filter?: unknown }).filter ?? []) as unknown,
     };
     const rows = await this.db
       .insert(evaluators)
