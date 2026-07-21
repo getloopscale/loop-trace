@@ -305,7 +305,12 @@ export function createSpanRepository(connectionString: string): {
   return { repo: new DrizzleSpanRepository(db), pool };
 }
 
-const MIGRATIONS_DIR = fileURLToPath(new URL("./migrations", import.meta.url));
+// This module lives at `infrastructure/db/observability/`, but the Drizzle
+// migrations (and copy-migrations.mjs's dist target) live one level up at
+// `infrastructure/db/migrations`. Resolve `../migrations` — `./migrations` points
+// at a non-existent `observability/migrations` and makes boot fail with
+// "Can't find meta/_journal.json" once the dist is rebuilt from this path.
+export const MIGRATIONS_DIR = fileURLToPath(new URL("../migrations", import.meta.url));
 
 /** Apply the committed Drizzle migrations (the real release artifact) to `pool`. */
 export async function migrateLatest(pool: pg.Pool): Promise<void> {
