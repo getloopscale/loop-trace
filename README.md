@@ -92,6 +92,33 @@ the span schema may change. Claude Code spans carry `user.email` / `user.id` /
 `account_uuid` and — with `OTEL_LOG_USER_PROMPTS=1` — the prompt text, so send telemetry
 only to a Theo Lens you trust.
 
+## Monitors, and why they are not guardrails
+
+A **Monitor** is a threshold over evaluator verdicts. It runs *after* the fact: a trace is scored,
+the score crosses a line you set, and — since M135 — the breach notifies through your webhook. It
+observes. It never sits in your request path and it never blocks anything.
+
+A **guardrail** is the opposite: something inline in *your* application that inspects a request or a
+response and refuses it. Theo Lens does not provide one, and deliberately so — an observability data
+plane is not a policy-enforcement proxy, and putting one in the request path would mean an outage in
+the observability layer becomes an outage in your product.
+
+`guardrail` therefore appears in Theo Lens in exactly one place: as a **span kind**. When your app's
+own blocker runs, you emit a span of kind `guardrail` and Theo Lens records what it did. The blocking
+is yours; the observation is ours. Both reference implementations in this space draw the line in the
+same place — Arize Phoenix states it plainly: *"Phoenix doesn't block requests — your app does.
+Guardrails block in real-time. Evaluators measure asynchronously."*
+
+The capability was called "Guards" until v0.62.0. The name promised enforcement that was never
+implemented and, per the above, was never going to be. `/v1/guards*` remains as a deprecated alias
+for one release; `/v1/monitors*` is canonical.
+
+| | Runs | Can block? | Lives in |
+|---|---|---|---|
+| Evaluator | after the trace | no | Theo Lens |
+| **Monitor** | after the evaluator | **no** | Theo Lens |
+| Guardrail | inline, on the request | yes | **your application** |
+
 ## How it works
 
 - **SDK** (`@usetheo/lens-sdk`) emits OTLP `gen_ai` spans over HTTP.
