@@ -27,6 +27,7 @@ import {
   autoEvalJobsCompleted,
   autoEvalJobsFailed,
   autoEvalJobsOrphaned,
+  autoEvalHeartbeatFailures,
 } from "./metrics.js";
 
 /**
@@ -238,7 +239,12 @@ export function buildAutoEvalSweepDeps(
     // leave margin before another worker may take the job.
     heartbeatMs: Math.max(1_000, Math.floor(staleMs / 3)),
     heartbeat: async (job) => {
-      await heartbeat(q, job.id, workerId);
+      try {
+        await heartbeat(q, job.id, workerId);
+      } catch (err) {
+        autoEvalHeartbeatFailures.add(1);
+        throw err; // the scheduler logs it; the counter makes it aggregatable
+      }
     },
     runJob: async (job: ClaimedJob) => {
       const ev = await getEvaluator(job.evaluatorId, job.workspaceId);

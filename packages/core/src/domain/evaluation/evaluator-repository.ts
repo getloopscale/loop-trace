@@ -45,4 +45,40 @@ export interface EvaluatorRepository {
    * evaluator is absent.
    */
   listBreachingTraces(guardId: string, workspaceId?: string): Promise<string[]>;
+  /**
+   * M135 — per-guard breach counts over a window, for the scheduled evaluator.
+   *
+   * `hasData` is the load-bearing field, not `breachCount`. A window where
+   * traces were evaluated and none breached (`hasData: true, breachCount: 0`)
+   * is a MEASUREMENT of zero; a window with nothing to evaluate
+   * (`hasData: false`) is ABSENCE. Collapsing the two is precisely
+   * theo-cloud#247, where an empty window read as a real zero and fired every
+   * below-threshold rule permanently.
+   */
+  guardBreachWindow(
+    guardId: string,
+    windowSeconds: number,
+    workspaceId?: string,
+  ): Promise<GuardBreachWindow>;
+}
+
+/** The windowed breach summary a scheduled guard evaluation reads. */
+export interface GuardBreachWindow {
+  /** Distinct traces in the window that breached the guard. */
+  breachCount: number;
+  /** Distinct traces in the window carrying a verdict for the guard's evaluator. */
+  evaluatedCount: number;
+  /** False when the window held nothing to evaluate — absence, not a zero. */
+  hasData: boolean;
+  /**
+   * False when no guard with this id exists IN THIS WORKSPACE — covering both "no such guard" and
+   * "belongs to another workspace", deliberately collapsed so the answer cannot be used to confirm
+   * another tenant's id.
+   *
+   * This is NOT hasData. A real guard whose window is empty is `{guardExists: true, hasData: false}`;
+   * a deleted guard is `{guardExists: false, hasData: false}`. The consumer must be able to tell
+   * "nothing happened" from "the thing you are monitoring is gone" — the first self-heals, the
+   * second never does, and treating them alike leaves an armed rule that can never fire.
+   */
+  guardExists: boolean;
 }

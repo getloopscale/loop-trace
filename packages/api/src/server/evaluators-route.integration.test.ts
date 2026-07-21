@@ -194,6 +194,78 @@ suite("M36 evaluators routes (integration)", () => {
     expect(((await breaches.json()) as { traceIds: string[] }).traceIds).toEqual([]);
   });
 
+  // ── M135 T3.0 — the windowed carrier over HTTP ───────────────────────────────────────────────
+  // theo-cloud's evaluator reads THIS, not the observability series. The series is a workspace
+  // aggregate returning one float per window; it cannot answer a per-guard question.
+  //
+  // The window param is VALIDATED rather than defaulted on garbage. Silently coercing an
+  // unparseable window into a default reads a different span of time than the caller asked for —
+  // the same class of silent coercion as theo-cloud#247, one layer up.
+
+  const makeGuard = async () => {
+    const ev = await req("POST", "/v1/evaluators", "rw", { name: "w", kind: "rule", config: { predicate: "" } });
+    const evId = ((await ev.json()) as { id: string }).id;
+    const g = await req("POST", "/v1/guards", "rw", { evaluatorId: evId, operator: "lt", threshold: 0.5 });
+    return ((await g.json()) as { id: string }).id;
+  };
+
+  it("test_breach_window_reports_absence_when_nothing_was_evaluated", async () => {
+    const gId = await makeGuard();
+    const res = await req("GET", `/v1/guards/${gId}/breach-window?window=3600`, "rw");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { hasData: boolean; breachCount: number; evaluatedCount: number };
+    // The load-bearing assertion: an empty window is ABSENCE, not a zero. A caller that reads
+    // only breachCount here would see 0 and fire every lt/lte rule — which is exactly #247.
+    expect(body.hasData).toBe(false);
+    expect(body.breachCount).toBe(0);
+    expect(body.evaluatedCount).toBe(0);
+  });
+
+  // ── The wire contract theo-cloud decodes ─────────────────────────────────────────────────────
+  //
+  // theo-cloud's alert evaluator unmarshals this body into a struct and branches on `guardExists`
+  // to decide whether a rule's guard has been deleted. That consumer lives in another repository,
+  // so nothing here would break if a field were renamed or dropped — which is precisely how the
+  // first version shipped: theo-cloud branched on a 404 this route never emits, and both sides'
+  // tests passed because each was written against its own author's intent.
+  //
+  // This asserts the exact key set on the wire. Dropping or renaming a key fails HERE, in the repo
+  // that owns the contract, instead of silently in a consumer nobody runs in this suite.
+  it("test_breach_window_wire_contract_is_the_shape_theo_cloud_decodes", async () => {
+    const gId = await makeGuard();
+    const res = await req("GET", `/v1/guards/${gId}/breach-window?window=3600`, "rw");
+    const body = (await res.json()) as Record<string, unknown>;
+
+    expect(Object.keys(body).sort()).toEqual(
+      ["breachCount", "evaluatedCount", "guardExists", "hasData", "windowSeconds"].sort(),
+    );
+    expect(typeof body["guardExists"]).toBe("boolean");
+    expect(typeof body["hasData"]).toBe("boolean");
+    expect(typeof body["breachCount"]).toBe("number");
+    expect(typeof body["evaluatedCount"]).toBe("number");
+    // A REAL guard with an empty window: present, but nothing to evaluate. The pair that the first
+    // version could not express, asserted on the wire rather than in the repository layer.
+    expect(body["guardExists"]).toBe(true);
+    expect(body["hasData"]).toBe(false);
+  });
+
+  it("test_breach_window_rejects_an_unparseable_window", async () => {
+    const gId = await makeGuard();
+    for (const w of ["abc", "-1", "0", ""]) {
+      const res = await req("GET", `/v1/guards/${gId}/breach-window?window=${w}`, "rw");
+      expect(res.status).toBe(400);
+    }
+  });
+
+  it("test_breach_window_does_not_leak_across_workspaces", async () => {
+    // The guard belongs to ws-x. ws-y asking about it gets ABSENCE — not a 404 that confirms the
+    // id exists, and not another tenant's counts.
+    const gId = await makeGuard();
+    const res = await req("GET", `/v1/guards/${gId}/breach-window?window=60`, "rw2");
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { hasData: boolean }).hasData).toBe(false);
+  });
+
   it("M82 — PUT /evaluators/:id renames (write scope) keeping id/kind/createdAt", async () => {
     const created = await req("POST", "/v1/evaluators", "rw", { name: "orig", kind: "rule", config: { predicate: "status:error" } });
     const rec = (await created.json()) as { id: string; createdAt: string };

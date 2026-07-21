@@ -20,6 +20,7 @@ import {
   listGuardsHandler,
   deleteGuardHandler,
   guardBreachesHandler,
+  guardBreachWindowHandler,
 } from "../handlers/evaluators.js";
 // M118 (D1) — pre-parse bodyLimit 413 caps on every buffering write route (reuse each route's cap).
 import { bodyLimit413, EVALUATOR_MAX_BYTES } from "../body-caps.js";
@@ -40,5 +41,6 @@ export function registerEvaluatorRoutes(app: Hono, evaluators?: EvaluatorApiDeps
     app.get("/v1/guards", requireScopeOnPrincipal("observability:read"), (c) => listGuardsHandler(c, ev));
     app.delete("/v1/guards/:id", requireScopeOnPrincipal("observability:delete"), (c) => deleteGuardHandler(c, ev));
     app.get("/v1/guards/:id/breaches", requireScopeOnPrincipal("observability:read"), (c) => guardBreachesHandler(c, ev));
+    app.get("/v1/guards/:id/breach-window", requireScopeOnPrincipal("observability:read"), (c) => guardBreachWindowHandler(c, ev));
   }
 }

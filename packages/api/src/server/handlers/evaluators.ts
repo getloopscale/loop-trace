@@ -242,6 +242,28 @@ export async function deleteGuardHandler(c: Context, deps: EvaluatorApiDeps): Pr
   return c.body(null, 204);
 }
 
+/**
+ * M135 T3.0 — the windowed breach summary theo-cloud's alert evaluator reads.
+ *
+ * `window` is VALIDATED, never defaulted on garbage: silently coercing an unparseable window into
+ * a default would read a different span of time than the caller asked for. That is the same class
+ * of silent coercion as theo-cloud#247 one layer up — the caller believes it asked a question it
+ * did not ask.
+ */
+export async function guardBreachWindowHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
+  const raw = c.req.query("window") ?? "";
+  const windowSeconds = Number(raw);
+  if (raw.trim() === "" || !Number.isInteger(windowSeconds) || windowSeconds <= 0) {
+    return c.json(apiError("INVALID_WINDOW", "window must be a positive integer number of seconds"), 400);
+  }
+  const summary = await deps.repo.guardBreachWindow(
+    c.req.param("id") ?? "",
+    windowSeconds,
+    getPrincipal(c).workspaceId,
+  );
+  return c.json({ ...summary, windowSeconds }, 200);
+}
+
 export async function guardBreachesHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
   const traceIds = await deps.repo.listBreachingTraces(
     c.req.param("id") ?? "",

@@ -94,10 +94,20 @@ export async function sweepOnce(deps: AutoEvalSweepDeps): Promise<void> {
       beat === undefined
         ? undefined
         : setInterval(() => {
-            void beat(job).catch(() => {
-              // A failed refresh is not fatal — the job keeps running and the
-              // worst case is the reclaim it was preventing. Logging every miss
-              // would be noise; losing the claim shows up as a re-run.
+            void beat(job).catch((err: unknown) => {
+              // A missed refresh is not fatal to THIS job — it keeps running.
+              // But it is the precondition for the failure the heartbeat exists
+              // to prevent: the claim goes stale, another worker reclaims, and
+              // the trace is judged twice. Swallowing it with no signal is
+              // exactly blueprint AP-3, which this milestone already counted on
+              // the enqueue path. Surface it in both places.
+              log({
+                level: "warn",
+                msg: "auto_eval_heartbeat_failed",
+                jobId: job.id,
+                workspaceId: job.workspaceId,
+                error: err instanceof Error ? err.message : String(err),
+              });
             });
           }, deps.heartbeatMs ?? 30_000);
 

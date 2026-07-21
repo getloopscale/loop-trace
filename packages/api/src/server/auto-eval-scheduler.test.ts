@@ -210,6 +210,42 @@ describe("sweepOnce (M134 T4.1)", () => {
     expect(beats.length).toBe(after);
   });
 
+  it("test_a_failed_heartbeat_is_surfaced_not_swallowed", async () => {
+    // Self-review catch. The first version caught and discarded the rejection
+    // with a comment arguing "the worst case is the reclaim it was preventing"
+    // — but that reclaim IS the failure: the trace gets judged twice. That is
+    // blueprint AP-3, the exact pattern this milestone counted on the enqueue
+    // path before repeating it here.
+    const logs: Record<string, unknown>[] = [];
+    let release: (() => void) | undefined;
+    const d = deps({
+      claimNext: vi.fn(async () => [job()]),
+      heartbeatMs: 5,
+      heartbeat: vi.fn(async () => {
+        throw new Error("db unreachable");
+      }),
+      log: (e) => logs.push(e),
+      runJob: vi.fn(
+        () =>
+          new Promise<{ ran: boolean }>((res) => {
+            release = () => res({ ran: true });
+          }),
+      ),
+    });
+
+    const sweep = sweepOnce(d);
+    await new Promise((r) => setTimeout(r, 18));
+    release?.();
+    await sweep;
+
+    const beats = logs.filter((l) => l["msg"] === "auto_eval_heartbeat_failed");
+    expect(beats.length).toBeGreaterThanOrEqual(1);
+    expect(beats[0]!["jobId"]).toBe("j1");
+    // A failing heartbeat must NOT take the job down with it.
+    expect(d.complete).toHaveBeenCalledTimes(1);
+    expect(d.fail).not.toHaveBeenCalled();
+  });
+
   it("test_stale_claims_are_reclaimed_before_claiming", async () => {
     const order: string[] = [];
     const d = deps({
