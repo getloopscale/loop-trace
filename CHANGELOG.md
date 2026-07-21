@@ -8,6 +8,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- CD pipeline complete (playbook Phases 3-6): integration + SAST lanes on the repo's own self-hosted runner, and `publish.yml` — a develop push builds, publishes to GHCR and deploys to dev behind a version gate and a health gate; a `v*` tag builds, signs, and never touches dev.
+
 
 - CD pipeline groundwork (playbook Phases 1-2): `docker-compose.deploy.yml` runs the API from the GHCR image, and `scripts/deploy-dev.sh` gates a deploy on two assertions — the running image's OCI revision label equals the deployed commit, and both liveness and readiness are green.
 - `GET /v1/version` now reports `{name, version, git_sha, built_at, node}` so "what is live?" has an answer a human can read.
