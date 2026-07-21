@@ -72,7 +72,19 @@ export const monitorRecordSchema = z
     enabled: z.boolean(),
   })
   .strict();
-export const monitorsListResponseSchema = z.object({ guards: z.array(monitorRecordSchema) }).strict();
+/**
+ * M136 — the list envelope carries BOTH keys during the deprecation window.
+ *
+ * Renaming the key outright would break every consumer even on the /v1/guards alias, because the
+ * alias mounts the same handler and would therefore return the new shape. An alias that preserves
+ * the path but changes the payload is a silent break wearing a compatibility badge.
+ *
+ * `monitors` is canonical; `guards` is deprecated and removed in the release that removes the path
+ * alias. Both always hold the same array — they are one list under two names, never two lists.
+ */
+export const monitorsListResponseSchema = z
+  .object({ monitors: z.array(monitorRecordSchema), guards: z.array(monitorRecordSchema) })
+  .strict();
 
 /** `RunResult` — the evaluator-run outcome (the synchronous sweep + the async job's final tally). */
 export const runResultResponseSchema = z

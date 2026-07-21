@@ -237,9 +237,11 @@ suite("M36 evaluators routes (integration)", () => {
     const body = (await res.json()) as Record<string, unknown>;
 
     expect(Object.keys(body).sort()).toEqual(
-      ["breachCount", "evaluatedCount", "guardExists", "hasData", "windowSeconds"].sort(),
+      ["breachCount", "evaluatedCount", "guardExists", "monitorExists", "hasData", "windowSeconds"].sort(),
     );
     expect(typeof body["guardExists"]).toBe("boolean");
+    // The canonical name and its deprecated twin must never disagree — they are one fact.
+    expect(body["monitorExists"]).toBe(body["guardExists"]);
     expect(typeof body["hasData"]).toBe("boolean");
     expect(typeof body["breachCount"]).toBe("number");
     expect(typeof body["evaluatedCount"]).toBe("number");
@@ -264,6 +266,48 @@ suite("M36 evaluators routes (integration)", () => {
     const res = await req("GET", `/v1/guards/${gId}/breach-window?window=60`, "rw2");
     expect(res.status).toBe(200);
     expect(((await res.json()) as { hasData: boolean }).hasData).toBe(false);
+  });
+
+  // ── M136 Phase 3 — /v1/monitors canonical, /v1/guards deprecated alias ───────────────────────
+  //
+  // The alias mounts the SAME handler (ADR D2). A second implementation would drift, and a
+  // deprecated path that behaves differently from the canonical one is worse than no alias at all —
+  // it breaks consumers silently instead of loudly. These tests assert byte-identical bodies, which
+  // is what makes D2 verifiable rather than aspirational.
+
+  it("test_monitors_is_the_canonical_path", async () => {
+    const res = await req("GET", "/v1/monitors", "rw");
+    expect(res.status).toBe(200);
+    expect((await res.json()) as { monitors: unknown[] }).toHaveProperty("monitors");
+  });
+
+  it("test_the_guards_alias_returns_byte_identical_bodies", async () => {
+    const ev = await req("POST", "/v1/evaluators", "rw", { name: "alias", kind: "rule", config: { predicate: "" } });
+    const evId = ((await ev.json()) as { id: string }).id;
+    await req("POST", "/v1/monitors", "rw", { evaluatorId: evId, operator: "lt", threshold: 0.5 });
+
+    const canonical = await req("GET", "/v1/monitors", "rw");
+    const alias = await req("GET", "/v1/guards", "rw");
+
+    expect(alias.status).toBe(canonical.status);
+    // Byte-identical, not merely equivalent. A shape difference here means the alias grew its own
+    // implementation, which is the drift D2 exists to prevent.
+    expect(await alias.text()).toBe(await canonical.text());
+  });
+
+  it("test_the_alias_covers_every_verb_not_just_the_read", async () => {
+    // A half-aliased surface is worse than none: a consumer's GET keeps working while its POST
+    // starts 404ing, so the break surfaces at the worst moment rather than immediately.
+    const ev = await req("POST", "/v1/evaluators", "rw", { name: "verbs", kind: "rule", config: { predicate: "" } });
+    const evId = ((await ev.json()) as { id: string }).id;
+
+    const created = await req("POST", "/v1/guards", "rw", { evaluatorId: evId, operator: "gt", threshold: 0.9 });
+    expect(created.status).toBe(200);
+    const id = ((await created.json()) as { id: string }).id;
+
+    expect((await req("GET", `/v1/guards/${id}/breaches`, "rw")).status).toBe(200);
+    expect((await req("GET", `/v1/guards/${id}/breach-window?window=60`, "rw")).status).toBe(200);
+    expect((await req("DELETE", `/v1/guards/${id}`, "rw")).status).toBe(204);
   });
 
   it("M82 — PUT /evaluators/:id renames (write scope) keeping id/kind/createdAt", async () => {

@@ -2898,6 +2898,16 @@ export interface components {
             enabled: boolean;
         };
         GuardsListResponse: {
+            monitors: {
+                id: string;
+                createdAt: string;
+                evaluatorId: string;
+                /** @enum {string} */
+                operator: "lt" | "lte" | "gt" | "gte" | "eq" | "label_eq";
+                threshold?: number;
+                labelValue?: string;
+                enabled: boolean;
+            }[];
             guards: {
                 id: string;
                 createdAt: string;

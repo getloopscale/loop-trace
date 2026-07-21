@@ -233,8 +233,9 @@ export async function createMonitorHandler(c: Context, deps: EvaluatorApiDeps): 
 }
 
 export async function listMonitorsHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
-  const guards = await deps.repo.listMonitors(getPrincipal(c).workspaceId);
-  return c.json(monitorsListResponseSchema.parse({ guards }), 200);
+  const monitors = await deps.repo.listMonitors(getPrincipal(c).workspaceId);
+  // Both keys, same array — see monitorsListResponseSchema. `guards` is deprecated.
+  return c.json(monitorsListResponseSchema.parse({ monitors, guards: monitors }), 200);
 }
 
 export async function deleteMonitorHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
@@ -261,7 +262,10 @@ export async function monitorBreachWindowHandler(c: Context, deps: EvaluatorApiD
     windowSeconds,
     getPrincipal(c).workspaceId,
   );
-  return c.json({ ...summary, windowSeconds }, 200);
+  // M136: `monitorExists` is canonical; `guardExists` is the deprecated twin kept for one release.
+  // theo-cloud shipped a consumer of `guardExists` in v0.61.0 — dropping it here would break that
+  // consumer through the compatibility alias itself, which is the one thing an alias must not do.
+  return c.json({ ...summary, monitorExists: summary.guardExists, windowSeconds }, 200);
 }
 
 export async function monitorBreachesHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {

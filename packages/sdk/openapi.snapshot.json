@@ -3866,6 +3866,51 @@
       "GuardsListResponse": {
         "type": "object",
         "properties": {
+          "monitors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "evaluatorId": {
+                  "type": "string"
+                },
+                "operator": {
+                  "type": "string",
+                  "enum": [
+                    "lt",
+                    "lte",
+                    "gt",
+                    "gte",
+                    "eq",
+                    "label_eq"
+                  ]
+                },
+                "threshold": {
+                  "type": "number"
+                },
+                "labelValue": {
+                  "type": "string"
+                },
+                "enabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "createdAt",
+                "evaluatorId",
+                "operator",
+                "enabled"
+              ],
+              "additionalProperties": false
+            }
+          },
           "guards": {
             "type": "array",
             "items": {
@@ -3913,6 +3958,7 @@
           }
         },
         "required": [
+          "monitors",
           "guards"
         ],
         "additionalProperties": false
