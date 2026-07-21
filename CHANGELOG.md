@@ -7,6 +7,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+
+## [0.61.0] - 2026-07-21
+
 ### Added
 
 - Guard breaches now notify (M135). A guard threshold used to be computed only when a human opened the screen; a guard-backed alert rule (`metric: guard_breach`) is evaluated on the existing 60s cadence and fires through the existing anti-storm state machine and webhook path.
@@ -16,6 +19,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - A failed heartbeat during auto-evaluation is now logged and counted instead of discarded. A missed refresh is not fatal to the running job, but it is the precondition for the failure the heartbeat exists to prevent — the claim goes stale, another worker takes over, and the trace is judged twice. Swallowing it left that invisible.
+
 ## [0.60.0] - 2026-07-21
 
 ### Added
