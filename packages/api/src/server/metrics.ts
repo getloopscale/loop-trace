@@ -116,3 +116,13 @@ export const autoEvalEnqueueFailures = counter();
  * real signal on its own: evaluators being deleted while their work is queued.
  */
 export const autoEvalJobsOrphaned = counter();
+/**
+ * Heartbeat refreshes that failed while a job was in flight.
+ *
+ * A missed refresh is not fatal on its own, but it is the precondition for the
+ * failure the heartbeat exists to prevent: the claim goes stale, another worker
+ * reclaims, and the trace is judged twice. Swallowing it silently is blueprint
+ * AP-3 — the same defect this milestone counted on the enqueue path and then
+ * repeated here until self-review caught it.
+ */
+export const autoEvalHeartbeatFailures = counter();

@@ -7,6 +7,10 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+
+### Fixed
+
+- A failed heartbeat during auto-evaluation is now logged and counted instead of discarded. A missed refresh is not fatal to the running job, but it is the precondition for the failure the heartbeat exists to prevent — the claim goes stale, another worker takes over, and the trace is judged twice. Swallowing it left that invisible.
 ## [0.60.0] - 2026-07-21
 
 ### Added
