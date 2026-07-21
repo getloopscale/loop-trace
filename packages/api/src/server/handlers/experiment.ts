@@ -23,6 +23,7 @@ import {
   type RunVariant,
   type SpanRepository,
   type EvaluatorRepository,
+  type JudgeClient,
 } from "@usetheo/lens-core";
 import {
   ProviderBreakerOpenError,
@@ -39,6 +40,12 @@ export interface ExperimentApiDeps {
   evaluatorRepo: EvaluatorRepository;
   /** null = no provider configured → the run fails closed (503). */
   chat: ReplayClient | null;
+  /**
+   * The pinned LLM judge (or null when unconfigured). When present, `llm_judge` evaluators ALSO score the
+   * replayed output — so the run shows a real quality A/B, not just rule verdicts. Reuses the SAME provider
+   * config as chat/copilot (D1); null → the run scores rules only (no extra billable call).
+   */
+  judge: JudgeClient | null;
   /** Per-workspace billable-abuse guard (429) — one run = one acquire; the 25-item cap bounds per-run calls. */
   limiter: RateLimiter;
   /** Injected clock (ms) — defaults to Date.now. */
@@ -123,7 +130,7 @@ export async function createExperimentRunHandler(c: Context, deps: ExperimentApi
         variant: parsed.variant,
         evaluators,
       },
-      { replay: deps.chat, now: clock },
+      { replay: deps.chat, now: clock, judge: deps.judge },
     );
     experimentRowsScored.add(result.items.length);
     const run = await deps.spanRepo.createExperimentRun(

@@ -1,16 +1,18 @@
 import type { ChatMessage, ReplayClient } from "../provider/chat.js";
 import { ChatError } from "../provider/chat.js";
 import { evaluateRule } from "./evaluator.js";
+import type { JudgeClient } from "./llm-judge.js";
 import type { EvaluatorRecord } from "./evaluator-repository.js";
 import type { Span } from "../observability/span.js";
 import type { ExperimentRunItem, RunScore, RunStatus, RunVariant } from "./experiment.js";
 import { aggregateRun } from "./experiment.js";
 
 /**
- * M64 — the experiment run engine (D2/D3). PURE orchestration with DIP-injected deps (a ReplayClient +
- * a clock): it loops the dataset items (bounded by {@link MAX_RUN_ITEMS}), applies the variant
- * (model/prompt override), calls the injected `replay.run` per item, and scores each output with the
- * enabled **rule** evaluators (the pure `evaluateRule`, D2 — no llm_judge / no extra billable call). A
+ * M64 — the experiment run engine (D3). PURE orchestration with DIP-injected deps (a ReplayClient, an
+ * optional judge, and a clock): it loops the dataset items (bounded by {@link MAX_RUN_ITEMS}), applies
+ * the variant (model/prompt override), calls the injected `replay.run` per item, and scores each output
+ * with the enabled evaluators — `rule` via the pure `evaluateRule`, and `llm_judge` via the injected
+ * judge when one is provided (each a billable call), so an experiment shows a real quality A/B. A
  * provider error on one item is recorded per-item (never a fabricated output) and the run is `partial`;
  * items beyond the cap are dropped and the run is `truncated`. No DB, no HTTP — the handler persists.
  */
@@ -28,12 +30,18 @@ export interface RunDatasetItem {
 export interface RunInput {
   items: RunDatasetItem[];
   variant: RunVariant;
-  /** The workspace's evaluators; the engine scores with the enabled RULE ones only (D2). */
+  /** The workspace's evaluators; the engine scores with the enabled rule + (when a judge is injected) llm_judge ones. */
   evaluators: EvaluatorRecord[];
 }
 
 export interface RunDeps {
   replay: ReplayClient;
+  /**
+   * Optional LLM judge. When provided, `llm_judge` evaluators ALSO score the replayed output (each is a
+   * billable judge call) — so an experiment shows a real quality A/B. When null/absent the run stays
+   * rule-only (backward compatible with the original M64 D2 slice).
+   */
+  judge?: JudgeClient | null;
   /** Injected clock (ms) for per-item latency — defaults to Date.now (deterministic-friendly in tests). */
   now?: () => number;
 }
@@ -77,14 +85,39 @@ function syntheticSpan(item: RunDatasetItem, output: string): Span {
   } as Span;
 }
 
-/** Score an output with the enabled RULE evaluators only (D2 — llm_judge deferred, no billable call). */
-function scoreOutput(evaluators: EvaluatorRecord[], span: Span): RunScore[] {
+/** input+output text a judge scores for a span (mirrors evaluator-engine's private spanIO). */
+function spanIO(span: Span): string {
+  return [span.inputValue ?? "", span.outputValue ?? ""].join("\n").trim();
+}
+
+/**
+ * Score a replayed output with the enabled evaluators: `rule` evaluators via the pure `evaluateRule`,
+ * and `llm_judge` evaluators via the injected `judge` (each a billable call) — so an experiment shows a
+ * real quality A/B, not just rule verdicts. When no judge is injected, llm_judge evaluators are skipped
+ * (rule-only, backward compatible). A judge error on one evaluator is swallowed per-evaluator
+ * (fail-open — one provider hiccup never sinks the whole run; that item just carries fewer scores).
+ */
+async function scoreOutput(
+  evaluators: EvaluatorRecord[],
+  span: Span,
+  judge: JudgeClient | null | undefined,
+): Promise<RunScore[]> {
   const scores: RunScore[] = [];
   for (const ev of evaluators) {
-    if (!ev.enabled) continue; // honor the M36 enabled flag (evaluator-engine.ts:136) — a disabled evaluator never scores
-    if (ev.kind !== "rule") continue; // D2: only pure rule evaluators score in the M64 slice
-    const verdict = evaluateRule(ev, span);
-    scores.push({ name: ev.name, ...(verdict.score !== undefined ? { score: verdict.score } : {}), ...(verdict.label !== undefined ? { label: verdict.label } : {}) });
+    if (!ev.enabled) continue; // honor the M36 enabled flag — a disabled evaluator never scores
+    if (ev.kind === "rule") {
+      const verdict = evaluateRule(ev, span);
+      scores.push({ name: ev.name, ...(verdict.score !== undefined ? { score: verdict.score } : {}), ...(verdict.label !== undefined ? { label: verdict.label } : {}) });
+    } else if (ev.kind === "llm_judge" && judge != null) {
+      const io = spanIO(span);
+      if (io === "") continue; // nothing to judge
+      try {
+        const verdict = await judge.judge(ev.config.prompt, io);
+        scores.push({ name: ev.name, ...(verdict.score !== undefined ? { score: verdict.score } : {}), ...(verdict.label !== undefined ? { label: verdict.label } : {}) });
+      } catch {
+        // fail-open per evaluator: a judge error drops this one score; the run continues.
+      }
+    }
   }
   return scores;
 }
@@ -105,7 +138,7 @@ export async function runExperiment(inp: RunInput, deps: RunDeps): Promise<RunOu
     try {
       const result = await deps.replay.run(messages, inp.variant.model);
       const latencyMs = Math.max(0, clock() - t0);
-      const scores = scoreOutput(inp.evaluators, syntheticSpan(dsItem, result.content));
+      const scores = await scoreOutput(inp.evaluators, syntheticSpan(dsItem, result.content), deps.judge);
       items.push({
         datasetItemTraceId: dsItem.traceId,
         ...(dsItem.inputSnapshot !== undefined ? { inputSnapshot: dsItem.inputSnapshot } : {}),

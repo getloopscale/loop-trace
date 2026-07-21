@@ -49,6 +49,18 @@ const llmJudgeEvaluator = {
   createdAt: "2026-07-07T00:00:00Z",
 } as unknown as EvaluatorRecord;
 
+// A fake judge: records the (prompt, io) it saw and returns a canned verdict.
+function fakeJudge(verdict: { score?: number; label?: string } = { score: 0.9, label: "good" }) {
+  const calls: { prompt: string; io: string }[] = [];
+  return {
+    calls,
+    async judge(prompt: string, io: string) {
+      calls.push({ prompt, io });
+      return verdict;
+    },
+  };
+}
+
 // A DISABLED rule evaluator — must NEVER score (honors the M36 enabled flag).
 const disabledRuleEvaluator = {
   id: "e3",
@@ -105,11 +117,48 @@ describe("M64 runExperiment (DIP engine)", () => {
     expect(out.status).toBe("partial");
   });
 
-  it("test_run_scores_with_enabled_rule_evaluators_only (llm_judge skipped — D2)", async () => {
-    // an llm_judge in the evaluator set is NOT run (no extra billable call); only rule evaluators score.
+  it("test_run_skips_llm_judge_when_no_judge_injected (rule-only, backward compatible)", async () => {
+    // with NO judge in deps, an llm_judge evaluator is skipped (no billable call); only rule evaluators score.
     const replay = fakeReplay({ output: "a good answer" });
     const out = await runExperiment(input([DS_ITEM], { evaluators: [ruleEvaluator, llmJudgeEvaluator] }), { replay });
     expect(out.items[0].scores.map((s) => s.name)).toEqual(["has-good"]); // only the rule evaluator
+  });
+
+  it("test_run_scores_llm_judge_when_a_judge_is_injected (real quality A/B)", async () => {
+    // WITH a judge in deps, the llm_judge evaluator scores the replayed output too — so the run shows a real quality signal.
+    const replay = fakeReplay({ output: "a good answer" });
+    const judge = fakeJudge({ score: 0.9, label: "good" });
+    const out = await runExperiment(
+      input([DS_ITEM], { evaluators: [ruleEvaluator, llmJudgeEvaluator] }),
+      { replay, judge },
+    );
+    // both the rule AND the llm_judge produced a score
+    expect(out.items[0].scores.map((s) => s.name)).toEqual(["has-good", "quality-judge"]);
+    expect(out.items[0].scores.find((s) => s.name === "quality-judge")).toEqual({
+      name: "quality-judge",
+      score: 0.9,
+      label: "good",
+    });
+    // the judge saw the evaluator's prompt + the replayed output
+    expect(judge.calls).toHaveLength(1);
+    expect(judge.calls[0].prompt).toBe("rate it");
+    expect(judge.calls[0].io).toContain("a good answer");
+  });
+
+  it("test_run_judge_error_fails_open_per_evaluator (rule score survives)", async () => {
+    // a judge throw on one evaluator drops only that score; the run continues and rule scores remain.
+    const replay = fakeReplay({ output: "a good answer" });
+    const judge = {
+      async judge() {
+        throw new Error("judge 502");
+      },
+    };
+    const out = await runExperiment(
+      input([DS_ITEM], { evaluators: [ruleEvaluator, llmJudgeEvaluator] }),
+      { replay, judge },
+    );
+    expect(out.items[0].scores.map((s) => s.name)).toEqual(["has-good"]); // judge score dropped, rule survives
+    expect(out.status).toBe("completed"); // per-evaluator fail-open, not a run failure
   });
 
   it("test_run_skips_disabled_rule_evaluators (honors the M36 enabled flag)", async () => {

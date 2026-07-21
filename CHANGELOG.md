@@ -7,7 +7,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [0.58.0] - 2026-07-20
+### Changed
+- **M64 experiment runs now score `llm_judge` evaluators (real quality A/B).** The experiment engine (`experiment-engine.ts`) previously scored only `rule` evaluators over the replayed output (the M64 D2 rule-only slice), so an A/B experiment never surfaced a real quality signal — only pass/fail rule verdicts. The engine now takes an optional injected `judge` (DIP): when present, `llm_judge` evaluators ALSO score the replayed output via the SAME provider judge reused by copilot/replay (D1), so an experiment's mean-score and compare deltas reflect real LLM-judged quality. Fail semantics stay layered — a judge error fails open per-evaluator (that score drops, the run stays `completed`), while a replay error still fails the item (`partial`). With no judge injected the engine stays rule-only (backward compatible). Wired end-to-end: `ExperimentApiDeps.judge` → composition root passes the pinned judge. Engine tests 8/8 (llm_judge scored-with-judge / skipped-without-judge / judge-error fail-open).
 
 ### Added
 - Roadmap amended: added **M132 — Session Conversation replay (inline Human→AI turn view on the session detail)** to `ROADMAP-edge-integration.md` (`/roadmap-feature session-conversation-replay`). Prompted by a LIVE Arize AX session-detail re-benchmark (`knowledge-base/references/arize-session-conversation-replay.png`) that validated M131 (Session Coherence badge + User ID) and revealed the last session-detail gap: the inline turn-by-turn conversational replay (each trace as Human input → AI output), which theo-lens does not render today (it shows SessionSummary + SessionTimeline). Depends on M131 (`[x]`) + M54 (`[x]`); reuses the M131 trace fetch — no new instrumentation. Open design question (full I/O vs 120-char previews) carried to `/to-plan`. Grill: `knowledge-base/grills/session-conversation-replay-feature-grill.md`.
