@@ -35,7 +35,7 @@ suite("prune retention cascade (integration, M23 T1.1)", () => {
   });
 
   beforeEach(async () => {
-    await pool.query("TRUNCATE spans, traces, sessions, replay_sessions, trace_tags");
+    await pool.query("TRUNCATE spans, traces, sessions, replay_sessions, trace_tags, eval_jobs");
   });
 
   afterAll(async () => {
@@ -81,6 +81,32 @@ suite("prune retention cascade (integration, M23 T1.1)", () => {
     expect(tags.rows[0].n).toBe(0);
     const replay = await pool.query("SELECT count(*)::int n FROM replay_sessions");
     expect(replay.rows[0].n).toBe(0);
+  });
+
+
+  it("prune_deletes_eval_jobs_of_pruned_traces", async () => {
+    // M134 EC-4. This schema has NO foreign keys, so every dependent table is
+    // enumerated by hand in the cascade — `eval_jobs` had to join that list.
+    // Two independent failures if it does not:
+    //   (a) the queue table grows without bound, forever;
+    //   (b) worse — a completed row OUTLIVES the trace it references, so the
+    //       `ON CONFLICT DO NOTHING` dedup (ADR D4) becomes a tombstone that
+    //       permanently suppresses evaluation if that trace_id is re-ingested.
+    await repo.save([span({ spanId: "e1", traceId: "t-old-job" })]);
+    await repo.save([span({ spanId: "e2", traceId: "t-fresh-job" })]);
+    const ev = "11111111-1111-1111-1111-111111111111";
+    await pool.query(
+      `INSERT INTO eval_jobs (workspace_id, evaluator_id, trace_id, status)
+       VALUES ('default', $1, 't-old-job', 'done'), ('default', $1, 't-fresh-job', 'queued')`,
+      [ev],
+    );
+    await backdate("t-old-job", 100);
+
+    const stats = await repo.prune(THIRTY_DAYS_AGO());
+
+    expect(stats.evalJobsDeleted).toBe(1);
+    const rows = await pool.query("SELECT trace_id FROM eval_jobs ORDER BY trace_id");
+    expect(rows.rows.map((r) => r.trace_id)).toEqual(["t-fresh-job"]);
   });
 
   it("prune_is_noop_when_nothing_older", async () => {

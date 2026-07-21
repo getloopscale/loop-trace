@@ -587,6 +587,17 @@ export const evaluators = pgTable(
     passLabel: text("pass_label"),
     failLabel: text("fail_label"),
     enabled: integer("enabled").default(1).notNull(),
+    // M134: automatic evaluation of new traces.
+    // `autoEnabled` defaults to 0 so upgrading starts NO judge spend — auto is
+    // opted into per evaluator (plan Drawbacks #2).
+    autoEnabled: integer("auto_enabled").default(0).notNull(),
+    // Probability in [0,1] that a qualifying trace is actually scored. The only
+    // lever that decouples judge cost from traffic volume (blueprint Q3).
+    sampling: doublePrecision("sampling").default(1).notNull(),
+    // WHICH TRACES trigger this evaluator. Distinct from `target` above, which
+    // selects WHICH SPANS INSIDE a trace get scored. Conflating the two is the
+    // single likeliest implementation error (plan glossary).
+    filter: jsonb("filter").default([]).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -629,5 +640,60 @@ export const guards = pgTable(
       .nullsNotDistinct(),
     index("guards_workspace_id_idx").on(t.workspaceId),
     index("guards_evaluator_id_idx").on(t.evaluatorId),
+  ],
+);
+
+/**
+ * M134: the auto-evaluation work queue. Per ADR D1 this table IS the queue —
+ * a worker claims a row with a conditional `UPDATE … RETURNING`, heartbeats
+ * while running, and an orphan scan reclaims stale claims. Chosen over
+ * BullMQ/Redis and Redis Streams because it is the only substrate where
+ * accepted work cannot be lost and which needs no new infrastructure
+ * (blueprint § Coverage Corner 3).
+ *
+ * Invariants this shape encodes:
+ *  - dedup is a DB invariant, not application logic (ADR D4 / blueprint AP-1 —
+ *    the reference deduped with a read-then-write and no unique index);
+ *  - `attempts` + a terminal `failed` bound the retry loop, so a deterministic
+ *    failure cannot be re-offered forever (EC-8);
+ *  - `runAfter` gates claiming, so a trace still arriving across OTLP batches
+ *    is re-armed rather than scored once on partial spans (EC-6);
+ *  - `workspaceId` is carried on the row because the claim loop spans
+ *    workspaces — the daemon must never assume a default tenant (EC-5).
+ *
+ * NOTE: this schema has no DB foreign keys by design, so `eval_jobs` MUST be
+ * added to the retention cascade explicitly or it grows forever and its rows
+ * outlive the traces they reference (EC-4).
+ */
+export const evalJobs = pgTable(
+  "eval_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceIdCol(),
+    evaluatorId: uuid("evaluator_id").notNull(),
+    traceId: text("trace_id").notNull(),
+    status: text("status").default("queued").notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    lastError: text("last_error"),
+    runAfter: timestamp("run_after", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    claimedBy: text("claimed_by"),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    // ADR D4 — one job per (workspace, evaluator, trace). Enqueue is an
+    // idempotent upsert against this constraint.
+    unique("eval_jobs_workspace_evaluator_trace_uq").on(
+      t.workspaceId,
+      t.evaluatorId,
+      t.traceId,
+    ),
+    // Supports the claim query: queued/stale rows whose run_after has elapsed.
+    index("eval_jobs_claim_idx").on(t.status, t.runAfter, t.claimedAt),
+    index("eval_jobs_workspace_id_idx").on(t.workspaceId),
   ],
 );
