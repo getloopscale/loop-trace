@@ -2539,6 +2539,7 @@ export interface components {
             ttftMs?: number;
             cacheReadTokens?: number;
             cacheCreationTokens?: number;
+            costUsd?: number;
             events?: {
                 name: string;
                 timeUnixNano?: string;
@@ -2615,6 +2616,9 @@ export interface components {
                 errorRate: number;
                 firstMessagePreview?: string;
                 evaluationsCount?: number;
+                lastMessagePreview?: string;
+                durationMs?: number;
+                userId?: string;
             }[];
             /** @default 0 */
             total: number;
@@ -2821,6 +2825,9 @@ export interface components {
             enabled: boolean;
             passLabel?: string;
             failLabel?: string;
+            autoEnabled?: boolean;
+            sampling?: number;
+            filter?: unknown[];
             /** @enum {string} */
             kind: "rule";
             config: {
@@ -2834,6 +2841,9 @@ export interface components {
             enabled: boolean;
             passLabel?: string;
             failLabel?: string;
+            autoEnabled?: boolean;
+            sampling?: number;
+            filter?: unknown[];
             /** @enum {string} */
             kind: "llm_judge";
             config: {
@@ -2850,6 +2860,9 @@ export interface components {
                 enabled: boolean;
                 passLabel?: string;
                 failLabel?: string;
+                autoEnabled?: boolean;
+                sampling?: number;
+                filter?: unknown[];
                 /** @enum {string} */
                 kind: "rule";
                 config: {
@@ -2863,6 +2876,9 @@ export interface components {
                 enabled: boolean;
                 passLabel?: string;
                 failLabel?: string;
+                autoEnabled?: boolean;
+                sampling?: number;
+                filter?: unknown[];
                 /** @enum {string} */
                 kind: "llm_judge";
                 config: {
@@ -2895,6 +2911,7 @@ export interface components {
         };
         RunResultResponse: {
             evaluator: string;
+            total: number;
             written: number;
             skipped: number;
             truncated: boolean;

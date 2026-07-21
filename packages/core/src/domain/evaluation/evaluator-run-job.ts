@@ -34,6 +34,16 @@ export interface EvaluatorRunJob {
   errors: number;
   truncated: boolean;
   errorMessage?: string;
+  /**
+   * Per-span failures, same shape the synchronous `RunResult` carried.
+   *
+   * `errors` above is only a COUNT. Keeping the count alone made the async job
+   * strictly less informative than the endpoint it replaced, which is what let
+   * the SDK's `runEvaluator` (still typed `Promise<RunResult>`) silently return
+   * a job view with `written: undefined`. An async contract that drops
+   * information the sync one provided is a regression, not a refactor.
+   */
+  errorDetails: { spanId: string; reason: string }[];
   createdAt: string;
   updatedAt: string;
 }
@@ -84,6 +94,7 @@ export class EvaluatorRunJobRegistry {
       scored: 0,
       skipped: 0,
       errors: 0,
+      errorDetails: [],
       truncated: false,
       createdAt: ts,
       updatedAt: ts,
@@ -115,8 +126,18 @@ export class EvaluatorRunJobRegistry {
 }
 
 /** Project a run result onto the job's progress counters. */
-function progressOf(r: RunResult): Pick<EvaluatorRunJob, "total" | "scored" | "skipped" | "errors" | "truncated"> {
-  return { total: r.total, scored: r.written, skipped: r.skipped, errors: r.errors.length, truncated: r.truncated };
+function progressOf(
+  r: RunResult,
+): Pick<EvaluatorRunJob, "total" | "scored" | "skipped" | "errors" | "errorDetails" | "truncated"> {
+  return {
+    total: r.total,
+    scored: r.written,
+    skipped: r.skipped,
+    errors: r.errors.length,
+    // Carry the detail, not just the count — see `errorDetails` on the interface.
+    errorDetails: r.errors,
+    truncated: r.truncated,
+  };
 }
 
 /**

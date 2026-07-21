@@ -13,8 +13,20 @@ function mockEngine(): typeof fetch {
         { status: 200 },
       );
     }
+    // M133: run is asynchronous — 202 + a job the client polls. The SDK keeps a
+    // synchronous `runEvaluator` by polling internally, so the doc-smoke must
+    // serve BOTH halves or it would prove nothing about the real flow.
     if (method === "POST" && url.pathname === "/v1/evaluators/ev1/run") {
-      return new Response(JSON.stringify({ evaluator: "errors", written: 12, skipped: 0, truncated: false, errors: [] }), { status: 200 });
+      return new Response(
+        JSON.stringify({ id: "job1", evaluatorId: "ev1", evaluatorName: "errors", status: "queued", total: 12, scored: 0, skipped: 0, errors: 0, errorDetails: [], truncated: false, createdAt: "t", updatedAt: "t" }),
+        { status: 202 },
+      );
+    }
+    if (method === "GET" && url.pathname === "/v1/evaluator-run-jobs/job1") {
+      return new Response(
+        JSON.stringify({ id: "job1", evaluatorId: "ev1", evaluatorName: "errors", status: "completed", total: 12, scored: 12, skipped: 0, errors: 0, errorDetails: [], truncated: false, createdAt: "t", updatedAt: "t" }),
+        { status: 200 },
+      );
     }
     return new Response("{}", { status: 200 });
   }) as unknown as typeof fetch;

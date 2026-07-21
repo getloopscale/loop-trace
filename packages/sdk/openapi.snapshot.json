@@ -2343,6 +2343,9 @@
           "cacheCreationTokens": {
             "type": "integer"
           },
+          "costUsd": {
+            "type": "number"
+          },
           "events": {
             "type": "array",
             "items": {
@@ -2648,6 +2651,16 @@
                 "evaluationsCount": {
                   "type": "integer",
                   "minimum": 0
+                },
+                "lastMessagePreview": {
+                  "type": "string"
+                },
+                "durationMs": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "userId": {
+                  "type": "string"
                 }
               },
               "required": [
@@ -3527,6 +3540,20 @@
               "failLabel": {
                 "type": "string"
               },
+              "autoEnabled": {
+                "type": "boolean"
+              },
+              "sampling": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "filter": {
+                "type": "array",
+                "items": {
+                  "nullable": true
+                }
+              },
               "kind": {
                 "type": "string",
                 "enum": [
@@ -3581,6 +3608,20 @@
               },
               "failLabel": {
                 "type": "string"
+              },
+              "autoEnabled": {
+                "type": "boolean"
+              },
+              "sampling": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "filter": {
+                "type": "array",
+                "items": {
+                  "nullable": true
+                }
               },
               "kind": {
                 "type": "string",
@@ -3652,6 +3693,20 @@
                     "failLabel": {
                       "type": "string"
                     },
+                    "autoEnabled": {
+                      "type": "boolean"
+                    },
+                    "sampling": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "filter": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    },
                     "kind": {
                       "type": "string",
                       "enum": [
@@ -3706,6 +3761,20 @@
                     },
                     "failLabel": {
                       "type": "string"
+                    },
+                    "autoEnabled": {
+                      "type": "boolean"
+                    },
+                    "sampling": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "filter": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
                     },
                     "kind": {
                       "type": "string",
@@ -3854,6 +3923,9 @@
           "evaluator": {
             "type": "string"
           },
+          "total": {
+            "type": "number"
+          },
           "written": {
             "type": "number"
           },
@@ -3885,6 +3957,7 @@
         },
         "required": [
           "evaluator",
+          "total",
           "written",
           "skipped",
           "truncated",

@@ -26,6 +26,18 @@ export default defineConfig({
       "@usetheo/lens-core/infra": fileURLToPath(
         new URL("./packages/core/src/infrastructure/db/index.ts", import.meta.url),
       ),
+      "@usetheo/lens-core/provider": fileURLToPath(
+        new URL("./packages/core/src/domain/provider/index.ts", import.meta.url),
+      ),
+      "@usetheo/lens-core/testing": fileURLToPath(
+        new URL("./packages/core/src/domain/theokit/theokit-vectors.ts", import.meta.url),
+      ),
+      "@usetheo/lens-core/observability": fileURLToPath(
+        new URL("./packages/core/src/domain/observability/index.ts", import.meta.url),
+      ),
+      "@usetheo/lens-core/evaluation": fileURLToPath(
+        new URL("./packages/core/src/domain/evaluation/index.ts", import.meta.url),
+      ),
       "@usetheo/lens-core": fileURLToPath(
         new URL("./packages/core/src/index.ts", import.meta.url),
       ),

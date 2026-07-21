@@ -73,7 +73,13 @@ import type {
   TraceTagsResponse,
   TraceTree,
   UpdateDatasetBody,
+  EvaluatorRunJobView,
 } from "./types.js";
+
+/** How long `runEvaluator` waits for its job before failing loudly. */
+const RUN_JOB_POLL_TIMEOUT_MS = 300_000;
+/** Gap between run-job polls. */
+const RUN_JOB_POLL_INTERVAL_MS = 500;
 
 // Re-export so existing consumers of `LensReadClientOptions` from `@usetheo/lens-sdk` (and the barrel
 // `index.ts`, which imports it from this module) keep resolving after the M117 transport split.
@@ -247,11 +253,54 @@ export class LensReadClient extends LensReadTransport {
    * fresh verdicts, billable for `llm_judge`) → NOT network-retried, so a lost response never
    * double-scores (M108 lesson).
    */
-  runEvaluator(id: string, body: RunEvaluatorBody = {}): Promise<RunResult> {
-    return this.send<RunResult>("POST", `/v1/evaluators/${encodeURIComponent(id)}/run`, {
-      body,
-      retryNetwork: false,
-    });
+  async runEvaluator(id: string, body: RunEvaluatorBody = {}): Promise<RunResult> {
+    // M133 made the endpoint asynchronous: it accepts with 202 and returns a job
+    // to poll. This method keeps its synchronous signature — an SDK consumer
+    // asked for a result, not a job handle — by submitting and then polling to a
+    // terminal state. Without this the client returned a job view typed as a
+    // RunResult, so `written` read `undefined` at every call site.
+    const job = await this.send<EvaluatorRunJobView>(
+      "POST",
+      `/v1/evaluators/${encodeURIComponent(id)}/run`,
+      { body, retryNetwork: false },
+    );
+    const done = await this.pollRunJob(job.id);
+    if (done.status === "failed") {
+      throw new Error(
+        `evaluator run failed: ${done.errorMessage ?? "unknown error"}`,
+      );
+    }
+    return {
+      evaluator: done.evaluatorName,
+      written: done.scored,
+      skipped: done.skipped,
+      truncated: done.truncated,
+      errors: done.errorDetails,
+    };
+  }
+
+  /**
+   * Poll a run job to a terminal state.
+   *
+   * Bounded, and it FAILS rather than returning a partial result — a caller that
+   * received a half-finished RunResult would under-report `written` with no way
+   * to tell that from a genuinely small run. Reads are idempotent, so the poll
+   * is network-retryable even though the submit above is not.
+   */
+  private async pollRunJob(jobId: string): Promise<EvaluatorRunJobView> {
+    const deadline = Date.now() + RUN_JOB_POLL_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      const job = await this.send<EvaluatorRunJobView>(
+        "GET",
+        `/v1/evaluator-run-jobs/${encodeURIComponent(jobId)}`,
+        { retryNetwork: true },
+      );
+      if (job.status === "completed" || job.status === "failed") return job;
+      await new Promise((r) => setTimeout(r, RUN_JOB_POLL_INTERVAL_MS));
+    }
+    throw new Error(
+      `evaluator run job ${jobId} did not finish within ${RUN_JOB_POLL_TIMEOUT_MS}ms`,
+    );
   }
 
   /** `POST /v1/guards` — create (or upsert) a guard over an evaluator's verdict. */

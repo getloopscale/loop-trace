@@ -9,7 +9,7 @@ import { DrizzleEvaluatorRepository } from "./drizzle-evaluator-repository.js";
 import { evaluatorSchema, guardSchema } from "../../../domain/evaluation/evaluator.js";
 
 const PG_URI = process.env["THEOLENS_PG_URI"];
-const MIGRATIONS = fileURLToPath(new URL("./migrations", import.meta.url));
+const MIGRATIONS = fileURLToPath(new URL("../migrations", import.meta.url));
 const suite = PG_URI ? describe : describe.skip;
 
 const WS_A = "ws-alice";

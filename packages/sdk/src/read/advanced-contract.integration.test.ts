@@ -2,8 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   RateLimiter,
   type EngineDeps,
-  type SpanRepository,
-} from "@usetheo/lens-core";
+  type SpanRepository, EvaluatorRunJobRegistry } from "@usetheo/lens-core";
 import {
   createSpanRepository,
   evaluatorRepoFromPool,
@@ -42,7 +41,7 @@ suite("LensReadClient advanced-write contract (M114)", () => {
       repo,
       undefined,
       {},
-      { repo: evaluatorRepo, engine },
+      { repo: evaluatorRepo, engine, runJobs: new EvaluatorRunJobRegistry() },
       { spanRepo: repo, chat: null, limiter: new RateLimiter(60) },
     );
     const engineFetch: typeof fetch = (input, init) =>

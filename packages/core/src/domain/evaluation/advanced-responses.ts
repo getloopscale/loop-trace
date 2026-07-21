@@ -101,6 +101,12 @@ export const evaluatorRunJobResponseSchema = z
     scored: z.number(),
     skipped: z.number(),
     errors: z.number(),
+    // Per-span failures. `errors` above is only a count; without the detail the
+    // async job is strictly less informative than the synchronous endpoint it
+    // replaced, and the SDK cannot reconstruct a RunResult.
+    errorDetails: z
+      .array(z.object({ spanId: z.string(), reason: z.string() }))
+      .default([]),
     truncated: z.boolean(),
     errorMessage: z.string().optional(),
     createdAt: z.string(),
