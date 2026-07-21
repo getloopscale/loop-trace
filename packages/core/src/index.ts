@@ -166,6 +166,18 @@ export {
   type RunOptions,
   type RunHooks,
 } from "./domain/evaluation/evaluator-engine.js";
+// M134 — auto-evaluation of new traces. The daemon lives in `packages/api`, so
+// these domain predicates must be reachable from the barrel (core never imports api).
+export { shouldSample } from "./domain/evaluation/should-sample.js";
+export {
+  matchesFilter,
+  isKnownFilterColumn,
+  KNOWN_FILTER_COLUMNS,
+  UnknownFilterColumnError,
+  type FilterClause,
+  type FilterColumn,
+  type FilterOperator,
+} from "./domain/evaluation/trace-filter.js";
 // M133 — async evaluator-run jobs (registry + background orchestrator + view mapper).
 export {
   EvaluatorRunJobRegistry,
