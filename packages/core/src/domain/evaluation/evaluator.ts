@@ -57,6 +57,11 @@ export const evaluatorSchema = z
     passLabel: z.string().optional(),
     failLabel: z.string().optional(),
     enabled: z.boolean().default(true),
+    // M134 — automatic evaluation. `autoEnabled` defaults FALSE so creating or
+    // upgrading an evaluator never silently starts judge spend.
+    autoEnabled: z.boolean().default(false),
+    sampling: z.number().min(0).max(1).default(1),
+    filter: z.array(z.unknown()).default([]),
   })
   .and(
     z.discriminatedUnion("kind", [

@@ -171,6 +171,7 @@ export {
 export { shouldSample } from "./domain/evaluation/should-sample.js";
 export {
   matchesFilter,
+  validateFilter,
   isKnownFilterColumn,
   KNOWN_FILTER_COLUMNS,
   UnknownFilterColumnError,

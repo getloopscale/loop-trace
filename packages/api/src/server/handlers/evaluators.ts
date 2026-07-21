@@ -22,6 +22,7 @@ import {
   type RateLimiter,
   apiError,
   zodFieldErrors,
+  validateFilter,
   // M118 (D4) — response schemas parsed at the boundary (server-side single source of truth).
   evaluatorRecordSchema,
   evaluatorsListResponseSchema,
@@ -44,6 +45,10 @@ const evaluatorUpdateSchema = z
     passLabel: z.string().optional(),
     failLabel: z.string().optional(),
     enabled: z.boolean().optional(),
+    // M134 — auto-evaluation knobs are editable without re-sending kind+config.
+    autoEnabled: z.boolean().optional(),
+    sampling: z.number().min(0).max(1).optional(),
+    filter: z.array(z.unknown()).optional(),
     kind: z.enum(["rule", "llm_judge"]).optional(),
     config: z.record(z.string(), z.unknown()).optional(),
   })
@@ -78,6 +83,13 @@ export async function createEvaluatorHandler(c: Context, deps: EvaluatorApiDeps)
     return c.json(apiError("INVALID_EVALUATOR", "invalid evaluator", zodFieldErrors(parsed.error)), 400);
   }
   const ev = parsed.data;
+  // M134 EC-7: a filter naming a column the evaluator path cannot evaluate must be
+  // rejected HERE. Validating only at run time turns one typo into a job that fails
+  // on every claim and is reclaimed forever.
+  const filterReason = validateFilter((ev as { filter?: unknown }).filter);
+  if (filterReason !== null) {
+    return c.json(apiError("INVALID_FILTER", filterReason), 400);
+  }
   // EC-1: a non-empty rule predicate that parses to zero clauses would match every
   // span (silent pass-all). Reject at the boundary.
   if (ev.kind === "rule") {
@@ -109,6 +121,12 @@ export async function updateEvaluatorHandler(c: Context, deps: EvaluatorApiDeps)
     return c.json(apiError("INVALID_EVALUATOR", "invalid evaluator", zodFieldErrors(parsed.error)), 400);
   }
   const updates = parsed.data;
+  // M134 EC-7 — same gate on the edit path; a PATCH must not be able to store what
+  // create rejects.
+  const updFilterReason = validateFilter((updates as { filter?: unknown }).filter);
+  if (updFilterReason !== null) {
+    return c.json(apiError("INVALID_FILTER", updFilterReason), 400);
+  }
   // If the caller changes kind/config, validate the pair against the create union (never store a
   // half-typed config). A rename (`{name}`) skips this.
   if (updates.kind !== undefined || updates.config !== undefined) {

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { Context } from "hono";
 import { RateLimiter, EvaluatorRunJobRegistry, type EvaluatorRecord, type RunResult } from "@usetheo/lens-core";
 
-import { runEvaluatorHandler, getEvaluatorRunJobHandler, type EvaluatorApiDeps } from "./evaluators.js";
+import { createEvaluatorHandler, updateEvaluatorHandler, runEvaluatorHandler, getEvaluatorRunJobHandler, type EvaluatorApiDeps } from "./evaluators.js";
 import { evaluatorRunRateLimited } from "../metrics.js";
 
 /**
@@ -120,5 +120,100 @@ describe("M133 async evaluator-run job", () => {
     // An absent id → 404.
     const absent = await getEvaluatorRunJobHandler(ctx({ ws: "ws-A", id: "nope" }), d);
     expect(absent.status).toBe(404);
+  });
+});
+
+/**
+ * M134 T2.3 (EC-7) — filter validity is enforced at WRITE time.
+ *
+ * The blueprint's filter ADR rejects validating only at evaluation time: an
+ * unrecognised column throws inside the job, so a single typo becomes a job
+ * that fails on every claim, is reclaimed by the orphan scan, and fails again —
+ * forever (compounding with EC-8). Rejecting at the boundary keeps a config
+ * mistake a 400.
+ *
+ * v1.0 of the plan mapped this requirement to the read-time predicate and
+ * called the coverage matrix complete; it was not.
+ */
+describe("M134 write-time filter validation (T2.3)", () => {
+  function writeDeps(): {
+    deps: EvaluatorApiDeps;
+    created: Record<string, unknown>[];
+    updated: Record<string, unknown>[];
+  } {
+    const created: Record<string, unknown>[] = [];
+    const updated: Record<string, unknown>[] = [];
+    const repo = {
+      createEvaluator: async (ev: Record<string, unknown>) => {
+        created.push(ev);
+        return { ...EVAL, ...ev };
+      },
+      updateEvaluator: async (_id: string, u: Record<string, unknown>) => {
+        updated.push(u);
+        return { ...EVAL, ...u };
+      },
+    } as unknown as EvaluatorApiDeps["repo"];
+    return { deps: { repo } as unknown as EvaluatorApiDeps, created, updated };
+  }
+
+  const VALID = { column: "model", op: "eq", value: "claude" };
+  const BAD_COLUMN = { column: "definitely_not_a_column", op: "eq", value: "x" };
+
+  it("test_create_rejects_a_filter_naming_an_unknown_column", async () => {
+    const { deps: d, created } = writeDeps();
+    const res = await createEvaluatorHandler(
+      ctx({ body: { name: "e", kind: "rule", config: { predicate: "" }, filter: [BAD_COLUMN] } }),
+      d,
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { code: string; message: string };
+    expect(body.code).toBe("INVALID_FILTER");
+    // The message must name the offending column — an operator has to be able
+    // to fix it without reading source.
+    expect(body.message).toMatch(/definitely_not_a_column/);
+    // And nothing was persisted.
+    expect(created).toHaveLength(0);
+  });
+
+  it("test_create_accepts_a_valid_filter", async () => {
+    const { deps: d, created } = writeDeps();
+    const res = await createEvaluatorHandler(
+      ctx({ body: { name: "e", kind: "rule", config: { predicate: "" }, filter: [VALID] } }),
+      d,
+    );
+    expect(res.status).toBe(200);
+    expect(created).toHaveLength(1);
+    expect(created[0]!["filter"]).toEqual([VALID]);
+  });
+
+  it("test_update_rejects_an_unknown_column_and_leaves_the_row_untouched", async () => {
+    const { deps: d, updated } = writeDeps();
+    const res = await updateEvaluatorHandler(
+      ctx({ body: { filter: [BAD_COLUMN] } }),
+      d,
+    );
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { code: string }).code).toBe("INVALID_FILTER");
+    expect(updated).toHaveLength(0);
+  });
+
+  it("test_sampling_out_of_range_is_rejected", async () => {
+    // The rate is the cost lever; a nonsense value must not reach the row.
+    const { deps: d } = writeDeps();
+    const res = await createEvaluatorHandler(
+      ctx({ body: { name: "e", kind: "rule", config: { predicate: "" }, sampling: 1.5 } }),
+      d,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("test_auto_defaults_to_off_when_absent", async () => {
+    // Upgrading must start no judge spend (plan Drawbacks #2).
+    const { deps: d, created } = writeDeps();
+    await createEvaluatorHandler(
+      ctx({ body: { name: "e", kind: "rule", config: { predicate: "" } } }),
+      d,
+    );
+    expect(created[0]!["autoEnabled"]).toBe(false);
   });
 });

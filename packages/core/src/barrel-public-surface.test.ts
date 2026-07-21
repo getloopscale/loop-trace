@@ -5,7 +5,7 @@ import * as rootBarrel from "./index.js";
 /**
  * M123 findability regroup guard: the `@usetheo/lens-core` root barrel public
  * surface is frozen here; a rename that drifts an export name fails.
- * (170 names — M134 added 5 auto-eval predicates (shouldSample, matchesFilter + its column registry) because the claim daemon lives in `packages/api` and core never imports api; M128 moved 3 test-support values, MAPPER_VECTORS/MAPPER_VECTOR_T0/
+ * (171 names — M134 added 5 auto-eval predicates (shouldSample, matchesFilter + its column registry) because the claim daemon lives in `packages/api` and core never imports api; M128 moved 3 test-support values, MAPPER_VECTORS/MAPPER_VECTOR_T0/
  * flattenOtlp, off the prod barrel to the `@usetheo/lens-core/testing` subpath;
  * M129 moved the 10 provider VALUE symbols — ChatError, openaiChatCompletion,
  * openaiChatCompletionWithUsage, OpenAICompatibleChat, OpenAICompatibleReplay,
@@ -183,6 +183,7 @@ const EXPECTED_PUBLIC_SURFACE = [
   "traceTagsResponseSchema",
   "UnknownFilterColumnError",
   "upsertSessionVerdict",
+  "validateFilter",
   "validatePredicate",
   "validateQuestion",
   "zodFieldErrors",

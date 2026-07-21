@@ -126,3 +126,57 @@ export function matchesFilter(
   }
   return true;
 }
+
+/** Operators a stored filter may use. Single source for the write-time check. */
+const KNOWN_OPERATORS: readonly FilterOperator[] = [
+  "eq",
+  "contains",
+  "notContains",
+  "startsWith",
+  "endsWith",
+  "anyOf",
+  "noneOf",
+];
+
+/**
+ * Write-time validation (M134 T2.3 / EC-7). Returns a human-readable reason, or
+ * `null` when the filter is storable.
+ *
+ * This is the half that keeps `UnknownFilterColumnError` from ever being thrown
+ * by a job in production. Validating only at evaluation time — the alternative
+ * the blueprint's filter ADR rejects — turns one typo into a job that fails on
+ * every claim, is reclaimed by the orphan scan, and fails again indefinitely.
+ *
+ * It shares `KNOWN_FILTER_COLUMNS` with `matchesFilter` by construction, so the
+ * write-time and read-time views of "a valid column" cannot drift apart. The
+ * reference had exactly that drift: filters the API accepted, the worker could
+ * not evaluate, until a guard was retro-fitted after the regression shipped.
+ */
+export function validateFilter(filter: unknown): string | null {
+  if (filter === undefined || filter === null) return null;
+  if (!Array.isArray(filter)) return "filter must be an array of clauses";
+
+  for (const [i, raw] of filter.entries()) {
+    if (typeof raw !== "object" || raw === null) {
+      return `filter[${i}] must be an object`;
+    }
+    const { column, op, value } = raw as Record<string, unknown>;
+
+    if (typeof column !== "string" || !isKnownFilterColumn(column)) {
+      return `filter[${i}]: unknown column "${String(column)}". Known columns: ${KNOWN_FILTER_COLUMNS.join(", ")}`;
+    }
+    if (typeof op !== "string" || !KNOWN_OPERATORS.includes(op as FilterOperator)) {
+      return `filter[${i}]: unknown operator "${String(op)}". Known operators: ${KNOWN_OPERATORS.join(", ")}`;
+    }
+    // Set operators need a list; the rest need a scalar. Accepting the wrong
+    // shape here would store a clause that silently never matches.
+    const wantsArray = op === "anyOf" || op === "noneOf";
+    if (wantsArray && !(Array.isArray(value) && value.every((v) => typeof v === "string"))) {
+      return `filter[${i}]: operator "${op}" requires value to be a string[]`;
+    }
+    if (!wantsArray && typeof value !== "string") {
+      return `filter[${i}]: operator "${op}" requires value to be a string`;
+    }
+  }
+  return null;
+}

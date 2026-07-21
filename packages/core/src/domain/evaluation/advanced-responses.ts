@@ -30,6 +30,11 @@ export const evaluatorRecordSchema = z.discriminatedUnion("kind", [
       enabled: z.boolean(),
       passLabel: z.string().optional(),
       failLabel: z.string().optional(),
+      // M134 — auto-evaluation knobs. Optional on the response so a row written
+      // before the migration (or a repo stub in a test) still parses.
+      autoEnabled: z.boolean().optional(),
+      sampling: z.number().min(0).max(1).optional(),
+      filter: z.array(z.unknown()).optional(),
       kind: z.literal(EVALUATOR_KINDS[0]), // "rule"
       config: ruleConfigSchema,
     })
@@ -43,6 +48,11 @@ export const evaluatorRecordSchema = z.discriminatedUnion("kind", [
       enabled: z.boolean(),
       passLabel: z.string().optional(),
       failLabel: z.string().optional(),
+      // M134 — auto-evaluation knobs. Optional on the response so a row written
+      // before the migration (or a repo stub in a test) still parses.
+      autoEnabled: z.boolean().optional(),
+      sampling: z.number().min(0).max(1).optional(),
+      filter: z.array(z.unknown()).optional(),
       kind: z.literal(EVALUATOR_KINDS[1]), // "llm_judge"
       config: judgeConfigSchema,
     })
