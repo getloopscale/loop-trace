@@ -16,11 +16,11 @@ import {
   deleteEvaluatorHandler,
   runEvaluatorHandler,
   getEvaluatorRunJobHandler,
-  createGuardHandler,
-  listGuardsHandler,
-  deleteGuardHandler,
-  guardBreachesHandler,
-  guardBreachWindowHandler,
+  createMonitorHandler,
+  listMonitorsHandler,
+  deleteMonitorHandler,
+  monitorBreachesHandler,
+  monitorBreachWindowHandler,
 } from "../handlers/evaluators.js";
 // M118 (D1) — pre-parse bodyLimit 413 caps on every buffering write route (reuse each route's cap).
 import { bodyLimit413, EVALUATOR_MAX_BYTES } from "../body-caps.js";
@@ -37,10 +37,10 @@ export function registerEvaluatorRoutes(app: Hono, evaluators?: EvaluatorApiDeps
     app.post("/v1/evaluators/:id/run", bodyLimit413(EVALUATOR_MAX_BYTES), requireScopeOnPrincipal("observability:write"), (c) => runEvaluatorHandler(c, ev));
     // M133 — poll an async evaluator-run job's status/progress (read scope; the run itself is write).
     app.get("/v1/evaluator-run-jobs/:id", requireScopeOnPrincipal("observability:read"), (c) => getEvaluatorRunJobHandler(c, ev));
-    app.post("/v1/guards", bodyLimit413(EVALUATOR_MAX_BYTES), requireScopeOnPrincipal("observability:write"), (c) => createGuardHandler(c, ev));
-    app.get("/v1/guards", requireScopeOnPrincipal("observability:read"), (c) => listGuardsHandler(c, ev));
-    app.delete("/v1/guards/:id", requireScopeOnPrincipal("observability:delete"), (c) => deleteGuardHandler(c, ev));
-    app.get("/v1/guards/:id/breaches", requireScopeOnPrincipal("observability:read"), (c) => guardBreachesHandler(c, ev));
-    app.get("/v1/guards/:id/breach-window", requireScopeOnPrincipal("observability:read"), (c) => guardBreachWindowHandler(c, ev));
+    app.post("/v1/guards", bodyLimit413(EVALUATOR_MAX_BYTES), requireScopeOnPrincipal("observability:write"), (c) => createMonitorHandler(c, ev));
+    app.get("/v1/guards", requireScopeOnPrincipal("observability:read"), (c) => listMonitorsHandler(c, ev));
+    app.delete("/v1/guards/:id", requireScopeOnPrincipal("observability:delete"), (c) => deleteMonitorHandler(c, ev));
+    app.get("/v1/guards/:id/breaches", requireScopeOnPrincipal("observability:read"), (c) => monitorBreachesHandler(c, ev));
+    app.get("/v1/guards/:id/breach-window", requireScopeOnPrincipal("observability:read"), (c) => monitorBreachWindowHandler(c, ev));
   }
 }

@@ -309,7 +309,7 @@ export interface EvaluatorRunResultDTO {
   truncated: boolean;
   errors: { spanId: string; reason: string }[];
 }
-export interface GuardRecordDTO {
+export interface MonitorRecordDTO {
   id: string;
   evaluatorId: string;
   operator: string;

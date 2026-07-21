@@ -6,7 +6,7 @@ import type pg from "pg";
 
 import { createPool } from "../observability/drizzle-span-repository.js";
 import { DrizzleEvaluatorRepository } from "./drizzle-evaluator-repository.js";
-import { evaluatorSchema, guardSchema } from "../../../domain/evaluation/evaluator.js";
+import { evaluatorSchema, monitorSchema } from "../../../domain/evaluation/evaluator.js";
 
 const PG_URI = process.env["THEOLENS_PG_URI"];
 const MIGRATIONS = fileURLToPath(new URL("../migrations", import.meta.url));
@@ -61,14 +61,14 @@ suite("M36 EvaluatorRepository (integration)", () => {
   it("test_delete_evaluator_cascades_guards", async () => {
     // EC-4: deleting an evaluator removes its guards in the same tx (no orphan).
     const ev = await repo.createEvaluator(ruleEv("q"), WS_A);
-    await repo.createGuard(
-      guardSchema.parse({ evaluatorId: ev.id, operator: "lt", threshold: 0.5 }),
+    await repo.createMonitor(
+      monitorSchema.parse({ evaluatorId: ev.id, operator: "lt", threshold: 0.5 }),
       WS_A,
     );
-    expect(await repo.listGuards(WS_A)).toHaveLength(1);
+    expect(await repo.listMonitors(WS_A)).toHaveLength(1);
     await repo.deleteEvaluator(ev.id, WS_A);
     expect(await repo.listEvaluators(WS_A)).toHaveLength(0);
-    expect(await repo.listGuards(WS_A)).toHaveLength(0); // cascaded
+    expect(await repo.listMonitors(WS_A)).toHaveLength(0); // cascaded
   });
 
   it("test_write_verdict_is_idempotent_latest_wins", async () => {
@@ -86,20 +86,20 @@ suite("M36 EvaluatorRepository (integration)", () => {
     // M36-EVAL-1: re-POSTing an identical numeric guard (label_value NULL) must NOT
     // create a duplicate — the NULLS NOT DISTINCT unique makes the upsert dedupe.
     const ev = await repo.createEvaluator(ruleEv("q"), WS_A);
-    const g1 = await repo.createGuard(
-      guardSchema.parse({ evaluatorId: ev.id, operator: "lt", threshold: 0.5 }),
+    const g1 = await repo.createMonitor(
+      monitorSchema.parse({ evaluatorId: ev.id, operator: "lt", threshold: 0.5 }),
       WS_A,
     );
-    const g2 = await repo.createGuard(
-      guardSchema.parse({ evaluatorId: ev.id, operator: "lt", threshold: 0.5 }),
+    const g2 = await repo.createMonitor(
+      monitorSchema.parse({ evaluatorId: ev.id, operator: "lt", threshold: 0.5 }),
       WS_A,
     );
     expect(g2.id).toBe(g1.id); // same row (upsert)
-    expect(await repo.listGuards(WS_A)).toHaveLength(1);
+    expect(await repo.listMonitors(WS_A)).toHaveLength(1);
     // a label_eq guard (threshold NULL) also dedupes
-    await repo.createGuard(guardSchema.parse({ evaluatorId: ev.id, operator: "label_eq", labelValue: "bad" }), WS_A);
-    await repo.createGuard(guardSchema.parse({ evaluatorId: ev.id, operator: "label_eq", labelValue: "bad" }), WS_A);
-    expect(await repo.listGuards(WS_A)).toHaveLength(2); // lt + label_eq, no dupes
+    await repo.createMonitor(monitorSchema.parse({ evaluatorId: ev.id, operator: "label_eq", labelValue: "bad" }), WS_A);
+    await repo.createMonitor(monitorSchema.parse({ evaluatorId: ev.id, operator: "label_eq", labelValue: "bad" }), WS_A);
+    expect(await repo.listMonitors(WS_A)).toHaveLength(2); // lt + label_eq, no dupes
   });
 
   it("test_breaches_operator_matrix_sql_path", async () => {
@@ -110,9 +110,9 @@ suite("M36 EvaluatorRepository (integration)", () => {
     await repo.writeVerdict(WS_A, { spanId: "s2", traceId: "t-high" }, "quality", { score: 0.8 });
     await repo.writeVerdict(WS_A, { spanId: "s3", traceId: "t-label" }, "quality", { label: "bad" });
     const breach = async (operator: string, over: Record<string, unknown>) => {
-      const g = await repo.createGuard(guardSchema.parse({ evaluatorId: ev.id, operator, ...over }), WS_A);
+      const g = await repo.createMonitor(monitorSchema.parse({ evaluatorId: ev.id, operator, ...over }), WS_A);
       const r = (await repo.listBreachingTraces(g.id, WS_A)).sort();
-      await repo.deleteGuard(g.id, WS_A);
+      await repo.deleteMonitor(g.id, WS_A);
       return r;
     };
     expect(await breach("lt", { threshold: 0.5 })).toEqual(["t-low"]);
@@ -127,8 +127,8 @@ suite("M36 EvaluatorRepository (integration)", () => {
 
   it("test_list_breaching_traces_scoped_and_correct", async () => {
     const ev = await repo.createEvaluator(ruleEv("quality"), WS_A);
-    const guard = await repo.createGuard(
-      guardSchema.parse({ evaluatorId: ev.id, operator: "lt", threshold: 0.5 }),
+    const guard = await repo.createMonitor(
+      monitorSchema.parse({ evaluatorId: ev.id, operator: "lt", threshold: 0.5 }),
       WS_A,
     );
     // t1 breaches (0.2 < 0.5), t2 does not (0.8)

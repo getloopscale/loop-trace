@@ -595,19 +595,19 @@ describe("LensReadClient — evaluators + guards (M111)", () => {
     expect(fNet).toHaveBeenCalledTimes(1);
   });
 
-  it("createGuard POSTs to /v1/guards and returns a GuardRecord", async () => {
+  it("createMonitor POSTs to /v1/guards and returns a MonitorRecord", async () => {
     const fetchFn = mockFetch({ id: "g1", evaluatorId: "ev1", operator: "gte", threshold: 0.8, createdAt: "t" });
     const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
-    const g = await client.createGuard({ evaluatorId: "ev1", operator: "gte", threshold: 0.8 });
+    const g = await client.createMonitor({ evaluatorId: "ev1", operator: "gte", threshold: 0.8 });
     expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/guards");
     expect(methodOf(fetchFn)).toBe("POST");
     expect(g.id).toBe("g1");
   });
 
-  it("deleteGuard DELETEs /v1/guards/{id} (204 → void)", async () => {
+  it("deleteMonitor DELETEs /v1/guards/{id} (204 → void)", async () => {
     const fetchFn = mockFetch(undefined, { status: 204, text: "" });
     const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
-    await client.deleteGuard("g1");
+    await client.deleteMonitor("g1");
     expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/guards/g1");
     expect(methodOf(fetchFn)).toBe("DELETE");
   });
@@ -839,18 +839,18 @@ describe("LensReadClient — M117 read parity: HAND (bare c.json) reads (T2.2)",
     expect(methodOf(fetchFn)).toBe("GET");
   });
 
-  it("listGuards builds /v1/guards and returns the { guards } wrapper", async () => {
+  it("listMonitors builds /v1/guards and returns the { guards } wrapper", async () => {
     const fetchFn = mockFetch({ guards: [{ id: "g1", evaluatorId: "ev1", operator: "gte", threshold: 0.8, createdAt: "t", enabled: true }] });
     const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
-    const res = await client.listGuards();
+    const res = await client.listMonitors();
     expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/guards");
     expect(res.guards[0]?.id).toBe("g1");
   });
 
-  it("getGuardBreaches builds /v1/guards/{id}/breaches and returns { traceIds }", async () => {
+  it("getMonitorBreaches builds /v1/guards/{id}/breaches and returns { traceIds }", async () => {
     const fetchFn = mockFetch({ traceIds: ["tr1", "tr2"] });
     const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
-    const res = await client.getGuardBreaches("g1");
+    const res = await client.getMonitorBreaches("g1");
     expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/guards/g1/breaches");
     expect(res.traceIds).toEqual(["tr1", "tr2"]);
   });

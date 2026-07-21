@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 
 import {
   evaluatorRecordSchema,
-  guardRecordSchema,
+  monitorRecordSchema,
   runResultResponseSchema,
   runCompareDeltasSchema,
   copilotFeedbackRecordSchema,
@@ -31,8 +31,8 @@ describe("M118 advanced response schemas", () => {
 
   it("guard_record_accepts_shape_and_rejects_extra_field", () => {
     const rec = { id: "g1", createdAt: "2026-07-07T00:00:00Z", evaluatorId: "e1", operator: "lt", threshold: 0.5, enabled: true };
-    expect(guardRecordSchema.parse(rec)).toEqual(rec);
-    expect(() => guardRecordSchema.parse({ ...rec, workspace_id: "leak" })).toThrow();
+    expect(monitorRecordSchema.parse(rec)).toEqual(rec);
+    expect(() => monitorRecordSchema.parse({ ...rec, workspace_id: "leak" })).toThrow();
   });
 
   it("run_result_accepts_shape_with_nested_errors", () => {

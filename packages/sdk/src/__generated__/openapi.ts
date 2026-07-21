@@ -2887,7 +2887,7 @@ export interface components {
                 };
             })[];
         };
-        GuardRecord: {
+        MonitorRecord: {
             id: string;
             createdAt: string;
             evaluatorId: string;

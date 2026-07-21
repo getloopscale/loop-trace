@@ -76,9 +76,9 @@ export { isValidAttrKey, parseSpanQuery, type SpanClause, type SpanQuery } from 
 // M36: online evaluators (compute/write path) — types + pure rule/guard engines.
 export {
   EVALUATOR_KINDS,
-  GUARD_OPERATORS,
+  MONITOR_OPERATORS,
   evaluatorSchema,
-  guardSchema,
+  monitorSchema,
   ruleConfigSchema,
   judgeConfigSchema,
   evaluateRule,
@@ -86,9 +86,9 @@ export {
   validatePredicate,
   deriveKind,
   type EvaluatorKind,
-  type GuardOperator,
+  type MonitorOperator,
   type Evaluator,
-  type Guard,
+  type Monitor,
   type Verdict,
   type RunResult,
 } from "./domain/evaluation/evaluator.js";
@@ -111,8 +111,8 @@ export { RateLimiter } from "./domain/rate-limiter.js";
 export {
   evaluatorRecordSchema,
   evaluatorsListResponseSchema,
-  guardRecordSchema,
-  guardsListResponseSchema,
+  monitorRecordSchema,
+  monitorsListResponseSchema,
   runResultResponseSchema,
   evaluatorRunJobResponseSchema,
   experimentRunsListResponseSchema,
@@ -202,7 +202,7 @@ export {
 export type {
   EvaluatorRepository,
   EvaluatorRecord,
-  GuardRecord,
+  MonitorRecord,
 } from "./domain/evaluation/evaluator-repository.js";
 // M131 B2/B3 — session-level Session Coherence evaluator + cached runner (reuses the M36 JudgeClient).
 export {

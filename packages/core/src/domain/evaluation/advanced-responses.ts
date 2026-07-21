@@ -11,7 +11,7 @@
  */
 import { z } from "zod";
 
-import { EVALUATOR_KINDS, GUARD_OPERATORS, ruleConfigSchema, judgeConfigSchema } from "./evaluator.js";
+import { EVALUATOR_KINDS, MONITOR_OPERATORS, ruleConfigSchema, judgeConfigSchema } from "./evaluator.js";
 import { experimentRunSchema } from "./experiment.js";
 
 const NAME_RE = /^[a-z0-9_-]{1,64}$/;
@@ -60,19 +60,19 @@ export const evaluatorRecordSchema = z.discriminatedUnion("kind", [
 ]);
 export const evaluatorsListResponseSchema = z.object({ evaluators: z.array(evaluatorRecordSchema) }).strict();
 
-/** The persisted-guard record (`GuardRecord` = `Guard & { id, createdAt }`). */
-export const guardRecordSchema = z
+/** The persisted-monitor record (`MonitorRecord` = `Monitor & { id, createdAt }`). */
+export const monitorRecordSchema = z
   .object({
     id: z.string(),
     createdAt: ISO,
     evaluatorId: z.string(),
-    operator: z.enum(GUARD_OPERATORS),
+    operator: z.enum(MONITOR_OPERATORS),
     threshold: z.number().optional(),
     labelValue: z.string().optional(),
     enabled: z.boolean(),
   })
   .strict();
-export const guardsListResponseSchema = z.object({ guards: z.array(guardRecordSchema) }).strict();
+export const monitorsListResponseSchema = z.object({ guards: z.array(monitorRecordSchema) }).strict();
 
 /** `RunResult` — the evaluator-run outcome (the synchronous sweep + the async job's final tally). */
 export const runResultResponseSchema = z

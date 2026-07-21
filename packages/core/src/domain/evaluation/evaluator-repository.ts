@@ -4,7 +4,7 @@
  * budget). Every method is workspace-scoped (M22 invariant 2). The run engine
  * (`evaluator-engine.ts`) reads spans via `SpanRepository` and writes verdicts here.
  */
-import type { Evaluator, Guard, Verdict } from "./evaluator.js";
+import type { Evaluator, Monitor, Verdict } from "./evaluator.js";
 
 /** A persisted evaluator (definition + server-assigned id/createdAt). `Evaluator` is a
  * discriminated union, so this is an intersection type (an interface cannot `extends`
@@ -12,7 +12,7 @@ import type { Evaluator, Guard, Verdict } from "./evaluator.js";
 export type EvaluatorRecord = Evaluator & { id: string; createdAt: string };
 
 /** A persisted guard. */
-export type GuardRecord = Guard & { id: string; createdAt: string };
+export type MonitorRecord = Monitor & { id: string; createdAt: string };
 
 export interface EvaluatorRepository {
   /** Create-or-update on `(workspace_id, name)` — idempotent (D2/D6). */
@@ -24,9 +24,9 @@ export interface EvaluatorRepository {
   /** Deletes the evaluator AND cascades its guards in one transaction (EC-4). */
   deleteEvaluator(id: string, workspaceId?: string): Promise<void>;
 
-  createGuard(guard: Guard, workspaceId?: string): Promise<GuardRecord>;
-  listGuards(workspaceId?: string): Promise<GuardRecord[]>;
-  deleteGuard(id: string, workspaceId?: string): Promise<void>;
+  createMonitor(guard: Monitor, workspaceId?: string): Promise<MonitorRecord>;
+  listMonitors(workspaceId?: string): Promise<MonitorRecord[]>;
+  deleteMonitor(id: string, workspaceId?: string): Promise<void>;
 
   /**
    * Idempotent verdict write into `span_evaluations` (upsert on the workspace-leading
@@ -44,7 +44,7 @@ export interface EvaluatorRepository {
    * scoped to the workspace (flag-only surfacing, D6). Empty when the guard or its
    * evaluator is absent.
    */
-  listBreachingTraces(guardId: string, workspaceId?: string): Promise<string[]>;
+  listBreachingTraces(monitorId: string, workspaceId?: string): Promise<string[]>;
   /**
    * M135 — per-guard breach counts over a window, for the scheduled evaluator.
    *
@@ -55,15 +55,15 @@ export interface EvaluatorRepository {
    * theo-cloud#247, where an empty window read as a real zero and fired every
    * below-threshold rule permanently.
    */
-  guardBreachWindow(
-    guardId: string,
+  monitorBreachWindow(
+    monitorId: string,
     windowSeconds: number,
     workspaceId?: string,
-  ): Promise<GuardBreachWindow>;
+  ): Promise<MonitorBreachWindow>;
 }
 
 /** The windowed breach summary a scheduled guard evaluation reads. */
-export interface GuardBreachWindow {
+export interface MonitorBreachWindow {
   /** Distinct traces in the window that breached the guard. */
   breachCount: number;
   /** Distinct traces in the window carrying a verdict for the guard's evaluator. */

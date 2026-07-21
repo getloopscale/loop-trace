@@ -12,11 +12,11 @@ import { DEFAULT_WORKSPACE_ID } from "../../../domain/principal.js";
 import { parsePoolConfig } from "../../../domain/evaluation/evaluator-config.js";
 import { NameConflictError, isUniqueViolation } from "../../../domain/errors.js";
 import { isUuid } from "../uuid.js";
-import type { Evaluator, Guard, Verdict } from "../../../domain/evaluation/evaluator.js";
+import type { Evaluator, Monitor, Verdict } from "../../../domain/evaluation/evaluator.js";
 import type {
   EvaluatorRepository,
   EvaluatorRecord,
-  GuardRecord, GuardBreachWindow } from "../../../domain/evaluation/evaluator-repository.js";
+  MonitorRecord, MonitorBreachWindow } from "../../../domain/evaluation/evaluator-repository.js";
 import { evaluators, monitors, spanEvaluations } from "../schema.js";
 
 type EvaluatorRow = typeof evaluators.$inferSelect;
@@ -45,11 +45,11 @@ function toEvaluatorRecord(row: EvaluatorRow): EvaluatorRecord {
   } as EvaluatorRecord;
 }
 
-function toGuardRecord(row: MonitorRow): GuardRecord {
+function toGuardRecord(row: MonitorRow): MonitorRecord {
   return {
     id: row.id,
     evaluatorId: row.evaluatorId,
-    operator: row.operator as GuardRecord["operator"],
+    operator: row.operator as MonitorRecord["operator"],
     enabled: row.enabled === 1,
     createdAt: row.createdAt.toISOString(),
     ...(row.threshold != null ? { threshold: row.threshold } : {}),
@@ -186,10 +186,10 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
     });
   }
 
-  async createGuard(
-    guard: Guard,
+  async createMonitor(
+    guard: Monitor,
     workspaceId: string = DEFAULT_WORKSPACE_ID,
-  ): Promise<GuardRecord> {
+  ): Promise<MonitorRecord> {
     const rows = await this.db
       .insert(monitors)
       .values({
@@ -214,9 +214,9 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
     return toGuardRecord(rows[0]!);
   }
 
-  async listGuards(
+  async listMonitors(
     workspaceId: string = DEFAULT_WORKSPACE_ID,
-  ): Promise<GuardRecord[]> {
+  ): Promise<MonitorRecord[]> {
     const rows = await this.db
       .select()
       .from(monitors)
@@ -224,7 +224,7 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
     return rows.map(toGuardRecord);
   }
 
-  async deleteGuard(
+  async deleteMonitor(
     id: string,
     workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<void> {
@@ -285,14 +285,14 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
    * window. Counting it would mean asserting it happened at a time we do not know. Recorded here so
    * the next reader does not "align" the two relations and silently start counting untimed rows.
    */
-  async guardBreachWindow(
-    guardId: string,
+  async monitorBreachWindow(
+    monitorId: string,
     windowSeconds: number,
     workspaceId: string = DEFAULT_WORKSPACE_ID,
-  ): Promise<GuardBreachWindow> {
+  ): Promise<MonitorBreachWindow> {
     const absent = { breachCount: 0, evaluatedCount: 0, hasData: false, guardExists: false };
     // Mirrors listBreachingTraces: a non-uuid path param is absence, not a 500 (22P02).
-    if (!isUuid(guardId)) return absent;
+    if (!isUuid(monitorId)) return absent;
 
     const rows = await this.db.execute(sql`
       SELECT
@@ -319,7 +319,7 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
       LEFT JOIN span_evaluations se ON se.name = e.name AND se.workspace_id = g.workspace_id
       LEFT JOIN traces t ON t.trace_id = se.trace_id AND t.workspace_id = se.workspace_id
         AND t.updated_at >= now() - (${String(Math.max(0, Math.floor(windowSeconds)))} || ' seconds')::interval
-      WHERE g.id = ${guardId} AND g.workspace_id = ${workspaceId}
+      WHERE g.id = ${monitorId} AND g.workspace_id = ${workspaceId}
     `);
 
     const row = (rows.rows as { breach_count: number; evaluated_count: number; guard_rows: number }[])[0];
@@ -335,10 +335,10 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
   }
 
   async listBreachingTraces(
-    guardId: string,
+    monitorId: string,
     workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<string[]> {
-    if (!isUuid(guardId)) return []; // non-uuid path param → no breaches (empty), not a 500 (22P02) — Rule 8
+    if (!isUuid(monitorId)) return []; // non-uuid path param → no breaches (empty), not a 500 (22P02) — Rule 8
     // Join guard → its evaluator → that evaluator's verdicts; a row breaches per the
     // guard's operator. Workspace-scoped on every table (M22). The breach predicate
     // is built from the controlled `operator` enum (no injection — bound params).
@@ -353,7 +353,7 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
       FROM monitors g
       JOIN evaluators e ON e.id = g.evaluator_id AND e.workspace_id = g.workspace_id
       JOIN span_evaluations se ON se.name = e.name AND se.workspace_id = g.workspace_id
-      WHERE g.id = ${guardId} AND g.workspace_id = ${workspaceId}
+      WHERE g.id = ${monitorId} AND g.workspace_id = ${workspaceId}
         AND (
           CASE g.operator
             WHEN 'lt'  THEN se.score IS NOT NULL AND se.score <  g.threshold

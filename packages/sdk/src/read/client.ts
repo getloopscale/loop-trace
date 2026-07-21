@@ -38,9 +38,9 @@ import type {
   EvaluatorUpdateBody,
   ExperimentRun,
   ExportLabelingBody,
-  GuardBody,
-  GuardBreachesResponse,
-  GuardRecord,
+  MonitorBody,
+  MonitorBreachesResponse,
+  MonitorRecord,
   LabelingQueueItem,
   LabelingQueuePage,
   ListEvaluatorsResponse,
@@ -304,12 +304,12 @@ export class LensReadClient extends LensReadTransport {
   }
 
   /** `POST /v1/guards` — create (or upsert) a guard over an evaluator's verdict. */
-  createGuard(body: GuardBody): Promise<GuardRecord> {
-    return this.send<GuardRecord>("POST", "/v1/guards", { body, retryNetwork: true });
+  createMonitor(body: MonitorBody): Promise<MonitorRecord> {
+    return this.send<MonitorRecord>("POST", "/v1/guards", { body, retryNetwork: true });
   }
 
   /** `DELETE /v1/guards/{id}` — delete a guard. */
-  deleteGuard(id: string): Promise<void> {
+  deleteMonitor(id: string): Promise<void> {
     return this.send<void>("DELETE", `/v1/guards/${encodeURIComponent(id)}`, { retryNetwork: true });
   }
 
@@ -487,13 +487,13 @@ export class LensReadClient extends LensReadTransport {
   }
 
   /** `GET /v1/guards` — the workspace's guards, wrapped as `{ guards: [...] }`. */
-  listGuards(): Promise<ListGuardsResponse> {
+  listMonitors(): Promise<ListGuardsResponse> {
     return this.request<ListGuardsResponse>("/v1/guards");
   }
 
   /** `GET /v1/guards/{id}/breaches` — the trace ids a guard flagged, wrapped as `{ traceIds: [...] }`. */
-  getGuardBreaches(id: string): Promise<GuardBreachesResponse> {
-    return this.request<GuardBreachesResponse>(`/v1/guards/${encodeURIComponent(id)}/breaches`);
+  getMonitorBreaches(id: string): Promise<MonitorBreachesResponse> {
+    return this.request<MonitorBreachesResponse>(`/v1/guards/${encodeURIComponent(id)}/breaches`);
   }
 
   /** `GET /v1/experiment-runs?datasetId=` — the workspace's runs (optionally scoped to a dataset). */

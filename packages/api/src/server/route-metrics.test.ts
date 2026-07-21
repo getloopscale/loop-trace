@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { RateLimiter, EvaluatorRunJobRegistry, type EvaluatorRecord, type GuardRecord } from "@usetheo/lens-core";
+import { RateLimiter, EvaluatorRunJobRegistry, type EvaluatorRecord, type MonitorRecord } from "@usetheo/lens-core";
 
 import { createApp } from "./app.js";
 import type { EvaluatorApiDeps } from "./handlers/evaluators.js";
 import {
   evaluatorRunsStarted,
   evaluatorsCreated,
-  guardsCreated,
+  monitorsCreated,
   datasetsCreated,
   datasetsRenamed,
   datasetsDeleted,
@@ -51,15 +51,15 @@ function stubRepo(): never {
 const EVAL: EvaluatorRecord = {
   id: "e1", name: "has-good", kind: "rule", config: { predicate: "" }, target: "", enabled: true, createdAt: "2026-07-07T00:00:00Z",
 } as unknown as EvaluatorRecord;
-const GUARD: GuardRecord = {
+const GUARD: MonitorRecord = {
   id: "g1", evaluatorId: "e1", operator: "lt", threshold: 0.5, enabled: true, createdAt: "2026-07-07T00:00:00Z",
-} as unknown as GuardRecord;
+} as unknown as MonitorRecord;
 
 function evaluatorDeps(): EvaluatorApiDeps {
   const repo = {
     getEvaluator: async () => EVAL,
     createEvaluator: async () => EVAL,
-    createGuard: async () => GUARD,
+    createMonitor: async () => GUARD,
     writeVerdict: async () => {},
   } as unknown as EvaluatorApiDeps["repo"];
   const engine = {
@@ -93,7 +93,7 @@ interface Case {
 const CASES: Case[] = [
   { name: "evaluatorRunsStarted", counter: evaluatorRunsStarted, drive: (a) => json(a, "POST", "/v1/evaluators/e1/run", {}) },
   { name: "evaluatorsCreated", counter: evaluatorsCreated, drive: (a) => json(a, "POST", "/v1/evaluators", { name: "has-good", kind: "rule", config: { predicate: "" } }) },
-  { name: "guardsCreated", counter: guardsCreated, drive: (a) => json(a, "POST", "/v1/guards", { evaluatorId: "e1", operator: "lt", threshold: 0.5 }) },
+  { name: "monitorsCreated", counter: monitorsCreated, drive: (a) => json(a, "POST", "/v1/guards", { evaluatorId: "e1", operator: "lt", threshold: 0.5 }) },
   { name: "datasetsCreated", counter: datasetsCreated, drive: (a) => json(a, "POST", "/v1/datasets", { name: "regression" }) },
   { name: "datasetsRenamed", counter: datasetsRenamed, drive: (a) => json(a, "PUT", "/v1/datasets/ds-1", { name: "renamed" }) },
   { name: "datasetsDeleted", counter: datasetsDeleted, drive: (a) => json(a, "DELETE", "/v1/datasets/ds-1") },

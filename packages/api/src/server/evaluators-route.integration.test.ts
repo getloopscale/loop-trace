@@ -347,7 +347,7 @@ suite("M36 evaluators routes (integration)", () => {
   });
 
   it("test_delete_guard_absent_is_idempotent", async () => {
-    // A valid-but-absent DELETE target (edge case): deleteGuard is a workspace-scoped no-op on a
+    // A valid-but-absent DELETE target (edge case): deleteMonitor is a workspace-scoped no-op on a
     // missing row, so DELETE returns 204 — never 404/500 — and stays 204 on a repeat (idempotent).
     const first = await req("DELETE", "/v1/guards/does-not-exist", "rw");
     expect(first.status).toBe(204);
@@ -399,7 +399,7 @@ suite("M36 evaluators routes (integration)", () => {
     expect(yTraceIds).toHaveLength(0);
 
     // A non-uuid guard id in the breaches read → empty (200), never a 500 (22P02) — same isUuid
-    // guard as deleteGuard/getEvaluator (M119 no-workaround fix).
+    // guard as deleteMonitor/getEvaluator (M119 no-workaround fix).
     const garbage = await req("GET", `/v1/guards/not-a-uuid/breaches`, "rw");
     expect(garbage.status).toBe(200);
     expect(((await garbage.json()) as { traceIds: string[] }).traceIds).toEqual([]);

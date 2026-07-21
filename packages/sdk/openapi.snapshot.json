@@ -3821,7 +3821,7 @@
         ],
         "additionalProperties": false
       },
-      "GuardRecord": {
+      "MonitorRecord": {
         "type": "object",
         "properties": {
           "id": {

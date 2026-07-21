@@ -131,7 +131,7 @@ const evaluatorDeps = {
       createdAt: ISO_NOW,
     }),
     deleteEvaluator: async () => undefined,
-    createGuard: async () => ({
+    createMonitor: async () => ({
       id: "g1",
       evaluatorId: "e1",
       operator: "lt",
@@ -139,8 +139,8 @@ const evaluatorDeps = {
       enabled: true,
       createdAt: ISO_NOW,
     }),
-    listGuards: async () => [],
-    deleteGuard: async () => undefined,
+    listMonitors: async () => [],
+    deleteMonitor: async () => undefined,
     listBreachingTraces: async () => [],
   },
   engine: {
