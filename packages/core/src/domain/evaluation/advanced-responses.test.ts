@@ -36,7 +36,7 @@ describe("M118 advanced response schemas", () => {
   });
 
   it("run_result_accepts_shape_with_nested_errors", () => {
-    const rr = { evaluator: "has-good", written: 3, skipped: 1, truncated: false, errors: [{ spanId: "s1", reason: "boom" }] };
+    const rr = { evaluator: "has-good", total: 4, written: 3, skipped: 1, truncated: false, errors: [{ spanId: "s1", reason: "boom" }] };
     expect(runResultResponseSchema.parse(rr)).toEqual(rr);
   });
 

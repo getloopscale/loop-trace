@@ -7,6 +7,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **Evaluator runs are now async (M133) — no more 502 on an `llm_judge` run.** `POST /v1/evaluators/:id/run` scored every selected span *synchronously inside the HTTP request*; for an `llm_judge` evaluator that fanned out one provider round-trip per span, **serially**, so a run over ~100 spans exceeded the edge timeout and returned `502` with NO verdict written (a silent failure). Two bottlenecks removed: (1) the run is **async** — the route registers a job and returns **`202`** with a queued job immediately (the POST no longer blocks on the fan-out, so it scales with N); the client polls the new **`GET /v1/evaluator-run-jobs/:id`** for `status` + `scored/total` progress. (2) the fan-out is now **bounded-concurrent** (`RUN_CONCURRENCY = 6`) instead of serial, so wall-clock is ~N/6 provider round-trips, not N — without an unbounded `Promise.all` that would flood the provider. Rule evaluators stay serial (CPU, instant). The job registry is **in-memory** (theo-lens is single-process); a durable, multi-instance store is the documented follow-up. `RunResult` gains `total` (the progress denominator). Engine tests cover bounded-concurrency scoring + progress; api tests cover 202-then-poll-completed + workspace-scoped 404.
+
 ## [0.59.0] - 2026-07-21
 
 ### Changed

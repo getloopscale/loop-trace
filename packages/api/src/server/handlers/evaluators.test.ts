@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import type { Context } from "hono";
-import { RateLimiter, type EvaluatorRecord, type RunResult } from "@usetheo/lens-core";
+import { RateLimiter, EvaluatorRunJobRegistry, type EvaluatorRecord, type RunResult } from "@usetheo/lens-core";
 
-import { runEvaluatorHandler, type EvaluatorApiDeps } from "./evaluators.js";
+import { runEvaluatorHandler, getEvaluatorRunJobHandler, type EvaluatorApiDeps } from "./evaluators.js";
 import { evaluatorRunRateLimited } from "../metrics.js";
 
 /**
@@ -22,15 +22,15 @@ const EVAL: EvaluatorRecord = {
   createdAt: "2026-07-07T00:00:00Z",
 } as unknown as EvaluatorRecord;
 
-const RUN_RESULT: RunResult = { evaluator: "has-good", written: 1, skipped: 0, truncated: false, errors: [] };
+const RUN_RESULT: RunResult = { evaluator: "has-good", total: 1, written: 1, skipped: 0, truncated: false, errors: [] };
 
-function ctx(opts: { ws?: string; body?: unknown; headers?: Record<string, string> } = {}): Context {
+function ctx(opts: { ws?: string; body?: unknown; headers?: Record<string, string>; id?: string } = {}): Context {
   const principal = { workspaceId: opts.ws ?? "ws-x", userId: "u", role: "member", scopes: ["observability:write"] };
   const headers = opts.headers ?? {};
   return {
     get: (k: string) => (k === "principal" ? principal : undefined),
     req: {
-      param: (n: string) => (n === "id" ? "e1" : undefined),
+      param: (n: string) => (n === "id" ? opts.id ?? "e1" : undefined),
       json: async () => opts.body ?? {},
     },
     header: (k: string, v: string) => { headers[k] = v; },
@@ -55,6 +55,7 @@ function deps(over: Partial<EvaluatorApiDeps> = {}): EvaluatorApiDeps {
   return {
     repo,
     engine,
+    runJobs: new EvaluatorRunJobRegistry(),
     limiter: new RateLimiter(1000),
     now: () => 1_000_000,
     ...over,
@@ -87,5 +88,37 @@ describe("M118 runEvaluatorHandler rate limiting", () => {
     // Workspace A's first call in the same window must NOT be rate-limited (isolation).
     const aFirst = await runEvaluatorHandler(ctx({ ws: "ws-A" }), d);
     expect(aFirst.status).not.toBe(429);
+  });
+});
+
+describe("M133 async evaluator-run job", () => {
+  it("test_run_returns_202_with_a_queued_job_then_poll_reports_completed", async () => {
+    const d = deps();
+    // POST /run registers a job and returns 202 immediately (no synchronous fan-out).
+    const res = await runEvaluatorHandler(ctx({ ws: "ws-A" }), d);
+    expect(res.status).toBe(202);
+    const job = (await res.json()) as { id: string; status: string; evaluatorName: string };
+    expect(job.status).toBe("queued");
+    expect(job.evaluatorName).toBe("has-good");
+    // The fire-and-forget background task settles on the microtask queue (empty fake selection → fast).
+    await new Promise((r) => setImmediate(r));
+    // GET /evaluator-run-jobs/:id reports the terminal state (workspace-scoped).
+    const poll = await getEvaluatorRunJobHandler(ctx({ ws: "ws-A", id: job.id }), d);
+    expect(poll.status).toBe(200);
+    const polled = (await poll.json()) as { status: string; total: number };
+    expect(polled.status).toBe("completed");
+    expect(polled.total).toBe(0); // no traces in the fake engine → empty selection
+  });
+
+  it("test_poll_foreign_or_absent_job_is_404", async () => {
+    const d = deps();
+    const res = await runEvaluatorHandler(ctx({ ws: "ws-A" }), d);
+    const job = (await res.json()) as { id: string };
+    // A different workspace must NOT see ws-A's job (no cross-tenant leak) → 404.
+    const foreign = await getEvaluatorRunJobHandler(ctx({ ws: "ws-B", id: job.id }), d);
+    expect(foreign.status).toBe(404);
+    // An absent id → 404.
+    const absent = await getEvaluatorRunJobHandler(ctx({ ws: "ws-A", id: "nope" }), d);
+    expect(absent.status).toBe(404);
   });
 });

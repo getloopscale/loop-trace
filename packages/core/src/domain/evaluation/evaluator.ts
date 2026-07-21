@@ -83,6 +83,8 @@ export type Guard = z.infer<typeof guardSchema>;
 /** Result of running an evaluator over a selection of spans. */
 export interface RunResult {
   evaluator: string;
+  /** Total target spans selected for scoring (the denominator for run progress). */
+  total: number;
   written: number;
   skipped: number;
   truncated: boolean;

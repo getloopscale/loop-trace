@@ -166,6 +166,25 @@ const EXPECTED_PUBLIC_SURFACE = [
   "validatePredicate",
   "validateQuestion",
   "zodFieldErrors",
+  // M131 — session coherence (eval + runner + store + response schema).
+  "COHERENCE_THRESHOLD",
+  "SESSION_COHERENCE_NAME",
+  "SESSION_COHERENCE_PROMPT",
+  "assembleSessionTranscript",
+  "evaluateSessionCoherence",
+  "getSessionVerdict",
+  "runSessionCoherence",
+  "sessionCoherenceResponseSchema",
+  "sessionVerdictStoreFromPool",
+  "sessionVersion",
+  "shapeCoherenceVerdict",
+  "upsertSessionVerdict",
+  // M133 — async evaluator-run jobs (registry + orchestrator + view mapper + response schema + concurrency).
+  "EvaluatorRunJobRegistry",
+  "RUN_CONCURRENCY",
+  "evaluatorRunJobResponseSchema",
+  "runEvaluatorRunJob",
+  "toRunJobView",
 ] as const;
 
 describe("M123 root barrel public surface", () => {

@@ -15,6 +15,7 @@ import {
   updateEvaluatorHandler,
   deleteEvaluatorHandler,
   runEvaluatorHandler,
+  getEvaluatorRunJobHandler,
   createGuardHandler,
   listGuardsHandler,
   deleteGuardHandler,
@@ -33,6 +34,8 @@ export function registerEvaluatorRoutes(app: Hono, evaluators?: EvaluatorApiDeps
     app.put("/v1/evaluators/:id", bodyLimit413(EVALUATOR_MAX_BYTES), requireScopeOnPrincipal("observability:write"), (c) => updateEvaluatorHandler(c, ev));
     app.delete("/v1/evaluators/:id", requireScopeOnPrincipal("observability:delete"), (c) => deleteEvaluatorHandler(c, ev));
     app.post("/v1/evaluators/:id/run", bodyLimit413(EVALUATOR_MAX_BYTES), requireScopeOnPrincipal("observability:write"), (c) => runEvaluatorHandler(c, ev));
+    // M133 — poll an async evaluator-run job's status/progress (read scope; the run itself is write).
+    app.get("/v1/evaluator-run-jobs/:id", requireScopeOnPrincipal("observability:read"), (c) => getEvaluatorRunJobHandler(c, ev));
     app.post("/v1/guards", bodyLimit413(EVALUATOR_MAX_BYTES), requireScopeOnPrincipal("observability:write"), (c) => createGuardHandler(c, ev));
     app.get("/v1/guards", requireScopeOnPrincipal("observability:read"), (c) => listGuardsHandler(c, ev));
     app.delete("/v1/guards/:id", requireScopeOnPrincipal("observability:delete"), (c) => deleteGuardHandler(c, ev));

@@ -11,8 +11,11 @@ import {
   evaluatorSchema,
   guardSchema,
   validatePredicate,
-  runEvaluator,
   NameConflictError,
+  // M133 — async evaluator-run jobs (register + fire-and-forget background scoring, poll for status).
+  EvaluatorRunJobRegistry,
+  runEvaluatorRunJob,
+  toRunJobView,
   type Evaluator,
   type EvaluatorRepository,
   type EngineDeps,
@@ -24,7 +27,7 @@ import {
   evaluatorsListResponseSchema,
   guardRecordSchema,
   guardsListResponseSchema,
-  runResultResponseSchema,
+  evaluatorRunJobResponseSchema,
 } from "@usetheo/lens-core";
 
 import { getPrincipal } from "../auth/middleware.js";
@@ -50,6 +53,8 @@ const evaluatorUpdateSchema = z
 export interface EvaluatorApiDeps {
   repo: EvaluatorRepository;
   engine: EngineDeps;
+  /** M133 — the async evaluator-run job registry (POST /run registers a job; GET polls it). */
+  runJobs: EvaluatorRunJobRegistry;
   /** M118 — per-workspace billable-abuse guard for `POST /v1/evaluators/:id/run` (429). Optional so a
    *  test app without it keeps the pre-M118 behavior (unbounded); the composition root always wires it. */
   limiter?: RateLimiter;
@@ -167,8 +172,27 @@ export async function runEvaluatorHandler(c: Context, deps: EvaluatorApiDeps): P
     opts.limit = lim;
   }
   evaluatorRunsStarted.add(1); // observable: billable evaluator-run volume (pillar c)
-  const result = await runEvaluator(ev, opts, ws, deps.engine);
-  return c.json(runResultResponseSchema.parse(result), 200);
+  // M133 — async: register a job, kick off the bounded-concurrency scoring in the background, and
+  // return 202 immediately. The old synchronous fan-out held the request until every span was judged,
+  // which exceeded the edge timeout for an llm_judge run (502, no verdict written). The client polls
+  // GET /v1/evaluator-run-jobs/:id for progress. Fire-and-forget: runEvaluatorRunJob never throws
+  // (it records a scoring failure on the job as status=failed).
+  const job = deps.runJobs.create(ws, ev.id, ev.name);
+  // Snapshot the queued view BEFORE kicking off the runner: `runEvaluatorRunJob` runs synchronously up
+  // to its first await (flipping the shared job to `running`), so serializing after would leak that.
+  const queued = evaluatorRunJobResponseSchema.parse(toRunJobView(job));
+  void runEvaluatorRunJob(deps.runJobs, job.id, ev, opts, ws, deps.engine);
+  return c.json(queued, 202);
+}
+
+/** M133 — poll an async evaluator-run job's status/progress (workspace-scoped; foreign id → 404). */
+export async function getEvaluatorRunJobHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
+  const ws = getPrincipal(c).workspaceId;
+  const job = deps.runJobs.get(ws, c.req.param("id") ?? "");
+  if (job === null) {
+    return c.json(apiError("RUN_JOB_NOT_FOUND", "not found"), 404);
+  }
+  return c.json(evaluatorRunJobResponseSchema.parse(toRunJobView(job)), 200);
 }
 
 export async function createGuardHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {

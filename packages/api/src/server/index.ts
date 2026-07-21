@@ -17,6 +17,7 @@ import {
   parseShutdownDrainMs,
   runSweep,
   RateLimiter,
+  EvaluatorRunJobRegistry,
   DEFAULT_WORKSPACE_ID,
   type EngineDeps,
 } from "@usetheo/lens-core";
@@ -101,6 +102,9 @@ export async function bootstrap(
   // M118: the billable POST /v1/evaluators/:id/run fans out up to backfillMax=500 judge calls per
   // request — its own low-RPM per-workspace limiter (its own env knob, decoupled from copilot — UQ3).
   const evaluatorRunLimiter = new RateLimiter(parseEvaluatorRpm(process.env));
+  // M133 — the async evaluator-run job registry (in-memory; a manual run registers a job, scores in
+  // the background with bounded concurrency, and the client polls for progress). Single-process v1.
+  const evaluatorRunJobs = new EvaluatorRunJobRegistry();
   // M93: OTLP ingest backpressure — a dedicated, higher-rpm per-workspace limiter (ingest is the
   // high-volume write path) so a runaway producer sheds with 429 before the pool exhausts.
   const ingestLimiter = new RateLimiter(parseIngestRpm(process.env));
@@ -130,7 +134,7 @@ export async function bootstrap(
     repo,
     webDistDir,
     authOptions,
-    { repo: evaluatorRepo, engine, limiter: evaluatorRunLimiter },
+    { repo: evaluatorRepo, engine, runJobs: evaluatorRunJobs, limiter: evaluatorRunLimiter },
     { spanRepo: repo, chat, limiter: copilotLimiter },
     { spanRepo: repo, chat: replayClient, limiter: replayLimiter },
     { spanRepo: repo, evaluatorRepo, chat: replayClient, judge, limiter: experimentLimiter },

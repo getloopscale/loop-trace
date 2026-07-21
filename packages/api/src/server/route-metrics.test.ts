@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { RateLimiter, type EvaluatorRecord, type GuardRecord } from "@usetheo/lens-core";
+import { RateLimiter, EvaluatorRunJobRegistry, type EvaluatorRecord, type GuardRecord } from "@usetheo/lens-core";
 
 import { createApp } from "./app.js";
 import type { EvaluatorApiDeps } from "./handlers/evaluators.js";
@@ -68,7 +68,7 @@ function evaluatorDeps(): EvaluatorApiDeps {
     judge: null,
     backfillMax: 500,
   } as unknown as EvaluatorApiDeps["engine"];
-  return { repo, engine, limiter: new RateLimiter(1000), now: () => 1 };
+  return { repo, engine, runJobs: new EvaluatorRunJobRegistry(), limiter: new RateLimiter(1000), now: () => 1 };
 }
 
 function buildApp(): ReturnType<typeof createApp> {

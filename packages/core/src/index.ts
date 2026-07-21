@@ -114,6 +114,7 @@ export {
   guardRecordSchema,
   guardsListResponseSchema,
   runResultResponseSchema,
+  evaluatorRunJobResponseSchema,
   experimentRunsListResponseSchema,
   runCompareDeltasSchema,
   experimentCompareResponseSchema,
@@ -160,9 +161,20 @@ export {
 export {
   runEvaluator,
   runSweep,
+  RUN_CONCURRENCY,
   type EngineDeps,
   type RunOptions,
+  type RunHooks,
 } from "./domain/evaluation/evaluator-engine.js";
+// M133 — async evaluator-run jobs (registry + background orchestrator + view mapper).
+export {
+  EvaluatorRunJobRegistry,
+  runEvaluatorRunJob,
+  toRunJobView,
+  type EvaluatorRunJob,
+  type EvaluatorRunJobView,
+  type RunJobStatus,
+} from "./domain/evaluation/evaluator-run-job.js";
 export type {
   EvaluatorRepository,
   EvaluatorRecord,
