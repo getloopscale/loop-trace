@@ -2,9 +2,9 @@ import { describe, it, expect } from "vitest";
 
 import {
   evaluatorSchema,
-  guardSchema,
+  monitorSchema,
   evaluateRule,
-  evaluateGuard,
+  evaluateMonitor,
   validatePredicate,
   deriveKind,
   type Evaluator,
@@ -68,13 +68,13 @@ describe("M36 evaluator schema (T1.2)", () => {
 
   it("test_guard_schema_accepts_operators", () => {
     expect(() =>
-      guardSchema.parse({ evaluatorId: "e1", operator: "lt", threshold: 0.5 }),
+      monitorSchema.parse({ evaluatorId: "e1", operator: "lt", threshold: 0.5 }),
     ).not.toThrow();
     expect(() =>
-      guardSchema.parse({ evaluatorId: "e1", operator: "label_eq", labelValue: "fail" }),
+      monitorSchema.parse({ evaluatorId: "e1", operator: "label_eq", labelValue: "fail" }),
     ).not.toThrow();
     expect(() =>
-      guardSchema.parse({ evaluatorId: "e1", operator: "bogus" }),
+      monitorSchema.parse({ evaluatorId: "e1", operator: "bogus" }),
     ).toThrow();
   });
 });
@@ -142,24 +142,24 @@ describe("M36 rule engine (T3.1)", () => {
   });
 });
 
-describe("M36 guards (T6.1)", () => {
+describe("M36 monitors (T6.1)", () => {
   const g = (operator: string, over: Record<string, unknown> = {}) =>
-    guardSchema.parse({ evaluatorId: "e1", operator, ...over });
+    monitorSchema.parse({ evaluatorId: "e1", operator, ...over });
 
-  it("test_guard_operator_matrix", () => {
-    expect(evaluateGuard(g("lt", { threshold: 0.5 }), { score: 0.4 })).toBe(true);
-    expect(evaluateGuard(g("lt", { threshold: 0.5 }), { score: 0.6 })).toBe(false);
-    expect(evaluateGuard(g("gte", { threshold: 0.5 }), { score: 0.5 })).toBe(true);
-    expect(evaluateGuard(g("gt", { threshold: 0.5 }), { score: 0.5 })).toBe(false);
-    expect(evaluateGuard(g("lte", { threshold: 0.5 }), { score: 0.5 })).toBe(true);
-    expect(evaluateGuard(g("eq", { threshold: 1 }), { score: 1 })).toBe(true);
-    expect(evaluateGuard(g("label_eq", { labelValue: "fail" }), { label: "fail" })).toBe(true);
-    expect(evaluateGuard(g("label_eq", { labelValue: "fail" }), { label: "pass" })).toBe(false);
+  it("test_monitor_operator_matrix", () => {
+    expect(evaluateMonitor(g("lt", { threshold: 0.5 }), { score: 0.4 })).toBe(true);
+    expect(evaluateMonitor(g("lt", { threshold: 0.5 }), { score: 0.6 })).toBe(false);
+    expect(evaluateMonitor(g("gte", { threshold: 0.5 }), { score: 0.5 })).toBe(true);
+    expect(evaluateMonitor(g("gt", { threshold: 0.5 }), { score: 0.5 })).toBe(false);
+    expect(evaluateMonitor(g("lte", { threshold: 0.5 }), { score: 0.5 })).toBe(true);
+    expect(evaluateMonitor(g("eq", { threshold: 1 }), { score: 1 })).toBe(true);
+    expect(evaluateMonitor(g("label_eq", { labelValue: "fail" }), { label: "fail" })).toBe(true);
+    expect(evaluateMonitor(g("label_eq", { labelValue: "fail" }), { label: "pass" })).toBe(false);
   });
 
-  it("test_guard_null_score_is_no_breach", () => {
+  it("test_monitor_null_score_is_no_breach", () => {
     // a score operator over a label-only verdict → no breach (null-safe)
-    expect(evaluateGuard(g("lt", { threshold: 0.5 }), { label: "x" })).toBe(false);
-    expect(evaluateGuard(g("label_eq", { labelValue: "fail" }), { score: 0 })).toBe(false);
+    expect(evaluateMonitor(g("lt", { threshold: 0.5 }), { label: "x" })).toBe(false);
+    expect(evaluateMonitor(g("label_eq", { labelValue: "fail" }), { score: 0 })).toBe(false);
   });
 });

@@ -9,7 +9,7 @@ import type { Context } from "hono";
 import { z } from "zod";
 import {
   evaluatorSchema,
-  guardSchema,
+  monitorSchema,
   validatePredicate,
   NameConflictError,
   // M133 — async evaluator-run jobs (register + fire-and-forget background scoring, poll for status).
@@ -26,13 +26,13 @@ import {
   // M118 (D4) — response schemas parsed at the boundary (server-side single source of truth).
   evaluatorRecordSchema,
   evaluatorsListResponseSchema,
-  guardRecordSchema,
-  guardsListResponseSchema,
+  monitorRecordSchema,
+  monitorsListResponseSchema,
   evaluatorRunJobResponseSchema,
 } from "@usetheo/lens-core";
 
 import { getPrincipal } from "../auth/middleware.js";
-import { evaluatorRunRateLimited, evaluatorRunsStarted, evaluatorsCreated, guardsCreated } from "../metrics.js";
+import { evaluatorRunRateLimited, evaluatorRunsStarted, evaluatorsCreated, monitorsCreated } from "../metrics.js";
 
 /**
  * M82 — a partial evaluator edit. `name` follows the same rule as create; `kind`+`config`, when present,
@@ -213,10 +213,10 @@ export async function getEvaluatorRunJobHandler(c: Context, deps: EvaluatorApiDe
   return c.json(evaluatorRunJobResponseSchema.parse(toRunJobView(job)), 200);
 }
 
-export async function createGuardHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
+export async function createMonitorHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
   const body = await readJson(c);
   if (body === null) return c.json(apiError("INVALID_BODY", "invalid json body"), 400);
-  const parsed = guardSchema.safeParse(body);
+  const parsed = monitorSchema.safeParse(body);
   if (!parsed.success) {
     return c.json(apiError("INVALID_GUARD", "invalid guard", zodFieldErrors(parsed.error)), 400);
   }
@@ -227,18 +227,19 @@ export async function createGuardHandler(c: Context, deps: EvaluatorApiDeps): Pr
   if (target === null) {
     return c.json(apiError("EVALUATOR_NOT_FOUND", "guard.evaluatorId not found in workspace"), 404);
   }
-  const rec = await deps.repo.createGuard(parsed.data, ws);
-  guardsCreated.add(1); // observable: guard-definition curation volume (pillar c)
-  return c.json(guardRecordSchema.parse(rec), 200);
+  const rec = await deps.repo.createMonitor(parsed.data, ws);
+  monitorsCreated.add(1); // observable: guard-definition curation volume (pillar c)
+  return c.json(monitorRecordSchema.parse(rec), 200);
 }
 
-export async function listGuardsHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
-  const guards = await deps.repo.listGuards(getPrincipal(c).workspaceId);
-  return c.json(guardsListResponseSchema.parse({ guards }), 200);
+export async function listMonitorsHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
+  const monitors = await deps.repo.listMonitors(getPrincipal(c).workspaceId);
+  // Both keys, same array — see monitorsListResponseSchema. `guards` is deprecated.
+  return c.json(monitorsListResponseSchema.parse({ monitors, guards: monitors }), 200);
 }
 
-export async function deleteGuardHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
-  await deps.repo.deleteGuard(c.req.param("id") ?? "", getPrincipal(c).workspaceId);
+export async function deleteMonitorHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
+  await deps.repo.deleteMonitor(c.req.param("id") ?? "", getPrincipal(c).workspaceId);
   return c.body(null, 204);
 }
 
@@ -250,21 +251,24 @@ export async function deleteGuardHandler(c: Context, deps: EvaluatorApiDeps): Pr
  * of silent coercion as theo-cloud#247 one layer up — the caller believes it asked a question it
  * did not ask.
  */
-export async function guardBreachWindowHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
+export async function monitorBreachWindowHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
   const raw = c.req.query("window") ?? "";
   const windowSeconds = Number(raw);
   if (raw.trim() === "" || !Number.isInteger(windowSeconds) || windowSeconds <= 0) {
     return c.json(apiError("INVALID_WINDOW", "window must be a positive integer number of seconds"), 400);
   }
-  const summary = await deps.repo.guardBreachWindow(
+  const summary = await deps.repo.monitorBreachWindow(
     c.req.param("id") ?? "",
     windowSeconds,
     getPrincipal(c).workspaceId,
   );
-  return c.json({ ...summary, windowSeconds }, 200);
+  // M136: `monitorExists` is canonical; `guardExists` is the deprecated twin kept for one release.
+  // theo-cloud shipped a consumer of `guardExists` in v0.61.0 — dropping it here would break that
+  // consumer through the compatibility alias itself, which is the one thing an alias must not do.
+  return c.json({ ...summary, monitorExists: summary.guardExists, windowSeconds }, 200);
 }
 
-export async function guardBreachesHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
+export async function monitorBreachesHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
   const traceIds = await deps.repo.listBreachingTraces(
     c.req.param("id") ?? "",
     getPrincipal(c).workspaceId,

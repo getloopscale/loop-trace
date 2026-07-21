@@ -35,7 +35,7 @@ suite("guard breach window (integration, M135 T2.1)", () => {
 
   beforeEach(async () => {
     await pool.query(
-      "TRUNCATE spans, traces, sessions, evaluators, guards, span_evaluations",
+      "TRUNCATE spans, traces, sessions, evaluators, monitors, span_evaluations",
     );
   });
 
@@ -48,7 +48,7 @@ suite("guard breach window (integration, M135 T2.1)", () => {
       { name, kind: "rule", config: { predicate: "" }, target: "", enabled: true } as never,
       WS,
     );
-    const g = await evaluatorRepo.createGuard(
+    const g = await evaluatorRepo.createMonitor(
       { evaluatorId: ev.id, operator, threshold, enabled: true } as never,
       WS,
     );
@@ -87,7 +87,7 @@ suite("guard breach window (integration, M135 T2.1)", () => {
     await traceWithVerdict("t-breach", "toxicity", 0.9);
     await traceWithVerdict("t-clean", "toxicity", 0.1);
 
-    const r = await evaluatorRepo.guardBreachWindow(g.id, 3600, WS);
+    const r = await evaluatorRepo.monitorBreachWindow(g.id, 3600, WS);
 
     expect(r.hasData).toBe(true);
     expect(r.breachCount).toBe(1);
@@ -101,7 +101,7 @@ suite("guard breach window (integration, M135 T2.1)", () => {
     const { g } = await guardOver("toxicity", "gt", 0.5);
     await traceWithVerdict("t-clean", "toxicity", 0.1);
 
-    const r = await evaluatorRepo.guardBreachWindow(g.id, 3600, WS);
+    const r = await evaluatorRepo.monitorBreachWindow(g.id, 3600, WS);
 
     expect(r.hasData).toBe(true);
     expect(r.breachCount).toBe(0);
@@ -111,7 +111,7 @@ suite("guard breach window (integration, M135 T2.1)", () => {
     // Nothing to evaluate. Collapsing this into `0` is exactly theo-cloud#247.
     const { g } = await guardOver("toxicity", "gt", 0.5);
 
-    const r = await evaluatorRepo.guardBreachWindow(g.id, 3600, WS);
+    const r = await evaluatorRepo.monitorBreachWindow(g.id, 3600, WS);
 
     expect(r.hasData).toBe(false);
     expect(r.breachCount).toBe(0);
@@ -121,7 +121,7 @@ suite("guard breach window (integration, M135 T2.1)", () => {
     const { g } = await guardOver("toxicity", "gt", 0.5);
     await traceWithVerdict("t-old", "toxicity", 0.9, 120); // 2h old
 
-    const r = await evaluatorRepo.guardBreachWindow(g.id, 3600, WS); // 1h window
+    const r = await evaluatorRepo.monitorBreachWindow(g.id, 3600, WS); // 1h window
 
     expect(r.hasData).toBe(false);
     expect(r.breachCount).toBe(0);
@@ -133,7 +133,7 @@ suite("guard breach window (integration, M135 T2.1)", () => {
     const { g } = await guardOver("toxicity", "gt", 0.5);
     await traceWithVerdict("t-breach", "toxicity", 0.9);
 
-    const r = await evaluatorRepo.guardBreachWindow(g.id, 3600, "ws-someone-else");
+    const r = await evaluatorRepo.monitorBreachWindow(g.id, 3600, "ws-someone-else");
 
     expect(r.hasData).toBe(false);
     expect(r.breachCount).toBe(0);
@@ -141,7 +141,7 @@ suite("guard breach window (integration, M135 T2.1)", () => {
 
   it("test_a_non_uuid_guard_id_is_absence_not_a_crash", async () => {
     // Mirrors listBreachingTraces: a bad path param is empty, not a 500 (22P02).
-    const r = await evaluatorRepo.guardBreachWindow("not-a-uuid", 3600, WS);
+    const r = await evaluatorRepo.monitorBreachWindow("not-a-uuid", 3600, WS);
 
     expect(r.hasData).toBe(false);
   });
@@ -161,8 +161,8 @@ suite("guard breach window (integration, M135 T2.1)", () => {
     const real = (await guardOver("ge", "lt", 0.5)).g.id;
     const unknown = "00000000-0000-0000-0000-0000000000ff";
 
-    const emptyWindow = await evaluatorRepo.guardBreachWindow(real, 3600, WS);
-    const noSuchGuard = await evaluatorRepo.guardBreachWindow(unknown, 3600, WS);
+    const emptyWindow = await evaluatorRepo.monitorBreachWindow(real, 3600, WS);
+    const noSuchGuard = await evaluatorRepo.monitorBreachWindow(unknown, 3600, WS);
 
     // Both are hasData:false — neither has anything to evaluate. That is NOT the distinction.
     expect(emptyWindow.hasData).toBe(false);
@@ -177,12 +177,12 @@ suite("guard breach window (integration, M135 T2.1)", () => {
     // Cross-tenant: same collapse as "no such guard", deliberately. Distinguishing them would
     // confirm another workspace's id.
     const real = (await guardOver("ge", "lt", 0.5)).g.id;
-    const fromOtherWs = await evaluatorRepo.guardBreachWindow(real, 3600, "ws-other");
+    const fromOtherWs = await evaluatorRepo.monitorBreachWindow(real, 3600, "ws-other");
     expect(fromOtherWs.guardExists).toBe(false);
   });
 
   it("test_a_non_uuid_id_reads_as_absent_rather_than_crashing", async () => {
-    const res = await evaluatorRepo.guardBreachWindow("not-a-uuid", 3600, WS);
+    const res = await evaluatorRepo.monitorBreachWindow("not-a-uuid", 3600, WS);
     expect(res.guardExists).toBe(false);
     expect(res.hasData).toBe(false);
   });

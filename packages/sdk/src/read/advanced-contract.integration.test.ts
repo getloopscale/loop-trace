@@ -55,7 +55,7 @@ suite("LensReadClient advanced-write contract (M114)", () => {
 
   beforeEach(async () => {
     await pool.query(
-      "TRUNCATE spans, traces, sessions, evaluators, guards, labeling_queue_items, copilot_feedback",
+      "TRUNCATE spans, traces, sessions, evaluators, monitors, labeling_queue_items, copilot_feedback",
     );
     const span = {
       spanId: "sdk-a1",
@@ -94,9 +94,9 @@ suite("LensReadClient advanced-write contract (M114)", () => {
 
   it("guard create + delete round-trips", async () => {
     const ev = await client.createEvaluator({ name: "q", kind: "rule", config: { predicate: "status:ok" } });
-    const guard = await client.createGuard({ evaluatorId: ev.id, operator: "gte", threshold: 0.8 });
+    const guard = await client.createMonitor({ evaluatorId: ev.id, operator: "gte", threshold: 0.8 });
     expect(guard.id).toBeTruthy();
-    await client.deleteGuard(guard.id);
+    await client.deleteMonitor(guard.id);
   });
 
   it("runEvaluator (rule — no provider needed) returns a typed RunResult", async () => {

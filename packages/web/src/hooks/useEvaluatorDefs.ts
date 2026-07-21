@@ -6,7 +6,7 @@ import {
   createEvaluatorDef,
   runEvaluatorDef,
   deleteEvaluatorDef,
-  createGuardDef,
+  createMonitorDef,
 } from "../api/client.js";
 import type { NewEvaluatorDTO, NewGuardDTO } from "../api/types.js";
 
@@ -34,7 +34,7 @@ export function useEvaluatorDefs() {
     onSuccess: invalidate,
   });
   const addGuard = useMutation({
-    mutationFn: (body: NewGuardDTO) => createGuardDef(body),
+    mutationFn: (body: NewGuardDTO) => createMonitorDef(body),
     onSuccess: invalidate,
   });
 

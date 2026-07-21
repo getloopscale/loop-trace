@@ -5,7 +5,7 @@
  *  - `rule` — a deterministic predicate reusing the M30 span-query DSL (no new DSL, D3).
  *  - `llm_judge` — a configurable OpenAI-compatible judge (see `llm-judge.ts`, D4).
  *
- * This module owns the PURE pieces (types, schemas, `evaluateRule`, `evaluateGuard`,
+ * This module owns the PURE pieces (types, schemas, `evaluateRule`, `evaluateMonitor`,
  * `validatePredicate`); the run engine (`evaluator-engine.ts`) and the judge client
  * (`llm-judge.ts`) compose them. Per `rules/architecture.md`, the domain depends on
  * nothing outward.
@@ -19,8 +19,8 @@ import type { Span } from "../observability/span.js";
 export const EVALUATOR_KINDS = ["rule", "llm_judge"] as const;
 export type EvaluatorKind = (typeof EVALUATOR_KINDS)[number];
 
-/** Guard threshold operators (grill Q4). */
-export const GUARD_OPERATORS = [
+/** Monitor threshold operators (grill Q4). */
+export const MONITOR_OPERATORS = [
   "lt",
   "lte",
   "gt",
@@ -28,7 +28,7 @@ export const GUARD_OPERATORS = [
   "eq",
   "label_eq",
 ] as const;
-export type GuardOperator = (typeof GUARD_OPERATORS)[number];
+export type MonitorOperator = (typeof MONITOR_OPERATORS)[number];
 
 const NAME_RE = /^[a-z0-9_-]{1,64}$/;
 
@@ -73,17 +73,17 @@ export const evaluatorSchema = z
 export type Evaluator = z.infer<typeof evaluatorSchema>;
 
 /** A flag-only guard over an evaluator's verdict. */
-export const guardSchema = z
+export const monitorSchema = z
   .object({
     evaluatorId: z.string().min(1),
-    operator: z.enum(GUARD_OPERATORS),
+    operator: z.enum(MONITOR_OPERATORS),
     threshold: z.number().optional(),
     labelValue: z.string().optional(),
     enabled: z.boolean().default(true),
   })
   .strict();
 
-export type Guard = z.infer<typeof guardSchema>;
+export type Monitor = z.infer<typeof monitorSchema>;
 
 /** Result of running an evaluator over a selection of spans. */
 export interface RunResult {
@@ -201,14 +201,14 @@ export function evaluateRule(
  * equality — meaningful for the 0/1 rule scores; for an arbitrary judge score in
  * [0,1] prefer a threshold operator (lt/lte/gt/gte) over exact `eq` (EVAL-4).
  */
-export function evaluateGuard(guard: Guard, verdict: Verdict): boolean {
-  if (guard.operator === "label_eq") {
-    return verdict.label != null && verdict.label === guard.labelValue;
+export function evaluateMonitor(monitor: Monitor, verdict: Verdict): boolean {
+  if (monitor.operator === "label_eq") {
+    return verdict.label != null && verdict.label === monitor.labelValue;
   }
   const s = verdict.score;
-  const t = guard.threshold;
+  const t = monitor.threshold;
   if (s == null || t == null) return false;
-  switch (guard.operator) {
+  switch (monitor.operator) {
     case "lt":
       return s < t;
     case "lte":

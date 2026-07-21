@@ -69,7 +69,7 @@ export const evaluatorRunRateLimited = counter();
 export const evaluatorRunsStarted = counter();
 // Evaluator / guard definition CRUD (create) — curation volume is observable at runtime.
 export const evaluatorsCreated = counter();
-export const guardsCreated = counter();
+export const monitorsCreated = counter();
 // Dataset lifecycle mutations (create / rename / delete / item-remove) — the add path already has
 // `datasetItemsAdded`; these close the remaining mutating verbs.
 export const datasetsCreated = counter();

@@ -20,7 +20,7 @@ export {
   createEvaluatorRepository,
   evaluatorRepoFromPool,
 } from "./evaluation/drizzle-evaluator-repository.js";
-export { spans, traces, sessions, replaySessions, evaluators, guards } from "./schema.js";
+export { spans, traces, sessions, replaySessions, evaluators, monitors } from "./schema.js";
 
 /**
  * Apply every pending migration to `pool`.

@@ -129,7 +129,7 @@ export interface TagBody {
 
 /**
  * Evaluators + guards (M111). Hand-written: the engine returns TS-typed records (`EvaluatorRecord`,
- * `GuardRecord`) with no Zod response schema, so there is nothing to generate; the M114 hermetic
+ * `MonitorRecord`) with no Zod response schema, so there is nothing to generate; the M114 hermetic
  * contract test proves each type against the real engine.
  */
 /** A `rule` evaluator's config — a span-predicate string. */
@@ -172,17 +172,17 @@ export interface EvaluatorUpdateBody {
   config?: RuleConfig | JudgeConfig;
 }
 /** The comparison a guard applies to an evaluator's verdict. */
-export type GuardOperator = "lt" | "lte" | "gt" | "gte" | "eq" | "label_eq";
+export type MonitorOperator = "lt" | "lte" | "gt" | "gte" | "eq" | "label_eq";
 /** Create a flag-only guard over an evaluator's verdict. */
-export interface GuardBody {
+export interface MonitorBody {
   evaluatorId: string;
-  operator: GuardOperator;
+  operator: MonitorOperator;
   threshold?: number;
   labelValue?: string;
   enabled?: boolean;
 }
 /** A stored guard (`enabled` is always emitted by the engine). */
-export type GuardRecord = GuardBody & { id: string; createdAt: string; enabled: boolean };
+export type MonitorRecord = MonitorBody & { id: string; createdAt: string; enabled: boolean };
 /** Options for {@link LensReadClient.runEvaluator} — scope the run to specific traces / a limit. */
 export interface RunEvaluatorBody {
   traceIds?: string[];
@@ -323,7 +323,7 @@ export interface ReplaySessionAck {
 // These 9 routes return a bare `c.json(record)` with no zod DTO to generate from, so the type is
 // hand-authored and pinned by the per-method hermetic contract test in
 // `read-parity-hand-contract.integration.test.ts` (T2.3 — the drift guard, per D1). Each REUSES an
-// existing element type (Span / EvaluatorRecord / GuardRecord / ExperimentRun) rather than
+// existing element type (Span / EvaluatorRecord / MonitorRecord / ExperimentRun) rather than
 // re-declaring its fields (DRY). The wrapper key mirrors the engine's `c.json({...})` key exactly (D3).
 
 /**
@@ -339,14 +339,14 @@ export interface TraceTree extends Span {
 export interface ListEvaluatorsResponse {
   evaluators: EvaluatorRecord[];
 }
-/** `GET /v1/guards` — `{ guards: GuardRecord[] }`. */
+/** `GET /v1/guards` — `{ guards: MonitorRecord[] }`. */
 // M117→M118: hand-typed pending server-side zod.
 export interface ListGuardsResponse {
-  guards: GuardRecord[];
+  guards: MonitorRecord[];
 }
 /** `GET /v1/guards/{id}/breaches` — `{ traceIds: string[] }`. */
 // M117→M118: hand-typed pending server-side zod.
-export interface GuardBreachesResponse {
+export interface MonitorBreachesResponse {
   traceIds: string[];
 }
 /** `GET /v1/experiment-runs` — `{ runs: ExperimentRun[] }`. */

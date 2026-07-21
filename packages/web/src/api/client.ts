@@ -20,7 +20,7 @@ import type {
   EvaluatorRecordDTO,
   NewEvaluatorDTO,
   EvaluatorRunResultDTO,
-  GuardRecordDTO,
+  MonitorRecordDTO,
   NewGuardDTO,
   CopilotAskRequest,
   CopilotAskResponse,
@@ -327,13 +327,13 @@ export async function deleteEvaluatorDef(id: string): Promise<void> {
 }
 
 /** List guards (M36). */
-export function getGuardDefs(): Promise<{ guards: GuardRecordDTO[] }> {
-  return getJson<{ guards: GuardRecordDTO[] }>("/v1/guards");
+export function getMonitorDefs(): Promise<{ guards: MonitorRecordDTO[] }> {
+  return getJson<{ guards: MonitorRecordDTO[] }>("/v1/guards");
 }
 
 /** Create a guard (M36). */
-export function createGuardDef(body: NewGuardDTO): Promise<GuardRecordDTO> {
-  return postJson<GuardRecordDTO>("/v1/guards", body);
+export function createMonitorDef(body: NewGuardDTO): Promise<MonitorRecordDTO> {
+  return postJson<MonitorRecordDTO>("/v1/guards", body);
 }
 
 /**

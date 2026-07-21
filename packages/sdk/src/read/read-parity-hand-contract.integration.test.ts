@@ -23,8 +23,8 @@ import { LensReadClient } from "./client.js";
  * `app.fetch` injected) and asserts every declared field is present with the right primitive kind.
  *
  * For the asymmetric pairs it feeds the write's returned id into the read (Recommendation 4 —
- * write→read round-trip): createEvaluator→getEvaluator/listEvaluators, createGuard→listGuards,
- * a guard→getGuardBreaches, and experiment runs seeded via the repo → getExperimentRun/
+ * write→read round-trip): createEvaluator→getEvaluator/listEvaluators, createMonitor→listMonitors,
+ * a guard→getMonitorBreaches, and experiment runs seeded via the repo → getExperimentRun/
  * listExperimentRuns/compareExperimentRuns. `askCopilot` is driven against a STUB chat provider
  * (the copilot fails closed 503 with no provider) to prove the `{ answer }` shape without a real LLM.
  * Gated on THEOLENS_PG_URI.
@@ -100,7 +100,7 @@ suite("LensReadClient ↔ engine — M117 HAND read parity (T2.3, drift guard)",
 
   beforeEach(async () => {
     await pool.query(
-      "TRUNCATE spans, traces, sessions, replay_sessions, evaluators, guards, labeling_queue_items, copilot_feedback, experiment_runs, experiment_run_items",
+      "TRUNCATE spans, traces, sessions, replay_sessions, evaluators, monitors, labeling_queue_items, copilot_feedback, experiment_runs, experiment_run_items",
     );
   });
 
@@ -152,18 +152,18 @@ suite("LensReadClient ↔ engine — M117 HAND read parity (T2.3, drift guard)",
     expect(res.evaluators.some((e) => e.id === created.id)).toBe(true);
   });
 
-  it("createGuard → listGuards contains the created guard", async () => {
+  it("createMonitor → listMonitors contains the created guard", async () => {
     const ev = await client.createEvaluator({ name: "g-ev", kind: "rule", config: { predicate: "status:ok" } });
-    const guard = await client.createGuard({ evaluatorId: ev.id, operator: "gte", threshold: 0.8 });
-    const res = await client.listGuards();
+    const guard = await client.createMonitor({ evaluatorId: ev.id, operator: "gte", threshold: 0.8 });
+    const res = await client.listMonitors();
     expect(Array.isArray(res.guards)).toBe(true);
     expect(res.guards.some((g) => g.id === guard.id)).toBe(true);
   });
 
-  it("createGuard → getGuardBreaches returns the { traceIds } wrapper", async () => {
+  it("createMonitor → getMonitorBreaches returns the { traceIds } wrapper", async () => {
     const ev = await client.createEvaluator({ name: "breach-ev", kind: "rule", config: { predicate: "status:error" } });
-    const guard = await client.createGuard({ evaluatorId: ev.id, operator: "lt", threshold: 0.5 });
-    const res = await client.getGuardBreaches(guard.id);
+    const guard = await client.createMonitor({ evaluatorId: ev.id, operator: "lt", threshold: 0.5 });
+    const res = await client.getMonitorBreaches(guard.id);
     expect(Array.isArray(res.traceIds)).toBe(true);
     for (const id of res.traceIds) expect(typeof id).toBe("string");
   });

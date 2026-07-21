@@ -37,7 +37,7 @@ suite("M36 evaluator engine (integration)", () => {
     deps = { evaluatorRepo: evalRepo, spanRepo, judge: null, backfillMax: 500 };
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE spans, traces, sessions, evaluators, guards, span_evaluations");
+    await pool.query("TRUNCATE spans, traces, sessions, evaluators, monitors, span_evaluations");
   });
   afterAll(async () => {
     await pool.end();

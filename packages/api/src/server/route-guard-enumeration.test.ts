@@ -28,8 +28,17 @@ const EXPECTED_DATA_ROUTES = new Set([
   "GET /v1/experiment-runs/:runId",
   "GET /v1/experiment-runs/compare",
   "GET /v1/guards",
+  // M136 — /v1/monitors is canonical; /v1/guards is the deprecated alias, mounted from the SAME
+  // table so a route added to one is added to both. Both sets are listed here on purpose: the day
+  // the alias is removed, exactly five lines disappear and the count drops by five. That is the
+  // deprecation being visible in the test rather than living only in a CHANGELOG note.
   "GET /v1/guards/:id/breach-window",
   "GET /v1/guards/:id/breaches",
+  "GET /v1/monitors",
+  "GET /v1/monitors/:id/breach-window",
+  "GET /v1/monitors/:id/breaches",
+  "POST /v1/monitors",
+  "DELETE /v1/monitors/:id",
   "GET /v1/labeling-queue",
   "GET /v1/labeling-queue/:itemId",
   "GET /v1/metrics/evaluators",
@@ -159,7 +168,7 @@ describe("M37 route guard enumeration", () => {
         .map((route) => `${route.method} ${route.path}`),
     );
     expect(liveRoutes).toEqual(EXPECTED_DATA_ROUTES);
-    expect(liveRoutes.size).toBe(56); // M116: + POST /v1/runs; M133: + GET /v1/evaluator-run-jobs/:id; M135: + GET /v1/guards/:id/breach-window
+    expect(liveRoutes.size).toBe(61); // M116: + POST /v1/runs; M133: + GET /v1/evaluator-run-jobs/:id; M135: + GET /v1/guards/:id/breach-window; M136: + 5 canonical /v1/monitors* (the /v1/guards* set stays as the deprecated alias, removed next release → back to 56)
   });
 
   it("asserts every mounted data route carries a per-verb scope middleware", () => {
