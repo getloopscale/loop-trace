@@ -7,6 +7,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+
+## [0.62.0] - 2026-07-21
+
 ### Added
 
 - `/v1/monitors*` — the canonical path for what was `/v1/guards*` (M136). Same behaviour; the name no longer promises request-path enforcement theo-lens does not do.
@@ -19,8 +22,6 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 - `/v1/guards*` — kept as an alias mounted on the same handlers, removed in the release after this one. Migrate to `/v1/monitors*`.
 - The `guards` key on the monitor-list response, and `guardExists` on the breach-window response. Both are now emitted alongside their canonical twins (`monitors`, `monitorExists`) and hold the same value; both are removed with the path alias. The old names were kept because dropping them would break consumers *through the compatibility alias itself* — an alias that preserves the path but changes the payload is a silent break wearing a compatibility badge.
-
-
 
 ## [0.61.0] - 2026-07-21
 
