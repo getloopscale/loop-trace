@@ -8,6 +8,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- CD playbook documented for this capability at `docs/cd-pipeline.md` — what differs from the reference and why.
+
 - CD pipeline complete (playbook Phases 3-6): integration + SAST lanes on the repo's own self-hosted runner, and `publish.yml` — a develop push builds, publishes to GHCR and deploys to dev behind a version gate and a health gate; a `v*` tag builds, signs, and never touches dev.
 
 
@@ -15,6 +17,10 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - `GET /v1/version` now reports `{name, version, git_sha, built_at, node}` so "what is live?" has an answer a human can read.
 
 ### Changed
+- Supply-chain hardening in `pnpm-workspace.yaml`: `minimumReleaseAge: 10080` (nothing published in the last 7 days), `trustPolicy: no-downgrade`, `blockExoticSubdeps: true`. Surfaced by the new SAST lane.
+- The runtime container drops root (`USER node`).
+- `allowBuilds` no longer carries unresolved placeholders — `cpu-features` and `ssh2` are explicitly denied. They were literally `set this to true or false`, invisible locally because the pnpm store already held approved builds, and fatal on a clean CI install.
+
 
 - **BREAKING:** the probes moved to the CD playbook's canonical paths — `/health` → `/v1/healthz`, `/ready` → `/v1/healthz/ready`, `/version` → `/v1/version`. Migrated cleanly with no alias; the only in-repo consumer (`seed-post-cleanroom-all.sh`) moves in the same commit. Readiness now reports `not_ready` instead of `unavailable`, and wraps the DB probe in a 2s timeout so a hung database cannot hang the probe itself.
 

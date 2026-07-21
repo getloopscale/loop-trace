@@ -38,4 +38,14 @@ COPY --from=build /app/packages/core/src/infrastructure/db/migrations ./packages
 COPY --from=build /app/packages/web/dist ./packages/web/dist
 ENV THEOLENS_PORT=4318
 EXPOSE 4318
+
+# Drop root. The `node` user ships with the base image (uid 1000), so this needs no useradd —
+# it only needs to be said. Surfaced by the CD SAST lane (dockerfile.security.missing-user).
+#
+# The API writes nothing to the filesystem: it serves a static bundle and talks to Postgres over
+# the network, so /app stays read-only to the runtime user. Ownership is set on the copied trees
+# rather than chown -R at the end, which would duplicate every layer's bytes.
+RUN chown -R node:node /app
+USER node
+
 CMD ["node", "packages/api/dist/server/index.js"]
