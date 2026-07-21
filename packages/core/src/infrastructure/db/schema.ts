@@ -613,11 +613,13 @@ export const evaluators = pgTable(
 /**
  * M36: a flag-only guard — a threshold over an evaluator's verdict. `operator` is
  * one of lt/lte/gt/gte/eq (over `threshold`) or label_eq (over `label_value`). A
- * breaching verdict flags the trace (surfaced read-side; no alert/block in v1).
- * Workspace-leading (M22); deleting an evaluator cascades its guards (EC-4).
+ * breaching verdict flags the trace and, since M135, can notify. It NEVER blocks:
+ * `guardrail` is a span KIND describing the inline blocker in the user's own app, which
+ * theo-lens observes — it is not a theo-lens capability.
+ * Workspace-leading (M22); deleting an evaluator cascades its monitors (EC-4).
  */
-export const guards = pgTable(
-  "guards",
+export const monitors = pgTable(
+  "monitors",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     workspaceId: workspaceIdCol(),
@@ -631,15 +633,15 @@ export const guards = pgTable(
       .notNull(),
   },
   (t) => [
-    // M36 (review M36-EVAL-1): NULLS NOT DISTINCT — a numeric guard has label_value
-    // NULL (and a label_eq guard has threshold NULL); under the PG default
-    // (NULLS DISTINCT) two identical guards never collide → the create upsert never
+    // M36 (review M36-EVAL-1): NULLS NOT DISTINCT — a numeric monitor has label_value
+    // NULL (and a label_eq monitor has threshold NULL); under the PG default
+    // (NULLS DISTINCT) two identical monitors never collide → the create upsert never
     // dedupes → duplicate rows. NULLS NOT DISTINCT makes the dedup actually fire.
-    unique("guards_workspace_id_dedup_uq")
+    unique("monitors_workspace_id_dedup_uq")
       .on(t.workspaceId, t.evaluatorId, t.operator, t.threshold, t.labelValue)
       .nullsNotDistinct(),
-    index("guards_workspace_id_idx").on(t.workspaceId),
-    index("guards_evaluator_id_idx").on(t.evaluatorId),
+    index("monitors_workspace_id_idx").on(t.workspaceId),
+    index("monitors_evaluator_id_idx").on(t.evaluatorId),
   ],
 );
 

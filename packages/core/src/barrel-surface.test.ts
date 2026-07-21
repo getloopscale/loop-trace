@@ -25,7 +25,7 @@ const INFRA_SYMBOLS = [
   "sessions",
   "replaySessions",
   "evaluators",
-  "guards",
+  "monitors",
 ] as const;
 
 describe("M122 core public boundary", () => {

@@ -100,7 +100,7 @@ suite("LensReadClient ↔ engine — M117 HAND read parity (T2.3, drift guard)",
 
   beforeEach(async () => {
     await pool.query(
-      "TRUNCATE spans, traces, sessions, replay_sessions, evaluators, guards, labeling_queue_items, copilot_feedback, experiment_runs, experiment_run_items",
+      "TRUNCATE spans, traces, sessions, replay_sessions, evaluators, monitors, labeling_queue_items, copilot_feedback, experiment_runs, experiment_run_items",
     );
   });
 

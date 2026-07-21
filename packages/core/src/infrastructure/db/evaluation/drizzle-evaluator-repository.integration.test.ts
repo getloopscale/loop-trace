@@ -30,7 +30,7 @@ suite("M36 EvaluatorRepository (integration)", () => {
     repo = new DrizzleEvaluatorRepository(db);
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE evaluators, guards, span_evaluations");
+    await pool.query("TRUNCATE evaluators, monitors, span_evaluations");
   });
   afterAll(async () => {
     await pool.end();

@@ -80,7 +80,7 @@ suite("M36 evaluators routes (integration)", () => {
     );
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE spans, traces, sessions, evaluators, guards, span_evaluations");
+    await pool.query("TRUNCATE spans, traces, sessions, evaluators, monitors, span_evaluations");
   });
   afterAll(async () => {
     await pool.end();

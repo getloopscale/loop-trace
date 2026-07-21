@@ -55,7 +55,7 @@ suite("LensReadClient advanced-write contract (M114)", () => {
 
   beforeEach(async () => {
     await pool.query(
-      "TRUNCATE spans, traces, sessions, evaluators, guards, labeling_queue_items, copilot_feedback",
+      "TRUNCATE spans, traces, sessions, evaluators, monitors, labeling_queue_items, copilot_feedback",
     );
     const span = {
       spanId: "sdk-a1",

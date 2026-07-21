@@ -35,7 +35,7 @@ suite("guard breach window (integration, M135 T2.1)", () => {
 
   beforeEach(async () => {
     await pool.query(
-      "TRUNCATE spans, traces, sessions, evaluators, guards, span_evaluations",
+      "TRUNCATE spans, traces, sessions, evaluators, monitors, span_evaluations",
     );
   });
 

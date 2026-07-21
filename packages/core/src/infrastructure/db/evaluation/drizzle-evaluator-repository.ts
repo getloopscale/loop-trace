@@ -2,7 +2,7 @@
  * M36 — Drizzle adapter for {@link EvaluatorRepository} (D1: separate from the
  * 1553-LoC span repo). Every query is workspace-scoped (M22). Verdict writes upsert
  * the workspace-leading `(workspace_id, span_id, name)` unique so re-runs are
- * idempotent (D2/D6); deleting an evaluator cascades its guards in one tx (EC-4).
+ * idempotent (D2/D6); deleting an evaluator cascades its monitors in one tx (EC-4).
  */
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
@@ -17,10 +17,10 @@ import type {
   EvaluatorRepository,
   EvaluatorRecord,
   GuardRecord, GuardBreachWindow } from "../../../domain/evaluation/evaluator-repository.js";
-import { evaluators, guards, spanEvaluations } from "../schema.js";
+import { evaluators, monitors, spanEvaluations } from "../schema.js";
 
 type EvaluatorRow = typeof evaluators.$inferSelect;
-type GuardRow = typeof guards.$inferSelect;
+type MonitorRow = typeof monitors.$inferSelect;
 
 function toEvaluatorRecord(row: EvaluatorRow): EvaluatorRecord {
   const base = {
@@ -45,7 +45,7 @@ function toEvaluatorRecord(row: EvaluatorRow): EvaluatorRecord {
   } as EvaluatorRecord;
 }
 
-function toGuardRecord(row: GuardRow): GuardRecord {
+function toGuardRecord(row: MonitorRow): GuardRecord {
   return {
     id: row.id,
     evaluatorId: row.evaluatorId,
@@ -170,13 +170,13 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
     workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<void> {
     if (!isUuid(id)) return; // non-uuid path param → no-op (204 idempotent), not a 500 (22P02) — Rule 8
-    // EC-4: cascade — drop the evaluator's guards in the SAME transaction so no
-    // orphan guard survives (guards have no DB FK, like every table here).
+    // EC-4: cascade — drop the evaluator's monitors in the SAME transaction so no
+    // orphan monitor survives (monitors have no DB FK, like every table here).
     await this.db.transaction(async (tx) => {
       await tx
-        .delete(guards)
+        .delete(monitors)
         .where(
-          and(eq(guards.evaluatorId, id), eq(guards.workspaceId, workspaceId)),
+          and(eq(monitors.evaluatorId, id), eq(monitors.workspaceId, workspaceId)),
         );
       await tx
         .delete(evaluators)
@@ -191,7 +191,7 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
     workspaceId: string = DEFAULT_WORKSPACE_ID,
   ): Promise<GuardRecord> {
     const rows = await this.db
-      .insert(guards)
+      .insert(monitors)
       .values({
         workspaceId,
         evaluatorId: guard.evaluatorId,
@@ -202,11 +202,11 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
       })
       .onConflictDoUpdate({
         target: [
-          guards.workspaceId,
-          guards.evaluatorId,
-          guards.operator,
-          guards.threshold,
-          guards.labelValue,
+          monitors.workspaceId,
+          monitors.evaluatorId,
+          monitors.operator,
+          monitors.threshold,
+          monitors.labelValue,
         ],
         set: { enabled: guard.enabled ? 1 : 0 },
       })
@@ -219,8 +219,8 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
   ): Promise<GuardRecord[]> {
     const rows = await this.db
       .select()
-      .from(guards)
-      .where(eq(guards.workspaceId, workspaceId));
+      .from(monitors)
+      .where(eq(monitors.workspaceId, workspaceId));
     return rows.map(toGuardRecord);
   }
 
@@ -230,8 +230,8 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
   ): Promise<void> {
     if (!isUuid(id)) return; // non-uuid path param → no-op (204 idempotent), not a 500 (22P02) — Rule 8
     await this.db
-      .delete(guards)
-      .where(and(eq(guards.id, id), eq(guards.workspaceId, workspaceId)));
+      .delete(monitors)
+      .where(and(eq(monitors.id, id), eq(monitors.workspaceId, workspaceId)));
   }
 
   async writeVerdict(
@@ -312,7 +312,7 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
         -- one row even when the FROM matches nothing, so row-presence proves nothing — that is
         -- precisely how the first draft of this method reported a deleted guard as a healthy one.
         count(g.id)::int AS guard_rows
-      FROM guards g
+      FROM monitors g
       -- LEFT joins, deliberately: an INNER join makes a guard with no verdicts indistinguishable
       -- from a guard that does not exist, which is the whole distinction this method carries.
       LEFT JOIN evaluators e ON e.id = g.evaluator_id AND e.workspace_id = g.workspace_id
@@ -350,7 +350,7 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
     // watches every toxicity verdict in the workspace), and is workspace-confined.
     const rows = await this.db.execute(sql`
       SELECT DISTINCT se.trace_id AS trace_id
-      FROM guards g
+      FROM monitors g
       JOIN evaluators e ON e.id = g.evaluator_id AND e.workspace_id = g.workspace_id
       JOIN span_evaluations se ON se.name = e.name AND se.workspace_id = g.workspace_id
       WHERE g.id = ${guardId} AND g.workspace_id = ${workspaceId}
