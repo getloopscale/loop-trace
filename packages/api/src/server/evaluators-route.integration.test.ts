@@ -221,6 +221,34 @@ suite("M36 evaluators routes (integration)", () => {
     expect(body.evaluatedCount).toBe(0);
   });
 
+  // ── The wire contract theo-cloud decodes ─────────────────────────────────────────────────────
+  //
+  // theo-cloud's alert evaluator unmarshals this body into a struct and branches on `guardExists`
+  // to decide whether a rule's guard has been deleted. That consumer lives in another repository,
+  // so nothing here would break if a field were renamed or dropped — which is precisely how the
+  // first version shipped: theo-cloud branched on a 404 this route never emits, and both sides'
+  // tests passed because each was written against its own author's intent.
+  //
+  // This asserts the exact key set on the wire. Dropping or renaming a key fails HERE, in the repo
+  // that owns the contract, instead of silently in a consumer nobody runs in this suite.
+  it("test_breach_window_wire_contract_is_the_shape_theo_cloud_decodes", async () => {
+    const gId = await makeGuard();
+    const res = await req("GET", `/v1/guards/${gId}/breach-window?window=3600`, "rw");
+    const body = (await res.json()) as Record<string, unknown>;
+
+    expect(Object.keys(body).sort()).toEqual(
+      ["breachCount", "evaluatedCount", "guardExists", "hasData", "windowSeconds"].sort(),
+    );
+    expect(typeof body["guardExists"]).toBe("boolean");
+    expect(typeof body["hasData"]).toBe("boolean");
+    expect(typeof body["breachCount"]).toBe("number");
+    expect(typeof body["evaluatedCount"]).toBe("number");
+    // A REAL guard with an empty window: present, but nothing to evaluate. The pair that the first
+    // version could not express, asserted on the wire rather than in the repository layer.
+    expect(body["guardExists"]).toBe(true);
+    expect(body["hasData"]).toBe(false);
+  });
+
   it("test_breach_window_rejects_an_unparseable_window", async () => {
     const gId = await makeGuard();
     for (const w of ["abc", "-1", "0", ""]) {
