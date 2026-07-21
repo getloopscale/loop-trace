@@ -9,7 +9,7 @@ import { normalizeLabelResolution } from "../../../domain/evaluation/labeling-qu
 import { createPool, DrizzleSpanRepository } from "../observability/drizzle-span-repository.js";
 
 const PG_URI = process.env["THEOLENS_PG_URI"];
-const MIGRATIONS = fileURLToPath(new URL("./migrations", import.meta.url));
+const MIGRATIONS = fileURLToPath(new URL("../migrations", import.meta.url));
 const suite = PG_URI ? describe : describe.skip;
 
 const WS_A = "ws-a";

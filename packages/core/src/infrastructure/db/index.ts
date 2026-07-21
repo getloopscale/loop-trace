@@ -1,3 +1,5 @@
+import type pg from "pg";
+import { fileURLToPath } from "node:url";
 /**
  * @usetheo/lens-core/infra — the infrastructure (Drizzle) subpath entry.
  *
@@ -6,6 +8,7 @@
  * domain surface (ports, value objects, zod DTOs). Composition roots import their
  * concretes from here; nothing else should. See ADR D1–D3 of the M122 plan.
  */
+export { spanRepoFromPool } from "./observability/drizzle-span-repository.js";
 export {
   DrizzleSpanRepository,
   createPool,
@@ -18,3 +21,23 @@ export {
   evaluatorRepoFromPool,
 } from "./evaluation/drizzle-evaluator-repository.js";
 export { spans, traces, sessions, replaySessions, evaluators, guards } from "./schema.js";
+
+/**
+ * Apply every pending migration to `pool`.
+ *
+ * Exposed because `packages/core` OWNS the migrations directory, so it is the
+ * only package that should reach for drizzle's migrator. Without this, an
+ * integration test in another package must either declare drizzle itself — a
+ * dependency it has no runtime need for — or silently depend on a sibling test
+ * file having migrated the shared database first, which makes the suite
+ * order-dependent (`rules/testing.md` § 3).
+ *
+ * Idempotent: drizzle records applied migrations, so calling it per test file
+ * against one shared database is safe.
+ */
+export async function runMigrations(pool: pg.Pool): Promise<void> {
+  const { drizzle } = await import("drizzle-orm/node-postgres");
+  const { migrate } = await import("drizzle-orm/node-postgres/migrator");
+  const migrationsFolder = fileURLToPath(new URL("./migrations", import.meta.url));
+  await migrate(drizzle(pool), { migrationsFolder });
+}

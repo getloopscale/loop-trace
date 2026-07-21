@@ -30,6 +30,11 @@ function toEvaluatorRecord(row: EvaluatorRow): EvaluatorRecord {
     target: row.target,
     enabled: row.enabled === 1,
     createdAt: row.createdAt.toISOString(),
+    // M134 — auto-evaluation. Read back so the ingest hook can decide whether
+    // this evaluator wants new traces, at what rate, and for which of them.
+    autoEnabled: row.autoEnabled === 1,
+    sampling: row.sampling,
+    filter: (row.filter ?? []) as unknown[],
     ...(row.passLabel != null ? { passLabel: row.passLabel } : {}),
     ...(row.failLabel != null ? { failLabel: row.failLabel } : {}),
   };
@@ -69,6 +74,12 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
       passLabel: ev.passLabel ?? null,
       failLabel: ev.failLabel ?? null,
       enabled: ev.enabled ? 1 : 0,
+      // M134 — persisted with the same backward-compatible defaults as the
+      // column defaults, so an older client that omits them keeps today's
+      // behaviour (auto OFF, no judge spend on upgrade).
+      autoEnabled: (ev as { autoEnabled?: boolean }).autoEnabled ? 1 : 0,
+      sampling: (ev as { sampling?: number }).sampling ?? 1,
+      filter: ((ev as { filter?: unknown }).filter ?? []) as unknown,
     };
     const rows = await this.db
       .insert(evaluators)
@@ -127,6 +138,19 @@ export class DrizzleEvaluatorRepository implements EvaluatorRepository {
     if (updates.failLabel !== undefined) set.failLabel = updates.failLabel ?? null;
     if (updates.enabled !== undefined) set.enabled = updates.enabled ? 1 : 0;
     if ("kind" in updates && updates.kind !== undefined) set.kind = updates.kind;
+    // M134 — without these three the auto-eval knobs were accepted and validated
+    // by the handler, built an EMPTY set, hit the "nothing to change" return
+    // below, and answered 200 with the OLD row. Enabling auto-evaluation on an
+    // existing evaluator was therefore impossible through the API: delete and
+    // recreate was the only path.
+    const m134 = updates as {
+      autoEnabled?: boolean;
+      sampling?: number;
+      filter?: unknown;
+    };
+    if (m134.autoEnabled !== undefined) set.autoEnabled = m134.autoEnabled ? 1 : 0;
+    if (m134.sampling !== undefined) set.sampling = m134.sampling;
+    if (m134.filter !== undefined) set.filter = m134.filter;
     if (Object.keys(set).length === 0) return this.getEvaluator(id, workspaceId); // nothing to change
     let rows: EvaluatorRow[];
     try {

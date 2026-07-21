@@ -18,6 +18,14 @@ export interface PruneStats {
   evaluationsDeleted: number;
   /** M26b human-feedback annotations of pruned traces (cascade — avoids orphans). */
   annotationsDeleted: number;
+  /**
+   * M134 auto-eval job rows of pruned traces (cascade). Two distinct reasons,
+   * both from EC-4: without it the queue table grows without bound, AND a
+   * completed row outliving its trace turns the `ON CONFLICT DO NOTHING`
+   * dedup into a tombstone that permanently suppresses re-evaluation if the
+   * same trace_id is ever re-ingested.
+   */
+  evalJobsDeleted: number;
 }
 
 /** Parsed retention config. `retentionDays === null` means retention is DISABLED. */

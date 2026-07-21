@@ -57,6 +57,11 @@ export const evaluatorSchema = z
     passLabel: z.string().optional(),
     failLabel: z.string().optional(),
     enabled: z.boolean().default(true),
+    // M134 — automatic evaluation. `autoEnabled` defaults FALSE so creating or
+    // upgrading an evaluator never silently starts judge spend.
+    autoEnabled: z.boolean().default(false),
+    sampling: z.number().min(0).max(1).default(1),
+    filter: z.array(z.unknown()).default([]),
   })
   .and(
     z.discriminatedUnion("kind", [
@@ -83,6 +88,8 @@ export type Guard = z.infer<typeof guardSchema>;
 /** Result of running an evaluator over a selection of spans. */
 export interface RunResult {
   evaluator: string;
+  /** Total target spans selected for scoring (the denominator for run progress). */
+  total: number;
   written: number;
   skipped: number;
   truncated: boolean;

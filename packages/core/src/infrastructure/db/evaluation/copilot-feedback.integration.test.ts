@@ -8,7 +8,7 @@ import type { Span } from "../../../domain/observability/span.js";
 import { createPool, DrizzleSpanRepository } from "../observability/drizzle-span-repository.js";
 
 const PG_URI = process.env["THEOLENS_PG_URI"];
-const MIGRATIONS = fileURLToPath(new URL("./migrations", import.meta.url));
+const MIGRATIONS = fileURLToPath(new URL("../migrations", import.meta.url));
 const suite = PG_URI ? describe : describe.skip;
 
 function span(overrides: Partial<Span> & Pick<Span, "spanId" | "traceId">): Span {

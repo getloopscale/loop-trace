@@ -114,6 +114,7 @@ export {
   guardRecordSchema,
   guardsListResponseSchema,
   runResultResponseSchema,
+  evaluatorRunJobResponseSchema,
   experimentRunsListResponseSchema,
   runCompareDeltasSchema,
   experimentCompareResponseSchema,
@@ -160,9 +161,44 @@ export {
 export {
   runEvaluator,
   runSweep,
+  mapPool,
+  RUN_CONCURRENCY,
   type EngineDeps,
   type RunOptions,
+  type RunHooks,
 } from "./domain/evaluation/evaluator-engine.js";
+// M134 — auto-evaluation of new traces. The daemon lives in `packages/api`, so
+// these domain predicates must be reachable from the barrel (core never imports api).
+export { shouldSample } from "./domain/evaluation/should-sample.js";
+export {
+  claimNextJobs,
+  completeJob,
+  failJob,
+  heartbeat,
+  reclaimStale,
+  MAX_ATTEMPTS,
+  type ClaimedJob,
+  type Queryable,
+} from "./domain/evaluation/eval-job-claim.js";
+export {
+  matchesFilter,
+  validateFilter,
+  isKnownFilterColumn,
+  KNOWN_FILTER_COLUMNS,
+  UnknownFilterColumnError,
+  type FilterClause,
+  type FilterColumn,
+  type FilterOperator,
+} from "./domain/evaluation/trace-filter.js";
+// M133 — async evaluator-run jobs (registry + background orchestrator + view mapper).
+export {
+  EvaluatorRunJobRegistry,
+  runEvaluatorRunJob,
+  toRunJobView,
+  type EvaluatorRunJob,
+  type EvaluatorRunJobView,
+  type RunJobStatus,
+} from "./domain/evaluation/evaluator-run-job.js";
 export type {
   EvaluatorRepository,
   EvaluatorRecord,

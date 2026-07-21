@@ -2,8 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   type EngineDeps,
   type Principal,
-  type AuthVerifier,
-} from "@usetheo/lens-core";
+  type AuthVerifier, EvaluatorRunJobRegistry,} from "@usetheo/lens-core";
 import {
   createSpanRepository,
   migrateLatest,
@@ -77,7 +76,7 @@ suite("M36 evaluators routes (integration)", () => {
         }),
         requireCredential: true,
       },
-      { repo: evaluatorRepo, engine },
+      { repo: evaluatorRepo, engine, runJobs: new EvaluatorRunJobRegistry() },
     );
   });
   beforeEach(async () => {
@@ -143,9 +142,18 @@ suite("M36 evaluators routes (integration)", () => {
       target: "",
     });
     const id = ((await created.json()) as { id: string }).id;
+    // M133 made this endpoint asynchronous: it accepts with 202 and a job the
+    // caller polls. This assertion carried the pre-M133 synchronous contract and
+    // was not updated -- it could not fail, because a missing subpath alias in
+    // vitest.integration.config.ts meant this whole file never loaded.
     const run = await req("POST", `/v1/evaluators/${id}/run`, "rw", {});
-    expect(run.status).toBe(200);
-    expect(((await run.json()) as { written: number }).written).toBeGreaterThanOrEqual(1);
+    expect(run.status).toBe(202);
+    const job = (await run.json()) as { id: string; status: string };
+    expect(job.status).toBe("queued");
+
+    const done = await pollRunJob(job.id);
+    expect(done.status).toBe("completed");
+    expect(done.scored).toBeGreaterThanOrEqual(1);
     // M26 read surface reflects the written verdict
     const metrics = await app.request("http://x/v1/metrics/evaluators?range=30d", {
       headers: { authorization: "Bearer rw" },
@@ -153,6 +161,21 @@ suite("M36 evaluators routes (integration)", () => {
     const names = ((await metrics.json()) as { evaluators: { name: string }[] }).evaluators.map((e) => e.name);
     expect(names).toContain("is_error");
   });
+
+  /** Poll an M133 run job to a terminal state. Bounded so a hang fails loudly. */
+  async function pollRunJob(
+    jobId: string,
+  ): Promise<{ status: string; scored: number }> {
+    for (let i = 0; i < 100; i += 1) {
+      const r = await app.request(`http://x/v1/evaluator-run-jobs/${jobId}`, {
+        headers: { authorization: "Bearer rw" },
+      });
+      const body = (await r.json()) as { status: string; scored: number };
+      if (body.status === "completed" || body.status === "failed") return body;
+      await new Promise((res) => setTimeout(res, 10));
+    }
+    throw new Error(`run job ${jobId} never reached a terminal state`);
+  }
 
   it("test_run_nonexistent_evaluator_404", async () => {
     const r = await req("POST", "/v1/evaluators/00000000-0000-0000-0000-000000000000/run", "rw", {});
@@ -280,8 +303,13 @@ suite("M36 evaluators routes (integration)", () => {
     });
     const ev = await req("POST", "/v1/evaluators", "rw", { name: "is_error", kind: "rule", config: { predicate: "status:error" }, target: "" });
     const evId = ((await ev.json()) as { id: string }).id;
+    // M133 async contract — the verdict this test depends on only exists once
+    // the job completes, so the poll is load-bearing, not ceremony.
     const run = await req("POST", `/v1/evaluators/${evId}/run`, "rw", {});
-    expect(((await run.json()) as { written: number }).written).toBeGreaterThanOrEqual(1);
+    expect(run.status).toBe(202);
+    const done = await pollRunJob(((await run.json()) as { id: string }).id);
+    expect(done.status).toBe("completed");
+    expect(done.scored).toBeGreaterThanOrEqual(1);
     const g = await req("POST", "/v1/guards", "rw", { evaluatorId: evId, operator: "gt", threshold: 0 });
     expect(g.status).toBe(200);
     const gId = ((await g.json()) as { id: string }).id;

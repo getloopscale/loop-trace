@@ -30,6 +30,11 @@ export const evaluatorRecordSchema = z.discriminatedUnion("kind", [
       enabled: z.boolean(),
       passLabel: z.string().optional(),
       failLabel: z.string().optional(),
+      // M134 — auto-evaluation knobs. Optional on the response so a row written
+      // before the migration (or a repo stub in a test) still parses.
+      autoEnabled: z.boolean().optional(),
+      sampling: z.number().min(0).max(1).optional(),
+      filter: z.array(z.unknown()).optional(),
       kind: z.literal(EVALUATOR_KINDS[0]), // "rule"
       config: ruleConfigSchema,
     })
@@ -43,6 +48,11 @@ export const evaluatorRecordSchema = z.discriminatedUnion("kind", [
       enabled: z.boolean(),
       passLabel: z.string().optional(),
       failLabel: z.string().optional(),
+      // M134 — auto-evaluation knobs. Optional on the response so a row written
+      // before the migration (or a repo stub in a test) still parses.
+      autoEnabled: z.boolean().optional(),
+      sampling: z.number().min(0).max(1).optional(),
+      filter: z.array(z.unknown()).optional(),
       kind: z.literal(EVALUATOR_KINDS[1]), // "llm_judge"
       config: judgeConfigSchema,
     })
@@ -64,14 +74,43 @@ export const guardRecordSchema = z
   .strict();
 export const guardsListResponseSchema = z.object({ guards: z.array(guardRecordSchema) }).strict();
 
-/** `RunResult` — the evaluator-run outcome (`POST /v1/evaluators/:id/run`). */
+/** `RunResult` — the evaluator-run outcome (the synchronous sweep + the async job's final tally). */
 export const runResultResponseSchema = z
   .object({
     evaluator: z.string(),
+    total: z.number(),
     written: z.number(),
     skipped: z.number(),
     truncated: z.boolean(),
     errors: z.array(z.object({ spanId: z.string(), reason: z.string() }).strict()),
+  })
+  .strict();
+
+/**
+ * `EvaluatorRunJobView` — an async evaluator-run job (M133). `POST /v1/evaluators/:id/run`
+ * returns this (status `queued`) with HTTP 202; the client polls `GET /v1/evaluator-run-jobs/:id`
+ * for `status` + `scored`/`total` progress until `completed`/`failed`.
+ */
+export const evaluatorRunJobResponseSchema = z
+  .object({
+    id: z.string(),
+    evaluatorId: z.string(),
+    evaluatorName: z.string(),
+    status: z.enum(["queued", "running", "completed", "failed"]),
+    total: z.number(),
+    scored: z.number(),
+    skipped: z.number(),
+    errors: z.number(),
+    // Per-span failures. `errors` above is only a count; without the detail the
+    // async job is strictly less informative than the synchronous endpoint it
+    // replaced, and the SDK cannot reconstruct a RunResult.
+    errorDetails: z
+      .array(z.object({ spanId: z.string(), reason: z.string() }))
+      .default([]),
+    truncated: z.boolean(),
+    errorMessage: z.string().optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
   })
   .strict();
 

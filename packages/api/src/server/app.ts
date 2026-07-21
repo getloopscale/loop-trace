@@ -39,7 +39,7 @@ import { registerDatasetRoutes } from "./routes/dataset-routes.js";
 import { registerLabelingQueueRoutes } from "./routes/labeling-queue-routes.js";
 import { registerExperimentRoutes } from "./routes/experiment-routes.js";
 import type { ExperimentApiDeps } from "./handlers/experiment.js";
-import type { RateLimiter } from "@usetheo/lens-core";
+import type { RateLimiter, Span } from "@usetheo/lens-core";
 
 /**
  * M93 — OTLP ingest hardening deps (all optional; a test app without them keeps the pre-M93 behavior
@@ -47,6 +47,14 @@ import type { RateLimiter } from "@usetheo/lens-core";
  * the byte caps bound the raw body (413 via bodyLimit) + the decompressed body (413, gzip-bomb).
  */
 export interface IngestApiDeps {
+  /**
+   * M134 — enqueue auto-evaluation for the spans just saved.
+   *
+   * Called AFTER the save succeeds and never awaited into the response path:
+   * per ADR D5 a failure here is counted and swallowed at the call site, so an
+   * eval-side problem can never fail an ingest. Absent → auto-eval is off.
+   */
+  enqueueAutoEval?: (spans: Span[], workspaceId: string) => Promise<void>;
   limiter?: RateLimiter;
   maxBodyBytes?: number;
   maxDecompressedBytes?: number;
@@ -71,6 +79,7 @@ import {
   spansRejected,
   ingestRateLimited,
   logIngest,
+  autoEvalEnqueueFailures,
 } from "./metrics.js";
 import { mountStatic } from "./static.js";
 import { buildOpenApiDocument } from "./openapi.js";
@@ -107,6 +116,33 @@ export interface AuthOptions {
   readonly pool?: AuthPool;
   /** Env-sourced bootstrap admin token (mints the first admin key). */
   readonly bootstrapToken?: string;
+}
+
+/**
+ * Fire-and-forget auto-eval enqueue (ADR D5).
+ *
+ * NOT awaited: the ingest response must not wait on it, and must not fail
+ * because of it. But a swallowed failure with no signal is blueprint AP-3 — the
+ * reference logs and returns, and the trace is never evaluated with nothing to
+ * show for it. The counter is what turns an invisible drop into an observable one.
+ */
+function enqueueAutoEval(
+  ingest: IngestApiDeps | undefined,
+  spans: Span[],
+  workspaceId: string,
+): void {
+  if (ingest?.enqueueAutoEval === undefined) return;
+  void ingest.enqueueAutoEval(spans, workspaceId).catch((err: unknown) => {
+    autoEvalEnqueueFailures.add(1);
+    console.error(
+      JSON.stringify({
+        level: "error",
+        msg: "auto_eval_enqueue_failed",
+        workspaceId,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  });
 }
 
 export function createApp(
@@ -259,6 +295,7 @@ export function createApp(
         const evals = toSave.reduce((n, s) => n + (s.evaluations?.length ?? 0), 0);
         evaluationsExtracted.add(evals);
         logIngest(toSave.length, evals);
+        enqueueAutoEval(ingest, toSave, ws);
       }
       if (rejected > 0) {
         spansRejected.add(rejected);
@@ -334,6 +371,7 @@ export function createApp(
       const evals = toSave.reduce((n, s) => n + (s.evaluations?.length ?? 0), 0);
       evaluationsExtracted.add(evals);
       logIngest(toSave.length, evals);
+      enqueueAutoEval(ingest, toSave, ws);
     }
     if (rejected > 0) {
       spansRejected.add(rejected);

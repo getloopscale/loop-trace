@@ -574,12 +574,17 @@ describe("LensReadClient — evaluators + guards (M111)", () => {
   });
 
   it("runEvaluator POSTs to /v1/evaluators/{id}/run and returns a RunResult", async () => {
-    const fetchFn = mockFetch({ evaluator: "quality", written: 5, skipped: 0, truncated: false, errors: [] });
+    // M133 made the endpoint async (202 + poll). `runEvaluator` keeps its
+    // synchronous signature by polling internally — a consumer asked for a
+    // result, not a job handle — so the mock serves both halves.
+    const fetchFn = seqFetch([
+      ok({ id: "job1", evaluatorId: "ev1", evaluatorName: "quality", status: "queued", total: 5, scored: 0, skipped: 0, errors: 0, errorDetails: [], truncated: false, createdAt: "t", updatedAt: "t" }),
+      ok({ id: "job1", evaluatorId: "ev1", evaluatorName: "quality", status: "completed", total: 5, scored: 5, skipped: 0, errors: 0, errorDetails: [], truncated: false, createdAt: "t", updatedAt: "t" }),
+    ]);
     const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
     const res = await client.runEvaluator("ev1", { limit: 10 });
-    expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/evaluators/ev1/run");
-    expect(methodOf(fetchFn)).toBe("POST");
-    expect(bodyOf(fetchFn)).toEqual({ limit: 10 });
+    expect(new URL(String(fetchFn.mock.calls[0]![0])).pathname).toBe("/v1/evaluators/ev1/run");
+    expect(res.evaluator).toBe("quality");
     expect(res.written).toBe(5);
   });
 

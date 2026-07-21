@@ -403,3 +403,24 @@ export interface Capabilities {
   openapi: string;
   docs: string;
 }
+
+/**
+ * The M133 async run-job view returned by `POST /v1/evaluators/{id}/run` (202)
+ * and `GET /v1/evaluator-run-jobs/{id}`. The SDK polls it internally so
+ * `runEvaluator` can keep returning a {@link RunResult}.
+ */
+export interface EvaluatorRunJobView {
+  id: string;
+  evaluatorId: string;
+  evaluatorName: string;
+  status: "queued" | "running" | "completed" | "failed";
+  total: number;
+  scored: number;
+  skipped: number;
+  errors: number;
+  errorDetails: { spanId: string; reason: string }[];
+  truncated: boolean;
+  errorMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+}
