@@ -17,6 +17,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - `GET /v1/version` now reports `{name, version, git_sha, built_at, node}` so "what is live?" has an answer a human can read.
 
 ### Changed
+- Commit só-de-documentação deixou de disparar a esteira. Medido em 2026-07-27: **19 dos últimos 40 commits (47%)** tocam apenas `.md` / `docs/` / `knowledge-base/` / `.claude/` e ainda assim consumiam a fila do runner compartilhado. `integration`, `sdk-go` e `security-sast` passam a ignorar esses caminhos. `publish` fica de fora (build de tag sempre carrega código); `sdk-py` já usava allowlist por `paths:`, que é estritamente melhor, e não foi tocado.
 - Supply-chain hardening in `pnpm-workspace.yaml`: `minimumReleaseAge: 10080` (nothing published in the last 7 days), `trustPolicy: no-downgrade`, `blockExoticSubdeps: true`. Surfaced by the new SAST lane.
 - The runtime container drops root (`USER node`).
 - `allowBuilds` no longer carries unresolved placeholders — `cpu-features` and `ssh2` are explicitly denied. They were literally `set this to true or false`, invisible locally because the pnpm store already held approved builds, and fatal on a clean CI install.

@@ -7,8 +7,23 @@ name: Security SAST
 
 on:
   pull_request:
+    # Mesmo filtro do gatilho acima (racional lá).
+    paths-ignore:
+      - '.claude/**'
+      - '**/*.md'
+      - 'docs/**'
+      - 'knowledge-base/**'
   push:
     branches: [develop, main]
+    # Commit só-de-documentação não exercita código e não deve consumir a fila do runner de
+    # executor único dividido por cinco repositórios. Medido em 2026-07-27: 47% dos últimos
+    # 40 commits deste repo tocam apenas .md / docs/ / knowledge-base/ / .claude/.
+    # Mesmo padrão já adotado em theo-memory.
+    paths-ignore:
+      - '.claude/**'
+      - '**/*.md'
+      - 'docs/**'
+      - 'knowledge-base/**'
 
 permissions:
   contents: read
