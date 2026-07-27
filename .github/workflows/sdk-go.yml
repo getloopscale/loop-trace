@@ -5,8 +5,10 @@ name: sdk-go
 on:
   push:
     branches: [develop, main]
-    # Commit só-de-documentação não exercita código e não deve consumir a fila do runner de
-    # executor único dividido por cinco repositórios. Medido em 2026-07-27: 47% dos últimos
+    # Commit só-de-documentação não exercita código e não deve consumir a fila do runner compartilhado: cada repositório tem seu PRÓPRIO processo de runner, mas os cinco
+    # rodam no MESMO host de 2 vCPU / 2 GB. A disputa é por CPU e RAM, não por um slot de fila —
+    # medido em 2026-07-27: os runners de theo-rag, theo-memory, theo-cloud e theo-db aparecem
+    # `busy=true` simultaneamente. Cada job desperdiçado aqui rouba CPU dos outros quatro repos. Medido em 2026-07-27: 47% dos últimos
     # 40 commits deste repo tocam apenas .md / docs/ / knowledge-base/ / .claude/.
     # Mesmo padrão já adotado em theo-memory.
     paths-ignore:
