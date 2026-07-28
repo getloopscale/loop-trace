@@ -55,21 +55,33 @@ jobs:
       - name: Provision runtime env
         # Written over STDIN, never argv: an argument is visible in the host's process list to
         # every other tenant of this shared box.
+        # Segredos chegam por `env:` e o `.env` remoto e montado com `printf`, NAO por heredoc
+        # expansivel. O heredoc `<<EOF` (nao citado) fazia o shell do runner expandir o CONTEUDO
+        # dos segredos: um `$(...)`, crase ou `$VAR` dentro de um valor viraria execucao ou
+        # corromperia o arquivo remoto em silencio. Era tambem o SC2087 que o actionlint apontou.
+        #
+        # `printf '%s\n'` com cada linha entre aspas trata todo valor como literal. `${SHA}` e
+        # `${BUILT}` continuam expandindo — eles PRECISAM, sao a proveniencia que o /version le —
+        # mas agora expandem sozinhos, sem arrastar os segredos pelo mesmo mecanismo.
+        env:
+          BOOTSTRAP: ${{ secrets.THEOLENS_PLATFORM_ADMIN_BOOTSTRAP }}
+          JUDGE_KEY: ${{ secrets.THEOLENS_JUDGE_API_KEY }}
+          JUDGE_URL: ${{ vars.THEOLENS_JUDGE_BASE_URL }}
         run: |
           SHA='${{ github.sha }}'
           BUILT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          ssh -i ~/.ssh/k root@"${{ vars.DEV_HOST }}" 'cat > ${{ vars.DEV_DEPLOY_DIR }}/.env' <<EOF
-          THEOLENS_API_PORT=18084
-          THEOLENS_PG_PORT=5434
-          THEOLENS_REQUIRE_CREDENTIAL=true
-          THEOLENS_PLATFORM_ADMIN_BOOTSTRAP=${{ secrets.THEOLENS_PLATFORM_ADMIN_BOOTSTRAP }}
-          THEOLENS_JUDGE_BASE_URL=${{ vars.THEOLENS_JUDGE_BASE_URL }}
-          THEOLENS_JUDGE_API_KEY=${{ secrets.THEOLENS_JUDGE_API_KEY }}
-          DISABLE_ERROR_REPORTING=1
-          THEOLENS_GIT_SHA=${SHA}
-          THEOLENS_VERSION=develop-${SHA:0:7}
-          THEOLENS_BUILD_TIME=${BUILT}
-          EOF
+          printf '%s\n' \
+            "THEOLENS_API_PORT=18084" \
+            "THEOLENS_PG_PORT=5434" \
+            "THEOLENS_REQUIRE_CREDENTIAL=true" \
+            "THEOLENS_PLATFORM_ADMIN_BOOTSTRAP=${BOOTSTRAP}" \
+            "THEOLENS_JUDGE_BASE_URL=${JUDGE_URL}" \
+            "THEOLENS_JUDGE_API_KEY=${JUDGE_KEY}" \
+            "DISABLE_ERROR_REPORTING=1" \
+            "THEOLENS_GIT_SHA=${SHA}" \
+            "THEOLENS_VERSION=develop-${SHA:0:7}" \
+            "THEOLENS_BUILD_TIME=${BUILT}" \
+          | ssh -i ~/.ssh/k root@"${{ vars.DEV_HOST }}" 'cat > ${{ vars.DEV_DEPLOY_DIR }}/.env'
 
       - name: Sync checkout, log into GHCR, deploy
         run: |
