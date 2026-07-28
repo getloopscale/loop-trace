@@ -49,7 +49,12 @@ jobs:
         # that break the NEXT job's checkout with "insufficient permission … .git/objects". Here
         # the checkout stays on the host (runner-owned) and only the scan is containerised.
         run: |
-          docker run --rm -v "$PWD:/src" semgrep/semgrep \
+          # Imagem fixada por DIGEST. Sem tag nem digest, resolve para `:latest` — mutavel — e o
+          # gate de SAST passa a verificar coisa diferente a cada run, com o codigo-fonte montado
+          # dentro do container. O actionlint deste mesmo repo ja era fixado; a disciplina nao
+          # pode valer para um scanner e falhar no outro.
+          docker run --rm -v "$PWD:/src" \
+            semgrep/semgrep@sha256:b68f9b68483955b85042dac7b4533757779625a02dcf91e470da4c2df1b430be \
             semgrep scan \
               --config p/typescript \
               --config p/javascript \
