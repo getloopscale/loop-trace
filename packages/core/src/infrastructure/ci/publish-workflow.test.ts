@@ -27,6 +27,7 @@ import { describe, expect, test } from 'vitest';
 const REPO_ROOT = resolve(fileURLToPath(import.meta.url), '../../../../../..');
 const PUBLISH = resolve(REPO_ROOT, '.github/workflows/publish.yml');
 const VENDORED = resolve(REPO_ROOT, '.github/workflows/build-publish.yml');
+const DEPLOY_COMPOSE = resolve(REPO_ROOT, 'docker-compose.deploy.yml');
 
 const LOCAL_REF = 'uses: ./.github/workflows/build-publish.yml';
 const UPSTREAM_REF = 'uses: usetheodev/theo/.github/workflows/build-publish.yml';
@@ -86,6 +87,26 @@ describe('vendored build-publish', () => {
       offending,
       'linha ativa ainda aponta para ghcr.io/usetheodev — um run de usetheoai não tem push lá (403)',
     ).toEqual([]);
+  });
+
+  // A licao do theo-rag (CM3): o guard acima cobre o lado que EMPURRA a imagem, e o deploy
+  // quebrou no lado que a PUXA — `403 Forbidden` no host, DEPOIS de o build ter passado e
+  // publicado normalmente. Sao arquivos distintos, sem compilador nem tipo em comum.
+  test('o compose de deploy puxa do MESMO namespace que o build publica', () => {
+    const compose = readFileSync(DEPLOY_COMPOSE, 'utf8');
+
+    const stale = compose
+      .split('\n')
+      .filter((l) => !l.trimStart().startsWith('#') && l.includes('ghcr.io/usetheodev'));
+    expect(
+      stale,
+      'o compose de deploy puxa de ghcr.io/usetheodev — o host recebe 403 e o deploy falha com a CI verde',
+    ).toEqual([]);
+
+    expect(
+      compose.includes('ghcr.io/usetheoai/theo-lens'),
+      'o compose de deploy nao referencia a imagem publicada em ghcr.io/usetheoai',
+    ).toBe(true);
   });
 
   test('a referência da imagem no cosign passa por env, não interpolada no run', () => {
