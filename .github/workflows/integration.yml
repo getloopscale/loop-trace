@@ -38,7 +38,7 @@ concurrency:
 jobs:
   integration:
     name: integration (postgres + test:integration)
-    runs-on: [self-hosted, linux, x64]
+    runs-on: blacksmith-8vcpu-ubuntu-2404
 
     services:
       postgres:
@@ -68,9 +68,12 @@ jobs:
         run: echo "THEOLENS_PG_URI=postgresql://postgres:postgres@localhost:${{ job.services.postgres.ports['5432'] }}/postgres" >> "$GITHUB_ENV"
 
       - name: Setup pnpm
+        # SEM `version:` de proposito. `pnpm/action-setup` le `packageManager` do package.json
+        # quando a versao nao e declarada aqui; declarar nos dois lugares cria DUAS fontes de
+        # verdade que divergem em silencio ate a action abortar com "Multiple versions of pnpm
+        # specified" — foi exatamente o que derrubou este gate. Uma fonte so: o package.json,
+        # que e tambem o que vale no desenvolvimento local.
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.4.0
-        with:
-          version: 11.5.3
 
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
