@@ -1,0 +1,32 @@
+# O gate que teria evitado o defeito que este mesmo commit corrige.
+#
+# `sdk-go.yml` declarava `paths` E `paths-ignore` no mesmo evento — combinacao que o GitHub
+# PROIBE. A recusa nao e um aviso: o workflow morre no PARSE, sem criar job algum e sem log.
+# O gate ficou vermelho em TODOS os runs (jobs=0, runner_name vazio) e nada na aba Actions
+# dizia por que. Um workflow invalido NAO FALHA — ele simplesmente nao roda, e isso e
+# indistinguivel de "passou" em varias telas.
+#
+# Precedente medido no theo-db: 95 de 100 runs perdidos exatamente assim.
+name: actionlint
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop]
+permissions:
+  contents: read
+jobs:
+  actionlint:
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: actionlint
+        # Binario com versao explicita, nao a action: a versao fica visivel aqui e nao muda
+        # debaixo do gate sem um commit. Drift de versao de linter ja quebrou o
+        # theo-traefik-mcp sem nenhuma mudanca de codigo (CM0).
+        run: |
+          set -euo pipefail
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color

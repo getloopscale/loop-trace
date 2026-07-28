@@ -11,11 +11,14 @@ on:
     # `busy=true` simultaneamente. Cada job desperdiçado aqui rouba CPU dos outros quatro repos. Medido em 2026-07-27: 47% dos últimos
     # 40 commits deste repo tocam apenas .md / docs/ / knowledge-base/ / .claude/.
     # Mesmo padrão já adotado em theo-memory.
-    paths-ignore:
-      - '.claude/**'
-      - '**/*.md'
-      - 'docs/**'
-      - 'knowledge-base/**'
+    # SEM `paths-ignore` junto de `paths`. O GitHub PROIBE os dois filtros no mesmo evento, e
+    # a recusa nao e um aviso: o workflow morre no PARSE, sem criar job algum e sem log. Foi o
+    # que manteve este gate vermelho em TODOS os runs — `jobs=0`, `runner_name` vazio, nada na
+    # aba Actions explicando por que.
+    #
+    # `paths` sozinho ja expressa a intencao: rodar so quando o SDK Go ou este arquivo mudam.
+    # Um commit so-de-documentacao fora de `packages/sdk-go/**` nao dispara o workflow de todo
+    # jeito, entao o `paths-ignore` nao acrescentava filtragem — so o erro de parse.
     paths:
       - "packages/sdk-go/**"
       - ".github/workflows/sdk-go.yml"
