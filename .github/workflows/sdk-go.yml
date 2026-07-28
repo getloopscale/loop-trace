@@ -51,9 +51,14 @@ jobs:
         run: go vet ./...
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6
+        # Action v9.3.0 + golangci-lint v2.6.0 — o MESMO par ja verde em theo-storage.
+        # O par anterior (action v6 + version v2.1) era INCOMPATIVEL, e a propria action dizia:
+        # "golangci-lint v2 is not supported by golangci-lint-action v6, you must update to v7".
+        # Resultado: 8 de 8 runs vermelhos, em develop e workspace. Nao era flaky nem lento —
+        # era uma combinacao que nunca poderia funcionar.
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          version: v2.1
+          version: v2.6.0
           working-directory: packages/sdk-go
 
       - name: Test (race)

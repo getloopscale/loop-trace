@@ -22,11 +22,13 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - name: actionlint
-        # Binario com versao explicita, nao a action: a versao fica visivel aqui e nao muda
-        # debaixo do gate sem um commit. Drift de versao de linter ja quebrou o
-        # theo-traefik-mcp sem nenhuma mudanca de codigo (CM0).
+      - name: actionlint (workflows + shellcheck dos blocos run:)
+        # Imagem fixada por DIGEST. A forma anterior — `bash <(curl .../main/scripts/...)` —
+        # baixava e executava um script do branch `main` de um repo de terceiros: ref mutavel
+        # + execucao arbitraria no runner, num repo que pina todas as demais actions por SHA.
+        # A disciplina de supply-chain nao pode valer para 40 actions e falhar justamente no
+        # gate de qualidade. Mesmo digest usado em theo-rag e theo-traefik-mcp.
         run: |
-          set -euo pipefail
-          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) 1.7.7
-          ./actionlint -color
+          docker run --rm -v "$PWD:/repo" --workdir /repo \
+            rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 \
+            -color
