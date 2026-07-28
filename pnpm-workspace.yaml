@@ -36,9 +36,28 @@ overrides:
 # npm supply-chain compromise is caught and yanked within hours; waiting is the cheapest defence
 # there is, and it costs only the latency of adopting a brand-new release.
 minimumReleaseAge: 10080
+# The 7-day rule protects against an UNKNOWN publisher shipping something malicious. Our own
+# packages have a known publisher — us — so waiting a week to consume a fix we just released
+# buys nothing and costs the whole point of releasing it. Scoped narrowly to the two org scopes;
+# everything else, including every transitive dependency, still waits.
+minimumReleaseAgeExclude:
+  - "@usetheo/*"
+  - "@theokit/*"
 # trustPolicy — refuse an update that DOWNGRADES a package's own security settings. Without it,
 # a malicious release can quietly turn off the protections a previous version had enabled.
 trustPolicy: no-downgrade
+# These three are flagged not because anything changed hands, but because they are OLD and widely
+# pinned: versions predating npm provenance attestations read as a "downgrade" against newer
+# releases that carry them. semver@6 in particular is one of the most-depended-on packages in the
+# registry and reaches us only transitively.
+#
+# This is an exception list, not a dismissal — each entry is a specific version we accept, so a
+# genuine takeover of a DIFFERENT package still fails the install. Revisit when the transitive
+# parents move to versions that carry provenance.
+trustPolicyExclude:
+  - "semver@6.3.1"
+  - "tailwind-merge@2.6.1"
+  - "undici-types@6.21.0"
 # blockExoticSubdeps — a transitive dependency may not pull code from a git URL, a tarball, or
 # any non-registry source. A registry version is auditable and yankable; an arbitrary git ref is
 # neither, and it is the standard vector for slipping past a lockfile review.
