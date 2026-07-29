@@ -23,7 +23,59 @@ concurrency:
   cancel-in-progress: false # never cancel a half-pushed image
 
 jobs:
+  # ── M137: the gates. Nothing below reaches GHCR before these pass. ────────────────────────────
+  #
+  # WHY `needs:` AND NOT `workflow_run`. `workflow_run` is evaluated ONLY in the default branch's
+  # definition and runs in its context, so the very commit that adds a gate ships ungated. Measured
+  # across five OSS peers (opik, langfuse, phoenix, argo-cd, compose): all 5 uses of `workflow_run`
+  # are post-publication verification or fork-privilege isolation — none is a gate. Two of them say
+  # so in their own comments. `needs:` is evaluated BEFORE the dependent job starts, so on a red
+  # commit no registry credential is ever acquired and there is no partial push to unwind.
+  #
+  # COST, MEASURED, NOT ESTIMATED: publish was ~103 s; with the gates the path is
+  # max(ci 55 s, integration 84 s) + 103 s ≈ 187 s → +84 s (+82%). Paid deliberately against theo-
+  # memory's measured 8.2% of pushes that published an image with the suite red on the same commit.
+  # If it ever bites, the lever is opik's registry layer cache, not removing the gate.
+  gate-ci:
+    uses: ./.github/workflows/ci.yml
+
+  gate-contract:
+    uses: ./.github/workflows/integration.yml
+    secrets:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+  # ── M137: `:latest` may only come from code that reached main ─────────────────────────────────
+  #
+  # `:latest` feeds reconciliation. A tag cut from an unpromoted commit would publish it from code
+  # that never passed through develop → main. Resolved through the API rather than `git merge-base`
+  # so no checkout is needed — this repo's full history is expensive to fetch.
+  guard-release-on-main:
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    permissions:
+      contents: read
+    steps:
+      - name: A tag esta contida em main?
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          STATUS="$(gh api "repos/${GITHUB_REPOSITORY}/compare/main...${SHA}" --jq .status)"
+          echo "posicao de ${SHA} em relacao a main: ${STATUS}"
+          case "${STATUS}" in
+            identical|behind)
+              echo "OK — a tag esta em main; :latest pode ser publicada." ;;
+            *)
+              echo "::error::A tag ${GITHUB_REF_NAME} NAO esta em main (${STATUS})." >&2
+              echo "::error::':latest' alimenta a reconciliacao e so pode sair de codigo promovido." >&2
+              exit 1 ;;
+          esac
+
   image:
+    # M137 — the gate. Removing this line reopens the hole that published rejected artifacts;
+    # `packages/api/src/server/publish-gate.test.ts` fails if it goes.
+    needs: [gate-ci, gate-contract, guard-release-on-main]
     uses: ./.github/workflows/build-publish.yml
     with:
       image: theo-lens

@@ -6,6 +6,14 @@
 name: Integration (Postgres)
 
 on:
+  # M137 — callable as a gate (`gate-contract` in publish.yml), so the image is not pushed before
+  # the Postgres suite passes. Unlike `ci.yml` this one DOES need a secret, and it is declared
+  # narrowly: only `OPENAI_API_KEY`, marked not-required so a caller without it still runs the
+  # database half rather than failing to start.
+  workflow_call:
+    secrets:
+      OPENAI_API_KEY:
+        required: false
   pull_request:
     # Mesmo filtro do gatilho acima (racional lá).
     paths-ignore:
