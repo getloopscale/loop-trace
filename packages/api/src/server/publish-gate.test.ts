@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { parse } from "yaml";
@@ -290,6 +290,32 @@ jobs:
     uses: ./.github/workflows/build-publish.yml
 `) as Record<string, unknown>;
       expect(() => assertImageIsGated(smuggled)).toThrow(/image-hotfix/);
+    });
+  });
+
+  /**
+   * F-7 — the checks above read four workflows BY NAME. The repo has nine, and nothing stopped a
+   * tenth from calling build-publish.yml: `sdk-go.yml` gaining a publish step would ship ungated
+   * while every assertion above stayed green. The gate has to quantify over the DIRECTORY, not
+   * over a list someone has to remember to extend.
+   */
+  describe("no ungated publisher anywhere in .github/workflows (F-7)", () => {
+    const files = readdirSync(WORKFLOWS).filter((f) => /\.ya?ml$/.test(f));
+
+    it("the sweep actually sees the whole directory", () => {
+      // Guards the guard: a glob that silently matched nothing would make every case below vacuous.
+      expect(files.length).toBeGreaterThanOrEqual(9);
+      expect(files).toContain("publish.yml");
+    });
+
+    it.each(files)("%s declares no ungated caller of build-publish.yml", (file) => {
+      // build-publish.yml IS the publisher; it is reusable and gated by its callers, not by itself.
+      if (file === "build-publish.yml") return;
+      for (const [name, job] of Object.entries(jobs(workflow(file)))) {
+        if (String(job?.["uses"] ?? "").endsWith("build-publish.yml")) {
+          assertJobIsGated(`${file}:${name}`, job);
+        }
+      }
     });
   });
 });
