@@ -39,6 +39,22 @@ function jobs(wf: Record<string, unknown>): Record<string, Record<string, unknow
   return (wf["jobs"] ?? {}) as Record<string, Record<string, unknown>>;
 }
 
+/** Every gate the `image` job must wait on. Adding one here is what makes the pin fail loudly. */
+const REQUIRED_GATES = ["gate-ci", "gate-contract", "gate-sast", "guard-release-on-main"] as const;
+
+/**
+ * THE assertion, extracted so the negative cases can run the REAL one instead of re-implementing
+ * its inverse by hand (M137 review, F-xval-8). A negative case that asserts on a fixture without
+ * touching the guarding logic proves the fixture is malformed, not that the guard would fire.
+ */
+function assertImageIsGated(wf: Record<string, unknown>): void {
+  const needs = jobs(wf)["image"]?.["needs"];
+  if (needs === undefined) throw new Error("publish.yml image job declares no needs: — the gate is gone");
+  const list = (Array.isArray(needs) ? needs : [needs]).map(String);
+  const missing = REQUIRED_GATES.filter((g) => !list.includes(g));
+  if (missing.length > 0) throw new Error(`image job is missing gate(s): ${missing.join(", ")}`);
+}
+
 describe("M137 — publication gates", () => {
   describe("the gates are callable (T1.1)", () => {
     it.each(["ci.yml", "integration.yml"])(
@@ -48,33 +64,35 @@ describe("M137 — publication gates", () => {
       },
     );
 
-    it("ci.yml keeps its PR + push triggers — the gate is additive, not a replacement", () => {
-      const on = triggers(workflow("ci.yml"));
-      expect(on).toHaveProperty("pull_request");
-      expect(on).toHaveProperty("push");
+    /**
+     * The PR trigger must survive: it is the reviewer-facing check, and it is deliberately NOT
+     * path-filtered (a filtered required check is never reported, leaving the PR unmergeable).
+     */
+    it("ci.yml keeps its pull_request trigger — the gate is additive, not a replacement", () => {
+      expect(triggers(workflow("ci.yml"))).toHaveProperty("pull_request");
     });
   });
 
   describe("the image waits for the suite (T1.2)", () => {
-    it("image declares needs on both gates and the release guard", () => {
-      const needs = jobs(workflow("publish.yml"))["image"]?.["needs"];
-      expect(needs, "publish.yml image job must declare needs:").toBeDefined();
-      const list = Array.isArray(needs) ? needs : [needs];
-      expect(list).toEqual(expect.arrayContaining(["gate-ci", "gate-contract", "guard-release-on-main"]));
+    it("image declares needs on every gate and the release guard", () => {
+      expect(() => assertImageIsGated(workflow("publish.yml"))).not.toThrow();
     });
 
     it("the gate jobs call the local workflows, not a copy of their steps", () => {
       const j = jobs(workflow("publish.yml"));
       expect(j["gate-ci"]?.["uses"]).toBe("./.github/workflows/ci.yml");
       expect(j["gate-contract"]?.["uses"]).toBe("./.github/workflows/integration.yml");
+      expect(j["gate-sast"]?.["uses"]).toBe("./.github/workflows/security-sast.yml");
     });
 
-    /**
-     * R2 from the plan: `workflow_call` widens the surface — a secret declared on a gate that does
-     * not need it is handed to every future caller. `ci` needs none.
-     */
-    it("gate-ci is passed no secrets", () => {
-      expect(jobs(workflow("publish.yml"))["gate-ci"]).not.toHaveProperty("secrets");
+    /** F-sec-1 — a secret with no consumer is pure surface handed to every future caller. */
+    it.each(["gate-ci", "gate-contract", "gate-sast"])("%s is passed no secrets", (job) => {
+      expect(jobs(workflow("publish.yml"))[job]).not.toHaveProperty("secrets");
+    });
+
+    /** F-sec-2/F-sec-4 — a standalone push trigger raced the gated call on the same concurrency group. */
+    it.each(["ci.yml", "integration.yml"])("%s has no standalone push trigger", (file) => {
+      expect(triggers(workflow(file))).not.toHaveProperty("push");
     });
   });
 
@@ -96,29 +114,28 @@ describe("M137 — publication gates", () => {
     });
   });
 
-  describe("docs-only work does not consume the pipeline (T2.2 / ADR D2)", () => {
-    it("ci.yml filters by a positive paths allowlist", () => {
-      const push = triggers(workflow("ci.yml"))["push"] as Record<string, unknown>;
-      expect(push?.["paths"], "ci.yml must declare an allowlist").toBeDefined();
-      expect(push["paths"]).toEqual(
-        expect.arrayContaining(["packages/**", ".github/workflows/**"]),
+  describe("docs-only work does not consume the pipeline (T2.2 / ADR D2 revised)", () => {
+    /**
+     * The filter lives in the CALLER. A callee's path filter is not evaluated for a `workflow_call`
+     * invocation, so a filter on ci.yml would not have stopped the gated run (F-sec-6).
+     */
+    it("publish.yml filters docs-only pushes", () => {
+      const push = triggers(workflow("publish.yml"))["push"] as Record<string, unknown>;
+      expect(push?.["paths-ignore"]).toEqual(
+        expect.arrayContaining(["**/*.md", "docs/**", "knowledge-base/**", ".claude/**"]),
       );
     });
 
     /**
-     * ADR D2. A denylist fails SILENTLY — a new top-level directory is included by default and burns
-     * the queue until someone reads the bill. An allowlist fails LOUDLY. Measured across five peers:
-     * `paths:` 45, `paths-ignore:` 3.
+     * ADR D2 REVISED. The allowlist argument (loud vs silent failure) holds for a code-only trigger,
+     * but this trigger also listens on `tags: ["v*"]` and path filters apply to tag pushes: a
+     * positive list would make a release whose commit did not match vanish with no image and no
+     * error. The first draft also proved the practical cost — its allowlist omitted `scripts/**`,
+     * which `pnpm build` executes.
      */
-    it("ci.yml does NOT use paths-ignore — the denylist is the weaker of the two", () => {
-      const push = triggers(workflow("ci.yml"))["push"] as Record<string, unknown>;
-      expect(push).not.toHaveProperty("paths-ignore");
-    });
-
-    it("publish.yml carries no path filter — a tag build always ships code", () => {
+    it("publish.yml uses a denylist, never an allowlist — a release must not vanish silently", () => {
       const push = triggers(workflow("publish.yml"))["push"] as Record<string, unknown>;
       expect(push).not.toHaveProperty("paths");
-      expect(push).not.toHaveProperty("paths-ignore");
     });
   });
 
@@ -128,7 +145,7 @@ describe("M137 — publication gates", () => {
    * it would notice a wrong one, and a gate-pinning test that cannot detect removal is theatre.
    */
   describe("the pin can actually detect removal", () => {
-    it("a publish.yml with needs: stripped fails the image assertion", () => {
+    it("a publish.yml with needs: stripped fails the REAL assertion", () => {
       const stripped = parse(`
 name: Publish
 on: { push: { branches: [develop] } }
@@ -136,19 +153,33 @@ jobs:
   image:
     uses: ./.github/workflows/build-publish.yml
 `) as Record<string, unknown>;
-      const needs = jobs(stripped)["image"]?.["needs"];
-      expect(needs).toBeUndefined();
+      expect(() => assertImageIsGated(stripped)).toThrow(/declares no needs/);
     });
 
-    it("a ci.yml using paths-ignore fails the allowlist assertion", () => {
-      const denylisted = parse(`
-name: CI
-on: { push: { branches: [develop], paths-ignore: ["**.md"] } }
-jobs: { build: { runs-on: ubuntu-latest } }
+    /**
+     * The mutation the first version could NOT catch (M137 review, F-xval-8): removing ONE gate
+     * rather than all of them. `arrayContaining` on a hand-rolled inverse never exercised this.
+     */
+    it("a PARTIAL removal — one gate dropped — still fails", () => {
+      const partial = parse(`
+name: Publish
+on: { push: { branches: [develop] } }
+jobs:
+  image:
+    needs: [gate-ci]
+    uses: ./.github/workflows/build-publish.yml
 `) as Record<string, unknown>;
-      const push = triggers(denylisted)["push"] as Record<string, unknown>;
-      expect(push).toHaveProperty("paths-ignore");
-      expect(push["paths"]).toBeUndefined();
+      expect(() => assertImageIsGated(partial)).toThrow(/missing gate\(s\)/);
+    });
+
+    it("a publish.yml using a positive allowlist is rejected", () => {
+      const allowlisted = parse(`
+name: Publish
+on: { push: { branches: [develop], tags: ["v*"], paths: ["packages/**"] } }
+jobs: { image: { uses: ./.github/workflows/build-publish.yml } }
+`) as Record<string, unknown>;
+      const push = triggers(allowlisted)["push"] as Record<string, unknown>;
+      expect(push).toHaveProperty("paths");
     });
   });
 });

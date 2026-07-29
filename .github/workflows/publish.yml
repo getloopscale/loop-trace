@@ -11,6 +11,22 @@ on:
   push:
     branches: [develop]
     tags: ["v*"]
+    # M137 review (F-sec-6). The filter MUST live here, in the caller: a callee's `paths` /
+    # `paths-ignore` is NOT evaluated for a `workflow_call` invocation, so without this a docs-only
+    # develop push ran ci + integration + sast in full through the gates.
+    #
+    # DENYLIST here, not the allowlist ADR D2 argued for — and the reversal is deliberate. This
+    # trigger also listens on `tags: ["v*"]`, and a path filter applies to tag pushes too: a POSITIVE
+    # list would make a release whose commit happened not to match it vanish silently — no image, no
+    # error. Exclusion errs toward publishing too much, which is the correct side here. The practical
+    # half of the argument is that the first draft's allowlist omitted `scripts/**` (executed by
+    # `pnpm build`), `test/**`, `tests/**`, `Dockerfile` and `drizzle.config.ts` — an open-ended
+    # "what is code" list is exactly what an allowlist is bad at enumerating.
+    paths-ignore:
+      - '.claude/**'
+      - '**/*.md'
+      - 'docs/**'
+      - 'knowledge-base/**'
   workflow_dispatch:
 
 permissions:
@@ -32,17 +48,22 @@ jobs:
   # so in their own comments. `needs:` is evaluated BEFORE the dependent job starts, so on a red
   # commit no registry credential is ever acquired and there is no partial push to unwind.
   #
-  # COST, MEASURED, NOT ESTIMATED: publish was ~103 s; with the gates the path is
-  # max(ci 55 s, integration 84 s) + 103 s ≈ 187 s → +84 s (+82%). Paid deliberately against theo-
-  # memory's measured 8.2% of pushes that published an image with the suite red on the same commit.
-  # If it ever bites, the lever is opik's registry layer cache, not removing the gate.
+  # COST — components measured, composite PROJECTED (M137 review, F-xval-6). Medians of successful
+  # runs on 2026-07-28: publish 103 s, integration 84 s, ci 55 s, sast 40 s. The gated path is
+  # therefore max(55, 84, 40) + 103 ≈ 187 s → +84 s (+82%). The ≈ is the honest part: no gated
+  # end-to-end run had been observed when this was written, so the composite is arithmetic on
+  # measured parts, not an observed duration. Paid deliberately against theo-memory's measured 8.2%
+  # of pushes that published an image with the suite red on the same commit. If it bites, the lever
+  # is opik's registry layer cache, not removing the gate.
   gate-ci:
     uses: ./.github/workflows/ci.yml
 
   gate-contract:
     uses: ./.github/workflows/integration.yml
-    secrets:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+  # F-sec-3 — semgrep gates too. It was named in the defect statement and left ungated.
+  gate-sast:
+    uses: ./.github/workflows/security-sast.yml
 
   # ── M137: `:latest` may only come from code that reached main ─────────────────────────────────
   #
@@ -75,7 +96,7 @@ jobs:
   image:
     # M137 — the gate. Removing this line reopens the hole that published rejected artifacts;
     # `packages/api/src/server/publish-gate.test.ts` fails if it goes.
-    needs: [gate-ci, gate-contract, guard-release-on-main]
+    needs: [gate-ci, gate-contract, gate-sast, guard-release-on-main]
     uses: ./.github/workflows/build-publish.yml
     with:
       image: theo-lens

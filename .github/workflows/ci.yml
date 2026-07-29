@@ -13,29 +13,21 @@ on:
   workflow_call:
   # NOT filtered, on purpose. A path filter on `pull_request` makes a docs-only PR sit forever with
   # the check "expected" but never reported — GitHub does not mark a filtered-out required check as
-  # passed, it simply never arrives. The queue saving is on `push` (where there is no reviewer
-  # waiting); on a PR the cost of a wasted run is lower than the cost of an unmergeable PR.
+  # passed, it simply never arrives.
   pull_request:
     branches: [develop, main]
-  push:
-    branches: [develop]
-    # M137 / ADR D2 — a POSITIVE allowlist, not `paths-ignore`.
-    #
-    # Measured across five peers (opik, langfuse, phoenix, argo-cd, compose): `paths:` 45 uses vs
-    # `paths-ignore:` 3. The failure modes are asymmetric and that is the whole argument — a denylist
-    # fails SILENTLY (a new top-level directory is included by default and burns the shared runner
-    # until someone reads the bill), an allowlist fails LOUDLY (the job does not run; nothing goes
-    # green). `.github/workflows/**` is in the list on purpose: a change to the pipeline must be
-    # tested by the pipeline.
-    paths:
-      - 'packages/**'
-      - '.github/workflows/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - 'tsconfig*.json'
-      - 'vitest.*.config.ts'
-      - 'eslint.config.js'
+  # NO `push:` trigger, on purpose (M137 review, F-sec-2/F-sec-4).
+  #
+  # On a develop push this workflow now runs EXCLUSIVELY as `gate-ci` inside publish.yml. Keeping a
+  # standalone `push:` alongside the gate caused two real defects: the same workflow ran TWICE per
+  # push (double runner load, which the +84 s wall-clock figure did not capture), and — worse — a
+  # `concurrency` group keyed only on `github.ref` is IDENTICAL for the standalone run and the gated
+  # call, so with `cancel-in-progress: true` one cancelled the other. A cancelled `gate-contract`
+  # leaves `needs:` unsatisfiable and blocks the image on a perfectly green commit.
+  #
+  # This is also what the workspace's model does: theo-memory's ci.yml has `workflow_call` +
+  # `pull_request` and no `push`. The docs-only filter lives in the CALLER (publish.yml), because a
+  # callee's path filter is not evaluated for a `workflow_call` invocation at all.
 permissions:
   contents: read
 jobs:
