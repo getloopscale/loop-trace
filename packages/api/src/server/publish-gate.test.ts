@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { parse } from "yaml";
@@ -136,7 +136,7 @@ describe("M137 — publication gates", () => {
     });
 
     /** F-sec-2/F-sec-4 — a standalone push trigger raced the gated call on the same concurrency group. */
-    it.each(["ci.yml", "integration.yml"])("%s has no standalone push trigger", (file) => {
+    it.each(["ci.yml", "integration.yml", "security-sast.yml"])("%s has no standalone push trigger", (file) => {
       expect(triggers(workflow(file))).not.toHaveProperty("push");
     });
   });
@@ -194,6 +194,31 @@ describe("M137 — publication gates", () => {
     it("publish.yml uses a denylist, never an allowlist — a release must not vanish silently", () => {
       expect(() => assertPublishUsesDenylist(workflow("publish.yml"))).not.toThrow();
     });
+  });
+
+  /**
+   * M138 — the repo must hold no host credential. theo-lens is Apache-2.0 and headed for
+   * publication; the umbrella runbook is explicit that a public repo carries no IP, path, user or
+   * SSH key. Unlike most debt this does not undo itself — a published history is public
+   * retroactively — so the absence is pinned rather than trusted to review.
+   */
+  describe("no host credentials remain (M138)", () => {
+    it("publish.yml has no deploy job", () => {
+      expect(jobs(workflow("publish.yml"))).not.toHaveProperty("deploy-dev");
+    });
+
+    it.each(["DEV_SSH_KEY", "DEV_HOST", "DEV_DEPLOY_DIR"])(
+      "%s is not referenced in any workflow expression",
+      (name) => {
+        const files = ["publish.yml", "ci.yml", "integration.yml", "security-sast.yml"];
+        for (const f of files) {
+          const raw = readFileSync(resolve(WORKFLOWS, f), "utf8");
+          // Strip comments: the removal rationale legitimately NAMES the old variables.
+          const code = raw.split("\n").filter((l) => !l.trim().startsWith("#")).join("\n");
+          expect(code, `${f} still uses ${name}`).not.toContain(name);
+        }
+      },
+    );
   });
 
   /**
@@ -265,6 +290,32 @@ jobs:
     uses: ./.github/workflows/build-publish.yml
 `) as Record<string, unknown>;
       expect(() => assertImageIsGated(smuggled)).toThrow(/image-hotfix/);
+    });
+  });
+
+  /**
+   * F-7 — the checks above read four workflows BY NAME. The repo has nine, and nothing stopped a
+   * tenth from calling build-publish.yml: `sdk-go.yml` gaining a publish step would ship ungated
+   * while every assertion above stayed green. The gate has to quantify over the DIRECTORY, not
+   * over a list someone has to remember to extend.
+   */
+  describe("no ungated publisher anywhere in .github/workflows (F-7)", () => {
+    const files = readdirSync(WORKFLOWS).filter((f) => /\.ya?ml$/.test(f));
+
+    it("the sweep actually sees the whole directory", () => {
+      // Guards the guard: a glob that silently matched nothing would make every case below vacuous.
+      expect(files.length).toBeGreaterThanOrEqual(9);
+      expect(files).toContain("publish.yml");
+    });
+
+    it.each(files)("%s declares no ungated caller of build-publish.yml", (file) => {
+      // build-publish.yml IS the publisher; it is reusable and gated by its callers, not by itself.
+      if (file === "build-publish.yml") return;
+      for (const [name, job] of Object.entries(jobs(workflow(file)))) {
+        if (String(job?.["uses"] ?? "").endsWith("build-publish.yml")) {
+          assertJobIsGated(`${file}:${name}`, job);
+        }
+      }
     });
   });
 });

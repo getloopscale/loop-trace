@@ -18,19 +18,13 @@ on:
       - '**/*.md'
       - 'docs/**'
       - 'knowledge-base/**'
-  push:
-    branches: [develop, main]
-    # Commit só-de-documentação não exercita código e não deve consumir a fila do runner compartilhado: cada repositório tem seu PRÓPRIO processo de runner, mas os cinco
-    # rodam no MESMO host de 2 vCPU / 2 GB. A disputa é por CPU e RAM, não por um slot de fila —
-    # medido em 2026-07-27: os runners de theo-rag, theo-memory, theo-cloud e theo-db aparecem
-    # `busy=true` simultaneamente. Cada job desperdiçado aqui rouba CPU dos outros quatro repos. Medido em 2026-07-27: 47% dos últimos
-    # 40 commits deste repo tocam apenas .md / docs/ / knowledge-base/ / .claude/.
-    # Mesmo padrão já adotado em theo-memory.
-    paths-ignore:
-      - '.claude/**'
-      - '**/*.md'
-      - 'docs/**'
-      - 'knowledge-base/**'
+  # NO `push:` trigger (M137 — same defect as ci.yml/integration.yml, observed LIVE on the first
+  # gated develop push: the standalone run was CANCELLED while `gate-sast` survived). This workflow
+  # is called as `gate-sast` by publish.yml; keeping a standalone push trigger made both runs compute
+  # the same `concurrency` group (`sast-${{ github.ref }}` — in a called workflow `github.ref` is the
+  # CALLER's ref) with `cancel-in-progress: true`, so one cancelled the other NON-DETERMINISTICALLY.
+  # This time the gate won. The other way round, a cancelled gate leaves `needs:` unsatisfiable and
+  # blocks the image on a green commit.
 
 permissions:
   contents: read

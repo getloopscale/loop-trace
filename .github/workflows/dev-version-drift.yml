@@ -1,0 +1,174 @@
+# Garantia CONTÍNUA de que o dev host roda a versão publicada.
+#
+# O DEFEITO QUE ELE COBRE. O reconciliador no host CORRIGE o drift, mas ninguém vigia o vigia: se o
+# timer systemd for desabilitado, se o host cair, ou se o reconciliador entrar em backoff por uma
+# imagem quebrada, a convergência para em SILÊNCIO — e silêncio é indistinguível de "está em dia".
+# Este gate pergunta ao serviço, de fora, qual commit ele acha que está rodando, e compara com o
+# último `publish` verde.
+#
+# DETECTA, não corrige. A divisão é deliberada: quem corrige está no host; quem observa precisa
+# estar FORA dele, senão observa a si mesmo.
+#
+# POR QUE ELE PERGUNTA NA PORTA E NÃO NO EDGE. A primeira versão deste arquivo consultava
+# `https://app-dev.usetheo.dev/v1/lens/version` para não citar host algum. Media 401: `/v1/lens/*`
+# está atrás do ForwardAuth fail-closed (`dev/traefik/dynamic.yml` router `lens-edge`), e o curl ia
+# sem credencial. O ramo de divergência era INALCANÇÁVEL — o gate saía 0 em todo run e reportava
+# cobertura que não existia. Um detector que nunca detecta é pior que nenhum: substitui vigilância
+# por sua aparência. A porta direta não é um atalho; é o único caminho que mede o que promete.
+#
+# POR QUE ELE PODE VIVER NESTE REPOSITÓRIO, que será público. Ele lê `vars.DEV_HOST` — e uma
+# *variable* do Actions **não é conteúdo do repositório**: não entra no git, não é publicada quando
+# o repo abre. O Passo 7 do runbook proíbe IP, caminho e usuário **em arquivos**, e nenhum aparece
+# aqui. O que a M138 removeu e ROTACIONOU foi `DEV_SSH_KEY` — acesso de shell ao host, uma exposição
+# de natureza inteiramente diferente de um endpoint de versão somente-leitura. `theo-memory` e
+# `theo-rag` já operam exatamente assim.
+#
+# O que SOBRARIA de exposição são os logs de Actions, que ficam públicos junto com o repo — e é por
+# isso que o primeiro passo faz `::add-mask::` no host. Sem ele, o valor apareceria em claro em toda
+# linha que mencionasse a URL.
+name: dev version drift
+
+on:
+  # De hora em hora. Drift num ambiente de dev é raro; detectar dentro de 1 h é suficiente.
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Necessário para consultar o último run bem-sucedido do `publish` — é ELE que define o commit
+  # esperado no host, não o tip de `develop`.
+  actions: read
+
+concurrency:
+  group: dev-version-drift
+  cancel-in-progress: true
+
+jobs:
+  drift:
+    name: dev host roda a última imagem publicada?
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    timeout-minutes: 15
+    steps:
+      # MASCARA ANTES DE QUALQUER COISA. `::add-mask::` faz o Actions substituir o valor por `***`
+      # em todo log subsequente. Variables, ao contrário de secrets, NÃO são mascaradas
+      # automaticamente — e os logs deste repositório ficam públicos quando ele abrir.
+      #
+      # O pré-requisito é checado aqui, no primeiro passo, com o comando de correção na mensagem:
+      # um gate que falha 20 linhas depois com `curl: (6)` custa uma hora de diagnóstico.
+      - name: Mascarar o host e checar o pré-requisito
+        env:
+          DEV_HOST: ${{ vars.DEV_HOST }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DEV_HOST}" ]; then
+            echo "::error::vars.DEV_HOST não está definida — sem host para checar."
+            echo "  gh variable set DEV_HOST -R ${GITHUB_REPOSITORY} --body '<host>'"
+            exit 1
+          fi
+          echo "::add-mask::${DEV_HOST}"
+          echo "host mascarado; a partir daqui ele aparece como *** nos logs."
+
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+          # `develop` porque o default branch é `main` e a tag `:develop` acompanha `develop`.
+          # Num gatilho `schedule` o checkout viria de `main`, e comparar o host contra `main`
+          # reportaria drift permanente e falso.
+          ref: develop
+          # OBRIGATÓRIO, não zelo: o diagnóstico usa `git merge-base --is-ancestor` e
+          # `git log A..B`. Com o clone shallow padrão só existe o commit do tip, e os dois
+          # falhariam — o gate detectaria o drift e não conseguiria dizer NADA sobre ele, que é
+          # metade do valor.
+          fetch-depth: 0
+
+      - name: Compara o SHA do dev host com a última imagem publicada
+        env:
+          DEV_HOST: ${{ vars.DEV_HOST }}
+          THEOLENS_PORT: '18084'
+          # O token do próprio repositório basta: o `publish` que consultamos é DESTE repo.
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # O ESPERADO É O ÚLTIMO `publish` BEM-SUCEDIDO, NÃO O TIP DE `develop`.
+          #
+          # Neste repo o argumento é mais forte que no theo-rag: a M137 deu ao `publish` um
+          # `paths-ignore`, então a branch avança legitimamente sem produzir imagem. Comparar com o
+          # tip acusaria drift a cada commit de documentação — e um alarme que grita sem motivo é
+          # desligado pelas pessoas. O head_sha do último run verde é, por construção, o commit
+          # cuja imagem existe no registry.
+          EXPECTED="$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow publish \
+            --branch develop --status success --limit 1 --json headSha --jq '.[0].headSha // ""')"
+
+          if [ -z "${EXPECTED}" ]; then
+            echo "Nenhum run bem-sucedido do \`publish\` em \`develop\` — nada contra o que comparar."
+            echo "Esperado num repo recém-configurado; o gate passa em vez de gritar sem base."
+            exit 0
+          fi
+
+          URL="http://${DEV_HOST}:${THEOLENS_PORT}/v1/version"
+          echo "esperado (último publish verde): ${EXPECTED}"
+
+          # RETRY COM PROPÓSITO, não superstição: o timer do reconciliador dispara a cada 5 min e só
+          # então puxa e recria, então o pior caso é ~5 min de espera + ~90 s de ciclo. Sem essa
+          # tolerância, todo run que caísse na janela reportaria drift falso. 8 × 60 s cobre com
+          # folga — e cobre também o backoff curto, sem cobrir o de 30 min (que É drift real).
+          RUNNING=""
+          for attempt in $(seq 1 8); do
+            if ! BODY="$(curl -fsS --max-time 15 "${URL}" 2>/dev/null)"; then
+              echo "tentativa ${attempt}: /v1/version inalcançável"
+              [ "${attempt}" -lt 8 ] && sleep 60 && continue
+              echo "::error::dev host inalcançável após 8 tentativas — o serviço pode estar fora do ar."
+              exit 1
+            fi
+
+            RUNNING="$(printf '%s' "${BODY}" | jq -r '.git_sha // "unknown"')"
+            echo "tentativa ${attempt}: dev host reporta ${RUNNING}"
+
+            if [ "${RUNNING}" = "${EXPECTED}" ]; then
+              echo "OK — dev host está em ${RUNNING}, igual à última imagem publicada."
+              exit 0
+            fi
+
+            [ "${attempt}" -lt 8 ] && sleep 60
+          done
+
+          # Chegou aqui: divergência ESTÁVEL, não janela de reconciliação.
+          echo "::error::DRIFT — dev host roda '${RUNNING}', o último publish verde foi '${EXPECTED}'."
+          {
+            echo "## Drift no ambiente de dev"
+            echo ""
+            echo "| | commit |"
+            echo "|---|---|"
+            echo "| dev host (\`/v1/version\`) | \`${RUNNING}\` |"
+            echo "| último \`publish\` verde | \`${EXPECTED}\` |"
+            echo ""
+            # `git cat-file -e` distingue os dois diagnósticos: um commit que EXISTE e é ancestral
+            # significa host atrasado; um SHA desconhecido significa que o host roda algo que não
+            # veio desta branch.
+            if git cat-file -e "${RUNNING}^{commit}" 2>/dev/null; then
+              if git merge-base --is-ancestor "${RUNNING}" "${EXPECTED}" 2>/dev/null; then
+                echo "O host está ATRASADO — roda um ancestral da última imagem publicada."
+                echo "Causa provável: o timer do reconciliador está parado, ou ele entrou em"
+                echo "backoff de 30 min (health gate falhando na imagem nova)."
+                echo ""
+                echo '```'
+                git log --oneline "${RUNNING}..${EXPECTED}" | head -20
+                echo '```'
+                echo ""
+                echo "No host:"
+                echo '```'
+                echo "systemctl --user status theolens-reconcile.timer"
+                echo "journalctl --user -u theolens-reconcile.service -n 50 --no-pager"
+                echo '```'
+              else
+                echo "O host roda um commit que NÃO é ancestral da última publicação —"
+                echo "imagem de outra branch, ou rollback feito movendo a tag \`:develop\`."
+              fi
+            else
+              echo "O commit do host é DESCONHECIDO neste repositório. Imagem de outra origem, ou o"
+              echo "container subiu sem a env de proveniência (\`THEOLENS_GIT_SHA\` ausente → \`unknown\`)."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
