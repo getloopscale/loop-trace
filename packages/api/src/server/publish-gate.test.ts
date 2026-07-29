@@ -136,7 +136,7 @@ describe("M137 — publication gates", () => {
     });
 
     /** F-sec-2/F-sec-4 — a standalone push trigger raced the gated call on the same concurrency group. */
-    it.each(["ci.yml", "integration.yml"])("%s has no standalone push trigger", (file) => {
+    it.each(["ci.yml", "integration.yml", "security-sast.yml"])("%s has no standalone push trigger", (file) => {
       expect(triggers(workflow(file))).not.toHaveProperty("push");
     });
   });
