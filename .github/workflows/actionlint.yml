@@ -1,0 +1,34 @@
+# O gate que teria evitado o defeito que este mesmo commit corrige.
+#
+# `sdk-go.yml` declarava `paths` E `paths-ignore` no mesmo evento — combinacao que o GitHub
+# PROIBE. A recusa nao e um aviso: o workflow morre no PARSE, sem criar job algum e sem log.
+# O gate ficou vermelho em TODOS os runs (jobs=0, runner_name vazio) e nada na aba Actions
+# dizia por que. Um workflow invalido NAO FALHA — ele simplesmente nao roda, e isso e
+# indistinguivel de "passou" em varias telas.
+#
+# Precedente medido no theo-db: 95 de 100 runs perdidos exatamente assim.
+name: actionlint
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop]
+permissions:
+  contents: read
+jobs:
+  actionlint:
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: actionlint (workflows + shellcheck dos blocos run:)
+        # Imagem fixada por DIGEST. A forma anterior — `bash <(curl .../main/scripts/...)` —
+        # baixava e executava um script do branch `main` de um repo de terceiros: ref mutavel
+        # + execucao arbitraria no runner, num repo que pina todas as demais actions por SHA.
+        # A disciplina de supply-chain nao pode valer para 40 actions e falhar justamente no
+        # gate de qualidade. Mesmo digest usado em theo-rag e theo-traefik-mcp.
+        run: |
+          docker run --rm -v "$PWD:/repo" --workdir /repo \
+            rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 \
+            -color

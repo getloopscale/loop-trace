@@ -489,7 +489,7 @@ describe("createApp (contract, stub repo)", () => {
       paths: Record<string, Record<string, unknown>>;
     };
     const isExcluded = (p: string) =>
-      ["/health", "/ready", "/openapi.json", "/v1", "/version", "/*"].includes(p) ||
+      ["/v1/healthz", "/v1/healthz/ready", "/openapi.json", "/v1", "/v1/version", "/*"].includes(p) ||
       p.startsWith("/v1/admin");
     const mounted = app.routes
       .filter((r) => r.method !== "ALL" && r.method !== "HEAD" && !isExcluded(r.path))
@@ -523,7 +523,7 @@ describe("createApp (contract, stub repo)", () => {
     const v1 = await app.request("/v1");
     expect(v1.status).toBe(200);
     expect(await v1.json()).toMatchObject({ service: "theo-lens", capability: "observability", openapi: "/openapi.json" });
-    const ver = await app.request("/version");
+    const ver = await app.request("/v1/version");
     expect(ver.status).toBe(200);
     expect((await ver.json()) as { version: string }).toHaveProperty("version");
   });
@@ -1663,16 +1663,16 @@ describe("M93 ingest durability & backpressure", () => {
 
 // M94 — liveness/readiness probes
 describe("M94 health & readiness probes", () => {
-  it("GET /health is 200 with no dependency check (pure liveness)", async () => {
+  it("GET /v1/healthz is 200 with no dependency check (pure liveness)", async () => {
     const app = createApp(new StubSpanRepository()); // no health dep at all
-    const res = await app.request("/health");
+    const res = await app.request("/v1/healthz");
     expect(res.status).toBe(200);
     expect(((await res.json()) as { status: string }).status).toBe("ok");
   });
 
   it("GET /health reports the version when provided", async () => {
     const app = createApp(new StubSpanRepository(), undefined, {}, undefined, undefined, undefined, undefined, undefined, { version: "9.9.9" });
-    const body = (await (await app.request("/health")).json()) as { version: string };
+    const body = (await (await app.request("/v1/healthz")).json()) as { version: string };
     expect(body.version).toBe("9.9.9");
   });
 
@@ -1680,26 +1680,26 @@ describe("M94 health & readiness probes", () => {
     const app = createApp(new StubSpanRepository(), undefined, {}, undefined, undefined, undefined, undefined, undefined, {
       pingDb: async () => {},
     });
-    const res = await app.request("/ready");
+    const res = await app.request("/v1/healthz/ready");
     expect(res.status).toBe(200);
     expect(((await res.json()) as { status: string }).status).toBe("ready");
   });
 
-  it("GET /ready is 503 when the DB probe throws (fail-closed, LB drains the node)", async () => {
+  it("GET /v1/healthz/ready is 503 when the DB probe throws (fail-closed, LB drains the node)", async () => {
     const app = createApp(new StubSpanRepository(), undefined, {}, undefined, undefined, undefined, undefined, undefined, {
       pingDb: async () => {
         throw new Error("connection refused");
       },
     });
-    const res = await app.request("/ready");
+    const res = await app.request("/v1/healthz/ready");
     expect(res.status).toBe(503);
-    expect(((await res.json()) as { status: string }).status).toBe("unavailable");
+    expect(((await res.json()) as { status: string }).status).toBe("not_ready");
   });
 
   it("both probes are reachable WITHOUT a bearer (unauthenticated)", async () => {
     // requireCredential=true would 401 any /v1 route; the probes must still answer.
     const app = createApp(new StubSpanRepository(), undefined, { requireCredential: true }, undefined, undefined, undefined, undefined, undefined, { pingDb: async () => {} });
-    expect((await app.request("/health")).status).toBe(200);
-    expect((await app.request("/ready")).status).toBe(200);
+    expect((await app.request("/v1/healthz")).status).toBe(200);
+    expect((await app.request("/v1/healthz/ready")).status).toBe(200);
   });
 });

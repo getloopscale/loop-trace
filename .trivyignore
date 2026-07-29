@@ -1,0 +1,33 @@
+# Trivy ignore list — CD image gate (usetheodev/theo/.github/workflows/build-publish.yml).
+#
+# Every entry MUST carry a justification and a review date. Prefer FIXING over ignoring: a bumped
+# dependency or a deleted package removes the vulnerability, while an ignore only removes the
+# alarm and quietly transfers the risk to whoever reads this file next.
+#
+# The two mitigations in the Dockerfile came first and are why this list is empty:
+#
+#   apk upgrade --no-cache
+#     The node:22-alpine tag is rebuilt on its own cadence, so between rebuilds it accumulates
+#     fixed-but-unshipped OS CVEs.
+#
+#   rm -rf /usr/local/lib/node_modules/npm
+#     Every fixable HIGH/CRITICAL the gate found on the first run — sigstore, tar, undici — lived
+#     in npm's VENDORED dependencies. This image never executes npm: the app resolves through
+#     pnpm at build time and its start command is `node`. Deleting it removes the finding rather
+#     than documenting an exception for it.
+#
+# The gate's second run then flagged 11 CVEs in pnpm 11.1.0 itself. A bump to 11.5.3 cleared 8 of
+# them and left 3 (plus pnpm's vendored tar and undici) still open in the newest release — which
+# reframed the problem: chasing a package manager's CVE feed is a subscription, not a fix.
+#
+#   rm -rf /usr/local/lib/node_modules/pnpm   (chained into the install RUN)
+#     pnpm's only job in the runtime stage is `pnpm install --prod`. After it returns, the image
+#     runs `node` and nothing else, so the package manager is dead weight WITH a CVE feed attached.
+#     Deleting it retired all 6 remaining findings and every pnpm CVE published from here on.
+#     It must be chained into the same RUN as the install: a separate layer leaves the binaries
+#     in the layer below, where Trivy still finds them and an attacker still reaches them.
+#
+# pnpm 11.5.3 is still pinned in the BUILD stage and in CI, where it does real work and where a
+# vulnerability in it is worth tracking. Only the runtime image drops it.
+#
+# Currently empty — nothing is ignored. Keep it that way if you can.

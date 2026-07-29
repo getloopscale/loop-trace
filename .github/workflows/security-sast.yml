@@ -1,0 +1,66 @@
+# Static security analysis over the production TypeScript surface (OWASP A05 / CWE-1059).
+# Adopted from the ecosystem CD playbook — theo-rag is the reference implementation.
+#
+# Third-party study material under .claude/knowledge-base/references/ is excluded: it is other
+# projects' code, cloned to read, and its findings are not ours to fix.
+name: Security SAST
+
+on:
+  # M137 review (F-sec-3) — callable as `gate-sast` in publish.yml. The milestone's own commit
+  # message and the gate test named ci, integration AND security-sast as the three workflows racing
+  # the build; closing the hole for only two of them left the recorded rationale claiming a fix the
+  # diff did not make. Semgrep now gates the publish like the other two.
+  workflow_call:
+  pull_request:
+    # Mesmo filtro do gatilho acima (racional lá).
+    paths-ignore:
+      - '.claude/**'
+      - '**/*.md'
+      - 'docs/**'
+      - 'knowledge-base/**'
+  # NO `push:` trigger (M137 — same defect as ci.yml/integration.yml, observed LIVE on the first
+  # gated develop push: the standalone run was CANCELLED while `gate-sast` survived). This workflow
+  # is called as `gate-sast` by publish.yml; keeping a standalone push trigger made both runs compute
+  # the same `concurrency` group (`sast-${{ github.ref }}` — in a called workflow `github.ref` is the
+  # CALLER's ref) with `cancel-in-progress: true`, so one cancelled the other NON-DETERMINISTICALLY.
+  # This time the gate won. The other way round, a cancelled gate leaves `needs:` unsatisfiable and
+  # blocks the image on a green commit.
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sast-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semgrep:
+    name: semgrep (TypeScript / OWASP)
+    # Self-hosted — GitHub-hosted minutes are billing-blocked org-wide, so `ubuntu-latest` jobs
+    # never dispatch (they fail in seconds with no runner).
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Run semgrep
+        # `docker run`, NOT a job-level `container:`. A container job runs EVERY step as root —
+        # including actions/checkout — leaving root-owned files in the shared self-hosted `_work`
+        # that break the NEXT job's checkout with "insufficient permission … .git/objects". Here
+        # the checkout stays on the host (runner-owned) and only the scan is containerised.
+        run: |
+          # Imagem fixada por DIGEST. Sem tag nem digest, resolve para `:latest` — mutavel — e o
+          # gate de SAST passa a verificar coisa diferente a cada run, com o codigo-fonte montado
+          # dentro do container. O actionlint deste mesmo repo ja era fixado; a disciplina nao
+          # pode valer para um scanner e falhar no outro.
+          docker run --rm -v "$PWD:/src" \
+            semgrep/semgrep@sha256:b68f9b68483955b85042dac7b4533757779625a02dcf91e470da4c2df1b430be \
+            semgrep scan \
+              --config p/typescript \
+              --config p/javascript \
+              --config p/owasp-top-ten \
+              --error \
+              --exclude '.claude/knowledge-base/references' \
+              --exclude node_modules \
+              --exclude dist \
+              --exclude '**/*.test.ts' \
+              /src

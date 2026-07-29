@@ -163,7 +163,7 @@ describe("M37 route guard enumeration", () => {
         // Neither is part of the scoped data surface this audit enumerates.
         .filter(
           (route) =>
-            !["/health", "/ready", "/openapi.json", "/v1", "/version"].includes(route.path),
+            !["/v1/healthz", "/v1/healthz/ready", "/openapi.json", "/v1", "/v1/version"].includes(route.path),
         )
         .map((route) => `${route.method} ${route.path}`),
     );

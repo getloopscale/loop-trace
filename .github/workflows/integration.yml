@@ -1,0 +1,97 @@
+# The integration suite (391 tests against a real Postgres) as a required gate.
+#
+# Until now it ran only on developer machines. Every one of the ~48 integration suites gates on
+# `THEOLENS_PG_URI` and self-skips when it is absent, so a lane without a database would report
+# green having executed nothing — the failure mode this workflow exists to make impossible.
+name: Integration (Postgres)
+
+on:
+  # M137 — callable as a gate (`gate-contract` in publish.yml), so the image is not pushed before
+  # the Postgres suite passes.
+  #
+  # NO `secrets:` block, deliberately (M137 review, F-sec-1). The first draft declared
+  # `OPENAI_API_KEY` here and publish.yml passed it — but NOTHING consumes it: zero `env:` mappings
+  # in this file and zero references in packages/, test/, tests/ or scripts/. All 49 integration
+  # suites gate on `THEOLENS_PG_URI`. Declaring a secret on `workflow_call` hands it to every future
+  # caller, so a secret with no consumer is pure surface. If an LLM-backed lane is added later, the
+  # secret arrives in the SAME commit as its `env:` mapping and its test — never ahead of one.
+  workflow_call:
+  pull_request:
+    # Mesmo filtro do gatilho acima (racional lá).
+    paths-ignore:
+      - '.claude/**'
+      - '**/*.md'
+      - 'docs/**'
+      - 'knowledge-base/**'
+  # NO `push:` trigger (M137 review, F-sec-2/F-sec-4). On a develop push this runs EXCLUSIVELY as
+  # `gate-contract` inside publish.yml. The standalone trigger collided with the gated call: both
+  # resolved the same `concurrency` group (`integration-${{ github.ref }}` — in a called workflow
+  # `github.ref` is the CALLER's ref), and with `cancel-in-progress: true` one cancelled the other.
+  # A cancelled gate leaves `needs:` unsatisfiable and blocks the image on a green commit.
+  # Matches the model: theo-memory's integration.yml is `workflow_call` + `pull_request` only.
+
+permissions:
+  contents: read
+
+# One run per ref — a new push cancels the in-flight run (single-trunk develop).
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    name: integration (postgres + test:integration)
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        # EPHEMERAL host port, never `5432:5432`. The self-hosted host is shared across every
+        # repo's runner, so a fixed port collides with a neighbour's Postgres. Resolved below.
+        ports:
+          - 5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Resolve Postgres URI (dynamic host port — shared self-hosted host)
+        # Providing the URI takes the globalSetup's fast path, so no Testcontainers is started
+        # here — the service container above IS the database. The setup asserts the host:port
+        # actually accepts connections, so a mis-resolved port fails with one clear message
+        # instead of 48 connection errors.
+        run: echo "THEOLENS_PG_URI=postgresql://postgres:postgres@localhost:${{ job.services.postgres.ports['5432'] }}/postgres" >> "$GITHUB_ENV"
+
+      - name: Setup pnpm
+        # SEM `version:` de proposito. `pnpm/action-setup` le `packageManager` do package.json
+        # quando a versao nao e declarada aqui; declarar nos dois lugares cria DUAS fontes de
+        # verdade que divergem em silencio ate a action abortar com "Multiple versions of pnpm
+        # specified" — foi exatamente o que derrubou este gate. Uma fonte so: o package.json,
+        # que e tambem o que vale no desenvolvimento local.
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.4.0
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # theo-lens DOES need this, unlike theo-rag: `@usetheo/lens-api` resolves `@usetheo/lens-core`
+      # through its built `dist/`, so an unbuilt core makes the API package import stale or missing
+      # symbols. Skipping it is how a rename passes typecheck and fails at runtime.
+      - name: Build workspace
+        run: pnpm build
+
+      - name: Run integration suite (real Postgres)
+        run: pnpm test:integration

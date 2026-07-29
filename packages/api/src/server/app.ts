@@ -66,6 +66,10 @@ export interface IngestApiDeps {
 export interface HealthApiDeps {
   version?: string;
   pingDb?: () => Promise<void>;
+  /** Commit the running image was built from — the answer to "what code is live". */
+  gitSha?: string;
+  /** ISO timestamp stamped at build. */
+  builtAt?: string;
 }
 import { bodyLimit } from "hono/body-limit";
 import { DEFAULT_MAX_INGEST_BYTES } from "@usetheo/lens-core";
@@ -174,16 +178,28 @@ export function createApp(
     return c.json(apiError("INTERNAL", "internal error"), 500);
   });
 
-  // M94 — k8s/edge probes, UNAUTHENTICATED and mounted before the /v1 bearer. `/health` is pure
-  // liveness (no dependency — a DB outage must NOT fail liveness, else a recoverable pod is killed);
-  // `/ready` runs a DB probe (SELECT 1) and 503s when the DB is unreachable so the LB drains the node.
-  app.get("/health", (c) => c.json({ status: "ok", version: health?.version ?? "unknown" }, 200));
-  app.get("/ready", async (c) => {
+  // M94 probes, moved to the CD playbook's canonical paths so every Theo capability answers the
+  // same three questions at the same URLs — a deploy gate that has to learn per-service paths is
+  // a deploy gate nobody reuses. UNAUTHENTICATED and mounted before the /v1 bearer: the gate runs
+  // before any credential exists on the box.
+  //
+  // Liveness is DB-INDEPENDENT on purpose. A DB blip that fails liveness gets a recoverable
+  // process killed; readiness is the probe that exists to say "alive but cannot serve" so a load
+  // balancer drains instead of erroring.
+  app.get("/v1/healthz", (c) => c.json({ status: "ok", version: health?.version ?? "unknown" }, 200));
+  app.get("/v1/healthz/ready", async (c) => {
     try {
-      await health?.pingDb?.();
-      return c.json({ status: "ready" }, 200);
+      // The timeout wraps the probe so a HUNG database cannot hang the readiness check itself —
+      // a probe that never answers is worse than one that answers "not ready".
+      await Promise.race([
+        health?.pingDb?.() ?? Promise.resolve(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("db probe timeout")), 2000),
+        ),
+      ]);
+      return c.json({ status: "ready", checks: { db: health?.pingDb ? "ok" : "skipped" } }, 200);
     } catch {
-      return c.json({ status: "unavailable" }, 503);
+      return c.json({ status: "not_ready", checks: { db: "fail" } }, 503);
     }
   });
 
@@ -191,7 +207,21 @@ export function createApp(
   // generated from the Zod DTOs + the live router at request time (never drifts); `/v1` is the
   // capability index; `/version` is the build stamp. A customer generates a client from these.
   app.get("/openapi.json", (c) => c.json(buildOpenApiDocument(app.routes, health?.version)));
-  app.get("/version", (c) => c.json({ version: health?.version ?? "unknown" }, 200));
+  // The build stamp a human reads to answer "what is running right now". The deploy gate itself
+  // compares the image's OCI revision label — that proves WHICH IMAGE runs, where this endpoint
+  // would only prove the container restarted with the right .env.
+  app.get("/v1/version", (c) =>
+    c.json(
+      {
+        name: "theo-lens",
+        version: health?.version ?? "unknown",
+        git_sha: health?.gitSha ?? "unknown",
+        built_at: health?.builtAt ?? "unknown",
+        node: process.version,
+      },
+      200,
+    ),
+  );
   app.get("/v1", (c) =>
     c.json(
       {

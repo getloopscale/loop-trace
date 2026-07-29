@@ -2,10 +2,19 @@ packages:
   - "packages/*"
   - "examples/*"
 allowBuilds:
-  cpu-features: set this to true or false
+  # A dependency's build script runs arbitrary code at install time, so each one is an explicit
+  # decision. `cpu-features` and `ssh2` arrive transitively via testcontainers (dockerode); both
+  # compile OPTIONAL native accelerations and fall back to pure JS when their build is skipped —
+  # which the integration suite proves on every run, since it drives Testcontainers throughout.
+  # Denying them costs nothing measurable and removes two compile steps from every install.
+  #
+  # These two were previously the literal placeholder "set this to true or false". Locally that
+  # is invisible: the store already holds approved builds. In a clean CI install pnpm 11 refuses
+  # with ERR_PNPM_IGNORED_BUILDS — the first CI run found it, which is what a first CI run is for.
+  cpu-features: false
+  ssh2: false
   esbuild: true
   protobufjs: true
-  ssh2: set this to true or false
 # Force the patched esbuild across the tree — clears GHSA-67mh-4wv8-2f99
 # (esbuild dev-server CORS, MEDIUM) pulled transitively via @esbuild-kit/core-utils.
 # pnpm 11 reads overrides from here, not from package.json#pnpm.overrides.
@@ -18,3 +27,38 @@ overrides:
   # by @theokit/ui (theme-schema validation); fixed in valibot 1.2.0. Validated that
   # @theokit/ui's ThemeProvider + barrel survive the 0.42->1.x bump via build + smoke (M17).
   "valibot": "^1.4.1"
+
+# ── Supply-chain hardening (semgrep p/typescript, surfaced by the CD SAST lane) ──────────────
+# These are the settings that decide what pnpm is willing to install, and they matter most in
+# exactly the situation nobody is watching: a transitive dependency publishing a malicious patch.
+#
+# minimumReleaseAge — do not install a version published less than 7 days ago. Nearly every
+# npm supply-chain compromise is caught and yanked within hours; waiting is the cheapest defence
+# there is, and it costs only the latency of adopting a brand-new release.
+minimumReleaseAge: 10080
+# The 7-day rule protects against an UNKNOWN publisher shipping something malicious. Our own
+# packages have a known publisher — us — so waiting a week to consume a fix we just released
+# buys nothing and costs the whole point of releasing it. Scoped narrowly to the two org scopes;
+# everything else, including every transitive dependency, still waits.
+minimumReleaseAgeExclude:
+  - "@usetheo/*"
+  - "@theokit/*"
+# trustPolicy — refuse an update that DOWNGRADES a package's own security settings. Without it,
+# a malicious release can quietly turn off the protections a previous version had enabled.
+trustPolicy: no-downgrade
+# These three are flagged not because anything changed hands, but because they are OLD and widely
+# pinned: versions predating npm provenance attestations read as a "downgrade" against newer
+# releases that carry them. semver@6 in particular is one of the most-depended-on packages in the
+# registry and reaches us only transitively.
+#
+# This is an exception list, not a dismissal — each entry is a specific version we accept, so a
+# genuine takeover of a DIFFERENT package still fails the install. Revisit when the transitive
+# parents move to versions that carry provenance.
+trustPolicyExclude:
+  - "semver@6.3.1"
+  - "tailwind-merge@2.6.1"
+  - "undici-types@6.21.0"
+# blockExoticSubdeps — a transitive dependency may not pull code from a git URL, a tarball, or
+# any non-registry source. A registry version is auditable and yankable; an arbitrary git ref is
+# neither, and it is the standard vector for slipping past a lockfile review.
+blockExoticSubdeps: true

@@ -1,0 +1,70 @@
+# O gate que faltava. Este repo tinha 5 workflows e nenhum verificava build, tipos ou lint
+# — 682 arquivos com commits diarios sem nenhum desses tres gates (medido no CM0).
+#
+# ORDEM DOS STEPS IMPORTA: Build vem ANTES de Lint. As regras `@typescript-eslint/no-unsafe-*`
+# sao TYPE-AWARE: num checkout limpo, sem `dist/`, os imports entre pacotes do workspace
+# resolvem para `any` e disparam erros em codigo intocado. Foi o defeito que ficou meses
+# invisivel no theo-memory, mascarado por instabilidade do runner self-hosted.
+name: CI
+on:
+  # M137 — callable as a gate. `publish.yml` runs this as `gate-ci` BEFORE the image job, so a red
+  # suite produces zero GHCR pushes. Deliberately declares NO `secrets:`: `workflow_call` hands
+  # whatever it declares to every future caller, and this workflow needs none (plan R2).
+  workflow_call:
+  # NOT filtered, on purpose. A path filter on `pull_request` makes a docs-only PR sit forever with
+  # the check "expected" but never reported — GitHub does not mark a filtered-out required check as
+  # passed, it simply never arrives.
+  pull_request:
+    branches: [develop, main]
+  # NO `push:` trigger, on purpose (M137 review, F-sec-2/F-sec-4).
+  #
+  # On a develop push this workflow now runs EXCLUSIVELY as `gate-ci` inside publish.yml. Keeping a
+  # standalone `push:` alongside the gate caused two real defects: the same workflow ran TWICE per
+  # push (double runner load, which the +84 s wall-clock figure did not capture), and — worse — a
+  # `concurrency` group keyed only on `github.ref` is IDENTICAL for the standalone run and the gated
+  # call, so with `cancel-in-progress: true` one cancelled the other. A cancelled `gate-contract`
+  # leaves `needs:` unsatisfiable and blocks the image on a perfectly green commit.
+  #
+  # This is also what the workspace's model does: theo-memory's ci.yml has `workflow_call` +
+  # `pull_request` and no `push`. The docs-only filter lives in the CALLER (publish.yml), because a
+  # callee's path filter is not evaluated for a `workflow_call` invocation at all.
+permissions:
+  contents: read
+jobs:
+  ci:
+    name: build + typecheck + lint
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        # SEM `version:`. A action le `packageManager` do package.json; declarar nos dois
+        # lugares cria duas fontes de verdade que divergem em silencio ate a action abortar
+        # com "Multiple versions of pnpm specified" — foi o que derrubou o `integration`
+        # deste repo minutos atras.
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.4.0
+
+      # Mesmo SHA e mesma versao de Node que o  deste repo ja usa e que
+      # acabou de rodar verde na Blacksmith — nao introduzo uma segunda configuracao de
+      # runtime para o mesmo repositorio.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test

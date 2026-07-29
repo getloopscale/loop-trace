@@ -75,4 +75,15 @@ suite("M136 guards → monitors rename (integration)", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].operator).toBe("lt");
   });
+
+  // The assertion the first version of this suite should have made. It checked that SOME unique
+  // index existed on `monitors` — and `guards_pkey` is unique, so it passed over the exact object
+  // it should have flagged. Asserting a property instead of a name cannot detect a wrong name.
+  it("test_no_index_on_monitors_still_carries_the_old_name", async () => {
+    const { rows } = await pool.query(
+      `SELECT indexname FROM pg_indexes WHERE tablename = 'monitors'`,
+    );
+    const stale = rows.map((r) => String(r.indexname)).filter((n) => n.startsWith("guards"));
+    expect(stale).toEqual([]);
+  });
 });
