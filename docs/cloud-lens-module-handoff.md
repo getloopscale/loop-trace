@@ -238,10 +238,10 @@ totalTokens, model?, costUsd?, inputPreview?, outputPreview?, evaluationsCount?`
 ---
 
 ## 7. How to start (per repo)
-1. **RUN 1 (theo-data):** open a session rooted at `/home/user/Projetos/usetheo/theo-data`,
+1. **RUN 1 (theo-data):** open a session rooted at `<workspace>/theo-data`,
    confirm `git branch --show-current` == `develop`, then `/auto-plan "theo-lens-m22-auth-tenancy"`
    (cite this handoff § 3 as prior art). Ship the develop→main PR for the `theo-lens` service.
 2. **RUN 2 (theo-cloud):** after A is merged, open a session rooted at
-   `/home/user/Projetos/usetheo/theo-cloud/theo-cloud`, confirm `develop`, then
+   `<workspace>/theo-cloud/theo-cloud`, confirm `develop`, then
    `/auto-plan "theo-cloud-lens-module"` (cite this handoff § 4 as prior art).
 3. Both runs gate at plan-confidence, review, and a **human-approved** PR. Never auto-merge `main`.
