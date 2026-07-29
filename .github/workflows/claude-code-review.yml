@@ -1,0 +1,58 @@
+# Trazido de `main` para `develop` e FIXADO POR SHA (release v0.63.0).
+#
+# Este arquivo e o `claude.yml` foram commitados DIRETAMENTE em `main` (commits "Claude Code Review
+# workflow" e "Claude PR Assistant workflow"), fora do fluxo workspace → develop → main, e por isso
+# não existiam em `develop`. O gate de SAST do PR de release os viu pela primeira vez — o checkout
+# de um `pull_request` é o merge commit, que junta os dois lados — e reprovou com 4 findings
+# `github-actions-mutable-action-tag`.
+#
+# O achado é legítimo: `actions/checkout@v4` e `claude-code-action@v1` são refs MUTÁVEIS, num
+# repositório que fixa todas as outras 40 actions por SHA de 40 caracteres. Tag pode ser repontada
+# em silêncio pelo dono da action — foi assim nos comprometimentos da `trivy-action` e da
+# `kics-github-action`. A disciplina de supply-chain não pode valer para as dependências e falhar
+# justamente nos workflows que ninguém revisou porque entraram por fora.
+#
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+    # Optional: Only run on specific file changes
+    # paths:
+    #   - "src/**/*.ts"
+    #   - "src/**/*.tsx"
+    #   - "src/**/*.js"
+    #   - "src/**/*.jsx"
+
+jobs:
+  claude-review:
+    # Optional: Filter by PR author
+    # if: |
+    #   github.event.pull_request.user.login == 'external-contributor' ||
+    #   github.event.pull_request.user.login == 'new-developer' ||
+    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@be7b93b1907a4abad570368f3c74b6fe3807510b # v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
+          plugins: 'code-review@claude-code-plugins'
+          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
+          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
+          # or https://code.claude.com/docs/en/cli-reference for available options
+
