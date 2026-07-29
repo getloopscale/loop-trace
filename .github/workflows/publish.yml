@@ -109,8 +109,12 @@ jobs:
 
   # ── M138: o deploy saiu daqui ──────────────────────────────────────────────────────────────────
   #
-  # O job `deploy-dev` instalava uma chave privada no runner, fazia `ssh root@$DEV_HOST`, escrevia um
-  # `.env` remoto por STDIN e rodava comandos no host. Foi substituído por um reconciliador PULL que
+  # O job `deploy-dev` instalava uma chave privada no runner, abria SSH como root contra o host de
+  # dev, escrevia um `.env` remoto por STDIN e rodava comandos lá. (Os nomes dos secrets e vars que
+  # ele consumia estão deliberadamente FORA deste comentário: o DoD da M138 exige que um grep por
+  # eles em `.github/` não retorne nada, e prosa histórica contando o grep seria uma falha do gate
+  # por uma razão sem valor — mas afrouxar o grep para tolerar comentários seria pior, porque um uso
+  # real comentado-e-descomentado passaria igual.) Foi substituído por um reconciliador PULL que
   # vive em `theo-workspace/dev/theo-lens/` e roda NO host por systemd timer.
   #
   # DUAS RAZÕES, e a primeira não se desfaz depois:
