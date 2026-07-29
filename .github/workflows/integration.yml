@@ -6,6 +6,16 @@
 name: Integration (Postgres)
 
 on:
+  # M137 — callable as a gate (`gate-contract` in publish.yml), so the image is not pushed before
+  # the Postgres suite passes.
+  #
+  # NO `secrets:` block, deliberately (M137 review, F-sec-1). The first draft declared
+  # `OPENAI_API_KEY` here and publish.yml passed it — but NOTHING consumes it: zero `env:` mappings
+  # in this file and zero references in packages/, test/, tests/ or scripts/. All 49 integration
+  # suites gate on `THEOLENS_PG_URI`. Declaring a secret on `workflow_call` hands it to every future
+  # caller, so a secret with no consumer is pure surface. If an LLM-backed lane is added later, the
+  # secret arrives in the SAME commit as its `env:` mapping and its test — never ahead of one.
+  workflow_call:
   pull_request:
     # Mesmo filtro do gatilho acima (racional lá).
     paths-ignore:
@@ -13,19 +23,12 @@ on:
       - '**/*.md'
       - 'docs/**'
       - 'knowledge-base/**'
-  push:
-    branches: [develop, main]
-    # Commit só-de-documentação não exercita código e não deve consumir a fila do runner compartilhado: cada repositório tem seu PRÓPRIO processo de runner, mas os cinco
-    # rodam no MESMO host de 2 vCPU / 2 GB. A disputa é por CPU e RAM, não por um slot de fila —
-    # medido em 2026-07-27: os runners de theo-rag, theo-memory, theo-cloud e theo-db aparecem
-    # `busy=true` simultaneamente. Cada job desperdiçado aqui rouba CPU dos outros quatro repos. Medido em 2026-07-27: 47% dos últimos
-    # 40 commits deste repo tocam apenas .md / docs/ / knowledge-base/ / .claude/.
-    # Mesmo padrão já adotado em theo-memory.
-    paths-ignore:
-      - '.claude/**'
-      - '**/*.md'
-      - 'docs/**'
-      - 'knowledge-base/**'
+  # NO `push:` trigger (M137 review, F-sec-2/F-sec-4). On a develop push this runs EXCLUSIVELY as
+  # `gate-contract` inside publish.yml. The standalone trigger collided with the gated call: both
+  # resolved the same `concurrency` group (`integration-${{ github.ref }}` — in a called workflow
+  # `github.ref` is the CALLER's ref), and with `cancel-in-progress: true` one cancelled the other.
+  # A cancelled gate leaves `needs:` unsatisfiable and blocks the image on a green commit.
+  # Matches the model: theo-memory's integration.yml is `workflow_call` + `pull_request` only.
 
 permissions:
   contents: read

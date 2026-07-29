@@ -6,6 +6,11 @@
 name: Security SAST
 
 on:
+  # M137 review (F-sec-3) — callable as `gate-sast` in publish.yml. The milestone's own commit
+  # message and the gate test named ci, integration AND security-sast as the three workflows racing
+  # the build; closing the hole for only two of them left the recorded rationale claiming a fix the
+  # diff did not make. Semgrep now gates the publish like the other two.
+  workflow_call:
   pull_request:
     # Mesmo filtro do gatilho acima (racional lá).
     paths-ignore:
