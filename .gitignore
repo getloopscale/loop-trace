@@ -32,6 +32,13 @@ knowledge-base/references/*/
 .claude/
 CLAUDE.local.md
 
+# Artefatos de ciclo na raiz — mesma razao do .claude/ acima, e a MESMA omissao pela metade:
+# desversionar `.claude/` e deixar `knowledge-base/` limpa 799 arquivos e publica outros 372,
+# dos quais 11 expondo o caminho de uma workstation. Nenhum dos dois repos irmaos versiona este diretorio.
+# Planos, blueprints, grills, implementacoes, auditorias e evidencias de dogfood nascem no
+# umbrella (`umbrella-scope.md` § 4); o que ficou aqui e historico congelado.
+knowledge-base/
+
 # Cycle (.claude/) — Python tooling caches (never track; regenerated per machine)
 .claude/**/__pycache__/
 .claude/**/*.pyc
