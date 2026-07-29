@@ -1,0 +1,53 @@
+# Detecta que a reconciliação PAROU de acontecer (M138).
+#
+# O reconciliador do host CORRIGE; este workflow AVISA que a correção não está acontecendo. São
+# papéis distintos de propósito: um agente que só corrige falha em silêncio quando ele próprio morre,
+# e foi exatamente essa a limitação do deploy push que a M138 substituiu.
+#
+# COMPARA CONTRA O ÚLTIMO `publish` BEM-SUCEDIDO, NÃO CONTRA O TIP DE `develop`. O publish tem
+# `paths-ignore`, então a branch avança sem deploy legitimamente — comparar com o tip acusaria drift
+# a cada commit de documentação, e um alarme que grita sem motivo é desligado pelas pessoas.
+name: dev version drift
+
+on:
+  schedule:
+    - cron: "17 * * * *" # de hora em hora, fora do minuto zero (evita a fila do topo da hora)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  drift:
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    steps:
+      - name: O dev host roda o que o ultimo publish produziu?
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Sem `vars.DEV_HOST`: a M138 removeu a topologia do host deste repositório, e ela não
+          # volta por uma porta lateral. O endpoint público do edge é o que se consulta.
+          LENS_VERSION_URL: https://app-dev.usetheo.dev/v1/lens/version
+        run: |
+          set -euo pipefail
+          EXPECTED="$(gh run list -R "${GITHUB_REPOSITORY}" --workflow=publish.yml \
+            --branch develop --status success -L 1 --json headSha --jq '.[0].headSha')"
+          [ -n "${EXPECTED}" ] || { echo "::warning::nenhum publish bem-sucedido em develop ainda"; exit 0; }
+
+          DEPLOYED="$(curl -sf --max-time 15 "${LENS_VERSION_URL}" | jq -r '.git_sha // empty' || true)"
+          if [ -z "${DEPLOYED}" ]; then
+            echo "::warning::não foi possível ler ${LENS_VERSION_URL} — o host está fora, ou o edge mudou."
+            echo "::warning::isto NÃO é prova de drift; é ausência de medição, e as duas não são a mesma coisa."
+            exit 0
+          fi
+
+          echo "esperado (ultimo publish): ${EXPECTED:0:12}"
+          echo "implantado (/v1/version):  ${DEPLOYED:0:12}"
+          if [ "${EXPECTED}" != "${DEPLOYED}" ]; then
+            echo "::error::DRIFT — o host roda ${DEPLOYED:0:12}, o ultimo publish foi ${EXPECTED:0:12}."
+            echo "::error::o reconciliador deveria ter convergido em ate 5 min. Verifique no host:"
+            echo "::error::  systemctl --user status theolens-reconcile.timer"
+            echo "::error::  journalctl --user -u theolens-reconcile.service -n 50"
+            exit 1
+          fi
+          echo "em dia — host e ultimo publish coincidem."

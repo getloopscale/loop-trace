@@ -107,71 +107,18 @@ jobs:
       sign: ${{ startsWith(github.ref, 'refs/tags/v') }}
       verify: ${{ startsWith(github.ref, 'refs/tags/v') }}
 
-  deploy-dev:
-    needs: image
-    # A tag build stops here. `needs: image` rather than `workflow_run` because `workflow_run` only
-    # fires from the DEFAULT branch (main), so a develop-only deploy wired that way never runs at
-    # all — a documented failure from theo-rag's pipeline.
-    if: ${{ github.ref == 'refs/heads/develop' }}
-    runs-on: blacksmith-8vcpu-ubuntu-2404
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - name: Configure SSH deploy key
-        run: |
-          install -m700 -d ~/.ssh
-          printf '%s\n' "${{ secrets.DEV_SSH_KEY }}" > ~/.ssh/k
-          chmod 600 ~/.ssh/k
-          ssh-keyscan -H "${{ vars.DEV_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
-
-      - name: Provision runtime env
-        # Written over STDIN, never argv: an argument is visible in the host's process list to
-        # every other tenant of this shared box.
-        # Segredos chegam por `env:` e o `.env` remoto e montado com `printf`, NAO por heredoc
-        # expansivel. O heredoc `<<EOF` (nao citado) fazia o shell do runner expandir o CONTEUDO
-        # dos segredos: um `$(...)`, crase ou `$VAR` dentro de um valor viraria execucao ou
-        # corromperia o arquivo remoto em silencio. Era tambem o SC2087 que o actionlint apontou.
-        #
-        # `printf '%s\n'` com cada linha entre aspas trata todo valor como literal. `${SHA}` e
-        # `${BUILT}` continuam expandindo — eles PRECISAM, sao a proveniencia que o /version le —
-        # mas agora expandem sozinhos, sem arrastar os segredos pelo mesmo mecanismo.
-        env:
-          BOOTSTRAP: ${{ secrets.THEOLENS_PLATFORM_ADMIN_BOOTSTRAP }}
-          JUDGE_KEY: ${{ secrets.THEOLENS_JUDGE_API_KEY }}
-          JUDGE_URL: ${{ vars.THEOLENS_JUDGE_BASE_URL }}
-        run: |
-          SHA='${{ github.sha }}'
-          BUILT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          printf '%s\n' \
-            "THEOLENS_API_PORT=18084" \
-            "THEOLENS_PG_PORT=5434" \
-            "THEOLENS_REQUIRE_CREDENTIAL=true" \
-            "THEOLENS_PLATFORM_ADMIN_BOOTSTRAP=${BOOTSTRAP}" \
-            "THEOLENS_JUDGE_BASE_URL=${JUDGE_URL}" \
-            "THEOLENS_JUDGE_API_KEY=${JUDGE_KEY}" \
-            "DISABLE_ERROR_REPORTING=1" \
-            "THEOLENS_GIT_SHA=${SHA}" \
-            "THEOLENS_VERSION=develop-${SHA:0:7}" \
-            "THEOLENS_BUILD_TIME=${BUILT}" \
-          | ssh -i ~/.ssh/k root@"${{ vars.DEV_HOST }}" 'cat > ${{ vars.DEV_DEPLOY_DIR }}/.env'
-
-      - name: Sync checkout, log into GHCR, deploy
-        run: |
-          ssh -i ~/.ssh/k root@"${{ vars.DEV_HOST }}" bash -s <<'REMOTE'
-          set -euo pipefail
-          DIR='${{ vars.DEV_DEPLOY_DIR }}'
-          # root operating a user-owned checkout; without this git refuses with "dubious ownership".
-          git config --global --add safe.directory "$DIR"
-          cd "$DIR"
-          # The deploy script lives in the repo, so the checkout must reach the published commit
-          # BEFORE it is invoked — otherwise the box runs the previous version of its own deploy.
-          git fetch -q origin develop
-          git reset --hard -q '${{ github.sha }}'
-          echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
-          EXPECTED_SHA='${{ github.sha }}' bash scripts/deploy-dev.sh
-          REMOTE
-
-      - name: Remove deploy key
-        if: always()
-        run: rm -f ~/.ssh/k
+  # ── M138: o deploy saiu daqui ──────────────────────────────────────────────────────────────────
+  #
+  # O job `deploy-dev` instalava uma chave privada no runner, fazia `ssh root@$DEV_HOST`, escrevia um
+  # `.env` remoto por STDIN e rodava comandos no host. Foi substituído por um reconciliador PULL que
+  # vive em `theo-workspace/dev/theo-lens/` e roda NO host por systemd timer.
+  #
+  # DUAS RAZÕES, e a primeira não se desfaz depois:
+  #   1. Este repositório é Apache-2.0 e vai ser publicado. Um repo público não carrega IP, caminho,
+  #      usuário nem chave SSH — e histórico publicado é público retroativamente.
+  #   2. Um deploy push verifica UMA VEZ. Container que reinicia de imagem antiga, `docker compose up`
+  #      manual no box, ou deploy que falha sem sucessor deixavam o ambiente defasado EM SILÊNCIO.
+  #      O reconciliador converge em três eixos (imagem, State.Running, proveniência) a cada 5 min.
+  #
+  # A ordem importou: o pull foi instalado e PROVADO no host antes de este job sair, para que o CD
+  # nunca ficasse numa janela sem nada convergindo.

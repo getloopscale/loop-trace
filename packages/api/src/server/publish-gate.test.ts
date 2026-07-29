@@ -197,6 +197,31 @@ describe("M137 — publication gates", () => {
   });
 
   /**
+   * M138 — the repo must hold no host credential. theo-lens is Apache-2.0 and headed for
+   * publication; the umbrella runbook is explicit that a public repo carries no IP, path, user or
+   * SSH key. Unlike most debt this does not undo itself — a published history is public
+   * retroactively — so the absence is pinned rather than trusted to review.
+   */
+  describe("no host credentials remain (M138)", () => {
+    it("publish.yml has no deploy job", () => {
+      expect(jobs(workflow("publish.yml"))).not.toHaveProperty("deploy-dev");
+    });
+
+    it.each(["DEV_SSH_KEY", "DEV_HOST", "DEV_DEPLOY_DIR"])(
+      "%s is not referenced in any workflow expression",
+      (name) => {
+        const files = ["publish.yml", "ci.yml", "integration.yml", "security-sast.yml"];
+        for (const f of files) {
+          const raw = readFileSync(resolve(WORKFLOWS, f), "utf8");
+          // Strip comments: the removal rationale legitimately NAMES the old variables.
+          const code = raw.split("\n").filter((l) => !l.trim().startsWith("#")).join("\n");
+          expect(code, `${f} still uses ${name}`).not.toContain(name);
+        }
+      },
+    );
+  });
+
+  /**
    * NEGATIVE CASE (`rules/testing.md` § 4.1). Everything above proves the gate is PRESENT. This
    * proves the assertions can still FAIL — a test that only ever sees a correct file cannot tell you
    * it would notice a wrong one, and a gate-pinning test that cannot detect removal is theatre.
