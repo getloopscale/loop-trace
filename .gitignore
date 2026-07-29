@@ -21,6 +21,17 @@ coverage/
 knowledge-base/references/*/
 !knowledge-base/references/_catalog.md
 
+# Claude Code working directory — estado de sessão por desenvolvedor, nunca commitado.
+#
+# DESVERSIONADO ao preparar a publicação, seguindo o theo-memory — o único dos três
+# repos irmãos que já fez esta limpeza. Eram 799 arquivos, dos quais 402 em
+# `knowledge-base/`: planos, reviews, auditorias e evidências de dogfood. Planejamento
+# interno e detalhes de infraestrutura num repositório Apache-2.0 a caminho de ficar
+# público. Os arquivos seguem no disco (removidos com `--cached`) e o contrato do
+# umbrella (`umbrella-scope.md` § 6) já manda todo artefato NOVO nascer lá, não aqui.
+.claude/
+CLAUDE.local.md
+
 # Cycle (.claude/) — Python tooling caches (never track; regenerated per machine)
 .claude/**/__pycache__/
 .claude/**/*.pyc

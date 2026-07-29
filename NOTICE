@@ -1,0 +1,31 @@
+Theo Lens — OpenTelemetry-native trace explorer for AI agents
+Copyright 2026 usetheo.dev
+
+This product includes software developed at usetheo.dev
+(https://usetheo.dev).
+
+Licensed under the Apache License, Version 2.0 (the "License").
+You may not use this file except in compliance with the License.
+You may obtain a copy of the License at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+This product includes or depends on the following third-party software,
+each under its own license:
+
+  * OpenTelemetry JS API and SDK (Apache-2.0)
+  * Hono (MIT)
+  * Drizzle ORM (Apache-2.0)
+  * node-postgres / pg (MIT)
+  * Zod (MIT)
+  * React and React DOM (MIT)
+  * TanStack Query (MIT)
+  * d3-sankey (ISC)
+
+The Go and Python SDKs under sdk-go/ and packages/sdk-py/ depend on the
+OpenTelemetry Go and Python distributions respectively (Apache-2.0).
+
+Trademarks: "Theo", "Theo Lens", "@usetheo/lens", and the Theo logo are
+trademarks of usetheo.dev. This Apache-2.0 license does not grant
+permission to use these trademarks. See https://usetheo.dev for trademark
+policy.
