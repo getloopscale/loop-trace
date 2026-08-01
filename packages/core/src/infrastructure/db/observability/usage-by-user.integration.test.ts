@@ -18,9 +18,14 @@ import type pg from "pg";
 
 import type { Span } from "../../../domain/observability/span.js";
 import { DEFAULT_PRICES } from "../../../domain/observability/default-prices.js";
+import { usageByUserResponseSchema } from "../../../domain/observability/usage-by-user.js";
 import { resolveModelPrice } from "../../../domain/observability/pricing.js";
 import { createPool, DrizzleSpanRepository } from "./drizzle-span-repository.js";
-import { aggregateUsageByUser } from "./usage-by-user-repository.js";
+import {
+  aggregateUsageByUser,
+  MAX_LIMIT,
+  MAX_WINDOW_DAYS,
+} from "./usage-by-user-repository.js";
 
 const PG_URI = process.env["THEOLENS_PG_URI"];
 const MIGRATIONS = fileURLToPath(new URL("../migrations", import.meta.url));
@@ -146,6 +151,95 @@ suite("M140 — usage by end user (integration)", () => {
     expect(r.users.find((u) => u.userId === "frank")?.spans).toBe(2);
   });
 
+
+  it("F-test-1 — an empty or blank user.id lands in the bucket, never 500s the report", async () => {
+    // The identity is CLIENT-CHOSEN. `coalesce` only substitutes NULL, so an empty string used to
+    // survive into a response the route validates with `.parse()` (userId min(1)) — one malformed
+    // attribute from any SDK client answered 500 for that client's whole workspace and window.
+    await repo.save(
+      [
+        span({ spanId: "g1", traceId: "tg", model: "claude-opus-4-8", inputTokens: 11, outputTokens: 0, attributes: { "user.id": "" } }),
+        span({ spanId: "g2", traceId: "tg", model: "claude-opus-4-8", inputTokens: 22, outputTokens: 0, attributes: { "user.id": "   " } }),
+        span({ spanId: "g3", traceId: "tg", model: "claude-opus-4-8", inputTokens: 33, outputTokens: 0, attributes: { "user.id": "real" } }),
+      ],
+      WS_A,
+    );
+
+    const r = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A);
+
+    expect(r.users.map((u) => u.userId).sort()).toEqual(["real", "unattributed"]);
+    expect(r.users.find((u) => u.userId === "unattributed")?.inputTokens).toBe(33);
+    // The whole point: the response must satisfy the contract the route enforces on the way out.
+    expect(() => usageByUserResponseSchema.parse(r)).not.toThrow();
+  });
+
+  it("F-test-4 — totalUsers counts distinct users, not spans", async () => {
+    // Every earlier fixture gave each user exactly one span, so count() and count(DISTINCT) agreed
+    // and the mutation survived. One user with two spans is all it takes to tell them apart.
+    await repo.save(
+      [
+        span({ spanId: "h1", traceId: "th", model: "claude-opus-4-8", inputTokens: 1, outputTokens: 0, attributes: { "user.id": "multi" } }),
+        span({ spanId: "h2", traceId: "th", model: "claude-opus-4-8", inputTokens: 1, outputTokens: 0, attributes: { "user.id": "multi" } }),
+        span({ spanId: "h3", traceId: "th", model: "claude-opus-4-8", inputTokens: 1, outputTokens: 0, attributes: { "user.id": "solo" } }),
+      ],
+      WS_A,
+    );
+
+    const r = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A);
+
+    expect(r.totalUsers).toBe(2);
+    expect(r.users.find((u) => u.userId === "multi")?.spans).toBe(2);
+  });
+
+  it("F-test-5a — the biggest consumer comes first (behaviour, not source text)", async () => {
+    await repo.save(
+      [
+        span({ spanId: "i1", traceId: "ti", model: "claude-opus-4-8", inputTokens: 10, outputTokens: 0, attributes: { "user.id": "small" } }),
+        span({ spanId: "i2", traceId: "ti", model: "claude-opus-4-8", inputTokens: 9000, outputTokens: 0, attributes: { "user.id": "big" } }),
+      ],
+      WS_A,
+    );
+
+    const r = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A);
+    expect(r.users[0]?.userId).toBe("big");
+  });
+
+  it("F-test-5b — user.id wins over gen_ai.user.id when a span carries both", async () => {
+    // The fallback ORDER is the rule (M131). No earlier fixture sent both keys, so inverting the
+    // coalesce was invisible to behaviour and only the source-string assertion noticed.
+    await repo.save(
+      [span({ spanId: "j1", traceId: "tj", model: "claude-opus-4-8", inputTokens: 5, outputTokens: 0,
+              attributes: { "user.id": "primary", "gen_ai.user.id": "secondary" } })],
+      WS_A,
+    );
+
+    const r = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A);
+    expect(r.users.map((u) => u.userId)).toEqual(["primary"]);
+  });
+
+  it("F-test-6 — limit and offset are clamped like the window is", async () => {
+    await repo.save(
+      [span({ spanId: "k1", traceId: "tk", model: "claude-opus-4-8", inputTokens: 1, outputTokens: 0, attributes: { "user.id": "one" } })],
+      WS_A,
+    );
+
+    const wide = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A, { limit: 100_000 });
+    expect(wide.users.length).toBeLessThanOrEqual(MAX_LIMIT);
+
+    // A negative offset must behave as 0, not as a SQL error or a silently empty page.
+    const negative = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A, { offset: -5 });
+    expect(negative.users.map((u) => u.userId)).toEqual(["one"]);
+  });
+
+  it("F-test-8 — query 2 stays restricted to the page (cardinality risk R3)", () => {
+    // Behaviourally equivalent by construction — costByUser is keyed by page id, so extra rows are
+    // ignored and no output assertion can ever see it. But without the restriction, query 2 fans out
+    // to every distinct user in the window: an unbounded-memory regression that ships green.
+    // Structural guard, same precedent as the ORDER BY tiebreak below.
+    const src = readFileSync(new URL("./usage-by-user-repository.ts", import.meta.url), "utf8");
+    expect(src).toMatch(/AND \$\{userId\} IN \$\{ids\}/);
+  });
+
   it("EC-3 — the ORDER BY carries a total tiebreak", () => {
     // MEASURED (mutation M4, 2026-07-29): the behavioural test below SURVIVES removing the
     // tiebreak. With three rows Postgres happens to return a stable order — same heap page, same
@@ -187,6 +281,6 @@ suite("M140 — usage by end user (integration)", () => {
 
   it("clamps an absurd window instead of scanning without bound (EC-4)", async () => {
     const r = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A, { days: 999_999 });
-    expect(r.windowDays).toBe(365);
+    expect(r.windowDays).toBe(MAX_WINDOW_DAYS);
   });
 });

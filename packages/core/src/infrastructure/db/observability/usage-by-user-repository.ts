@@ -35,7 +35,7 @@ import { END_USER_ID_SQL } from "../repo-shared.js";
 
 /** Window ceiling. Without one, `?days=999999` passes "is a positive integer" and scans everything. */
 export const MAX_WINDOW_DAYS = 365;
-const MAX_LIMIT = 500;
+export const MAX_LIMIT = 500;
 
 /** `sum()` over integer returns `numeric`, which the driver hands back as a string. */
 const int = (v: unknown): number => {
@@ -56,7 +56,13 @@ export async function aggregateUsageByUser(
   // The window is over `ingested_at` (ADR D3): `start_time_unix_nano` is TEXT, so a range over it
   // compares lexicographically and silently mis-orders the moment the digit count changes.
   const since = sql`now() - make_interval(days => ${windowDays})`;
-  const userId = sql`coalesce(${END_USER_ID_SQL("spans")}, ${UNATTRIBUTED_USER_ID})`;
+  // `nullif(btrim(…), '')` BEFORE the coalesce: the identity is client-chosen, and `coalesce` only
+  // substitutes NULL — an empty or whitespace-only `user.id` would survive it and reach the response
+  // schema, which requires `min(1)`. The route parses with `.parse()`, so one such span made the
+  // endpoint answer 500 for the WHOLE workspace and window: a single malformed attribute from any
+  // SDK client permanently broke that client's own report. Empty and blank are not identities —
+  // they belong in the same bucket as a missing key.
+  const userId = sql`coalesce(nullif(btrim(${END_USER_ID_SQL("spans")}), ''), ${UNATTRIBUTED_USER_ID})`;
   const scope = sql`workspace_id = ${workspaceId} AND ingested_at >= ${since}`;
 
   // 1 — the page. ORDER BY carries a total tiebreak on "userId" (EC-3): without it, two users with
