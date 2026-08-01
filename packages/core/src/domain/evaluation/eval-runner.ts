@@ -14,7 +14,7 @@
  */
 
 import type { EvalDataset, EvalExample, EvalSplit } from "./eval-dataset.js";
-import { evaluateRule, type Verdict } from "./evaluator.js";
+import { evaluateRule, evaluatorSchema, type Verdict } from "./evaluator.js";
 
 /** Falha estrutural do harness — distinta de "um exemplo não passou", que é um resultado. */
 export class RegressionError extends Error {
@@ -77,17 +77,18 @@ function runOne(example: EvalExample): ExampleResult {
 
   // `evaluateRule` recebe o tipo COMPLETO de `Evaluator`, que carrega campos do motor de execução
   // (`filter`, `target`, `enabled`, `autoEnabled`, `sampling`) que ele próprio não lê. Exigi-los no
-  // dataset seria pedir ao autor do exemplo que preenchesse cinco campos irrelevantes para o que
-  // está sendo testado — e formulário longo é preenchido por copy-paste. Preenchemos aqui com
-  // valores neutros: o dataset declara só o que muda o veredito.
-  const evaluator = {
-    filter: [],
-    target: "span",
-    enabled: true,
-    autoEnabled: false,
-    sampling: 1,
-    ...example.evaluator,
-  } as Parameters<typeof evaluateRule>[0];
+  // dataset seria pedir ao autor do exemplo cinco campos irrelevantes para o que está sendo testado.
+  //
+  // Os defaults vêm de `evaluatorSchema`, NÃO escritos à mão aqui. A primeira versão os duplicava e
+  // já havia DIVERGIDO num deles — `target: "span"` contra o `default("")` de `evaluator.ts:56`.
+  // Quatro dos cinco eram cópia fiel; o quinto, não. Uma segunda fonte de verdade sobre "como é um
+  // evaluator por default" é exatamente o que um harness de fidelidade não pode ter: o gate existe
+  // para reproduzir a produção, e reproduzi-la de memória derrota o propósito. Reusar o schema é
+  // à prova de drift por construção — e menos código.
+  const evaluator = evaluatorSchema.parse(example.evaluator);
+  if (evaluator.kind !== "rule") {
+    throw new RegressionError(`example "${example.id}" is not a rule evaluator after parsing`);
+  }
 
   const actual = evaluateRule(evaluator, example.span, example.hasChildren);
   const mismatch = diff(example.expected, actual);

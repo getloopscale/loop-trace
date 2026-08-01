@@ -14,10 +14,13 @@ import { resolve } from "node:path";
 import { parse } from "yaml";
 import { describe, expect, it } from "vitest";
 
-import { parseEvalDataset } from "./eval-dataset.js";
+import { parseEvalDataset, SHIPPED_DATASET_PATH } from "./eval-dataset.js";
 import { runEvalDataset } from "./eval-runner.js";
 
-const DATASET_PATH = resolve(__dirname, "../../../../../evals/rule-evaluators.yaml");
+// O caminho vem do domínio, não de um segundo encoding aqui (review F-arch-3). O climb de
+// `__dirname` até a raiz do repo permanece, mas o NOME do arquivo é declarado uma vez só.
+const REPO_ROOT = resolve(__dirname, "../../../../..");
+const DATASET_PATH = resolve(REPO_ROOT, SHIPPED_DATASET_PATH);
 
 function loadShipped(): ReturnType<typeof parseEvalDataset> {
   return parseEvalDataset(parse(readFileSync(DATASET_PATH, "utf8")));

@@ -17,9 +17,10 @@ import { resolve } from "node:path";
 
 import { parse } from "yaml";
 
-import { parseEvalDataset, runEvalDataset } from "@usetheo/lens-core";
+import { parseEvalDataset, runEvalDataset, SHIPPED_DATASET_PATH } from "@usetheo/lens-core";
 
-const DEFAULT_DATASET = "evals/rule-evaluators.yaml";
+// O caminho é declarado no domínio (SHIPPED_DATASET_PATH), não aqui — ver eval-dataset.ts.
+const DEFAULT_DATASET = SHIPPED_DATASET_PATH;
 
 function parseArgs(argv) {
   const args = { dataset: DEFAULT_DATASET, splits: undefined, failOnRegression: false };
@@ -85,10 +86,26 @@ function main() {
   const { counts, results, hasRegression } = result;
   const scope = args.splits ? args.splits.join(", ") : "all splits";
 
+  // Contagem POR SPLIT, não só o agregado: o DoD pede "o runner reporta a contagem por split", e a
+  // distinção é o que dá sentido aos splits — ver 10 em `regression` e 1 em `dev` diz o que gateia
+  // e o que apenas informa. Um "11/11 passed" agregado esconde exatamente essa informação.
+  const perSplit = new Map();
+  for (const r of results) {
+    for (const sp of r.splits) {
+      const acc = perSplit.get(sp) ?? { total: 0, passed: 0 };
+      perSplit.set(sp, { total: acc.total + 1, passed: acc.passed + (r.passed ? 1 : 0) });
+    }
+  }
+  const splitLine = [...perSplit.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([sp, c]) => `${sp} ${c.passed}/${c.total}`)
+    .join(" · ");
+
   const lines = [
     `## Eval — ${dataset.dataset_name}`,
     "",
     `Scope: \`${scope}\` · ${counts.passed}/${counts.total} passed`,
+    `Per split: ${splitLine}`,
     "",
     "| Example | Splits | Result |",
     "| --- | --- | --- |",

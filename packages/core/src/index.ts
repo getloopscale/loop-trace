@@ -94,10 +94,14 @@ export {
 } from "./domain/evaluation/evaluator.js";
 // M139 — o harness de eval (dataset + runner). Domínio puro: o CLI `scripts/run-eval.mjs` é a
 // única camada com I/O, e consome estes símbolos pelo barrel.
+// Só o que o CLI de fato consome. A primeira versão exportava também `evalDatasetSchema`,
+// `EVAL_SPLITS` e `EvalRunOptions` — nenhum tinha importador fora do próprio módulo e do teste que
+// registra os nomes do barrel, o que é `soft_cap_orphan_export_typescript`. Exportar "por
+// completude" engorda a superfície pública logo depois de a M129 tê-la deliberadamente encolhido:
+// cada nome aqui é um compromisso de compatibilidade que alguém paga depois.
 export {
   parseEvalDataset,
-  evalDatasetSchema,
-  EVAL_SPLITS,
+  SHIPPED_DATASET_PATH,
   type EvalDataset,
   type EvalExample,
   type EvalSplit,
@@ -107,7 +111,6 @@ export {
   RegressionError,
   type EvalRunResult,
   type ExampleResult,
-  type EvalRunOptions,
 } from "./domain/evaluation/eval-runner.js";
 // M129: the `provider` domain (chat, breaker, env, client factory) is NO LONGER on the root barrel.
 // It moved behind the `@usetheo/lens-core/provider` subpath (packages/core/src/domain/provider/index.ts)

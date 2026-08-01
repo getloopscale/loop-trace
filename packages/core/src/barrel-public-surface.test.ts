@@ -5,8 +5,8 @@ import * as rootBarrel from "./index.js";
 /**
  * M123 findability regroup guard: the `@usetheo/lens-core` root barrel public
  * surface is frozen here; a rename that drifts an export name fails.
- * (183 names — M139 added 5 eval-harness names (parseEvalDataset, evalDatasetSchema, EVAL_SPLITS,
- * runEvalDataset, RegressionError): the dataset + runner are pure domain, and the CLI
+ * (182 names — M139 added 3 eval-harness names (parseEvalDataset, runEvalDataset, RegressionError) —
+ * only what the CLI consumes; the review flagged the other two as orphan exports: the dataset + runner are pure domain, and the CLI
  * `scripts/run-eval.mjs` — the only layer with I/O — consumes them through this barrel; M134 added 5 auto-eval predicates (shouldSample, matchesFilter + its column registry) because the claim daemon lives in `packages/api` and core never imports api; M128 moved 3 test-support values, MAPPER_VECTORS/MAPPER_VECTOR_T0/
  * flattenOtlp, off the prod barrel to the `@usetheo/lens-core/testing` subpath;
  * M129 moved the 10 provider VALUE symbols — ChatError, openaiChatCompletion,
@@ -40,7 +40,6 @@ const EXPECTED_PUBLIC_SURFACE = [
   "DEFAULT_WORKSPACE_ID",
   "ERROR_CODES",
   "EVALUATOR_KINDS",
-  "EVAL_SPLITS",
   "EvaluatorRunJobRegistry",
   "InvalidFeedbackError",
   "JudgeError",
@@ -61,6 +60,7 @@ const EXPECTED_PUBLIC_SURFACE = [
   "RegressionError",
   "SESSION_COHERENCE_NAME",
   "SESSION_COHERENCE_PROMPT",
+  "SHIPPED_DATASET_PATH",
   "TAG_MAX_LENGTH",
   "THEOKIT_SERVICE_NAME",
   "UnknownFilterColumnError",
@@ -91,7 +91,6 @@ const EXPECTED_PUBLIC_SURFACE = [
   "defaultAdapter",
   "deriveKind",
   "errorBody",
-  "evalDatasetSchema",
   "evaluateRule",
   "evaluateSessionCoherence",
   "evaluatorRecordSchema",

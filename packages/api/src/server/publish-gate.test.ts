@@ -128,16 +128,43 @@ describe("M137 — publication gates", () => {
       expect(j["gate-ci"]?.["uses"]).toBe("./.github/workflows/ci.yml");
       expect(j["gate-contract"]?.["uses"]).toBe("./.github/workflows/integration.yml");
       expect(j["gate-sast"]?.["uses"]).toBe("./.github/workflows/security-sast.yml");
+      expect(j["gate-eval"]?.["uses"]).toBe("./.github/workflows/eval.yml");
+    });
+
+    /**
+     * As três asserções abaixo eram listas LITERAIS mantidas à mão, e o `/review` da M139 provou
+     * por mutação o que isso custa: `gate-eval` não estava em nenhuma delas, então repointar
+     * `gate-eval` para `ci.yml` — o eval nunca roda, e o check aparece VERDE porque ci.yml é
+     * verde — deixava 45/45 testes passando. Re-adicionar um `push:` a `eval.yml`, o defeito exato
+     * do F-sec-2, também passava.
+     *
+     * Agora derivam de `publish.yml`: qualquer job `gate-*` entra automaticamente, e o próximo gate
+     * fica coberto sem ninguém lembrar de estender uma lista. É a diferença entre um teste que pina
+     * o que existe e um que pina a REGRA.
+     */
+    const GATE_JOBS = Object.entries(jobs(workflow("publish.yml")))
+      .filter(([name, def]) => name.startsWith("gate-") && String(def?.["uses"] ?? "").startsWith("./.github/workflows/"))
+      .map(([name, def]) => [name, String(def!["uses"]).replace("./.github/workflows/", "")] as const);
+
+    it("the derivation found the gates (guards the guard)", () => {
+      // Uma derivação que casasse zero jobs tornaria todo `it.each` abaixo vacuamente verde.
+      expect(GATE_JOBS.length).toBeGreaterThanOrEqual(4);
+      expect(GATE_JOBS.map(([n]) => n)).toContain("gate-eval");
     });
 
     /** F-sec-1 — a secret with no consumer is pure surface handed to every future caller. */
-    it.each(["gate-ci", "gate-contract", "gate-sast"])("%s is passed no secrets", (job) => {
+    it.each(GATE_JOBS)("%s is passed no secrets", (job) => {
       expect(jobs(workflow("publish.yml"))[job]).not.toHaveProperty("secrets");
     });
 
     /** F-sec-2/F-sec-4 — a standalone push trigger raced the gated call on the same concurrency group. */
-    it.each(["ci.yml", "integration.yml", "security-sast.yml"])("%s has no standalone push trigger", (file) => {
+    it.each(GATE_JOBS)("%s's workflow has no standalone push trigger", (_job, file) => {
       expect(triggers(workflow(file))).not.toHaveProperty("push");
+    });
+
+    /** Um gate cujo alvo não declara `workflow_call` reprova no PARSE — startup_failure, 0 jobs. */
+    it.each(GATE_JOBS)("%s's workflow declares workflow_call", (_job, file) => {
+      expect(triggers(workflow(file))).toHaveProperty("workflow_call");
     });
   });
 
@@ -330,13 +357,20 @@ jobs:
   describe("every local workflow reference resolves (found by mutation, M139)", () => {
     const files = readdirSync(WORKFLOWS).filter((f) => /\.ya?ml$/.test(f));
 
-    it.each(files)("%s references only workflows that exist", (file) => {
+    it.each(files)("%s references only workflows that exist AND are callable", (file) => {
       for (const [job, def] of Object.entries(jobs(workflow(file)))) {
         const uses = String(def?.["uses"] ?? "");
         if (!uses.startsWith("./.github/workflows/")) continue;
         const target = uses.replace("./.github/workflows/", "");
         if (!existsSync(resolve(WORKFLOWS, target))) {
           throw new Error(`${file}:${job} calls ${uses}, which does not exist`);
+        }
+        // EXISTIR NÃO BASTA — o alvo precisa declarar `workflow_call:`. Sem ele o GitHub reprova a
+        // chamada no PARSE, e um run que morre no parse aparece como `startup_failure`: criado, zero
+        // jobs, 0s. A lista de checks mostra vermelho e quem olha conclui que o gate rodou e
+        // reprovou. Este par de asserções cobre as duas metades: o arquivo existe, e ele é chamável.
+        if (triggers(workflow(target))["workflow_call"] === undefined) {
+          throw new Error(`${file}:${job} calls ${uses}, which does not declare \`workflow_call:\``);
         }
       }
     });

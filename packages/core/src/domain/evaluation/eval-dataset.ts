@@ -16,6 +16,14 @@ import { z } from "zod";
 import { spanSchema } from "../observability/span.js";
 import { validatePredicate } from "./evaluator.js";
 
+/**
+ * Onde o dataset shipped vive, relativo à raiz do repositório. Declarado UMA vez: o CLI e o teste
+ * do dataset shipped consomem esta constante em vez de cada um encodar o caminho. Duas encodações
+ * independentes do mesmo fato significam que mover o arquivo e atualizar só uma delas deixa o teste
+ * asseverando sobre um caminho que não existe, ou o CI avaliando um arquivo que ninguém testa.
+ */
+export const SHIPPED_DATASET_PATH = "evals/rule-evaluators.yaml";
+
 /** `regression` gateia; `dev` roda e não gateia (Phoenix `run_experiment.py:238-259`). */
 export const EVAL_SPLITS = ["regression", "dev"] as const;
 export type EvalSplit = (typeof EVAL_SPLITS)[number];

@@ -41,9 +41,14 @@ permissions:
 concurrency:
   group: eval-${{ github.ref }}
   # FALSE, ao contrário dos outros gates. Copiado do Phoenix (`pxi-evals.yml`): cancelar um eval
-  # pela metade desperdiça o que já rodou, e no tier medido desperdiça dinheiro de API já gasto.
-  # Aqui o custo é pequeno, mas a razão vale igual — e o dia em que o tier medido entrar, o
-  # comportamento certo já estará no lugar.
+  # pela metade desperdiça o que já rodou, e no tier medido desperdiçaria dinheiro de API já gasto.
+  #
+  # NÃO é isto que impede o defeito F-sec-2 da M137, e a primeira redação deste comentário sugeria
+  # que era. O que impede é a AUSÊNCIA do gatilho `push:` abaixo: sem ele nunca existem dois runs
+  # neste grupo, então `cancel-in-progress` jamais é consultado. E `false` não salvaria o gate se o
+  # `push:` voltasse — o GitHub mantém no máximo UM run pendente por grupo, então um terceiro run
+  # cancela o enfileirado do mesmo jeito. `false` troca "cancelado já" por "enfileirado e depois
+  # cancelado". O teste em `publish-gate.test.ts` é o que pina a ausência do `push:`.
   cancel-in-progress: false
 
 jobs:
@@ -61,9 +66,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+      # SHAs alinhados com ci.yml e integration.yml, e a razão não é uniformidade estética: a
+      # primeira versão deste arquivo pinou `setup-node@2028fbc5…` com o comentário `# v4.1.0`, e
+      # esse SHA é a tag **v6.0.0** — um salto de major não revisado, executando dentro de um gate,
+      # atrás de um comentário que derrotava a auditoria. O pin de `pnpm/action-setup` era pior:
+      # um commit de master sem tag, 13 commits ATRÁS do que ci.yml usa — e o de ci.yml foi
+      # escolhido justamente por REVERTER a mudança para Node 24 do pnpm. Um comentário de
+      # proveniência que mente é pior que nenhum: quem audita o diff audita o código errado.
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.4.0
 
-      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v4.1.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
