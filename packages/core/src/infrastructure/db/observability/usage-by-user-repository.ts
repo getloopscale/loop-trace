@@ -24,6 +24,8 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import { DEFAULT_WORKSPACE_ID } from "../../../domain/principal.js";
 import {
+  MAX_LIMIT,
+  MAX_WINDOW_DAYS,
   UNATTRIBUTED_USER_ID,
   type UsageByUserOptions,
   type UsageByUserResponse,
@@ -33,9 +35,8 @@ import { computeTraceCost, resolveModelPrice } from "../../../domain/observabili
 import type { PriceTable } from "../../../domain/observability/pricing.js";
 import { END_USER_ID_SQL } from "../repo-shared.js";
 
-/** Window ceiling. Without one, `?days=999999` passes "is a positive integer" and scans everything. */
-export const MAX_WINDOW_DAYS = 365;
-export const MAX_LIMIT = 500;
+// The ceilings live in the domain (both the route and this file enforce them). Kept here as a
+// last line of defence: a caller reaching the repository directly still cannot ask for everything.
 
 /** `sum()` over integer returns `numeric`, which the driver hands back as a string. */
 const int = (v: unknown): number => {

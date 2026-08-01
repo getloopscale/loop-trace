@@ -129,6 +129,24 @@ suite("M140 — usage-by-user through the real route", () => {
     }
   });
 
+  it("rejects an out-of-range window and page size instead of clamping in silence", async () => {
+    // Documented in SURFACE-theo-lens § 6.3 as the most likely adversarial angle, and it is a real
+    // defect: `?limit=100000` answered 200 with at most 500 rows and NOTHING in the response said
+    // so. `windowDays` is echoed, `limit` is not — so a caller paging with a large limit advances
+    // `offset` by 100000 while receiving 500 rows, and reads the wrong pages with no signal.
+    //
+    // The route's own comment already promised that "a caller never receives a window different
+    // from the one it asked for". Now it is true. Safe to tighten: the route is one day old and has
+    // no consumer — it is absent from both the dashboard BFF and the read SDK.
+    for (const qs of ["?days=999999", "?limit=100000"]) {
+      const res = await get(`/v1/analytics/usage-by-user${qs}`, "a");
+      expect(res.status, `${qs} must be rejected, not clamped`).toBe(400);
+      expect((await res.json()) as Record<string, unknown>).toMatchObject({ code: "INVALID_QUERY" });
+    }
+    // The boundary values themselves stay valid — the ceiling is inclusive.
+    expect((await get("/v1/analytics/usage-by-user?days=365&limit=500", "a")).status).toBe(200);
+  });
+
   it("honours a valid window instead of silently defaulting", async () => {
     const body = (await (await get("/v1/analytics/usage-by-user?days=7", "a")).json()) as { windowDays: number };
     expect(body.windowDays).toBe(7);

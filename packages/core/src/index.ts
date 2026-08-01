@@ -412,6 +412,8 @@ export type { SDKMessage, RunResult as TheokitRunResult } from "./domain/theokit
 
 // M140 — consumption grouped by end user (report contract + the unattributed bucket).
 export {
+  MAX_LIMIT,
+  MAX_WINDOW_DAYS,
   UNATTRIBUTED_USER_ID,
   usageByUserResponseSchema,
   usageByUserRowSchema,
