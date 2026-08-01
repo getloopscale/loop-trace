@@ -1,0 +1,90 @@
+# M139 — eval determinístico como gate de publicação.
+#
+# O QUE ELE COBRE. Os gates da M137 provam que o código compila, tipa, passa nos testes e não tem
+# CVE. Nenhum deles prova que o PRODUTO continua avaliando corretamente: uma refatoração que
+# inverta um label de evaluator passa por todos eles. Este gate roda o dataset versionado em
+# `evals/` contra `evaluateRule` e reprova quando um exemplo do split `regression` diverge do
+# veredito que o dataset declara.
+#
+# TIER LIVRE, E SÓ ELE GATEIA. `evaluateRule` é uma função pura sobre um span literal — sem I/O, sem
+# rede, sem chave. É por isso que ele pode gatear sem flakiness. O tier medido (`llm_judge`, que é
+# estocástico) NÃO está aqui: ele testa CONTRATO, não valor, e depende de decidir qual chave o CI
+# usa — decisão de operação registrada em Unresolved Questions do plano.
+#
+# SEM BASELINE. O `expected` mora no dataset. A regressão é "um exemplo do split `regression`
+# falhou", sem estado entre execuções — o modelo do Phoenix
+# (`knowledge-base/references/phoenix/evals/pxi/harness/run_experiment.py:238-259`). O theo-memory
+# precisa de baseline com banda de tolerância porque as métricas dele são contínuas e vêm de um LLM
+# (`packages/eval/src/regression.ts:3-4`); as nossas são booleanas e determinísticas. Sem baseline,
+# não existe o risco de alguém regravá-lo quando o gate reprova.
+name: eval
+
+on:
+  # Chamado como `gate-eval` por publish.yml. `workflow_call` é síncrono e preserva `github.sha`,
+  # ao contrário de `workflow_run` — a razão está escrita em publish.yml (M137).
+  workflow_call:
+  # PR mata o defeito antes do trunk. NÃO filtrado por `paths`: um filtro em `pull_request` deixa o
+  # check "expected" e nunca reportado, prendendo o PR para sempre (mesma razão do ci.yml).
+  pull_request:
+    branches: [develop, main]
+
+  # SEM gatilho `push`, de propósito (M137 review, F-sec-2). Num push para develop este workflow roda
+  # EXCLUSIVAMENTE como `gate-eval` dentro do publish.yml. Manter um `push:` avulso ao lado do gate
+  # causou dois defeitos reais: o mesmo workflow rodava DUAS vezes por push, e — pior — o grupo de
+  # concorrência abaixo é IDÊNTICO para o run avulso e para a chamada gateada (num workflow chamado,
+  # `github.ref` é o ref do CHAMADOR), então com `cancel-in-progress` um cancelava o outro de forma
+  # não-determinística. Observado ao vivo como `Security SAST: cancelled`.
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eval-${{ github.ref }}
+  # FALSE, ao contrário dos outros gates. Copiado do Phoenix (`pxi-evals.yml`): cancelar um eval
+  # pela metade desperdiça o que já rodou, e no tier medido desperdiça dinheiro de API já gasto.
+  # Aqui o custo é pequeno, mas a razão vale igual — e o dia em que o tier medido entrar, o
+  # comportamento certo já estará no lugar.
+  cancel-in-progress: false
+
+jobs:
+  eval:
+    name: eval (deterministic rule evaluators)
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    # ORÇAMENTO. Os quatro gates do publish são `needs:` do job `image`, não uns dos outros — rodam
+    # em PARALELO. O caminho crítico é `max(gates) + image`, e o gate mais lento hoje é
+    # `gate-contract` com 82 s (medido). Enquanto este job terminar abaixo disso, ele fica na sombra
+    # e custa ZERO wall-clock. 10 min é teto de segurança, não expectativa: o eval é local e puro.
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v4.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # BUILD ANTES DE RODAR, não por zelo: o CLI importa `@usetheo/lens-core` pelo `dist/`, e num
+      # checkout limpo esse `dist/` não existe. Mesma razão pela qual o `Build` precede o `Lint` no
+      # ci.yml — lá as regras type-aware resolviam para `any`; aqui o import simplesmente não existe.
+      - name: Build
+        run: pnpm build
+
+      # O tier livre. Sem `env`, sem `secrets` — se este passo precisar de credencial algum dia, é
+      # sinal de que deixou de ser o tier livre.
+      - name: Eval — regression split (gates the publish)
+        run: node scripts/run-eval.mjs --splits regression --fail-on-regression
+
+      # O split `dev` roda para dar sinal e NÃO gateia: exemplos exploratórios (superfícies novas,
+      # convenções ainda instáveis) não devem travar uma publicação. `continue-on-error` é o que
+      # torna essa distinção real em vez de decorativa.
+      - name: Eval — dev split (reports, does not gate)
+        continue-on-error: true
+        run: node scripts/run-eval.mjs --splits dev

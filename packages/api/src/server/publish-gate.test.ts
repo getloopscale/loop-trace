@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { parse } from "yaml";
@@ -44,7 +44,7 @@ function jobs(wf: Record<string, unknown>): Record<string, Record<string, unknow
 }
 
 /** Every gate the `image` job must wait on. Adding one here is what makes the pin fail loudly. */
-const REQUIRED_GATES = ["gate-ci", "gate-contract", "gate-sast", "guard-release-on-main"] as const;
+const REQUIRED_GATES = ["gate-ci", "gate-contract", "gate-sast", "gate-eval", "guard-release-on-main"] as const;
 
 /**
  * THE assertion, extracted so the negative cases can run the REAL one instead of re-implementing
@@ -270,7 +270,7 @@ name: Publish
 on: { push: { branches: [develop] } }
 jobs:
   image:
-    needs: [gate-ci, gate-contract, gate-sast, guard-release-on-main]
+    needs: [gate-ci, gate-contract, gate-sast, gate-eval, guard-release-on-main]
     if: \${{ always() }}
     uses: ./.github/workflows/build-publish.yml
 `) as Record<string, unknown>;
@@ -284,7 +284,7 @@ name: Publish
 on: { push: { branches: [develop] } }
 jobs:
   image:
-    needs: [gate-ci, gate-contract, gate-sast, guard-release-on-main]
+    needs: [gate-ci, gate-contract, gate-sast, gate-eval, guard-release-on-main]
     uses: ./.github/workflows/build-publish.yml
   image-hotfix:
     uses: ./.github/workflows/build-publish.yml
@@ -314,6 +314,29 @@ jobs:
       for (const [name, job] of Object.entries(jobs(workflow(file)))) {
         if (String(job?.["uses"] ?? "").endsWith("build-publish.yml")) {
           assertJobIsGated(`${file}:${name}`, job);
+        }
+      }
+    });
+  });
+
+  /**
+   * Encontrado por MUTAÇÃO ao adicionar `gate-eval` (M139): deletar `eval.yml` não fazia nenhum
+   * teste falhar, embora `publish.yml` continuasse declarando `uses: ./.github/workflows/eval.yml`.
+   * O GitHub reprova isso no PARSE — `workflow was not found` — e um run que morre no parse aparece
+   * como `startup_failure`: run criado, zero jobs, 0s. Quem olha a lista vê vermelho e presume que
+   * o gate rodou e reprovou. É a mesma família do defeito que custou 30 runs ao theo-memory
+   * (`eval.yml:43-51`): o estado do check não prova que o check executou.
+   */
+  describe("every local workflow reference resolves (found by mutation, M139)", () => {
+    const files = readdirSync(WORKFLOWS).filter((f) => /\.ya?ml$/.test(f));
+
+    it.each(files)("%s references only workflows that exist", (file) => {
+      for (const [job, def] of Object.entries(jobs(workflow(file)))) {
+        const uses = String(def?.["uses"] ?? "");
+        if (!uses.startsWith("./.github/workflows/")) continue;
+        const target = uses.replace("./.github/workflows/", "");
+        if (!existsSync(resolve(WORKFLOWS, target))) {
+          throw new Error(`${file}:${job} calls ${uses}, which does not exist`);
         }
       }
     });

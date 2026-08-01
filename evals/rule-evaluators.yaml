@@ -1,0 +1,247 @@
+# Dataset de eval dos evaluators `rule` — M139.
+#
+# FORMATO (Phoenix, `knowledge-base/references/phoenix/evals/pxi/datasets/*.yaml`):
+#   - `id` legível por humano, nunca uuid — o id aparece no relatório quando o exemplo falha;
+#   - `splits: [regression]` GATEIA o publish; `[dev]` roda e não gateia;
+#   - casos positivos e negativos separados, porque um suíte só com um dos dois é metade de um
+#     suíte (`rules/testing.md` § 4.1);
+#   - `metadata.notes` diz POR QUE o exemplo existe. Um exemplo sem razão declarada é um exemplo a
+#     remover — é o que impede o dataset de virar teatro com o tempo.
+#
+# `expected` é comparado por CHAVE DECLARADA (ADR D5): declarar só `label` ignora o `score` que
+# `evaluateRule` também devolve. Um `expected` vazio é recusado na carga.
+
+dataset_name: rule-evaluators
+description: >-
+  Cobertura de regressão dos evaluators `rule` — o kind determinístico de
+  `EVALUATOR_KINDS`. Exercita o casamento de predicado do span-query DSL através
+  de `evaluateRule`, que é puro e portanto gateável sem flakiness.
+
+examples:
+  # ===== Positivos: o predicado casa e o veredito é `pass` =====
+
+  - id: name-exact-match
+    splits: [regression]
+    evaluator:
+      kind: rule
+      name: name-is-llm-call
+      config: { predicate: 'name:"llm.call"' }
+    span:
+      spanId: s-name-1
+      traceId: t-1
+      name: llm.call
+      startTimeUnixNano: "1000"
+      endTimeUnixNano: "2000"
+    expected: { label: pass, score: 1 }
+    metadata:
+      notes: >-
+        O caso mais simples que pode existir, e por isso o mais valioso: se ESTE
+        quebrar, o casamento de predicado quebrou por inteiro e todo o resto do
+        dataset é ruído.
+
+  - id: status-error-match
+    splits: [regression]
+    evaluator:
+      kind: rule
+      name: is-error
+      config: { predicate: "status:error" }
+    span:
+      spanId: s-err-1
+      traceId: t-1
+      name: llm.call
+      startTimeUnixNano: "1000"
+      endTimeUnixNano: "2000"
+      statusCode: ERROR
+    expected: { label: pass }
+    metadata:
+      notes: >-
+        `status:error` NÃO lê um campo `status` — lê `statusCode` e testa
+        `/error/i` sobre ele (`evaluator.ts:133-134`). A primeira versão deste
+        exemplo escreveu `status: error` no span e o dataset reprovou na hora: o
+        span era válido pelo schema e o predicado simplesmente não casava. É o
+        tipo de divergência entre o nome do filtro e o nome do campo que só
+        aparece quando algo executa.
+
+  - id: custom-pass-label-is-honored
+    splits: [regression]
+    evaluator:
+      kind: rule
+      name: with-custom-label
+      config: { predicate: 'name:"llm.call"' }
+      passLabel: approved
+    span:
+      spanId: s-lbl-1
+      traceId: t-1
+      name: llm.call
+      startTimeUnixNano: "1000"
+      endTimeUnixNano: "2000"
+    expected: { label: approved }
+    metadata:
+      notes: >-
+        `passLabel` alimenta o operador `label_eq` dos monitores. Se ele deixar
+        de ser respeitado, todo monitor que compara label passa a nunca disparar
+        — e um monitor que nunca dispara é indistinguível de um sistema saudável.
+
+  # ===== Negativos: o predicado NÃO casa e o veredito é `fail` =====
+
+  - id: name-mismatch-fails
+    splits: [regression]
+    evaluator:
+      kind: rule
+      name: name-is-llm-call
+      config: { predicate: 'name:"llm.call"' }
+    span:
+      spanId: s-name-2
+      traceId: t-1
+      name: db.query
+      startTimeUnixNano: "1000"
+      endTimeUnixNano: "2000"
+    expected: { label: fail, score: 0 }
+    metadata:
+      notes: >-
+        O par negativo de `name-exact-match`. Sem ele, um predicado que casasse
+        TUDO passaria no positivo e o dataset não notaria — é a diferença entre
+        testar o casamento e testar que algo aconteceu.
+
+  - id: status-ok-does-not-match-error
+    splits: [regression]
+    evaluator:
+      kind: rule
+      name: is-error
+      config: { predicate: "status:error" }
+    span:
+      spanId: s-err-2
+      traceId: t-1
+      name: llm.call
+      startTimeUnixNano: "1000"
+      endTimeUnixNano: "2000"
+      statusCode: OK
+    expected: { label: fail }
+    metadata:
+      notes: Par negativo de `status-error-match`.
+
+  - id: custom-fail-label-is-honored
+    splits: [regression]
+    evaluator:
+      kind: rule
+      name: with-custom-fail-label
+      config: { predicate: 'name:"llm.call"' }
+      failLabel: rejected
+    span:
+      spanId: s-lbl-2
+      traceId: t-1
+      name: db.query
+      startTimeUnixNano: "1000"
+      endTimeUnixNano: "2000"
+    expected: { label: rejected }
+    metadata:
+      notes: Par negativo de `custom-pass-label-is-honored`.
+
+  # ===== Conjunção: várias cláusulas precisam valer ao mesmo tempo =====
+
+  - id: two-clauses-all-must-hold
+    splits: [regression]
+    evaluator:
+      kind: rule
+      name: error-llm-call
+      config: { predicate: 'name:"llm.call" status:error' }
+    span:
+      spanId: s-and-1
+      traceId: t-1
+      name: llm.call
+      startTimeUnixNano: "1000"
+      endTimeUnixNano: "2000"
+      statusCode: ERROR
+    expected: { label: pass }
+    metadata:
+      notes: >-
+        Duas cláusulas, ambas satisfeitas. O par abaixo é o que prova que a
+        semântica é E e não OU.
+
+  - id: two-clauses-one-failing-does-not-match
+    splits: [regression]
+    evaluator:
+      kind: rule
+      name: error-llm-call
+      config: { predicate: 'name:"llm.call" status:error' }
+    span:
+      spanId: s-and-2
+      traceId: t-1
+      name: llm.call
+      startTimeUnixNano: "1000"
+      endTimeUnixNano: "2000"
+      statusCode: OK
+    expected: { label: fail }
+    metadata:
+      notes: >-
+        O nome casa, o status não. Se o DSL virasse OU em alguma refatoração,
+        ESTE exemplo é o único do dataset que perceberia.
+
+  # ===== `hasChildren`: sem ele, um predicado sobre `chain` é inexprimível =====
+
+  - id: chain-kind-requires-children
+    splits: [regression]
+    evaluator:
+      kind: rule
+      name: is-chain
+      config: { predicate: "kind:chain" }
+    span:
+      spanId: s-chain-1
+      traceId: t-1
+      name: agent.step
+      startTimeUnixNano: "1000"
+      endTimeUnixNano: "2000"
+    hasChildren: true
+    expected: { label: pass }
+    metadata:
+      notes: >-
+        `deriveKind` só produz `chain` quando o contexto de filhos é fornecido
+        (`evaluator.ts:106,118`) — um span solitário não é uma cadeia. EC-4 do
+        edge-case review: sem o campo `hasChildren` no dataset, este predicado
+        seria impossível de exercitar.
+
+  - id: lone-span-is-not-a-chain
+    splits: [regression]
+    evaluator:
+      kind: rule
+      name: is-chain
+      config: { predicate: "kind:chain" }
+    span:
+      spanId: s-chain-2
+      traceId: t-1
+      name: agent.step
+      startTimeUnixNano: "1000"
+      endTimeUnixNano: "2000"
+    expected: { label: fail }
+    metadata:
+      notes: >-
+        Mesmo predicado, mesmo span, `hasChildren` ausente (default false). O par
+        prova que o sinal é o contexto, não o nome do span.
+
+  # ===== dev: roda, reporta, NÃO gateia =====
+
+  - id: attribute-predicate-exploratory
+    splits: [dev]
+    evaluator:
+      kind: rule
+      name: has-model-attr
+      config: { predicate: 'attr:gen_ai.request.model=gpt-4' }
+    span:
+      spanId: s-attr-1
+      traceId: t-1
+      name: llm.call
+      startTimeUnixNano: "1000"
+      endTimeUnixNano: "2000"
+      attributes:
+        gen_ai.request.model: gpt-4
+    expected: { label: pass }
+    metadata:
+      notes: >-
+        Predicado sobre atributo — superfície mais nova e menos estável que
+        `name`/`status`, e com sintaxe própria (`attr:<chave>=<valor>`, o primeiro
+        `=` separa; ver `span-query.ts:96-105`). Fica em `dev` de propósito:
+        queremos o sinal sem que uma mudança de convenção de atributo trave a
+        publicação. Promover para `regression` quando a convenção assentar.
+        A primeira versão deste exemplo usava `attr.chave:"valor"` e o gate a
+        recusou na carga — o predicado parseava para ZERO cláusulas, que é
+        match-all disfarçado. O EC-3 pagou por si mesmo antes de existir CI.

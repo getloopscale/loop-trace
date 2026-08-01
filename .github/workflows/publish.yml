@@ -65,6 +65,16 @@ jobs:
   gate-sast:
     uses: ./.github/workflows/security-sast.yml
 
+  # M139 — the gates above prove the code compiles, types, tests and has no CVE. None of them
+  # proves the PRODUCT still evaluates correctly: a refactor that inverts an evaluator label passes
+  # all four. This one runs the versioned dataset in `evals/` against `evaluateRule` and fails when
+  # a `regression`-split example diverges from the verdict the dataset declares.
+  #
+  # Deterministic by construction — `evaluateRule` is a pure function over a literal span, so this
+  # gates without flakiness. The stochastic `llm_judge` tier is deliberately NOT here.
+  gate-eval:
+    uses: ./.github/workflows/eval.yml
+
   # ── M137: `:latest` may only come from code that reached main ─────────────────────────────────
   #
   # `:latest` feeds reconciliation. A tag cut from an unpromoted commit would publish it from code
@@ -96,7 +106,7 @@ jobs:
   image:
     # M137 — the gate. Removing this line reopens the hole that published rejected artifacts;
     # `packages/api/src/server/publish-gate.test.ts` fails if it goes.
-    needs: [gate-ci, gate-contract, gate-sast, guard-release-on-main]
+    needs: [gate-ci, gate-contract, gate-sast, gate-eval, guard-release-on-main]
     uses: ./.github/workflows/build-publish.yml
     with:
       image: theo-lens
