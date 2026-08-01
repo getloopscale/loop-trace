@@ -15,7 +15,7 @@
  * leak here surfaces as a plausible number rather than an error — the failure mode this whole
  * milestone was built against. The unit of proof has to be the boundary, not the helper.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type pg from "pg";
 
 import type { AuthVerifier, Principal } from "@usetheo/lens-core";
