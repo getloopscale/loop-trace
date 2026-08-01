@@ -14,6 +14,7 @@ import {
   agentCatalogResponseSchema,
   annotationsResponseSchema,
   costByPeriodResponseSchema,
+  usageByUserResponseSchema,
   datasetDetailSchema,
   datasetSchema,
   datasetsResponseSchema,
@@ -68,6 +69,7 @@ function namedSchemas(): Record<string, z.ZodTypeAny> {
     ObservabilityResponse: observabilityResponseSchema,
     SessionListResponse: sessionListResponseSchema,
     CostByPeriodResponse: costByPeriodResponseSchema,
+    UsageByUserResponse: usageByUserResponseSchema,
     ToolStatsResponse: toolStatsResponseSchema,
     Dataset: datasetSchema,
     DatasetsResponse: datasetsResponseSchema,
@@ -108,6 +110,7 @@ const RESPONSE_FOR_ROUTE: Record<string, string> = {
   "GET /v1/metrics/observability": "ObservabilityResponse",
   "GET /v1/sessions": "SessionListResponse",
   "GET /v1/analytics/cost": "CostByPeriodResponse",
+  "GET /v1/analytics/usage-by-user": "UsageByUserResponse",
   "GET /v1/analytics/tools": "ToolStatsResponse",
   "GET /v1/datasets": "DatasetsResponse",
   // M107 — write surface 2xx response components (request bodies are hand-written in the SDK).

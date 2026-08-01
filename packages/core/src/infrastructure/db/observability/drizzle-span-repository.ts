@@ -10,6 +10,11 @@ import * as aggregateRepo from "./aggregate-repository.js";
 import * as annotationRepo from "./annotation-repository.js";
 import * as retentionRepo from "../retention-repository.js";
 import * as sessionRepo from "./session-repository.js";
+import * as usageByUserRepo from "./usage-by-user-repository.js";
+import type {
+  UsageByUserOptions,
+  UsageByUserResponse,
+} from "../../../domain/observability/usage-by-user.js";
 import * as copilotFeedbackRepo from "../evaluation/copilot-feedback-repository.js";
 import * as experimentRepo from "../evaluation/experiment-repository.js";
 import * as datasetRepo from "../evaluation/dataset-repository.js";
@@ -76,6 +81,13 @@ export class DrizzleSpanRepository implements SpanRepository {
   ) {}
 
   // M99 (B-M1) — the TraceReadRepository role now lives in `trace-read-repository.ts`.
+  aggregateUsageByUser(
+    opts: UsageByUserOptions = {},
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<UsageByUserResponse> {
+    return usageByUserRepo.aggregateUsageByUser(this.db, this.priceTable, workspaceId, opts);
+  }
+
   save(spansToSave: Span[], workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<void> {
     return traceReadRepo.save(this.db, this.priceTable, spansToSave, workspaceId);
   }

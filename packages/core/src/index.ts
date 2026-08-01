@@ -409,3 +409,13 @@ export type { SDKMessage, RunResult as TheokitRunResult } from "./domain/theokit
 // subpath (see package.json `exports`), so the prod public API stops carrying test-only exports. The SDK
 // mapper-drift test imports it from `@usetheo/lens-core/testing`; core's own tests import it directly from
 // `./domain/theokit/theokit-vectors.js`.
+
+// M140 — consumption grouped by end user (report contract + the unattributed bucket).
+export {
+  UNATTRIBUTED_USER_ID,
+  usageByUserResponseSchema,
+  usageByUserRowSchema,
+  type UsageByUserOptions,
+  type UsageByUserResponse,
+  type UsageByUserRow,
+} from "./domain/observability/usage-by-user.js";

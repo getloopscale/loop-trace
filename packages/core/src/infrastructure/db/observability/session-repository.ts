@@ -18,7 +18,7 @@ import {
   type SessionListItem,
   type SessionListResponse,
 } from "../../../domain/observability/session.js";
-import { LATENCY_MS_EXPR, preview, traceRowToItem } from "../repo-shared.js";
+import { END_USER_ID_SQL, LATENCY_MS_EXPR, preview, traceRowToItem } from "../repo-shared.js";
 import { sessions, traces } from "../schema.js";
 
 
@@ -103,13 +103,13 @@ export async function listSessions(
                AND sp.workspace_id = ${workspaceId}
                AND sp.start_time_unix_nano ~ '^\\d+$'
                AND sp.end_time_unix_nano ~ '^\\d+$') AS "durationMs",
-           -- M131 A3 — user id = best-effort attributes->>'user.id' (fallback gen_ai.user.id); NULL → em-dash.
-           (SELECT coalesce(sp.attributes->>'user.id', sp.attributes->>'gen_ai.user.id')
+           -- M131 A3 — user id via the single END_USER_ID_SQL definition (M140 ADR D1); NULL → em-dash.
+           (SELECT ${END_USER_ID_SQL("sp")}
               FROM spans sp
               JOIN traces tt ON tt.trace_id = sp.trace_id AND tt.workspace_id = ${workspaceId}
              WHERE tt.session_id = s.session_id
                AND sp.workspace_id = ${workspaceId}
-               AND coalesce(sp.attributes->>'user.id', sp.attributes->>'gen_ai.user.id') IS NOT NULL
+               AND ${END_USER_ID_SQL("sp")} IS NOT NULL
              LIMIT 1) AS "userIdRaw"
     FROM sessions s
     LEFT JOIN traces t ON t.session_id = s.session_id AND t.workspace_id = s.workspace_id
