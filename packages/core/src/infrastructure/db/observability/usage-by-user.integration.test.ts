@@ -18,14 +18,14 @@ import type pg from "pg";
 
 import type { Span } from "../../../domain/observability/span.js";
 import { DEFAULT_PRICES } from "../../../domain/observability/default-prices.js";
-import { usageByUserResponseSchema } from "../../../domain/observability/usage-by-user.js";
-import { resolveModelPrice } from "../../../domain/observability/pricing.js";
-import { createPool, DrizzleSpanRepository } from "./drizzle-span-repository.js";
 import {
-  aggregateUsageByUser,
   MAX_LIMIT,
   MAX_WINDOW_DAYS,
-} from "./usage-by-user-repository.js";
+  usageByUserResponseSchema,
+} from "../../../domain/observability/usage-by-user.js";
+import { resolveModelPrice } from "../../../domain/observability/pricing.js";
+import { createPool, DrizzleSpanRepository } from "./drizzle-span-repository.js";
+import { aggregateUsageByUser } from "./usage-by-user-repository.js";
 
 const PG_URI = process.env["THEOLENS_PG_URI"];
 const MIGRATIONS = fileURLToPath(new URL("../migrations", import.meta.url));
