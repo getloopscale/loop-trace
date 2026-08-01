@@ -14,7 +14,15 @@ import { describe, expect, it } from "vitest";
 
 // Billing vocabulary. `cost`/`usd`/`price` are deliberately ABSENT: they are the legitimate language
 // of observed consumption, and banning them would make the rule unusable rather than strict.
-const BILLING_TERMS = /\b(invoice|billing|billed|chargeback|charge[sd]?|subscription|payment|payable)\b/i;
+//
+// SUBSTRING match, deliberately — NOT `\b…\b`. Measured 2026-07-29: the word-boundary version
+// escaped 8 of 8 realistic field names (`invoiceId`, `billingCycle`, `accountId`, `invoice_id`,
+// `totalCharged`, …), because `_` and the next capital are both word characters. A guard whose
+// stated purpose is to stop erosion "by one field name" and which catches no field name is worse
+// than none: it reports safety it does not provide. `account` is included — the DoD names it and
+// the failure message promises it; it was missing from the pattern.
+const BILLING_TERMS =
+  /(invoice|billing|billed|chargeback|charge|account|subscription|payment|payable)/i;
 
 const FILES = [
   "../../../core/src/domain/observability/usage-by-user.ts",
@@ -49,9 +57,15 @@ describe("M140 — usage-by-user stays on the observability side of the boundary
   it("guards itself: the pattern really does fire on billing vocabulary", () => {
     // Without this, a typo in the regex would leave the boundary unguarded while the suite stays
     // green — the same class of defect this milestone spent its discovery phase measuring.
-    expect(BILLING_TERMS.test("const invoice = { total: 1 };")).toBe(true);
-    expect(BILLING_TERMS.test("if (billing) return;")).toBe(true);
-    expect(BILLING_TERMS.test("costUsd, priceTable, usage")).toBe(false);
+    // Realistic FIELD NAMES, not isolated words — the form the vocabulary would actually arrive in.
+    for (const name of [
+      "invoiceId", "billingCycle", "chargeAmount", "accountId",
+      "invoice_id", "totalCharged", "subscriptionTier", "paymentMethodId",
+    ]) {
+      expect(BILLING_TERMS.test(`const ${name} = 1;`), `${name} must be caught`).toBe(true);
+    }
+    // …and the legitimate consumption vocabulary must stay allowed, or the rule gets deleted.
+    expect(BILLING_TERMS.test("costUsd, priceTable, usage, unpricedSpans")).toBe(false);
     // And the comment-stripper must not become an escape hatch: code still matches.
     expect(stripComments("// theo-cloud charges\nconst invoice = 1;")).toContain("invoice");
     expect(stripComments("// theo-cloud charges\nconst x = 1;")).not.toContain("charges");
