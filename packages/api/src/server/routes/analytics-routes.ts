@@ -14,6 +14,8 @@ import {
   traceListResponseSchema,
   costByPeriodResponseSchema,
   usageByUserResponseSchema,
+  MAX_LIMIT,
+  MAX_WINDOW_DAYS,
   type UsageByUserOptions,
   apiError,
 } from "@usetheo/lens-core";
@@ -73,6 +75,15 @@ export function registerAnalyticsRoutes(app: Hono, repo: TraceReadRepository & A
     const offset = c.req.query("offset") === undefined ? undefined : Number(c.req.query("offset"));
     if (days === null || limit === null) {
       return c.json(apiError("INVALID_QUERY", "days and limit must be positive integers"), 400);
+    }
+    // Reject above the ceiling rather than clamping. Clamping `days` was at least observable
+    // (`windowDays` is echoed); clamping `limit` was NOT — a caller asking for 100000 got 500 rows
+    // with nothing saying so, then advanced `offset` by 100000 and read the wrong pages in silence.
+    if (days !== undefined && days > MAX_WINDOW_DAYS) {
+      return c.json(apiError("INVALID_QUERY", `days must be at most ${MAX_WINDOW_DAYS}`), 400);
+    }
+    if (limit !== undefined && limit > MAX_LIMIT) {
+      return c.json(apiError("INVALID_QUERY", `limit must be at most ${MAX_LIMIT}`), 400);
     }
     if (offset !== undefined && (!Number.isInteger(offset) || offset < 0)) {
       return c.json(apiError("INVALID_QUERY", "offset must be a non-negative integer"), 400);

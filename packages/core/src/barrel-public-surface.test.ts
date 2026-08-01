@@ -193,6 +193,8 @@ const EXPECTED_PUBLIC_SURFACE = [
   "toolStatsResponseSchema",
   "traceCostSchema",
   "traceListItemSchema",
+  "MAX_LIMIT",
+  "MAX_WINDOW_DAYS",
   "UNATTRIBUTED_USER_ID",
   "usageByUserResponseSchema",
   "usageByUserRowSchema",

@@ -58,6 +58,15 @@ export const usageByUserResponseSchema = z.object({
 });
 
 /**
+ * Window ceiling, in days. Lives in the domain because BOTH the route (which rejects a larger
+ * value) and the repository (which is the last line of defence) need the same number — two copies
+ * would drift, and the drift would be silent.
+ */
+export const MAX_WINDOW_DAYS = 365;
+/** Page-size ceiling. Same reason. */
+export const MAX_LIMIT = 500;
+
+/**
  * Query options for the report. Lives in the domain, not in the repository, so the port can be
  * declared without the domain importing infrastructure (`architecture.md` § 2).
  */
