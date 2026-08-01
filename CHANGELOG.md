@@ -7,6 +7,14 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **O detalhe de um trace deixou de contradizer a listagem que o mostrou** (LT-034). `GET /v1/traces` listava o trace, `GET /v1/traces/{id}/cost` devolvia 200 com custo e tokens, e `GET /v1/traces/{id}` devolvia **404** — duas rotas do mesmo serviço afirmando que o trace existe e uma afirmando que não. Quem clicasse na linha recebia "não encontrado" para algo que o produto acabara de mostrar.
+
+  **Causa medida, não inferida:** os traces afetados existem na tabela derivada `traces` com **zero** linhas em `spans`. A listagem e o custo leem `traces`; só o detalhe lia `spans`, e devolvia vazio como se o trace não existisse. Um trace pode perder seus spans por retenção, limpeza manual ou ingestão parcial — e nenhuma dessas coisas apaga o trace. Não era filtro de tenant: os três casos reportados estão no mesmo workspace, e as três rotas derivam o workspace do mesmo principal.
+
+  Agora o detalhe cai na mesma fonte das irmãs quando não há spans, devolvendo o trace com subárvore vazia — e **continua escopado por workspace**, porque um fallback sem escopo seria uma porta cross-tenant com aparência de trace plausível, não de erro. Um trace genuinamente inexistente continua 404 nas três rotas.
+
 ### Added
 
 - **`GET /v1/analytics/usage-by-user` — consumo de tokens e custo por end-user** (M140). O dado já estava sendo ingerido, indexado e retido: **49.375 de 49.376 spans** do ambiente de desenvolvimento carregam a identidade do usuário (`user.id`, com fallback para o `gen_ai.user.id` da convenção OpenTelemetry), e **nenhuma rota agrupava por ela** — quem opera um agente multi-usuário precisava exportar traces e agregar fora do produto, exatamente o trabalho que uma ferramenta de observabilidade deveria poupar. A resposta traz tokens (entrada, saída, cache de leitura e de criação), custo estimado, `totalUsers` e a janela aplicada; janela sobre o tempo de ingestão (padrão 30 dias, teto 365) e paginação com desempate total, para que um usuário não apareça em duas páginas nem desapareça entre elas.
