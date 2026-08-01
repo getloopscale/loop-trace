@@ -102,6 +102,34 @@ describe("runEvalDataset", () => {
     expect(runEvalDataset(chain).hasRegression).toBe(false);
   });
 
+  /**
+   * F-test-3 do review — `some` → `every` no filtro SOBREVIVIA a 1139 testes, porque todo exemplo
+   * era single-split e para eles os dois operadores são idênticos. Com `every`, um exemplo
+   * multi-split é silenciosamente EXCLUÍDO do run gateado, e como os outros exemplos mantêm o run
+   * não-vazio, a guarda de run-vazio não dispara. É "um eval que mede menos do que afirma e ainda
+   * reporta verde" — exatamente o que este milestone existe para eliminar.
+   */
+  it("selects a multi-split example under EITHER of its splits (some, not every)", () => {
+    const multi = build([
+      { ...passingExample("in-both"), splits: ["regression", "dev"] },
+      passingExample("only-regression"),
+    ]);
+    expect(runEvalDataset(multi, { splits: ["regression"] }).results.map((r) => r.id)).toEqual([
+      "in-both",
+      "only-regression",
+    ]);
+    expect(runEvalDataset(multi, { splits: ["dev"] }).results.map((r) => r.id)).toEqual(["in-both"]);
+  });
+
+  /** O diagnóstico que o operador lê — não só o booleano (F-test-8). */
+  it("reports counts and a mismatch string that names field, expected and got", () => {
+    const r = runEvalDataset(build([passingExample("ok"), failingExample("bad")]));
+    expect(r.counts).toEqual({ total: 2, passed: 1, failed: 1 });
+    expect(r.results.find((x) => x.id === "bad")?.mismatch).toMatch(
+      /label: expected "fail", got "pass"/,
+    );
+  });
+
   it("filters by split when `splits` is given", () => {
     const d = build([failingExample("dev-only", ["dev"]), passingExample("reg")]);
     const r = runEvalDataset(d, { splits: ["regression"] });
@@ -141,11 +169,31 @@ describe("the gate actually fails — seeded mutation and fail-closed (T2.2)", (
    * Um `kind` fora de `EVALUATOR_KINDS` não pode ser ignorado em silêncio — seria um exemplo que
    * não roda e ainda assim conta como coberto.
    */
+  /** F-test-4 — a terceira falha estrutural, a única cujo modo é um verde silencioso. */
+  it("FAILURE: an empty `expected` fails closed instead of counting as passed", () => {
+    const vacuous = {
+      dataset_name: "d",
+      examples: [{ ...passingExample("asserts-nothing"), expected: {} }],
+    } as unknown as EvalDataset;
+    expect(() => runEvalDataset(vacuous)).toThrow(RegressionError);
+    expect(() => runEvalDataset(vacuous)).toThrow(/asserts nothing/i);
+  });
+
+  /** F-test-5 — o branch que o CI atinge com um typo em `--splits`. */
+  it("FAILURE: a split matching zero examples fails closed", () => {
+    const d = build([passingExample("reg")]);
+    expect(() => runEvalDataset(d, { splits: ["dev"] })).toThrow(/no examples matched/i);
+  });
+
   it("FAILURE: an unknown evaluator kind fails closed instead of being skipped", () => {
     const alien = {
       dataset_name: "d",
       examples: [{ ...passingExample("alien"), evaluator: { kind: "llm_judge", name: "j", config: {} } }],
     } as unknown as EvalDataset;
-    expect(() => runEvalDataset(alien)).toThrow(/unsupported evaluator kind|llm_judge/i);
+    // Conjuntivo, não alternado (F-test-9): o `|llm_judge` original era satisfeito por QUALQUER
+    // erro cuja mensagem contivesse a string — inclusive um erro de zod — então o teste passaria
+    // com a guarda fail-closed deletada.
+    expect(() => runEvalDataset(alien)).toThrow(RegressionError);
+    expect(() => runEvalDataset(alien)).toThrow(/unsupported evaluator kind/i);
   });
 });

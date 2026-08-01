@@ -375,4 +375,33 @@ jobs:
       }
     });
   });
+
+  /**
+   * F-test-2 do review. O gate podia estar cabeado, nomeado, chamável e verde — e ainda assim
+   * incapaz de reprovar: remover `--fail-on-regression` do comando deixava 45/45 passando. O
+   * workflow rodava o eval, via a regressão, e saía 0. Nada pinava que o passo que GATEIA carrega
+   * a flag que o faz gatear.
+   */
+  describe("the eval gate's command actually gates (F-test-2)", () => {
+    const evalJob = jobs(workflow("eval.yml"))["eval"] as Record<string, unknown> | undefined;
+    const steps = (evalJob?.["steps"] ?? []) as Array<Record<string, unknown>>;
+    const gating = steps.filter((st) => {
+      const run = String(st["run"] ?? "");
+      return run.includes("run-eval.mjs") && run.includes("--splits regression");
+    });
+
+    it("exactly one step runs the regression split", () => {
+      expect(gating).toHaveLength(1);
+    });
+
+    it("that step carries --fail-on-regression", () => {
+      expect(String(gating[0]?.["run"] ?? "")).toContain("--fail-on-regression");
+    });
+
+    it("that step is NOT continue-on-error", () => {
+      // `continue-on-error: true` existe no passo do split `dev`, logo abaixo. Aplicá-lo ao passo
+      // que gateia deixaria o job verde sobre uma regressão — e nada impedia isso.
+      expect(gating[0]).not.toHaveProperty("continue-on-error");
+    });
+  });
 });

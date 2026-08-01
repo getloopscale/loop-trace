@@ -90,6 +90,18 @@ function runOne(example: EvalExample): ExampleResult {
     throw new RegressionError(`example "${example.id}" is not a rule evaluator after parsing`);
   }
 
+  // F-test-4 do review. O schema já recusa `expected: {}` (eval-dataset.ts), mas o runner é
+  // chamável direto — e das três falhas estruturais ele guardava duas (dataset vazio, kind
+  // desconhecido) e deixava a terceira passar. A assimetria importa porque esta é a única cujo
+  // modo de falha é um VERDE silencioso: `diff()` sobre um expected sem chaves não encontra
+  // problema algum, o exemplo é contado como `passed`, e um exemplo que não afirma nada entra na
+  // contagem de cobertura.
+  if (Object.keys(example.expected).length === 0) {
+    throw new RegressionError(
+      `example "${example.id}" declares an empty \`expected\` — it asserts nothing and would count as passed`,
+    );
+  }
+
   const actual = evaluateRule(evaluator, example.span, example.hasChildren);
   const mismatch = diff(example.expected, actual);
   return {

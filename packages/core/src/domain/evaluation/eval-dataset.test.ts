@@ -55,6 +55,35 @@ describe("parseEvalDataset", () => {
     expect(() => parseEvalDataset(d)).toThrow(/matches-name/);
   });
 
+  /**
+   * F-test-5 do review — a lente NEGATIVA da arity de `splits`, que faltava. O enum tinha teste
+   * ("rejects an unknown split"); a cardinalidade não. Remover o `.min(1)` sobrevivia a 1139
+   * testes, e o efeito é o pior tipo de relatório: um exemplo com `splits: []` FALHA, imprime ❌
+   * no summary do CI, e o processo sai 0. Uma linha vermelha num run verde.
+   */
+  it("rejects an example with an empty splits array", () => {
+    const d = dataset();
+    (d["examples"] as Record<string, unknown>[])[0]!["splits"] = [];
+    expect(() => parseEvalDataset(d)).toThrow(/at least one split/i);
+  });
+
+  /**
+   * F-test-6 — os quatro `.strict()` carregam peso real e nenhum estava pinado. O caso que
+   * importa: `expected: { label: "pass", scoer: 0 }` seria SILENCIOSAMENTE reduzido a
+   * `{ label: "pass" }`, e o autor acreditaria estar afirmando dois eixos quando afirma um.
+   * Sub-medição reportada como verde — a mesma classe do EC-1/EC-3, que têm teste.
+   */
+  it.each([
+    ["expected", (d: Record<string, unknown>) => { ((d["examples"] as Record<string, unknown>[])[0]!["expected"] as Record<string, unknown>)["scoer"] = 0; }],
+    ["example", (d: Record<string, unknown>) => { (d["examples"] as Record<string, unknown>[])[0]!["haschildren"] = true; }],
+    ["evaluator", (d: Record<string, unknown>) => { ((d["examples"] as Record<string, unknown>[])[0]!["evaluator"] as Record<string, unknown>)["kindd"] = "rule"; }],
+    ["dataset", (d: Record<string, unknown>) => { d["datasetName"] = "x"; }],
+  ])("rejects an unrecognised key on the %s schema", (_where, mutate) => {
+    const d = dataset();
+    mutate(d);
+    expect(() => parseEvalDataset(d)).toThrow(/unrecognized|unrecognised/i);
+  });
+
   it("rejects an unknown split", () => {
     const d = dataset();
     (d["examples"] as Record<string, unknown>[])[0]!["splits"] = ["staging"];

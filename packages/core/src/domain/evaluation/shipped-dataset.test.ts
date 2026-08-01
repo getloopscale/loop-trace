@@ -31,6 +31,18 @@ describe("evals/rule-evaluators.yaml (shipped)", () => {
     expect(() => loadShipped()).not.toThrow();
   });
 
+  /**
+   * GUARDA DA GUARDA (F-test-11). Três checagens abaixo têm forma `expect(lista).toEqual([])` e
+   * passam se o predicado for enfraquecido a ponto de nunca casar — não distinguem "o dataset está
+   * limpo" de "a checagem quebrou". O `publish-gate.test.ts` reconheceu essa vacuidade e a guardou;
+   * aqui faltava. Estes dois controles fecham: o parse não pode devolver zero exemplos, e o regex
+   * de id precisa REJEITAR um id sabidamente ruim.
+   */
+  it("the checks below cannot be vacuous", () => {
+    expect(loadShipped().examples.length).toBeGreaterThanOrEqual(8);
+    expect(/^[a-z0-9]+(-[a-z0-9]+)*$/.test("Bad_Id")).toBe(false);
+  });
+
   it("has both splits — regression gates, dev does not", () => {
     const splits = new Set(loadShipped().examples.flatMap((e) => e.splits));
     expect(splits.has("regression")).toBe(true);
@@ -41,9 +53,15 @@ describe("evals/rule-evaluators.yaml (shipped)", () => {
    * Um suíte só com casos positivos não distingue "o predicado casa o que deve" de "o predicado
    * casa tudo" (`rules/testing.md` § 4.1).
    */
-  it("has at least two negative cases", () => {
+  it("has at least two negative cases IN THE GATING SPLIT", () => {
+    // ESTRUTURAL, não por grafia (F-test-10). A versão anterior listava os labels de hoje
+    // ("fail", "rejected"), então um negativo futuro com `failLabel: denied` seria invisível ao
+    // contador. E não exigia `regression`: mover todos os negativos para `dev` deixaria o teste
+    // certificando uma cobertura negativa que já não gateia nada.
     const negatives = loadShipped().examples.filter(
-      (e) => e.expected.label === "fail" || e.expected.label === "rejected" || e.expected.score === 0,
+      (e) =>
+        e.splits.includes("regression") &&
+        (e.expected.label === (e.evaluator.failLabel ?? "fail") || e.expected.score === 0),
     );
     expect(negatives.length).toBeGreaterThanOrEqual(2);
   });
