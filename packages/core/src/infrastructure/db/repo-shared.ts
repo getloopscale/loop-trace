@@ -44,6 +44,21 @@ export const DERIVED_AGENT_NAME_SQL = (alias: "s2" | "s3" | "spans") => sql`CASE
   ELSE NULL
 END`;
 
+// M140 (ADR D1) — the end-user identity, defined ONCE. M131 A3 settled the rule: best-effort
+// `user.id`, falling back to the OTel semantic-convention `gen_ai.user.id`. The order is the rule,
+// not a detail — it decides which id wins when a client sends both. It lived duplicated inside
+// session-repository.ts (two copies of the same coalesce) until the usage-by-user report became a
+// third consumer; a business rule with N copies has N truths, and a fix to one leaves the others
+// stale in silence. NULL when neither key is present — callers decide what an un-attributed span
+// means (the usage report buckets it as `unattributed`; the session list renders an em-dash).
+//
+// `alias` is a compile-time-enforced union of the span-table aliases the real call sites use — `sp`
+// in session-repository.ts:108, `spans` in the aggregate queries. It is never user input, so no
+// `sql.raw` variable can slip in. Widening it to `string` to fit a new call site would reopen that
+// surface: add the literal to the union instead.
+export const END_USER_ID_SQL = (alias: "sp" | "spans") =>
+  sql`coalesce(${sql.raw(alias)}.attributes->>'user.id', ${sql.raw(alias)}.attributes->>'gen_ai.user.id')`;
+
 export const DERIVED_SPAN_KIND_SQL = sql`CASE
   WHEN s.attributes->>'gen_ai.tool.name' IS NOT NULL OR s.attributes->>'gen_ai.operation.name' = 'execute_tool' THEN 'tool'
   WHEN s.attributes->>'gen_ai.operation.name' IN ('retrieve', 'search') THEN 'retriever'
