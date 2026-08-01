@@ -13,6 +13,8 @@ import {
   toolStatsResponseSchema,
   traceListResponseSchema,
   costByPeriodResponseSchema,
+  usageByUserResponseSchema,
+  type UsageByUserOptions,
   apiError,
 } from "@usetheo/lens-core";
 
@@ -52,5 +54,34 @@ export function registerAnalyticsRoutes(app: Hono, repo: TraceReadRepository & A
       getPrincipal(c).workspaceId,
     );
     return c.json(costByPeriodResponseSchema.parse(result), 200);
+  });
+
+  // M140 — consumption grouped by END USER. Observability, not billing: theo-lens reports what it
+  // observed; theo-cloud is what charges. The workspace comes from the Principal and never from a
+  // query param — a `?workspaceId=` here would be a cross-tenant leak by design (M22).
+  app.get("/v1/analytics/usage-by-user", requireScopeOnPrincipal("observability:read"), async (c) => {
+    // Fail-fast on each param (Rule 8): a non-numeric or out-of-range value is rejected rather than
+    // silently defaulted, so a caller never receives a window different from the one it asked for.
+    const num = (name: string): number | undefined | null => {
+      const raw = c.req.query(name);
+      if (raw === undefined) return undefined;
+      const n = Number(raw);
+      return Number.isInteger(n) && n > 0 ? n : null;
+    };
+    const days = num("days");
+    const limit = num("limit");
+    const offset = c.req.query("offset") === undefined ? undefined : Number(c.req.query("offset"));
+    if (days === null || limit === null) {
+      return c.json(apiError("INVALID_QUERY", "days and limit must be positive integers"), 400);
+    }
+    if (offset !== undefined && (!Number.isInteger(offset) || offset < 0)) {
+      return c.json(apiError("INVALID_QUERY", "offset must be a non-negative integer"), 400);
+    }
+    const opts: UsageByUserOptions = {};
+    if (days !== undefined) opts.days = days;
+    if (limit !== undefined) opts.limit = limit;
+    if (offset !== undefined) opts.offset = offset;
+    const result = await repo.aggregateUsageByUser(opts, getPrincipal(c).workspaceId);
+    return c.json(usageByUserResponseSchema.parse(result), 200);
   });
 }

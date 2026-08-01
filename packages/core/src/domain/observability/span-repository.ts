@@ -6,6 +6,7 @@ import type { NorthStarResponse } from "./north-star.js";
 import type { ObservabilityRange, ObservabilityResponse } from "./observability.js";
 import type { SessionListResponse, SessionDetailResponse } from "./session.js";
 import type { PruneStats } from "./retention.js";
+import type { UsageByUserOptions, UsageByUserResponse } from "./usage-by-user.js";
 import type { EvaluatorSummary, ScoreBucket } from "../evaluation/evaluation.js";
 import type { SpanAttributeKey, SpanAttributeValue } from "./span-facets.js";
 import type { Annotation, NormalizedAnnotation } from "./annotation.js";
@@ -74,6 +75,9 @@ export interface AggregateRepository {
   /** M90: per-evaluator score aggregation bucketed over time (mean + label counts per period).
    *  Only buckets with ≥ 1 sample are returned (no fabricated zero period). */
   aggregateScoresOverTime(range: ObservabilityRange, workspaceId?: string): Promise<ScoreBucket[]>;
+  /** M140: token/cost consumption grouped by END USER (client-chosen `user.id`), windowed + paged.
+   *  Spans with no identity fall into the `unattributed` bucket — never dropped. */
+  aggregateUsageByUser(opts?: UsageByUserOptions, workspaceId?: string): Promise<UsageByUserResponse>;
   /** M92: facet discovery — top-N distinct span attribute keys in the workspace (recent window). */
   discoverSpanAttributeKeys(workspaceId?: string): Promise<SpanAttributeKey[]>;
   /** M92: facet discovery — top-N distinct values for one attribute key (key bound as a jsonb path). */
