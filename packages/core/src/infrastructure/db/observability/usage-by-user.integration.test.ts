@@ -19,7 +19,6 @@ import type pg from "pg";
 import type { Span } from "../../../domain/observability/span.js";
 import { DEFAULT_PRICES } from "../../../domain/observability/default-prices.js";
 import {
-  MAX_LIMIT,
   MAX_WINDOW_DAYS,
   usageByUserResponseSchema,
 } from "../../../domain/observability/usage-by-user.js";
@@ -217,18 +216,38 @@ suite("M140 — usage by end user (integration)", () => {
     expect(r.users.map((u) => u.userId)).toEqual(["primary"]);
   });
 
-  it("F-test-6 — limit and offset are clamped like the window is", async () => {
+  it("F-test-6 — limit is APPLIED, and offset floors at zero", async () => {
+    // Rewritten 2026-08-01 after asking "is there a wrong implementation that would pass this?".
+    // The previous version seeded ONE user and asserted `users.length <= MAX_LIMIT`. With one row
+    // that is true whether the clamp exists or not — measured: deleting `Math.min(MAX_LIMIT, …)`
+    // left all 14 tests green. A fixture with no discriminating power protects the appearance of
+    // the behaviour, not the behaviour.
+    //
+    // Three users and `limit: 2` tells the two implementations apart: applied → 2 rows,
+    // ignored → 3.
     await repo.save(
-      [span({ spanId: "k1", traceId: "tk", model: "claude-opus-4-8", inputTokens: 1, outputTokens: 0, attributes: { "user.id": "one" } })],
+      [
+        span({ spanId: "l1", traceId: "tl", model: "claude-opus-4-8", inputTokens: 300, outputTokens: 0, attributes: { "user.id": "lim-a" } }),
+        span({ spanId: "l2", traceId: "tl", model: "claude-opus-4-8", inputTokens: 200, outputTokens: 0, attributes: { "user.id": "lim-b" } }),
+        span({ spanId: "l3", traceId: "tl", model: "claude-opus-4-8", inputTokens: 100, outputTokens: 0, attributes: { "user.id": "lim-c" } }),
+      ],
       WS_A,
     );
 
-    const wide = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A, { limit: 100_000 });
-    expect(wide.users.length).toBeLessThanOrEqual(MAX_LIMIT);
+    const page = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A, { limit: 2 });
+    expect(page.users.map((u) => u.userId)).toEqual(["lim-a", "lim-b"]);
+    expect(page.totalUsers).toBe(3);
 
-    // A negative offset must behave as 0, not as a SQL error or a silently empty page.
+    // A negative offset must behave as 0 — not error, and not silently skip the first page.
     const negative = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A, { offset: -5 });
-    expect(negative.users.map((u) => u.userId)).toEqual(["one"]);
+    expect(negative.users.map((u) => u.userId)).toEqual(["lim-a", "lim-b", "lim-c"]);
+
+    // HONEST LIMIT: the 500 ceiling itself is NOT exercised — discriminating it needs 501+ seeded
+    // users, which is disproportionate here. Since `8e77635` the route rejects `limit > 500` with
+    // 400 before the repository is reached (`usage-by-user-route.integration.test.ts` covers that),
+    // so the clamp below is defence in depth for a direct caller, and it is asserted structurally.
+    const src = readFileSync(new URL("./usage-by-user-repository.ts", import.meta.url), "utf8");
+    expect(src).toMatch(/Math\.min\(MAX_LIMIT,/);
   });
 
   it("F-test-8 — query 2 stays restricted to the page (cardinality risk R3)", () => {
