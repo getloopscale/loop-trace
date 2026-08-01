@@ -9,6 +9,10 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Roadmap emendado: **M139 — Eval no CI**, para que o produto que avalia agentes passe a se avaliar (`/roadmap-feature eval-ci-dataset`). O `llm_judge` não tem nenhuma métrica de concordância com rótulo humano, embora a `labeling_queue` exista, e os benchmarks do repositório não são citados por workflow algum — são medições de um dia, não gates. Desenho de dois tiers derivado do campo: o determinístico gateia, o estocástico testa contrato e pula visivelmente sem chave.
+
+### Added
+
 - **Os cinco arquivos que faltavam para este repositório poder ser publicado.** `LICENSE`, `NOTICE`, `SECURITY.md`, `CODE_OF_CONDUCT.md` e `CONTRIBUTING.md`. O mais grave era a licença: o `CLAUDE.md` afirma Apache-2.0 desde sempre e **todo** `package.json` declara `"license": "Apache-2.0"`, mas não havia arquivo `LICENSE` na raiz e o GitHub reportava `license: none` — uma licença que existe em metadado e não no repositório não concede direito algum a quem clona, e um repositório público sem licença é, por padrão, "todos os direitos reservados". `NOTICE`, `SECURITY.md` e `CONTRIBUTING.md` foram **escritos** para o theo-lens, não copiados dos irmãos: as dependências são as reais deste workspace, os escopos são os cinco `observability:*` que o código de fato usa, e a seção de conteúdo ingerido diz o que é verdade **aqui** — num produto de tracing os spans **são** a carga útil, então um defeito que copie um header `Authorization` para um atributo de span é divulgação de credencial com retenção indefinida, e todo span é entrada influenciada pelo atacante antes de chegar ao judge e ao copilot.
 
 ### Removed
