@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { parse } from "yaml";
@@ -44,7 +44,7 @@ function jobs(wf: Record<string, unknown>): Record<string, Record<string, unknow
 }
 
 /** Every gate the `image` job must wait on. Adding one here is what makes the pin fail loudly. */
-const REQUIRED_GATES = ["gate-ci", "gate-contract", "gate-sast", "guard-release-on-main"] as const;
+const REQUIRED_GATES = ["gate-ci", "gate-contract", "gate-sast", "gate-eval", "guard-release-on-main"] as const;
 
 /**
  * THE assertion, extracted so the negative cases can run the REAL one instead of re-implementing
@@ -128,16 +128,43 @@ describe("M137 — publication gates", () => {
       expect(j["gate-ci"]?.["uses"]).toBe("./.github/workflows/ci.yml");
       expect(j["gate-contract"]?.["uses"]).toBe("./.github/workflows/integration.yml");
       expect(j["gate-sast"]?.["uses"]).toBe("./.github/workflows/security-sast.yml");
+      expect(j["gate-eval"]?.["uses"]).toBe("./.github/workflows/eval.yml");
+    });
+
+    /**
+     * As três asserções abaixo eram listas LITERAIS mantidas à mão, e o `/review` da M139 provou
+     * por mutação o que isso custa: `gate-eval` não estava em nenhuma delas, então repointar
+     * `gate-eval` para `ci.yml` — o eval nunca roda, e o check aparece VERDE porque ci.yml é
+     * verde — deixava 45/45 testes passando. Re-adicionar um `push:` a `eval.yml`, o defeito exato
+     * do F-sec-2, também passava.
+     *
+     * Agora derivam de `publish.yml`: qualquer job `gate-*` entra automaticamente, e o próximo gate
+     * fica coberto sem ninguém lembrar de estender uma lista. É a diferença entre um teste que pina
+     * o que existe e um que pina a REGRA.
+     */
+    const GATE_JOBS = Object.entries(jobs(workflow("publish.yml")))
+      .filter(([name, def]) => name.startsWith("gate-") && String(def?.["uses"] ?? "").startsWith("./.github/workflows/"))
+      .map(([name, def]) => [name, String(def!["uses"]).replace("./.github/workflows/", "")] as const);
+
+    it("the derivation found the gates (guards the guard)", () => {
+      // Uma derivação que casasse zero jobs tornaria todo `it.each` abaixo vacuamente verde.
+      expect(GATE_JOBS.length).toBeGreaterThanOrEqual(4);
+      expect(GATE_JOBS.map(([n]) => n)).toContain("gate-eval");
     });
 
     /** F-sec-1 — a secret with no consumer is pure surface handed to every future caller. */
-    it.each(["gate-ci", "gate-contract", "gate-sast"])("%s is passed no secrets", (job) => {
+    it.each(GATE_JOBS)("%s is passed no secrets", (job) => {
       expect(jobs(workflow("publish.yml"))[job]).not.toHaveProperty("secrets");
     });
 
     /** F-sec-2/F-sec-4 — a standalone push trigger raced the gated call on the same concurrency group. */
-    it.each(["ci.yml", "integration.yml", "security-sast.yml"])("%s has no standalone push trigger", (file) => {
+    it.each(GATE_JOBS)("%s's workflow has no standalone push trigger", (_job, file) => {
       expect(triggers(workflow(file))).not.toHaveProperty("push");
+    });
+
+    /** Um gate cujo alvo não declara `workflow_call` reprova no PARSE — startup_failure, 0 jobs. */
+    it.each(GATE_JOBS)("%s's workflow declares workflow_call", (_job, file) => {
+      expect(triggers(workflow(file))).toHaveProperty("workflow_call");
     });
   });
 
@@ -270,7 +297,7 @@ name: Publish
 on: { push: { branches: [develop] } }
 jobs:
   image:
-    needs: [gate-ci, gate-contract, gate-sast, guard-release-on-main]
+    needs: [gate-ci, gate-contract, gate-sast, gate-eval, guard-release-on-main]
     if: \${{ always() }}
     uses: ./.github/workflows/build-publish.yml
 `) as Record<string, unknown>;
@@ -284,7 +311,7 @@ name: Publish
 on: { push: { branches: [develop] } }
 jobs:
   image:
-    needs: [gate-ci, gate-contract, gate-sast, guard-release-on-main]
+    needs: [gate-ci, gate-contract, gate-sast, gate-eval, guard-release-on-main]
     uses: ./.github/workflows/build-publish.yml
   image-hotfix:
     uses: ./.github/workflows/build-publish.yml
@@ -316,6 +343,65 @@ jobs:
           assertJobIsGated(`${file}:${name}`, job);
         }
       }
+    });
+  });
+
+  /**
+   * Encontrado por MUTAÇÃO ao adicionar `gate-eval` (M139): deletar `eval.yml` não fazia nenhum
+   * teste falhar, embora `publish.yml` continuasse declarando `uses: ./.github/workflows/eval.yml`.
+   * O GitHub reprova isso no PARSE — `workflow was not found` — e um run que morre no parse aparece
+   * como `startup_failure`: run criado, zero jobs, 0s. Quem olha a lista vê vermelho e presume que
+   * o gate rodou e reprovou. É a mesma família do defeito que custou 30 runs ao theo-memory
+   * (`eval.yml:43-51`): o estado do check não prova que o check executou.
+   */
+  describe("every local workflow reference resolves (found by mutation, M139)", () => {
+    const files = readdirSync(WORKFLOWS).filter((f) => /\.ya?ml$/.test(f));
+
+    it.each(files)("%s references only workflows that exist AND are callable", (file) => {
+      for (const [job, def] of Object.entries(jobs(workflow(file)))) {
+        const uses = String(def?.["uses"] ?? "");
+        if (!uses.startsWith("./.github/workflows/")) continue;
+        const target = uses.replace("./.github/workflows/", "");
+        if (!existsSync(resolve(WORKFLOWS, target))) {
+          throw new Error(`${file}:${job} calls ${uses}, which does not exist`);
+        }
+        // EXISTIR NÃO BASTA — o alvo precisa declarar `workflow_call:`. Sem ele o GitHub reprova a
+        // chamada no PARSE, e um run que morre no parse aparece como `startup_failure`: criado, zero
+        // jobs, 0s. A lista de checks mostra vermelho e quem olha conclui que o gate rodou e
+        // reprovou. Este par de asserções cobre as duas metades: o arquivo existe, e ele é chamável.
+        if (triggers(workflow(target))["workflow_call"] === undefined) {
+          throw new Error(`${file}:${job} calls ${uses}, which does not declare \`workflow_call:\``);
+        }
+      }
+    });
+  });
+
+  /**
+   * F-test-2 do review. O gate podia estar cabeado, nomeado, chamável e verde — e ainda assim
+   * incapaz de reprovar: remover `--fail-on-regression` do comando deixava 45/45 passando. O
+   * workflow rodava o eval, via a regressão, e saía 0. Nada pinava que o passo que GATEIA carrega
+   * a flag que o faz gatear.
+   */
+  describe("the eval gate's command actually gates (F-test-2)", () => {
+    const evalJob = jobs(workflow("eval.yml"))["eval"] as Record<string, unknown> | undefined;
+    const steps = (evalJob?.["steps"] ?? []) as Array<Record<string, unknown>>;
+    const gating = steps.filter((st) => {
+      const run = String(st["run"] ?? "");
+      return run.includes("run-eval.mjs") && run.includes("--splits regression");
+    });
+
+    it("exactly one step runs the regression split", () => {
+      expect(gating).toHaveLength(1);
+    });
+
+    it("that step carries --fail-on-regression", () => {
+      expect(String(gating[0]?.["run"] ?? "")).toContain("--fail-on-regression");
+    });
+
+    it("that step is NOT continue-on-error", () => {
+      // `continue-on-error: true` existe no passo do split `dev`, logo abaixo. Aplicá-lo ao passo
+      // que gateia deixaria o job verde sobre uma regressão — e nada impedia isso.
+      expect(gating[0]).not.toHaveProperty("continue-on-error");
     });
   });
 });

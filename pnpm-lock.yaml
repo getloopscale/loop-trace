@@ -22,6 +22,9 @@ importers:
       '@types/pg':
         specifier: ^8.11.0
         version: 8.20.0
+      '@usetheo/lens-core':
+        specifier: workspace:*
+        version: link:packages/core
       '@vitest/coverage-v8':
         specifier: ^4.0.0
         version: 4.1.9(vitest@4.1.9)
