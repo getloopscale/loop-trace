@@ -187,7 +187,32 @@ export async function getTraceTree(
     .from(spans)
     .where(and(eq(spans.traceId, traceId), eq(spans.workspaceId, workspaceId)))
     .orderBy(sql`start_time_unix_nano::numeric`, spans.spanId);
-  if (rows.length === 0) return null;
+  if (rows.length === 0) {
+    // LT-034 — no spans is NOT the same as no trace. `listTraces` and `getTraceCost` both read the
+    // derived `traces` table; only this function read `spans`, so a trace whose spans are gone
+    // (retention, a manual cleanup, a partial ingest) was LISTED and PRICED while its detail
+    // answered 404. Two routes of one service asserting a trace exists and a third denying it is
+    // worse than either answer alone: the user clicks a row the product just showed them and gets
+    // "not found".
+    //
+    // So fall back to the same source the siblings use, and answer with the trace and an empty
+    // subtree. Still workspace-scoped — the fallback must not become a cross-tenant door.
+    const derived = await db
+      .select()
+      .from(traces)
+      .where(and(eq(traces.traceId, traceId), eq(traces.workspaceId, workspaceId)))
+      .limit(1);
+    const t = derived[0];
+    if (!t) return null; // genuinely unknown → 404 on all three, as before
+    return {
+      spanId: traceId,
+      traceId,
+      name: t.name ?? traceId,
+      startTimeUnixNano: t.startTimeUnixNano ?? "0",
+      endTimeUnixNano: t.endTimeUnixNano ?? "0",
+      children: [],
+    } as TraceTreeNode;
+  }
 
   // Read-time assembly over ALL persisted spans → out-of-order batches and
   // orphans (parent absent) resolve correctly (EC-2 / Q3).
