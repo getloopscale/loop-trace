@@ -111,12 +111,31 @@ suite("LT-034 — the trace routes agree with each other (integration)", () => {
     expect(listing.traces.map((t) => t.traceId)).not.toContain("no-such-trace-at-all");
   });
 
-  it("tenant isolation survives the fix: workspace B never reaches workspace A's trace", async () => {
-    // The detail route is about to start reading the `traces` table. That table is workspace-keyed
-    // too, but a fix that dropped the scope while adding the fallback would leak — and it would
-    // look like a plausible trace, not like an error.
-    await seedOrphanTrace("trace-of-a", "orphan-a");
-    expect(await repo.getTraceTree("trace-of-a", "ws-someone-else")).toBeNull();
-    expect(await repo.getTraceCost("trace-of-a", "ws-someone-else")).toBeNull();
+  it("tenant isolation: another workspace reaches neither a trace WITH spans nor an orphan", async () => {
+    // MEASURED 2026-08-01: the earlier version of this test seeded only an ORPHAN trace, so it
+    // exercised the fallback path alone. Removing the workspace filter from the main path
+    // (`getTraceTree` over `spans`) left all 18 tests GREEN — the leak that matters most was
+    // invisible. The fixture has to carry BOTH shapes, because the two paths are scoped by
+    // different queries and a fix to one says nothing about the other.
+    //
+    // Both ids below are REAL in workspace A. An id that exists nowhere would pass against an
+    // implementation with no scoping at all, since a made-up id is absent from every tenant —
+    // it proves the lock works by trying a key that opens no door.
+    await repo.save([span({ spanId: "a-real-1", traceId: "trace-with-spans-of-a", name: "real" })], WS);
+    await seedOrphanTrace("trace-orphan-of-a", "orphan-a");
+
+    // Sanity: both ARE reachable from their own workspace, otherwise the assertions below would
+    // pass for the wrong reason (nothing is reachable from anywhere).
+    expect(await repo.getTraceTree("trace-with-spans-of-a", WS)).not.toBeNull();
+    expect(await repo.getTraceTree("trace-orphan-of-a", WS)).not.toBeNull();
+
+    for (const id of ["trace-with-spans-of-a", "trace-orphan-of-a"]) {
+      expect(await repo.getTraceTree(id, "ws-someone-else"), `${id} leaked via detail`).toBeNull();
+      expect(await repo.getTraceCost(id, "ws-someone-else"), `${id} leaked via cost`).toBeNull();
+    }
+
+    // …and the listing must not hand the ids out either.
+    const foreign = await repo.listTraces({}, "ws-someone-else");
+    expect(foreign.traces.map((x) => x.traceId)).not.toContain("trace-with-spans-of-a");
   });
 });
