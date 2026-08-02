@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { rowsAs } from "../../../domain/sql-rows.js";
 import { DEFAULT_WORKSPACE_ID } from "../../../domain/principal.js";
-import { round3 } from "../../../domain/observability/tool-stats.js";
+import { round3, roundUsd } from "../../../domain/observability/tool-stats.js";
 import {
   isoTimestamp,
   shapeSessionDetail,
@@ -125,7 +125,8 @@ export async function listSessions(
       firstSeenAt: isoTimestamp(r.firstSeenAt),
       lastSeenAt: isoTimestamp(r.lastSeenAt),
       traceCount: r.traceCount,
-      costUsd: round3(r.costUsd ?? 0),
+      // 6 casas, não 3: a LISTA sofria o mesmo zeramento do detalhe (LT-063 / #121).
+      costUsd: roundUsd(r.costUsd ?? 0),
       totalTokens: r.totalTokens ?? 0,
       errorRate: r.traceCount === 0 ? 0 : round3(r.errorCount / r.traceCount),
     };

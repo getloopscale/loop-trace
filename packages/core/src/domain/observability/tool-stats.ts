@@ -29,6 +29,23 @@ export function round3(x: number): number {
 }
 
 /**
+ * Arredondamento de VALOR EM USD — 6 casas. Distinto de `round3` de propósito.
+ *
+ * `round3` serve grandezas cuja terceira casa já é ruído (latência em ms, taxa de erro).
+ * Custo não é uma delas: uma chamada de agente com modelo barato custa na casa de 1e-4, e
+ * três casas a zeram. Foi assim que o agregado de sessão passou a devolver `costUsd: 0`
+ * enquanto os traces membros somavam 0.000384 na MESMA resposta (LT-063 / #121).
+ *
+ * As 6 casas não são número novo: é a precisão que `pricing.ts` já usa ao calcular o custo
+ * de um trace. Um agregado não pode ser mais grosseiro que as parcelas que soma, senão não
+ * fecha por construção — por isso o piso vive aqui, num lugar só, e não inline em cada
+ * chamador.
+ */
+export function roundUsd(x: number): number {
+  return Math.round(x * 1e6) / 1e6;
+}
+
+/**
  * Canonical span status_code values meaning ERROR. OTLP/protobuf yields the numeric
  * enum ("2"); some producers/JSON paths yield the textual name. The tool-stats error
  * filter and the UI status mapping both key on this set (kept in sync by review F-st-1).

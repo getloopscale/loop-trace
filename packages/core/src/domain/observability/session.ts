@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { round3 } from "./tool-stats.js";
+import { round3, roundUsd } from "./tool-stats.js";
 import { traceListItemSchema, type TraceListItem } from "./trace-list.js";
 
 /**
@@ -119,7 +119,9 @@ export function isoTimestamp(value: Date | string): string {
 /**
  * Pure shaping of a raw session aggregate into the detail DTO (M13). errorRate
  * guards divide-by-zero; NULL cost/tokens/latency coalesce to 0 (EC-1 — an
- * all-tokenless session is valid, not an error); floats are round3-ed.
+ * all-tokenless session is valid, not an error). Latência e taxa vão a 3 casas; CUSTO vai a
+ * 6 (`roundUsd`), a mesma precisão de `pricing.ts` — com 3 casas todo custo < $0.0005 virava
+ * 0 e a resposta se contradizia (LT-063 / #121).
  * Deterministic + unit-testable; the SQL is cross-checked against it in integration.
  */
 export function shapeSessionDetail(raw: RawSessionDetail): SessionDetailResponse {
@@ -128,7 +130,7 @@ export function shapeSessionDetail(raw: RawSessionDetail): SessionDetailResponse
     firstSeenAt: isoTimestamp(raw.firstSeenAt),
     lastSeenAt: isoTimestamp(raw.lastSeenAt),
     traceCount: raw.traceCount,
-    costUsd: round3(raw.costUsd ?? 0),
+    costUsd: roundUsd(raw.costUsd ?? 0),
     totalTokens: raw.totalTokens ?? 0,
     errorRate: raw.traceCount === 0 ? 0 : round3(raw.errorCount / raw.traceCount),
     latencyP50Ms: round3(raw.p50 ?? 0),
