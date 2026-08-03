@@ -194,6 +194,10 @@ const EXPECTED_PUBLIC_SURFACE = [
   "traceCostSchema",
   "traceListItemSchema",
   "MAX_LIMIT",
+  // M140 review: the deep-page ceiling. Added deliberately — it belongs on the public surface for
+  // the same reason MAX_LIMIT does: the route rejects above it and the repository clamps to it, so
+  // a consumer building a pager needs the number rather than rediscovering it from a 400.
+  "MAX_OFFSET",
   "MAX_WINDOW_DAYS",
   "UNATTRIBUTED_USER_ID",
   "usageByUserResponseSchema",

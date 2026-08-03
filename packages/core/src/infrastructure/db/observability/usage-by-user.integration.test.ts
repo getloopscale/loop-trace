@@ -19,10 +19,12 @@ import type pg from "pg";
 import type { Span } from "../../../domain/observability/span.js";
 import { DEFAULT_PRICES } from "../../../domain/observability/default-prices.js";
 import {
+  MAX_OFFSET,
   MAX_WINDOW_DAYS,
   usageByUserResponseSchema,
 } from "../../../domain/observability/usage-by-user.js";
 import { resolveModelPrice } from "../../../domain/observability/pricing.js";
+import { roundUsd } from "../../../domain/observability/tool-stats.js";
 import { createPool, DrizzleSpanRepository } from "./drizzle-span-repository.js";
 import { aggregateUsageByUser } from "./usage-by-user-repository.js";
 
@@ -35,6 +37,10 @@ const WS_B = "ws-usage-b";
 
 /** A model guaranteed to share NO prefix with any price key (EC-5) — prefix match would false-pass. */
 const NO_PRICE_MODEL = "zzz-no-price-model";
+
+/** The costUsd of one user in a response, or 0 when absent. */
+const costOf = (r: { users: { userId: string; costUsd: number }[] }, userId: string): number =>
+  r.users.find((u) => u.userId === userId)?.costUsd ?? 0;
 
 function span(over: Partial<Span> & Pick<Span, "spanId" | "traceId">): Span {
   return {
@@ -72,7 +78,18 @@ suite("M140 — usage by end user (integration)", () => {
 
   it("T4.1 — a workspace never sees another workspace's end user", async () => {
     await repo.save(
-      [span({ spanId: "a1", traceId: "ta", model: "claude-opus-4-8", inputTokens: 1000, outputTokens: 500, attributes: { "user.id": "alice" } })],
+      [
+        span({ spanId: "a1", traceId: "ta", model: "claude-opus-4-8", inputTokens: 1000, outputTokens: 500, attributes: { "user.id": "alice" } }),
+        // An UNPRICED span with tokens, in A only. The endpoint runs several queries and each one
+        // carries its own `WHERE workspace_id`; a leak confined to the price-gap query alone used
+        // to survive every test here, because the only two-workspace fixture seeded priced spans
+        // exclusively. MEASURED: unscoping that one query left the suite 22/22 green.
+        span({ spanId: "a2", traceId: "ta2", model: NO_PRICE_MODEL, inputTokens: 40, outputTokens: 10, attributes: { "user.id": "alice" } }),
+        // The SAME identity as B's user, in A. The per-model query (the input to the price table)
+        // filters by the page's ids — if IT leaked, A's spend would fold into B's "bob" row while
+        // the token sums, which come from the page query, stayed correct. Only costUsd would move.
+        span({ spanId: "a3", traceId: "ta3", model: "claude-opus-4-8", inputTokens: 900_000, outputTokens: 900_000, attributes: { "user.id": "bob" } }),
+      ],
       WS_A,
     );
     await repo.save(
@@ -88,6 +105,16 @@ suite("M140 — usage by end user (integration)", () => {
     // pass on a bug that filtered the label out of the SELECT but not out of the SUM.
     expect(asB.users.reduce((n, u) => n + u.inputTokens, 0)).toBe(7);
     expect(asB.totalUsers).toBe(1);
+    // (c) the price-gap query — A's unpriced span must not be counted against B. Without this, a
+    // report can announce a price gap that belongs to another tenant: a plausible number, not an
+    // error, which is the failure mode this whole milestone was built against.
+    expect(asB.unpricedSpans).toBe(0);
+    // (d) the per-model query — B's "bob" must be priced from B's 7/3 tokens alone. A shared
+    // identity is the only fixture shape that can expose this, and the assertion is on cost because
+    // that is the single field the per-model query owns.
+    const price = resolveModelPrice("claude-opus-4-8", DEFAULT_PRICES);
+    const bobOnlyInB = 7 * (price?.inputPerToken ?? 0) + 3 * (price?.outputPerToken ?? 0);
+    expect(costOf(asB, "bob")).toBeCloseTo(roundUsd(bobOnlyInB), 6);
   });
 
   it("T4.2 — a span with no identity lands in the unattributed bucket, never dropped", async () => {
@@ -275,7 +302,12 @@ suite("M140 — usage by end user (integration)", () => {
     // comment above the query that merely mentions ORDER BY, and pass while measuring nothing.
     const orderByLines = src.split("\n").filter((l) => /^\s+ORDER BY /.test(l));
     expect(orderByLines).toHaveLength(1);
-    expect(orderByLines[0]).toMatch(/DESC,\s*1 ASC\s*$/);
+    // Anchored on the PROPERTY (a descending total, then an ascending tiebreak on the grouping
+    // key), not on one spelling of it. It previously demanded the literal `1 ASC`; rewriting the
+    // page as a CTE that names its columns turned it red while the tiebreak was still total and
+    // still correct. A guard that breaks on a behaviour-preserving rename teaches the next person
+    // to weaken it, which is worse than the gap it covers.
+    expect(orderByLines[0]).toMatch(/DESC,\s*(1|"userId")\s+ASC\s*$/);
   });
 
   it("EC-3 — pagination returns every user exactly once when totals tie", async () => {
@@ -301,5 +333,98 @@ suite("M140 — usage by end user (integration)", () => {
   it("clamps an absurd window instead of scanning without bound (EC-4)", async () => {
     const r = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A, { days: 999_999 });
     expect(r.windowDays).toBe(MAX_WINDOW_DAYS);
+  });
+
+  it("clamps an absurd offset as a last line of defence (the route rejects it first)", async () => {
+    // Nothing in the response echoes the offset, so the observable is that it did NOT blow up: an
+    // unbounded value reached `OFFSET` as a bigint and errored in the driver. Parsing proves the
+    // response is well-formed rather than a thrown 500.
+    const r = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A, { offset: 999_999_999 });
+    expect(() => usageByUserResponseSchema.parse(r)).not.toThrow();
+    expect(MAX_OFFSET).toBeLessThan(999_999_999);
+  });
+
+  it("an EMPTY workspace answers a well-formed zero report, never an absent one", async () => {
+    // The edge that `count(*) OVER ()` introduces: the total rides on the page rows, so an empty
+    // page has no row to read it from. This pins the whole shape, not one field — and the branch
+    // that skips the per-model query (`ids.length === 0`) is only reachable here.
+    const r = await aggregateUsageByUser(db, DEFAULT_PRICES, "ws-usage-empty");
+    expect(() => usageByUserResponseSchema.parse(r)).not.toThrow();
+    expect(r).toEqual({ users: [], unpricedSpans: 0, totalUsers: 0, windowDays: 30 });
+  });
+
+  it("an offset PAST THE END still reports the true totalUsers, not zero", async () => {
+    // The dangerous half of the same edge. Reading the window count off row 0 works only while
+    // there IS a row; paging past the end must NOT report "0 users" for a workspace that has three
+    // — the caller cannot tell that lie from the truth, and it is what a naive fold produces.
+    await repo.save(
+      [
+        span({ spanId: "o1", traceId: "to", model: "claude-opus-4-8", inputTokens: 3, attributes: { "user.id": "u1" } }),
+        span({ spanId: "o2", traceId: "to", model: "claude-opus-4-8", inputTokens: 2, attributes: { "user.id": "u2" } }),
+        span({ spanId: "o3", traceId: "to", model: "claude-opus-4-8", inputTokens: 1, attributes: { "user.id": "u3" } }),
+      ],
+      WS_A,
+    );
+
+    const past = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A, { limit: 2, offset: 50 });
+    expect(past.users).toEqual([]);
+    expect(past.totalUsers).toBe(3);
+  });
+
+  it("the aggregates describe ONE window, not one clock each", async () => {
+    // Before the window was bound once as a value, each statement re-evaluated `now()` and measured
+    // a slightly different range. The observable consequence is an inconsistent report: a total
+    // counting a user whose rows the page never saw. Asserting the invariant is stronger than
+    // asserting the implementation — with the page not truncated by `limit`, row count and reported
+    // total must agree.
+    await repo.save(
+      [
+        span({ spanId: "w1", traceId: "tw", model: "claude-opus-4-8", inputTokens: 5, attributes: { "user.id": "w-a" } }),
+        span({ spanId: "w2", traceId: "tw", model: "claude-opus-4-8", inputTokens: 4, attributes: { "user.id": "w-b" } }),
+      ],
+      WS_A,
+    );
+
+    const r = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A, { limit: 100 });
+    expect(r.users.length).toBe(r.totalUsers);
+  });
+
+  it("T4.3c — a span with NO model but WITH tokens counts as unpriced", async () => {
+    // The `model === ""` disjunct of the price-gap classifier had no fixture: one corner seeded a
+    // priceless model WITH tokens, the other a NULL model with ZERO tokens. Nothing seeded the
+    // input that actually reaches this branch.
+    await repo.save(
+      [
+        span({ spanId: "n1", traceId: "tn", model: NO_PRICE_MODEL, inputTokens: 10, attributes: { "user.id": "nm" } }),
+        span({ spanId: "n2", traceId: "tn", inputTokens: 10, attributes: { "user.id": "nm" } }),
+      ],
+      WS_A,
+    );
+
+    const r = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A);
+    expect(r.unpricedSpans).toBe(2);
+    // …and neither contributes cost: an unpriced span raises the gap, never the total.
+    expect(costOf(r, "nm")).toBe(0);
+  });
+
+  it("pins the six-decimal cost floor itself, not just the value", async () => {
+    // `toBeCloseTo(x, 6)` tolerates exactly the rounding step, so a rounded and an unrounded
+    // implementation are indistinguishable under it — the assertion could not see whether the floor
+    // was applied at all. The property under test is IDEMPOTENCE: a value already at the floor is
+    // unchanged by rounding again. Per-user cost is a SUM over models, and summing rounded floats
+    // reintroduces trailing digits, so dropping the final `roundUsd` makes this red.
+    //
+    // The floor is a deliberate contract: three-decimal rounding once reported real spend as zero.
+    await repo.save(
+      [
+        span({ spanId: "p1", traceId: "tp", model: "claude-opus-4-8", inputTokens: 7, outputTokens: 3, attributes: { "user.id": "prec" } }),
+        span({ spanId: "p2", traceId: "tp", model: "claude-sonnet-4-5", inputTokens: 11, outputTokens: 13, attributes: { "user.id": "prec" } }),
+      ],
+      WS_A,
+    );
+
+    const cost = costOf(await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A), "prec");
+    expect(cost).toBeGreaterThan(0);
+    expect(cost).toBe(roundUsd(cost));
   });
 });
