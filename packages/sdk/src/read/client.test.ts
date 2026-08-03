@@ -177,6 +177,30 @@ describe("LensReadClient — the 7 typed read methods (T2.2)", () => {
     expect(res.period).toBe("day");
   });
 
+  it("usageByUser hits /v1/analytics/usage-by-user and forwards the window + page", async () => {
+    // M117 read parity: every sibling analytics read is reachable from this client. M140 shipped a
+    // named OpenAPI component with no method here, so the first-party client could not reach its
+    // own endpoint.
+    const fetchFn = mockFetch({ users: [], unpricedSpans: 0, totalUsers: 0, windowDays: 7 });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    const res = await client.usageByUser({ days: 7, limit: 50, offset: 10 });
+    const url = new URL(calledUrl(fetchFn));
+    expect(url.pathname).toBe("/v1/analytics/usage-by-user");
+    expect(url.searchParams.get("days")).toBe("7");
+    expect(url.searchParams.get("limit")).toBe("50");
+    expect(url.searchParams.get("offset")).toBe("10");
+    expect(res.windowDays).toBe(7);
+  });
+
+  it("usageByUser omits unset options rather than sending empty params", async () => {
+    // Sending `days=` would be a value the engine must interpret; omitting it lets the engine apply
+    // its documented default (30), which is the contract the docs promise.
+    const fetchFn = mockFetch({ users: [], unpricedSpans: 0, totalUsers: 0, windowDays: 30 });
+    const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
+    await client.usageByUser();
+    expect(new URL(calledUrl(fetchFn)).search).toBe("");
+  });
+
   it("toolStats hits /v1/analytics/tools with no query", async () => {
     const fetchFn = mockFetch({ tools: [] });
     const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });

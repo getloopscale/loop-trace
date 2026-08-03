@@ -100,6 +100,7 @@ import { buildOpenApiDocument } from "./openapi.js";
  *  - GET  /v1/analytics/cost : day/week cost aggregation (?period=day|week, M5)
  *  - GET  /v1/analytics/tools: per-tool stats ranking (M6)
  *  - GET  /v1/analytics/tools/:name/traces : executions that called a tool (M6 drill-down)
+ *  - GET  /v1/analytics/usage-by-user : token/cost consumption per end user (?days=&limit=&offset=, M140)
  *  - POST /v1/replay-sessions: record a replay-open event (M8 north-star)
  *  - GET  /v1/metrics/north-star: traces/day + replay-sessions/week (M8)
  *  - GET  /v1/metrics/observability: time-series traffic/error-rate, latency percentiles, tokens/cost by model (M11)

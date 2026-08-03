@@ -24,6 +24,16 @@ import { describe, expect, it } from "vitest";
 const BILLING_TERMS =
   /(invoice|billing|billed|chargeback|charge|account|subscription|payment|payable)/i;
 
+/**
+ * The endpoint's PRODUCTION surface: the domain contract, the query that builds it, and the route
+ * that serves it. `analytics-routes.ts` is not new to this milestone but it is where the endpoint
+ * lives, so it is in scope by the same logic.
+ *
+ * The list is deliberately these three and NOT "every file the milestone added" — the test used to
+ * claim the latter while covering three of seven, and the four it omitted are test files, which
+ * must name the vocabulary in order to search for it. Naming the real scope is honest; claiming a
+ * coverage the list does not have is what the review caught.
+ */
 const FILES = [
   "../../../core/src/domain/observability/usage-by-user.ts",
   "../../../core/src/infrastructure/db/observability/usage-by-user-repository.ts",
@@ -41,7 +51,7 @@ const stripComments = (src: string): string =>
   src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
 
 describe("M140 — usage-by-user stays on the observability side of the boundary", () => {
-  it("carries no billing vocabulary in any file the milestone added", () => {
+  it("carries no billing vocabulary anywhere on the endpoint's production surface", () => {
     for (const rel of FILES) {
       const src = stripComments(readFileSync(new URL(rel, import.meta.url), "utf8"));
       const hit = BILLING_TERMS.exec(src);
