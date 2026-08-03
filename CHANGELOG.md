@@ -7,6 +7,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.67.0] - 2026-08-03
+
 ### Added
 
 - **o relatório de consumo por end-user ganhou eixo de tempo** (M143). `GET /v1/analytics/usage-by-user?bucket=day` passa a devolver, para cada usuário da página, uma **série diária** de tokens e custo — o que responde *"o consumo deste usuário está subindo?"*, pergunta que nenhuma tela respondia. **Sem o parâmetro, a resposta é exatamente a de antes**, campo por campo: a tela que já consome este endpoint está em produção, e um campo novo obrigatório a derrubaria. **O teto foi medido, não escolhido.** Pedir 50 usuários sobre 365 dias produz 18.250 pontos e 1,6 MB de JSON para uma tela; o uso real de um gráfico — os 5 maiores consumidores sobre um ano — são 1.825 pontos e 101 kB. Por isso o endpoint **recusa** quando o orçamento de pontos passa de 2.000, dizendo **quais dos dois** parâmetros reduzir e por quanto — em vez de devolver menos dados do que o pedido sem avisar, que é o defeito que este endpoint já pagou para não ter. O orçamento conta **um dia a mais que a janela pedida**, e isso não é margem de segurança: uma janela de N dias que começa no meio de um dia atravessa N+1 dias de calendário, então é essa a quantidade de pontos que a resposta pode de fato carregar. Um dia sem consumo **não vira um ponto zero**: a série vem com lacuna, porque um zero inventado é indistinguível de consumo real zero. E o balde do consumo não atribuído tem série como qualquer outro usuário — ele é frequentemente o maior consumidor, e escondê-lo no eixo do tempo desfaria a decisão que o pôs junto dos demais.
