@@ -7,6 +7,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.66.0] - 2026-08-03
+
 ### Fixed
 
 - **O detalhe de um trace deixou de contradizer a listagem que o mostrou** (LT-034). `GET /v1/traces` listava o trace, `GET /v1/traces/{id}/cost` devolvia 200 com custo e tokens, e `GET /v1/traces/{id}` devolvia **404** — duas rotas do mesmo serviço afirmando que o trace existe e uma afirmando que não. Quem clicasse na linha recebia "não encontrado" para algo que o produto acabara de mostrar.
