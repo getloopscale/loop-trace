@@ -411,13 +411,18 @@ export type { SDKMessage, RunResult as TheokitRunResult } from "./domain/theokit
 // `./domain/theokit/theokit-vectors.js`.
 
 // M140 — consumption grouped by end user (report contract + the unattributed bucket).
+// M143 — o eixo de tempo: `MAX_BUCKET_POINTS` e o schema do ponto da série. O teto SÓ funciona se
+// atravessar o barrel: sem esta linha ele fica `undefined` na rota, `pontos > undefined` é sempre
+// falso, e o endpoint aceita em silêncio o pedido que deveria recusar — medido nesta milestone.
 export {
+  MAX_BUCKET_POINTS,
   MAX_LIMIT,
   MAX_OFFSET,
   MAX_WINDOW_DAYS,
   UNATTRIBUTED_USER_ID,
   usageByUserResponseSchema,
   usageByUserRowSchema,
+  usageByUserSeriesPointSchema,
   type UsageByUserOptions,
   type UsageByUserResponse,
   type UsageByUserRow,

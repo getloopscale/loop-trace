@@ -193,6 +193,9 @@ const EXPECTED_PUBLIC_SURFACE = [
   "toolStatsResponseSchema",
   "traceCostSchema",
   "traceListItemSchema",
+  // M143 — o teto do produto `limit × days` quando há série. Público porque a ROTA precisa dele;
+  // sem atravessar o barrel ele fica `undefined` lá e o teto passa em silêncio (medido no M143).
+  "MAX_BUCKET_POINTS",
   "MAX_LIMIT",
   // M140 review: the deep-page ceiling. Added deliberately — it belongs on the public surface for
   // the same reason MAX_LIMIT does: the route rejects above it and the repository clamps to it, so
@@ -202,6 +205,8 @@ const EXPECTED_PUBLIC_SURFACE = [
   "UNATTRIBUTED_USER_ID",
   "usageByUserResponseSchema",
   "usageByUserRowSchema",
+  // M143 — o schema de UM ponto da série temporal.
+  "usageByUserSeriesPointSchema",
   "traceListResponseSchema",
   "traceTagsResponseSchema",
   "upsertSessionVerdict",
