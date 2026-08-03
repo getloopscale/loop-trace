@@ -100,6 +100,45 @@ route (the theo-lens paths are `/v1/traces/:id`, etc.):
 - `GET /v1/lens/traces/:id` — the reconstructed span tree for one trace.
 - `GET /v1/lens/traces/:id/cost` — the per-trace cost summary.
 - `GET /v1/lens/metrics/observability?range=` — time-series traffic / error-rate / latency / cost-by-model.
+- `GET /v1/lens/analytics/usage-by-user?days=&limit=&offset=` — token and cost consumption grouped by
+  **end user** (M140). See below.
+
+### `GET /v1/analytics/usage-by-user` — consumption per end user
+
+Groups your workspace's spans by the end-user identity your SDK recorded — `user.id`, falling back to
+the OpenTelemetry `gen_ai.user.id`. Windowed over ingestion time (`days`, default 30, max 365) and
+paged (`limit` default 50, max 500; `offset` default 0, max 10000).
+
+**A value above any ceiling is REFUSED with `400 INVALID_QUERY`, never quietly reduced.** The
+distinction matters when you page: `windowDays` is echoed in the response, but `limit` is not, so a
+silently-clamped `limit=100000` would hand you 500 rows with nothing saying so — and you would then
+advance `offset` by 100000 and read the wrong pages without any signal that something was wrong.
+The ceilings themselves are inclusive: `?days=365&limit=500&offset=10000` is valid.
+
+```json
+{
+  "users": [
+    { "userId": "u-42", "spans": 120, "inputTokens": 3261202, "outputTokens": 12590407,
+      "cacheReadTokens": 0, "cacheCreationTokens": 0, "costUsd": 41.23 }
+  ],
+  "unpricedSpans": 0,
+  "totalUsers": 2,
+  "windowDays": 30
+}
+```
+
+Three things worth knowing before you act on the numbers:
+
+- **`costUsd` is an estimate of observed consumption, not a bill.** theo-lens reports what it saw;
+  billing lives elsewhere. The figure is derived from a price table that may not cover every model.
+- **`unpricedSpans` is how that gap is made visible.** It counts spans that carried tokens but whose
+  model had no price entry — their tokens are in the totals, their cost is not. When it is non-zero,
+  `costUsd` is **low by an unknown amount**. It counts only spans that actually consumed tokens, so a
+  workspace full of non-LLM spans does not report a phantom gap.
+- **`userId` is whatever your SDK put in the attribute.** If you send e-mail addresses, this endpoint
+  returns an aggregated, ordered list of them. Redaction belongs at ingestion, in your instrumentation
+  — not here. Spans carrying neither key are grouped under the literal id `unattributed` rather than
+  dropped, so "nobody consumed this" never gets confused with "we could not tell who did".
 
 ## Dashboard equivalent (browser session)
 

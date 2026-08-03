@@ -62,7 +62,12 @@ suite("sessions grouping (integration, M13)", () => {
     const d = await repo.getSessionDetail("S1");
     const ca = (await repo.getTraceCost("ta"))!.costUsd;
     const cb = (await repo.getTraceCost("tb"))!.costUsd;
-    expect(d!.costUsd).toBe(round3(ca + cb)); // no drift (D2/risk #2)
+    // #121 — o oráculo estava enfraquecido, e de um jeito que o nome do teste denunciava:
+    // ele aplicava `round3` TAMBÉM no lado esperado. Com o mesmo transform com perda dos dois
+    // lados, a deriva sub-milésimo que este teste existe para pegar ("no drift", D2/risk #2)
+    // era invisível por construção — foi exatamente ela que produziu `costUsd: 0` em sessão
+    // barata. Agora o esperado usa a precisão de USD (6 casas), a mesma das parcelas.
+    expect(d!.costUsd).toBe(roundUsd(ca + cb));
   });
 
   it("test_get_session_detail_absent_returns_null", async () => {
@@ -135,4 +140,9 @@ suite("sessions grouping (integration, M13)", () => {
 /** Local round3 mirror (kept tiny to avoid importing test-only helpers). */
 function round3(x: number): number {
   return Math.round(x * 1000) / 1000;
+}
+
+/** Espelho local de `roundUsd` — 6 casas, a precisão de USD (ver tool-stats). */
+function roundUsd(x: number): number {
+  return Math.round(x * 1e6) / 1e6;
 }

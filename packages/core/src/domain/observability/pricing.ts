@@ -5,6 +5,8 @@
  * (claude-api pricing ref): cache-read = 0.1× input, cache-creation (ephemeral 5-min,
  * which Claude Code uses) = 1.25× input.
  */
+import { roundUsd } from "./tool-stats.js";
+
 export interface ModelPrice {
   inputPerToken: number;
   outputPerToken: number;
@@ -67,5 +69,7 @@ export function computeTraceCost(usage: ModelUsage[], table: PriceTable): number
       total += (u.cacheCreationTokens ?? 0) * price.cacheCreationPerToken;
     }
   }
-  return Math.round(total * 1e6) / 1e6;
+  // A precisão de USD vive em `roundUsd` (tool-stats), não inline aqui: quando ela estava
+  // duplicada, o agregado de sessão divergiu para 3 casas e zerou custos reais (#121).
+  return roundUsd(total);
 }

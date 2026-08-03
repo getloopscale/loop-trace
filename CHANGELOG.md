@@ -7,6 +7,26 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.66.0] - 2026-08-03
+
+### Fixed
+
+- **O detalhe de um trace deixou de contradizer a listagem que o mostrou** (LT-034). `GET /v1/traces` listava o trace, `GET /v1/traces/{id}/cost` devolvia 200 com custo e tokens, e `GET /v1/traces/{id}` devolvia **404** — duas rotas do mesmo serviço afirmando que o trace existe e uma afirmando que não. Quem clicasse na linha recebia "não encontrado" para algo que o produto acabara de mostrar.
+
+  **Causa medida, não inferida:** os traces afetados existem na tabela derivada `traces` com **zero** linhas em `spans`. A listagem e o custo leem `traces`; só o detalhe lia `spans`, e devolvia vazio como se o trace não existisse. Um trace pode perder seus spans por retenção, limpeza manual ou ingestão parcial — e nenhuma dessas coisas apaga o trace. Não era filtro de tenant: os três casos reportados estão no mesmo workspace, e as três rotas derivam o workspace do mesmo principal.
+
+  Agora o detalhe cai na mesma fonte das irmãs quando não há spans, devolvendo o trace com subárvore vazia — e **continua escopado por workspace**, porque um fallback sem escopo seria uma porta cross-tenant com aparência de trace plausível, não de erro. Um trace genuinamente inexistente continua 404 nas três rotas.
+
+### Added
+
+- **`GET /v1/analytics/usage-by-user` — consumo de tokens e custo por end-user** (M140). O dado já estava sendo ingerido, indexado e retido: **49.375 de 49.376 spans** do ambiente de desenvolvimento carregam a identidade do usuário (`user.id`, com fallback para o `gen_ai.user.id` da convenção OpenTelemetry), e **nenhuma rota agrupava por ela** — quem opera um agente multi-usuário precisava exportar traces e agregar fora do produto, exatamente o trabalho que uma ferramenta de observabilidade deveria poupar. A resposta traz tokens (entrada, saída, cache de leitura e de criação), custo estimado, `totalUsers` e a janela aplicada; janela sobre o tempo de ingestão (padrão 30 dias, teto 365) e paginação com desempate total, para que um usuário não apareça em duas páginas nem desapareça entre elas. **Pedir mais do que o teto é recusado com erro, não reduzido em silêncio** — a diferença importa porque a janela vem ecoada na resposta e o tamanho da página não: um `limit` cortado sem aviso devolveria 500 linhas enquanto você avança a paginação como se tivesse recebido cem mil, lendo as páginas erradas sem nenhum sinal.
+
+  **`unpricedSpans` é obrigatório na resposta, não opcional.** Ele conta quantos spans tinham tokens mas nenhum preço na tabela — os tokens deles entram nos totais, o custo não. Um total silenciosamente baixo é lido como o gasto real, e um campo que pode ser omitido é lido como "não falta nada". O campo conta **apenas spans que consumiram tokens**: no workspace medido, 36.901 spans não têm modelo *nem* tokens (são chamadas de ferramenta e chains, sem nada a precificar) e contá-los reportaria uma lacuna 36.900× maior que a verdadeira.
+
+  **Spans sem identidade vão para o bucket explícito `unattributed`, nunca descartados** — "ninguém consumiu" e "não sabemos de quem foi" são respostas diferentes, e a segunda precisa ser visível. Ele é ordenado junto com os demais, porque o caso que importa ver é justamente aquele em que é o maior consumidor.
+
+  Dois avisos honestos para quem consome: o valor em dólar é **estimativa de consumo observado, não uma fatura** — theo-lens reporta o que observou, cobrança vive em outro lugar; e `userId` é o que o seu SDK gravou, então **se você envia e-mail, este endpoint devolve uma lista de e-mails agregada e ordenada** — a redação pertence à instrumentação, na ingestão, não à leitura. O isolamento por tenant é provado por teste de integração contra Postgres real, não por inspeção: num relatório agregado, um vazamento aparece como número plausível, não como erro.
+
 ### Added
 
 - Roadmap emendado: **M139 — Eval no CI**, para que o produto que avalia agentes passe a se avaliar (`/roadmap-feature eval-ci-dataset`). O `llm_judge` não tem nenhuma métrica de concordância com rótulo humano, embora a `labeling_queue` exista, e os benchmarks do repositório não são citados por workflow algum — são medições de um dia, não gates. Desenho de dois tiers derivado do campo: o determinístico gateia, o estocástico testa contrato e pula visivelmente sem chave.

@@ -10,6 +10,11 @@ import * as aggregateRepo from "./aggregate-repository.js";
 import * as annotationRepo from "./annotation-repository.js";
 import * as retentionRepo from "../retention-repository.js";
 import * as sessionRepo from "./session-repository.js";
+import * as usageByUserRepo from "./usage-by-user-repository.js";
+import type {
+  UsageByUserOptions,
+  UsageByUserResponse,
+} from "../../../domain/observability/usage-by-user.js";
 import * as copilotFeedbackRepo from "../evaluation/copilot-feedback-repository.js";
 import * as experimentRepo from "../evaluation/experiment-repository.js";
 import * as datasetRepo from "../evaluation/dataset-repository.js";
@@ -96,6 +101,17 @@ export class DrizzleSpanRepository implements SpanRepository {
     return traceReadRepo.listTracesForTool(this.db, toolName, limit, workspaceId);
   }
   // M99 (B-M1) — the AggregateRepository role now lives in `aggregate-repository.ts`.
+  //
+  // M140's aggregate belongs HERE, with its role siblings. It was first written under the
+  // TraceReadRepository comment above, which made that section header describe something it does
+  // not label — the facade is organised by role on purpose (M97/M99), and a comment that lies about
+  // its own block is worse than no comment.
+  aggregateUsageByUser(
+    opts: UsageByUserOptions = {},
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<UsageByUserResponse> {
+    return usageByUserRepo.aggregateUsageByUser(this.db, this.priceTable, workspaceId, opts);
+  }
   aggregateCostByPeriod(period: CostPeriod, workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<CostByPeriodResponse> {
     return aggregateRepo.aggregateCostByPeriod(this.db, period, workspaceId);
   }

@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { rowsAs } from "../../../domain/sql-rows.js";
 import { DEFAULT_WORKSPACE_ID } from "../../../domain/principal.js";
-import { round3 } from "../../../domain/observability/tool-stats.js";
+import { round3, roundUsd } from "../../../domain/observability/tool-stats.js";
 import {
   isoTimestamp,
   shapeSessionDetail,
@@ -18,7 +18,7 @@ import {
   type SessionListItem,
   type SessionListResponse,
 } from "../../../domain/observability/session.js";
-import { LATENCY_MS_EXPR, preview, traceRowToItem } from "../repo-shared.js";
+import { END_USER_ID_SQL, LATENCY_MS_EXPR, preview, traceRowToItem } from "../repo-shared.js";
 import { sessions, traces } from "../schema.js";
 
 
@@ -103,13 +103,13 @@ export async function listSessions(
                AND sp.workspace_id = ${workspaceId}
                AND sp.start_time_unix_nano ~ '^\\d+$'
                AND sp.end_time_unix_nano ~ '^\\d+$') AS "durationMs",
-           -- M131 A3 — user id = best-effort attributes->>'user.id' (fallback gen_ai.user.id); NULL → em-dash.
-           (SELECT coalesce(sp.attributes->>'user.id', sp.attributes->>'gen_ai.user.id')
+           -- M131 A3 — user id via the single END_USER_ID_SQL definition (M140 ADR D1); NULL → em-dash.
+           (SELECT ${END_USER_ID_SQL("sp")}
               FROM spans sp
               JOIN traces tt ON tt.trace_id = sp.trace_id AND tt.workspace_id = ${workspaceId}
              WHERE tt.session_id = s.session_id
                AND sp.workspace_id = ${workspaceId}
-               AND coalesce(sp.attributes->>'user.id', sp.attributes->>'gen_ai.user.id') IS NOT NULL
+               AND ${END_USER_ID_SQL("sp")} IS NOT NULL
              LIMIT 1) AS "userIdRaw"
     FROM sessions s
     LEFT JOIN traces t ON t.session_id = s.session_id AND t.workspace_id = s.workspace_id
@@ -125,7 +125,8 @@ export async function listSessions(
       firstSeenAt: isoTimestamp(r.firstSeenAt),
       lastSeenAt: isoTimestamp(r.lastSeenAt),
       traceCount: r.traceCount,
-      costUsd: round3(r.costUsd ?? 0),
+      // 6 casas, não 3: a LISTA sofria o mesmo zeramento do detalhe (LT-063 / #121).
+      costUsd: roundUsd(r.costUsd ?? 0),
       totalTokens: r.totalTokens ?? 0,
       errorRate: r.traceCount === 0 ? 0 : round3(r.errorCount / r.traceCount),
     };

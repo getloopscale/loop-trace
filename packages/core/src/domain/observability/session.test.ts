@@ -17,11 +17,36 @@ const base: RawSessionDetail = {
 describe("shapeSessionDetail (M13)", () => {
   it("test_shape_session_detail_sums_and_rounds", () => {
     const out = shapeSessionDetail(base);
-    expect(out.costUsd).toBe(0.012);
+    // MUDADO no #121, e a mudança é o ponto: este número era `0.012` e ancorava o
+    // arredondamento a 3 casas — ou seja, o teste guardava o defeito em vez do
+    // comportamento. Custo agora vai a 6 casas (`roundUsd`), como em `pricing.ts`.
+    // Latência e taxa seguem em 3, que é onde 3 casas fazem sentido.
+    expect(out.costUsd).toBe(0.012345);
     expect(out.latencyP50Ms).toBe(10.123);
     expect(out.latencyP95Ms).toBe(88.568);
     expect(out.totalTokens).toBe(1500);
     expect(out.firstSeenAt).toBe("2026-06-22T00:00:00.000Z");
+  });
+
+  it("test_shape_session_detail_preserves_subcent_cost", () => {
+    // Regressão LT-063 / #121. `round3` zerava TODO custo abaixo de $0.0005 — e essa é a
+    // faixa comum de uma chamada de agente com modelo barato, não um caso de canto. O
+    // sintoma era a resposta se contradizer sozinha: `costUsd: 0` no topo e
+    // `traces[].costUsd: 0.000192` duas vezes no mesmo JSON.
+    //
+    // O piso de precisão não é escolha nova: `pricing.ts` já calcula custo com 6 casas
+    // (`Math.round(total * 1e6) / 1e6`). Um agregado mais grosseiro que as parcelas que
+    // ele soma não pode fechar por construção.
+    const out = shapeSessionDetail({ ...base, costUsd: 0.000384 });
+    expect(out.costUsd).toBe(0.000384);
+  });
+
+  it("test_shape_session_detail_cost_equals_sum_of_member_traces", () => {
+    // O invariante que o usuário enxerga: o total da sessão bate com a soma do que ela lista.
+    // Sem isto, o teste acima passaria com qualquer precisão ≥ 6 casas sem provar coerência.
+    const parcelas = [0.000192, 0.000192];
+    const out = shapeSessionDetail({ ...base, costUsd: parcelas[0]! + parcelas[1]! });
+    expect(out.costUsd).toBe(0.000384);
   });
 
   it("test_shape_session_error_rate_zero_guard", () => {

@@ -293,6 +293,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/analytics/usage-by-user": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /v1/analytics/usage-by-user */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UsageByUserResponse"];
+                    };
+                };
+                /** @description Validation failure — see details[] */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                /** @description Missing or invalid credential */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                /** @description Scope not permitted */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/datasets": {
         parameters: {
             query?: never;
@@ -2636,6 +2708,20 @@ export interface components {
                 totalTokens: number;
                 traceCount: number;
             }[];
+        };
+        UsageByUserResponse: {
+            users: {
+                userId: string;
+                spans: number;
+                inputTokens: number;
+                outputTokens: number;
+                cacheReadTokens: number;
+                cacheCreationTokens: number;
+                costUsd: number;
+            }[];
+            unpricedSpans: number;
+            totalUsers: number;
+            windowDays: number;
         };
         ToolStatsResponse: {
             tools: {

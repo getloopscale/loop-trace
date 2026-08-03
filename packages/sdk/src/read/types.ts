@@ -26,6 +26,8 @@ export type SessionListResponse = Schemas["SessionListResponse"];
 export type CostByPeriodResponse = Schemas["CostByPeriodResponse"];
 /** `GET /v1/analytics/tools` — tool-call usage stats. */
 export type ToolStatsResponse = Schemas["ToolStatsResponse"];
+/** M140 — token/cost consumption grouped by end user. */
+export type UsageByUserResponse = Schemas["UsageByUserResponse"];
 /** A single dataset entity. */
 export type Dataset = Schemas["Dataset"];
 /** `GET /v1/datasets` — the workspace's datasets, wrapped as `{ datasets: Dataset[] }`. */
@@ -79,6 +81,20 @@ export interface ObservabilityOptions {
 /** The aggregation period for cost analytics. */
 export interface CostByPeriodOptions {
   period?: string;
+}
+
+/**
+ * Window + pagination for the consumption-per-end-user read (M140).
+ *
+ * Every one of these is REJECTED with a typed `400 INVALID_QUERY` above its ceiling — `days` > 365,
+ * `limit` > 500, `offset` > 10000 — rather than quietly reduced. That is deliberate: `windowDays` is
+ * echoed in the response but `limit` is not, so a silent clamp would hand you a short page while you
+ * paged as if it were long.
+ */
+export interface UsageByUserOptions {
+  days?: number;
+  limit?: number;
+  offset?: number;
 }
 
 /** The rolling window for the evaluator/score metric reads (engine default `24h`). */

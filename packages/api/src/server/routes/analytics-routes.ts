@@ -13,10 +13,16 @@ import {
   toolStatsResponseSchema,
   traceListResponseSchema,
   costByPeriodResponseSchema,
+  usageByUserResponseSchema,
+  MAX_LIMIT,
+  MAX_OFFSET,
+  MAX_WINDOW_DAYS,
+  type UsageByUserOptions,
   apiError,
 } from "@usetheo/lens-core";
 
 import { getPrincipal, requireScopeOnPrincipal } from "../auth/middleware.js";
+import { usageByUserReports } from "../metrics.js";
 
 // M130 (ISP) — narrowed from the composite `SpanRepository` to the exact roles used:
 // trace-read (listTracesForTool) + aggregates (agents/tool-stats/cost).
@@ -52,5 +58,58 @@ export function registerAnalyticsRoutes(app: Hono, repo: TraceReadRepository & A
       getPrincipal(c).workspaceId,
     );
     return c.json(costByPeriodResponseSchema.parse(result), 200);
+  });
+
+  // M140 — consumption grouped by END USER. Observability, not billing: theo-lens reports what it
+  // observed; theo-cloud is what charges. The workspace comes from the Principal and never from a
+  // query param — a `?workspaceId=` here would be a cross-tenant leak by design (M22).
+  app.get("/v1/analytics/usage-by-user", requireScopeOnPrincipal("observability:read"), async (c) => {
+    // Fail-fast on each param (Rule 8): a non-numeric or out-of-range value is rejected rather than
+    // silently defaulted, so a caller never receives a window different from the one it asked for.
+    const num = (name: string): number | undefined | null => {
+      const raw = c.req.query(name);
+      if (raw === undefined) return undefined;
+      const n = Number(raw);
+      return Number.isInteger(n) && n > 0 ? n : null;
+    };
+    const days = num("days");
+    const limit = num("limit");
+    const offset = c.req.query("offset") === undefined ? undefined : Number(c.req.query("offset"));
+    if (days === null || limit === null) {
+      return c.json(apiError("INVALID_QUERY", "days and limit must be positive integers"), 400);
+    }
+    // Reject above the ceiling rather than clamping. Clamping `days` was at least observable
+    // (`windowDays` is echoed); clamping `limit` was NOT — a caller asking for 100000 got 500 rows
+    // with nothing saying so, then advanced `offset` by 100000 and read the wrong pages in silence.
+    if (days !== undefined && days > MAX_WINDOW_DAYS) {
+      return c.json(apiError("INVALID_QUERY", `days must be at most ${MAX_WINDOW_DAYS}`), 400);
+    }
+    if (limit !== undefined && limit > MAX_LIMIT) {
+      return c.json(apiError("INVALID_QUERY", `limit must be at most ${MAX_LIMIT}`), 400);
+    }
+    if (offset !== undefined && (!Number.isInteger(offset) || offset < 0)) {
+      return c.json(apiError("INVALID_QUERY", "offset must be a non-negative integer"), 400);
+    }
+    // `offset` was the only parameter with a shape check and no magnitude check, and the gap had
+    // two edges. `Number.isInteger` accepts `1e21` and `99999999999999999999`, which sailed past
+    // the line above and then died in the driver as `invalid input syntax for type bigint` — a
+    // generic 500 where the two branches above promise a typed 400. And a merely large offset is
+    // expensive: measured at 500k spans, `OFFSET 190000` doubled latency and spilled ~10 MB of
+    // temp sort to disk, on a number the caller picks.
+    if (offset !== undefined && offset > MAX_OFFSET) {
+      return c.json(apiError("INVALID_QUERY", `offset must be at most ${MAX_OFFSET}`), 400);
+    }
+    const opts: UsageByUserOptions = {};
+    if (days !== undefined) opts.days = days;
+    if (limit !== undefined) opts.limit = limit;
+    if (offset !== undefined) opts.offset = offset;
+    const result = await repo.aggregateUsageByUser(opts, getPrincipal(c).workspaceId);
+    usageByUserReports.add(1);
+    // The response concentrates client-chosen identities that MAY be PII (risk R1). Nothing shared
+    // caches an Authorization-bearing response by default, so this is belt-and-braces rather than a
+    // fix for an observed leak — but it is the one read whose body is a list of people, and the M141
+    // BFF puts a proxy in front of it, which is where "by default" stops being a guarantee.
+    c.header("Cache-Control", "private, no-store");
+    return c.json(usageByUserResponseSchema.parse(result), 200);
   });
 }

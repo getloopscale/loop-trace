@@ -17,6 +17,7 @@ const EXPECTED_DATA_ROUTES = new Set([
   "DELETE /v1/traces/:traceId/tags",
   "GET /v1/agents",
   "GET /v1/analytics/cost",
+  "GET /v1/analytics/usage-by-user",
   "GET /v1/analytics/tools",
   "GET /v1/analytics/tools/:toolName/traces",
   "GET /v1/datasets",
@@ -168,7 +169,7 @@ describe("M37 route guard enumeration", () => {
         .map((route) => `${route.method} ${route.path}`),
     );
     expect(liveRoutes).toEqual(EXPECTED_DATA_ROUTES);
-    expect(liveRoutes.size).toBe(61); // M116: + POST /v1/runs; M133: + GET /v1/evaluator-run-jobs/:id; M135: + GET /v1/guards/:id/breach-window; M136: + 5 canonical /v1/monitors* (the /v1/guards* set stays as the deprecated alias, removed next release → back to 56)
+    expect(liveRoutes.size).toBe(62); // M116: + POST /v1/runs; M133: + GET /v1/evaluator-run-jobs/:id; M135: + GET /v1/guards/:id/breach-window; M136: + 5 canonical /v1/monitors* (the /v1/guards* set stays as the deprecated alias, removed next release → back to 56); M140: + GET /v1/analytics/usage-by-user
   });
 
   it("asserts every mounted data route carries a per-verb scope middleware", () => {
