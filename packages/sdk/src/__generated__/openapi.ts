@@ -2718,6 +2718,14 @@ export interface components {
                 cacheReadTokens: number;
                 cacheCreationTokens: number;
                 costUsd: number;
+                series?: {
+                    periodStart: string;
+                    inputTokens: number;
+                    outputTokens: number;
+                    cacheReadTokens: number;
+                    cacheCreationTokens: number;
+                    costUsd: number;
+                }[];
             }[];
             unpricedSpans: number;
             totalUsers: number;

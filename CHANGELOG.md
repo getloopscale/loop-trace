@@ -7,6 +7,14 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.67.0] - 2026-08-03
+
+### Added
+
+- **o relatório de consumo por end-user ganhou eixo de tempo** (M143). `GET /v1/analytics/usage-by-user?bucket=day` passa a devolver, para cada usuário da página, uma **série diária** de tokens e custo — o que responde *"o consumo deste usuário está subindo?"*, pergunta que nenhuma tela respondia. **Sem o parâmetro, a resposta é exatamente a de antes**, campo por campo: a tela que já consome este endpoint está em produção, e um campo novo obrigatório a derrubaria. **O teto foi medido, não escolhido.** Pedir 50 usuários sobre 365 dias produz 18.250 pontos e 1,6 MB de JSON para uma tela; o uso real de um gráfico — os 5 maiores consumidores sobre um ano — são 1.825 pontos e 101 kB. Por isso o endpoint **recusa** quando o orçamento de pontos passa de 2.000, dizendo **quais dos dois** parâmetros reduzir e por quanto — em vez de devolver menos dados do que o pedido sem avisar, que é o defeito que este endpoint já pagou para não ter. O orçamento conta **um dia a mais que a janela pedida**, e isso não é margem de segurança: uma janela de N dias que começa no meio de um dia atravessa N+1 dias de calendário, então é essa a quantidade de pontos que a resposta pode de fato carregar. Um dia sem consumo **não vira um ponto zero**: a série vem com lacuna, porque um zero inventado é indistinguível de consumo real zero. E o balde do consumo não atribuído tem série como qualquer outro usuário — ele é frequentemente o maior consumidor, e escondê-lo no eixo do tempo desfaria a decisão que o pôs junto dos demais.
+
+- Roadmap emendado: **M143 — série temporal do consumo por end-user** (`/roadmap-feature`). Medido antes de propor: `/v1/dashboard/lens/observability` já entrega séries, mas por **modelo** e workspace-wide, e `lens-series.ts` não tem função alguma por `userId` — a série por end-user não existe em lugar nenhum do produto. Os spans já têm `user.id` e timestamp, e a M140 já agrupa por usuário dentro de uma janela; falta só o eixo. O DoD exige **medir o custo da query antes de escolher a forma** — cardinalidade é real (400 usuários × 365 dias são 146 mil linhas onde hoje há 400) e a escolha entre teto e top-N tem resposta empírica barata. A M141 não muda uma linha: o BFF repassa `r.URL.Query()` inteira, exatamente como o CHANGELOG dela previu.
+
 ## [0.66.0] - 2026-08-03
 
 ### Fixed
@@ -18,6 +26,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
   Agora o detalhe cai na mesma fonte das irmãs quando não há spans, devolvendo o trace com subárvore vazia — e **continua escopado por workspace**, porque um fallback sem escopo seria uma porta cross-tenant com aparência de trace plausível, não de erro. Um trace genuinamente inexistente continua 404 nas três rotas.
 
 ### Added
+
+- Roadmap amendado: adicionado **M142 — a tela do consumo por end-user** (`/roadmap-feature`). O caminho de dados foi entregue e aceito nas M140/M141, e as duas declararam a tela **adiada**, não descartada; este milestone a cumpre. O DoD exige que a tela seja alcançável **por clique** (menu + rota + marcação de ativo — as três peças), que a lacuna de preço apareça **na tela** e não só no JSON, e que um erro do serviço chegue com a **mensagem dele**, não com "ocorreu um erro" (#m142)
 
 - **`GET /v1/analytics/usage-by-user` — consumo de tokens e custo por end-user** (M140). O dado já estava sendo ingerido, indexado e retido: **49.375 de 49.376 spans** do ambiente de desenvolvimento carregam a identidade do usuário (`user.id`, com fallback para o `gen_ai.user.id` da convenção OpenTelemetry), e **nenhuma rota agrupava por ela** — quem opera um agente multi-usuário precisava exportar traces e agregar fora do produto, exatamente o trabalho que uma ferramenta de observabilidade deveria poupar. A resposta traz tokens (entrada, saída, cache de leitura e de criação), custo estimado, `totalUsers` e a janela aplicada; janela sobre o tempo de ingestão (padrão 30 dias, teto 365) e paginação com desempate total, para que um usuário não apareça em duas páginas nem desapareça entre elas. **Pedir mais do que o teto é recusado com erro, não reduzido em silêncio** — a diferença importa porque a janela vem ecoada na resposta e o tamanho da página não: um `limit` cortado sem aviso devolveria 500 linhas enquanto você avança a paginação como se tivesse recebido cem mil, lendo as páginas erradas sem nenhum sinal.
 

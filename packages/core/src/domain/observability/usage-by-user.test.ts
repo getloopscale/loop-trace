@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import {
+  MAX_BUCKET_POINTS,
   UNATTRIBUTED_USER_ID,
   usageByUserResponseSchema,
   usageByUserRowSchema,
@@ -78,5 +79,52 @@ describe("M140 — usageByUser response contract", () => {
     // It must be sortable next to real users — the case worth seeing is it being the largest.
     const parsed = usageByUserRowSchema.parse({ ...row, userId: UNATTRIBUTED_USER_ID });
     expect(parsed.userId).toBe("unattributed");
+  });
+});
+
+/**
+ * M143 — a série temporal. O `bucket` é ADITIVO (ADR-3): a M142 está em produção lendo
+ * `{users, unpricedSpans, totalUsers, windowDays}`, e um campo novo obrigatório derrubaria uma tela
+ * implantada.
+ */
+describe("M143 — series", () => {
+  const linhaBase = {
+    userId: "u1",
+    spans: 3,
+    inputTokens: 100,
+    outputTokens: 50,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+    costUsd: 0.5,
+  };
+
+  it("aceita uma linha SEM series — compatibilidade do ADR-3", () => {
+    expect(usageByUserRowSchema.safeParse(linhaBase).success).toBe(true);
+  });
+
+  it("aceita uma linha COM series", () => {
+    const r = usageByUserRowSchema.safeParse({
+      ...linhaBase,
+      series: [
+        { periodStart: "2026-08-01T00:00:00.000Z", inputTokens: 60, outputTokens: 30, cacheReadTokens: 0, cacheCreationTokens: 0, costUsd: 0.3 },
+        { periodStart: "2026-08-02T00:00:00.000Z", inputTokens: 40, outputTokens: 20, cacheReadTokens: 0, cacheCreationTokens: 0, costUsd: 0.2 },
+      ],
+    });
+    expect(r.success).toBe(true);
+  });
+
+  // Um ponto sem rótulo é um ponto que não se sabe onde colocar no eixo.
+  it("recusa um periodStart vazio", () => {
+    const r = usageByUserRowSchema.safeParse({
+      ...linhaBase,
+      series: [{ periodStart: "", inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheCreationTokens: 0, costUsd: 0 }],
+    });
+    expect(r.success).toBe(false);
+  });
+
+  // O teto vive no domínio pela MESMA razão registrada em MAX_WINDOW_DAYS: a rota e o repositório
+  // precisam do mesmo número, e duas cópias derivam em silêncio.
+  it("exporta MAX_BUCKET_POINTS ao lado dos outros tetos", () => {
+    expect(MAX_BUCKET_POINTS).toBe(2000);
   });
 });

@@ -14,6 +14,7 @@ import {
   traceListResponseSchema,
   costByPeriodResponseSchema,
   usageByUserResponseSchema,
+  MAX_BUCKET_POINTS,
   MAX_LIMIT,
   MAX_OFFSET,
   MAX_WINDOW_DAYS,
@@ -99,10 +100,48 @@ export function registerAnalyticsRoutes(app: Hono, repo: TraceReadRepository & A
     if (offset !== undefined && offset > MAX_OFFSET) {
       return c.json(apiError("INVALID_QUERY", `offset must be at most ${MAX_OFFSET}`), 400);
     }
+    // M143 — o eixo de tempo. `bucket` é aditivo: ausente, tudo abaixo é inerte e a resposta é a de
+    // hoje, campo por campo (a tela da M142 está em produção lendo esse formato).
+    const bucketRaw = c.req.query("bucket");
+    if (bucketRaw !== undefined && bucketRaw !== "day") {
+      // Recusar em vez de cair no default: um `bucket=week` aceito em silêncio devolveria série
+      // DIÁRIA sob um nome semanal, e o gráfico plotaria a granularidade errada sem ninguém saber.
+      return c.json(apiError("INVALID_QUERY", 'bucket must be "day"'), 400);
+    }
+
+    // O teto do PRODUTO, e não de cada parâmetro. MEDIDO (blueprint do M143, perfil denso em
+    // Postgres 17 com o mesmo índice composto): `limit=50 × days=365` produz 18.250 pontos e
+    // **1.591 kB** de JSON para uma tela, enquanto o uso real do gráfico (top-5 × 365) são 1.825
+    // pontos / 101 kB / 18,9 ms. O tempo cresce 1,73× com o bucket; o RESULTADO cresce 365×.
+    //
+    // Um teto só em `days` ou só em `limit` não limita o que explode — `50 × 365` passa por
+    // qualquer teto individual razoável. E devolver top-N em silêncio seria clampar, que é
+    // exatamente o que as duas guardas acima recusam por princípio.
+    //
+    // A mensagem nomeia OS DOIS parâmetros: dizer só um deixa o chamador girando o botão errado.
+    if (bucketRaw === "day") {
+      // `days + 1`, e não `days`. A janela é ROLANTE (`now() - days`), não alinhada ao calendário,
+      // então uma janela de N dias que comece no meio de um dia atravessa N+1 dias de calendário e
+      // produz N+1 baldes. MEDIDO no review: `days=3` produziu **4** baldes. Sem o `+1` o teto
+      // orçava menos pontos do que a resposta pode carregar — erro por um dia, não por ordem de
+      // grandeza, mas o ADR-1 promete "o número de pontos no PIOR caso".
+      const pontos = ((days ?? 30) + 1) * (limit ?? 50);
+      if (pontos > MAX_BUCKET_POINTS) {
+        return c.json(
+          apiError(
+            "INVALID_QUERY",
+            `with bucket=day, (days + 1) × limit must be at most ${MAX_BUCKET_POINTS} (asked for ${(days ?? 30) + 1} × ${limit ?? 50} = ${pontos})`,
+          ),
+          400,
+        );
+      }
+    }
+
     const opts: UsageByUserOptions = {};
     if (days !== undefined) opts.days = days;
     if (limit !== undefined) opts.limit = limit;
     if (offset !== undefined) opts.offset = offset;
+    if (bucketRaw === "day") opts.bucket = "day";
     const result = await repo.aggregateUsageByUser(opts, getPrincipal(c).workspaceId);
     usageByUserReports.add(1);
     // The response concentrates client-chosen identities that MAY be PII (risk R1). Nothing shared

@@ -167,6 +167,70 @@ suite("M140 — usage-by-user through the real route", () => {
     expect((await get("/v1/analytics/usage-by-user?days=365&limit=500", "a")).status).toBe(200);
   });
 
+  /*
+   * M143 — o teto do PRODUTO `limit × days`, e por que ele existe.
+   *
+   * MEDIDO (blueprint do M143, Postgres 17, perfil denso): `limit=50&days=365&bucket=day` produz
+   * 18.250 pontos e **1.591 kB** de JSON para uma tela. O uso real do gráfico (top-5 × 365) são
+   * 1.825 pontos / 101 kB / 18,9 ms.
+   *
+   * O tempo cresce 1,73× com o bucket; o RESULTADO cresce 365×. Um teto só em `days` ou só em
+   * `limit` não limita o que explode — 50 × 365 passa por qualquer teto individual razoável.
+   */
+  it("M143 — recusa o produto limit × days acima do teto, nomeando OS DOIS parametros", async () => {
+    const res = await get("/v1/analytics/usage-by-user?limit=50&days=365&bucket=day", "a");
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { code: string; message: string };
+    expect(body.code).toBe("INVALID_QUERY");
+    // Nomear só um dos dois deixa o chamador girando o botão errado.
+    expect(body.message).toMatch(/limit/i);
+    expect(body.message).toMatch(/days/i);
+    expect(body.message).toMatch(/2000/);
+  });
+
+  // F-4 do review: os dois casos de teto passavam AMBOS os parâmetros, então o ramo que substitui
+  // o default nunca era exercitado — e é justamente a forma que estoura o payload sem ninguém pedir
+  // um número grande. Medido: `?days=365&bucket=day` são 365 × 50 = 18.250 pontos.
+  it("M143 — o teto conta o default de limit quando ele e omitido", async () => {
+    const res = await get("/v1/analytics/usage-by-user?days=365&bucket=day", "a");
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { message: string }).message).toMatch(/18300/);
+  });
+
+  // F-5 do review: "no máximo 2000" e "menos que 2000" eram indistinguíveis para a suíte.
+  it("M143 — a fronteira do teto e INCLUSIVA", async () => {
+    // (4 + 1) × 400 = 2000, exatamente no teto. O `+1` é o dia extra que uma janela rolante
+    // atravessa — medido no review: `days=3` produz 4 baldes.
+    expect((await get("/v1/analytics/usage-by-user?days=4&limit=400&bucket=day", "a")).status).toBe(200);
+    // e um ponto acima já recusa
+    expect((await get("/v1/analytics/usage-by-user?days=4&limit=401&bucket=day", "a")).status).toBe(400);
+  });
+
+  it("M143 — aceita o uso real do grafico (top-5 x 365 dias)", async () => {
+    expect((await get("/v1/analytics/usage-by-user?limit=5&days=365&bucket=day", "a")).status).toBe(200);
+  });
+
+  // O teto é do produto QUANDO HÁ SÉRIE. Aplicá-lo sempre quebraria a tabela que a M142 já usa em
+  // produção — `limit=50&days=365` sem bucket é uma consulta legítima que responde 200 hoje.
+  it("M143 — o teto NAO se aplica sem bucket", async () => {
+    expect((await get("/v1/analytics/usage-by-user?limit=50&days=365", "a")).status).toBe(200);
+  });
+
+  it("M143 — recusa um bucket desconhecido em vez de cair no default em silencio", async () => {
+    for (const qs of ["?bucket=week", "?bucket=", "?bucket=1"]) {
+      const res = await get(`/v1/analytics/usage-by-user${qs}`, "a");
+      expect(res.status, `${qs} deve ser recusado`).toBe(400);
+      expect((await res.json()) as Record<string, unknown>).toMatchObject({ code: "INVALID_QUERY" });
+    }
+  });
+
+  it("M143 — com bucket=day a resposta carrega series; sem ele, nao", async () => {
+    const com = (await (await get("/v1/analytics/usage-by-user?bucket=day", "a")).json()) as { users: { series?: unknown[] }[] };
+    const sem = (await (await get("/v1/analytics/usage-by-user", "a")).json()) as { users: { series?: unknown[] }[] };
+    expect(Array.isArray(com.users[0]?.series)).toBe(true);
+    expect(sem.users[0]?.series).toBeUndefined();
+  });
+
   it("honours a valid window instead of silently defaulting", async () => {
     const body = (await (await get("/v1/analytics/usage-by-user?days=7", "a")).json()) as { windowDays: number };
     expect(body.windowDays).toBe(7);
