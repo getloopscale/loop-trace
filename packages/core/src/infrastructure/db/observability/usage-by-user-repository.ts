@@ -51,11 +51,41 @@ import type { PriceTable } from "../../../domain/observability/pricing.js";
 import { roundUsd } from "../../../domain/observability/tool-stats.js";
 import { END_USER_ID_SQL } from "../repo-shared.js";
 
+/** M143 — o acumulador de UM ponto da série, antes de virar resposta. */
+interface SeriesAcc {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  costUsd: number;
+}
+
 /** `sum()` over integer returns `numeric`, which the driver hands back as a string. */
 const int = (v: unknown): number => {
   const n = typeof v === "number" ? v : Number(v ?? 0);
   return Number.isFinite(n) ? Math.trunc(n) : 0;
 };
+
+/**
+ * M143 — os pontos de um usuário, ordenados pelo eixo do tempo.
+ *
+ * PURA e exportada de propósito. A ordenação estava inline, e a mutação que a REMOVIA sobrevivia a
+ * todos os testes de integração: o Postgres devolve as linhas já ordenadas para os fixtures, então
+ * a ordem de inserção do `Map` calhava de bater — e não há como forçar o banco a desordenar a partir
+ * de um teste. Extraída, um teste unitário alimenta desordem diretamente e o mutante morre. É a
+ * mesma lição do M142: lógica isolada é lógica que a mutação alcança.
+ *
+ * A ordem importa porque o eixo do tempo tem direção: uma série fora de ordem faz o gráfico desenhar
+ * ziguezague sobre dado monotônico. E a ordem que o Postgres devolve é detalhe do plano de execução,
+ * não contrato — um `HashAggregate` pode mudá-la sem aviso.
+ */
+export function serieOrdenada(
+  porBucket: Map<string, SeriesAcc> | undefined,
+): { periodStart: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number; costUsd: number }[] {
+  return [...(porBucket ?? new Map<string, SeriesAcc>()).entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([periodStart, acc]) => ({ periodStart, ...acc, costUsd: roundUsd(acc.costUsd) }));
+}
 
 export async function aggregateUsageByUser(
   db: NodePgDatabase,
@@ -135,12 +165,24 @@ export async function aggregateUsageByUser(
   const ids = rows.map((r) => String(r["userId"]));
 
   // 2 — per-model usage for the page only, so cost can reuse the domain price table.
+  //
+  // M143 — `bucket` acrescenta UMA DIMENSÃO a esta query, e nenhuma query nova. O bucket não muda
+  // QUEM entra na página; muda o que cada usuário carrega. Query 1 (a página + `totalUsers` via
+  // window function) e a query da lacuna de preço ficam intocadas, o que preserva as três decisões
+  // medidas da M140 sem tocá-las.
+  //
+  // MEDIDO (blueprint do M143, Postgres 17, mesmo índice composto, perfil denso de 50 usuários
+  // ativos todos os 365 dias): 77,7 ms → 134,6 ms com a dimensão, e 250 → 91.250 linhas. O tempo
+  // cresce 1,73×; o RESULTADO cresce 365×. Por isso o teto do ADR-1 age sobre o produto
+  // `limit × days` e não sobre o tempo de query — o gargalo é o payload.
+  const bucketExpr = sql`date_trunc('day', ingested_at)`;
   const perModel =
     ids.length === 0
       ? []
       : ((
           await db.execute(sql`
             SELECT ${userId} AS "userId",
+                   ${opts.bucket === "day" ? sql`${bucketExpr} AS "bucket",` : sql``}
                    coalesce(model, '') AS model,
                    coalesce(sum(input_tokens), 0) AS "inputTokens",
                    coalesce(sum(output_tokens), 0) AS "outputTokens",
@@ -148,25 +190,49 @@ export async function aggregateUsageByUser(
                    coalesce(sum(cache_creation_tokens), 0) AS "cacheCreationTokens"
             FROM spans
             WHERE ${scope} AND ${userId} IN ${ids}
-            GROUP BY 1, 2
+            GROUP BY 1, 2${opts.bucket === "day" ? sql`, 3` : sql``}
           `)
         ).rows as Record<string, unknown>[]);
 
   const costByUser = new Map<string, number>();
+  // M143 — o mesmo laço alimenta a série, chaveado por (userId, bucket). Um segundo laço sobre as
+  // mesmas linhas seria uma segunda passada e uma segunda chance de divergir do custo da linha.
+  const seriesByUser = new Map<string, Map<string, SeriesAcc>>();
+
   for (const r of perModel) {
-    const model = String(r["model"] ?? "");
-    if (model === "") continue; // no model → nothing priceable
-    const usage = [
-      {
-        model,
-        inputTokens: int(r["inputTokens"]),
-        outputTokens: int(r["outputTokens"]),
-        cacheReadTokens: int(r["cacheReadTokens"]),
-        cacheCreationTokens: int(r["cacheCreationTokens"]),
-      },
-    ];
     const id = String(r["userId"]);
-    costByUser.set(id, (costByUser.get(id) ?? 0) + computeTraceCost(usage, priceTable));
+    const tokens = {
+      inputTokens: int(r["inputTokens"]),
+      outputTokens: int(r["outputTokens"]),
+      cacheReadTokens: int(r["cacheReadTokens"]),
+      cacheCreationTokens: int(r["cacheCreationTokens"]),
+    };
+    const model = String(r["model"] ?? "");
+    // Um span sem modelo não tem o que precificar, mas TEM tokens — e eles pertencem à série tanto
+    // quanto os precificados. Somar custo zero e contar os tokens é o que mantém a soma da série
+    // igual à soma da linha; pular a linha inteira faria o gráfico mostrar menos que a tabela.
+    const custo = model === "" ? 0 : computeTraceCost([{ model, ...tokens }], priceTable);
+
+    costByUser.set(id, (costByUser.get(id) ?? 0) + custo);
+
+    if (opts.bucket === "day") {
+      const chave = new Date(String(r["bucket"])).toISOString();
+      const porBucket = seriesByUser.get(id) ?? new Map<string, SeriesAcc>();
+      const acc = porBucket.get(chave) ?? {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        costUsd: 0,
+      };
+      acc.inputTokens += tokens.inputTokens;
+      acc.outputTokens += tokens.outputTokens;
+      acc.cacheReadTokens += tokens.cacheReadTokens;
+      acc.cacheCreationTokens += tokens.cacheCreationTokens;
+      acc.costUsd += custo;
+      porBucket.set(chave, acc);
+      seriesByUser.set(id, porBucket);
+    }
   }
 
   const gapRows = gapRes.rows as Record<string, unknown>[];
@@ -209,6 +275,20 @@ export async function aggregateUsageByUser(
       // session aggregate drifted to three decimals and reported real spend as zero (#121). This
       // milestone extracted END_USER_ID_SQL to kill exactly this class of second copy.
       costUsd: roundUsd(costByUser.get(id) ?? 0),
+      // M143 — `undefined`, nunca `[]`, quando `bucket` não foi pedido: uma lista vazia afirma "não
+      // houve consumo", que é diferente de "não foi pedido". A tela da M142 está em produção lendo
+      // a resposta sem este campo, e um `[]` a faria desenhar um gráfico vazio onde não há gráfico.
+      //
+      // Ordenado por `periodStart`: o eixo do tempo tem direção, e uma série fora de ordem faz o
+      // gráfico desenhar ziguezague sobre dados monotônicos. O `Map` preserva ordem de inserção, que
+      // é a ordem em que o Postgres devolveu — não é ordem temporal, e confiar nela seria confiar
+      // num detalhe do plano de execução.
+      //
+      // Um dia sem consumo NÃO produz ponto. Um zero inventado é indistinguível de consumo real
+      // zero; a série vem com buraco, e quem plota decide o que fazer com ele.
+      ...(opts.bucket === "day"
+        ? { series: serieOrdenada(seriesByUser.get(id)) }
+        : {}),
     };
   });
 

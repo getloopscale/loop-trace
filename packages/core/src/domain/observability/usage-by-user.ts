@@ -22,6 +22,22 @@ export const UNATTRIBUTED_USER_ID = "unattributed";
 
 const nonNegativeInt = z.number().int().nonnegative();
 
+/**
+ * M143 — um ponto da série temporal: o consumo de UM usuário em UM bucket.
+ *
+ * `periodStart` é `min(1)` pela mesma razão que `userId` é: um ponto sem rótulo é um ponto que não
+ * se sabe onde colocar no eixo, e o gráfico o desenharia em algum lugar arbitrário em vez de falhar.
+ */
+export const usageByUserSeriesPointSchema = z.object({
+  /** Início do bucket, em ISO-8601. O rótulo do ponto no eixo do tempo. */
+  periodStart: z.string().min(1),
+  inputTokens: nonNegativeInt,
+  outputTokens: nonNegativeInt,
+  cacheReadTokens: nonNegativeInt,
+  cacheCreationTokens: nonNegativeInt,
+  costUsd: z.number().nonnegative(),
+});
+
 export const usageByUserRowSchema = z.object({
   /** Client-chosen end-user id, or `unattributed`. MAY contain PII — see the milestone's risk R1. */
   userId: z.string().min(1),
@@ -35,6 +51,14 @@ export const usageByUserRowSchema = z.object({
    * whenever `unpricedSpans` is non-zero, which is why that field is mandatory rather than optional.
    */
   costUsd: z.number().nonnegative(),
+  /**
+   * M143 — a série diária deste usuário, presente APENAS quando o chamador pediu `bucket`.
+   *
+   * `optional`, nunca `default([])`: uma lista vazia afirma "não houve consumo", que é diferente de
+   * "não foi pedido". A distinção importa porque a tela da M142 está em produção lendo a resposta
+   * sem este campo (ADR-3), e um `[]` a faria desenhar um gráfico vazio onde não há gráfico.
+   */
+  series: z.array(usageByUserSeriesPointSchema).optional(),
 });
 
 export const usageByUserResponseSchema = z.object({
@@ -79,6 +103,26 @@ export const MAX_LIMIT = 500;
 export const MAX_OFFSET = 10_000;
 
 /**
+ * M143 — teto sobre o PRODUTO `limit × days` quando `bucket` está presente.
+ *
+ * Vive aqui pela MESMA razão que os três acima: a rota (que recusa) e o repositório (última linha de
+ * defesa) precisam do mesmo número, e duas cópias derivam em silêncio.
+ *
+ * O valor vem de medição, não de gosto (blueprint do M143, perfil denso em Postgres 17 com o mesmo
+ * índice composto): `limit=50, days=365` produz 18.250 pontos e **1.591 kB** de JSON para uma tela;
+ * o uso real do gráfico (top-5 × 365) são 1.825 pontos / 101 kB / 18,9 ms, e a página padrão da
+ * tabela sobre um mês (50 × 30) são 1.500. Ambos os casos reais passam sob 2000; o extremo é
+ * recusado.
+ *
+ * Por que sobre o PRODUTO e não sobre cada parâmetro: um teto só em `days` ou só em `limit` não
+ * limita o que explode — `50 × 365` passa por qualquer teto individual razoável. E por que recusar
+ * em vez de devolver top-N em silêncio: clampar sem dizer é exatamente o que a M140 recusou
+ * ("Reject above the ceiling rather than clamping"), e a M141 pagou para esse 400 tipado atravessar
+ * o BFF verbatim.
+ */
+export const MAX_BUCKET_POINTS = 2000;
+
+/**
  * Query options for the report. Lives in the domain, not in the repository, so the port can be
  * declared without the domain importing infrastructure (`architecture.md` § 2).
  */
@@ -96,6 +140,13 @@ export interface UsageByUserOptions {
   limit?: number;
   /** Page offset; defaults to 0. Rejected by the route above `MAX_OFFSET`, clamped here. */
   offset?: number;
+  /**
+   * M143 — granularidade do eixo de tempo. Ausente ⇒ nenhuma série, e a resposta é a de hoje.
+   *
+   * Só `day` neste milestone: a medição do discover cobriu o bucket diário, e oferecer hora ou
+   * semana sem medi-los seria prometer desempenho que ninguém verificou.
+   */
+  bucket?: "day";
 }
 
 export type UsageByUserRow = z.infer<typeof usageByUserRowSchema>;

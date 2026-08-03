@@ -22,6 +22,7 @@ import {
   MAX_OFFSET,
   MAX_WINDOW_DAYS,
   usageByUserResponseSchema,
+  UNATTRIBUTED_USER_ID,
 } from "../../../domain/observability/usage-by-user.js";
 import { resolveModelPrice } from "../../../domain/observability/pricing.js";
 import { roundUsd } from "../../../domain/observability/tool-stats.js";
@@ -69,6 +70,202 @@ suite("M140 — usage by end user (integration)", () => {
 
   beforeEach(async () => {
     await db.execute(sql`DELETE FROM spans WHERE workspace_id IN (${WS_A}, ${WS_B})`);
+  });
+
+  /*
+   * M143 — a SÉRIE TEMPORAL.
+   *
+   * `ingested_at` não é controlável pelo `repo.save` (ele usa o default `now()`), então cada caso
+   * abaixo retrodata explicitamente. Isso é fixture, não gambiarra: a janela do relatório é sobre
+   * `ingested_at` por decisão medida da M140 (`start_time_unix_nano` é TEXT e ordena
+   * lexicograficamente), então é ESSA coluna que o bucket tem de fatiar.
+   */
+  const retrodatar = async (spanId: string, diasAtras: number): Promise<void> => {
+    await db.execute(
+      sql`UPDATE spans SET ingested_at = now() - (${diasAtras} || ' days')::interval WHERE span_id = ${spanId}`,
+    );
+  };
+
+  it("M143 — dois dias do MESMO usuário produzem duas entradas na série", async () => {
+    await repo.save(
+      [
+        span({ spanId: "s-d1", traceId: "t-d1", model: "claude-opus-4-8", inputTokens: 100, outputTokens: 50, attributes: { "user.id": "alice" } }),
+        span({ spanId: "s-d2", traceId: "t-d2", model: "claude-opus-4-8", inputTokens: 300, outputTokens: 70, attributes: { "user.id": "alice" } }),
+      ],
+      WS_A,
+    );
+    await retrodatar("s-d1", 3);
+    await retrodatar("s-d2", 1);
+
+    const r = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A, { bucket: "day" });
+    const alice = r.users.find((u) => u.userId === "alice");
+    expect(alice?.series).toHaveLength(2);
+    // a série soma o mesmo que a linha — senão o gráfico e a tabela contam histórias diferentes
+    expect(alice?.series?.reduce((a, p) => a + p.inputTokens + p.outputTokens, 0)).toBe(
+      (alice?.inputTokens ?? 0) + (alice?.outputTokens ?? 0),
+    );
+    // e os rótulos do eixo são dias distintos, não o mesmo timestamp repetido
+    const dias = new Set(alice?.series?.map((p) => p.periodStart.slice(0, 10)));
+    expect(dias.size).toBe(2);
+    // O rótulo é meia-noite: `date_trunc('day')` zera hora, minuto e segundo. Sem esta asserção,
+    // trocar o bucket para `hour` deixaria o teste verde — os spans estão em dias distintos, então
+    // a CONTAGEM de buckets não muda, e só o rótulo denuncia a granularidade.
+    for (const ponto of alice?.series ?? []) {
+      expect(ponto.periodStart).toMatch(/T00:00:00/);
+    }
+  });
+
+  // O par que separa dia de hora pela CONTAGEM: mesmo dia, horas diferentes. Com `day` é UM ponto.
+  it("M143 — dois spans no mesmo dia colapsam num único ponto", async () => {
+    await repo.save(
+      [
+        span({ spanId: "s-h1", traceId: "t-h1", model: "claude-opus-4-8", inputTokens: 10, outputTokens: 5, attributes: { "user.id": "erin" } }),
+        span({ spanId: "s-h2", traceId: "t-h2", model: "claude-opus-4-8", inputTokens: 20, outputTokens: 7, attributes: { "user.id": "erin" } }),
+      ],
+      WS_A,
+    );
+    // mesmo dia (2 dias atrás), separados por 5 horas
+    await db.execute(sql`UPDATE spans SET ingested_at = date_trunc('day', now() - interval '2 days') + interval '3 hours' WHERE span_id = 's-h1'`);
+    await db.execute(sql`UPDATE spans SET ingested_at = date_trunc('day', now() - interval '2 days') + interval '8 hours' WHERE span_id = 's-h2'`);
+
+    const r = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A, { bucket: "day" });
+    const erin = r.users.find((u) => u.userId === "erin");
+    expect(erin?.series).toHaveLength(1);
+    expect(erin?.series?.[0]?.inputTokens).toBe(30);
+  });
+
+  // Um span SEM modelo não tem o que precificar, mas TEM tokens — e eles pertencem à série tanto
+  // quanto os precificados. Pular a linha inteira faria o gráfico mostrar menos que a tabela.
+  it("M143 — span sem modelo entra na série com custo zero, não é descartado", async () => {
+    await repo.save(
+      [
+        span({ spanId: "s-nm1", traceId: "t-nm1", model: "claude-opus-4-8", inputTokens: 100, outputTokens: 50, attributes: { "user.id": "frank" } }),
+        span({ spanId: "s-nm2", traceId: "t-nm2", inputTokens: 777, outputTokens: 333, attributes: { "user.id": "frank" } }),
+      ],
+      WS_A,
+    );
+    await retrodatar("s-nm1", 3);
+    await retrodatar("s-nm2", 1);
+
+    const r = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A, { bucket: "day" });
+    const frank = r.users.find((u) => u.userId === "frank");
+    expect(frank?.series).toHaveLength(2);
+    // a soma da série é a soma da LINHA — o span sem preço conta tokens em ambas
+    const tokensSerie = frank?.series?.reduce((a, x) => a + x.inputTokens + x.outputTokens, 0) ?? 0;
+    expect(tokensSerie).toBe((frank?.inputTokens ?? 0) + (frank?.outputTokens ?? 0));
+    expect(tokensSerie).toBe(100 + 50 + 777 + 333);
+  });
+
+  // O eixo do tempo tem direção. Uma série fora de ordem faz o gráfico desenhar ziguezague sobre
+  // dado monotônico, e a ordem do Postgres é detalhe do plano de execução, não contrato.
+  it("M143 — a série vem ordenada por periodStart, crescente", async () => {
+    await repo.save(
+      [
+        span({ spanId: "s-o1", traceId: "t-o1", model: "claude-opus-4-8", inputTokens: 10, outputTokens: 1, attributes: { "user.id": "gina" } }),
+        span({ spanId: "s-o2", traceId: "t-o2", model: "claude-opus-4-8", inputTokens: 20, outputTokens: 2, attributes: { "user.id": "gina" } }),
+        span({ spanId: "s-o3", traceId: "t-o3", model: "claude-opus-4-8", inputTokens: 30, outputTokens: 3, attributes: { "user.id": "gina" } }),
+      ],
+      WS_A,
+    );
+    await retrodatar("s-o1", 2);
+    await retrodatar("s-o2", 9);
+    await retrodatar("s-o3", 5);
+
+    const r = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A, { bucket: "day" });
+    const rotulos = r.users.find((u) => u.userId === "gina")?.series?.map((p) => p.periodStart) ?? [];
+    expect(rotulos).toHaveLength(3);
+    expect(rotulos).toEqual([...rotulos].sort());
+  });
+
+  // `roundUsd` impõe o piso de seis casas, e o custo do PONTO tem de respeitá-lo tanto quanto o da
+  // linha. O #121 deste repositório é o precedente: duplicar essa regra fez o agregado reportar
+  // gasto real como zero.
+  it("M143 — o custo de cada ponto respeita o piso de seis casas", async () => {
+    // TRÊS modelos no MESMO bucket: o custo do ponto é a SOMA de três `computeTraceCost`, e é a
+    // acumulação em ponto flutuante que produz a cauda de dígitos. Um span só, de um modelo só,
+    // costuma cair num valor já curto — e o teste passaria sem `roundUsd`, medindo nada.
+    await repo.save(
+      [
+        span({ spanId: "s-r1", traceId: "t-r1", model: "gpt-4o", inputTokens: 7, outputTokens: 3, attributes: { "user.id": "hank" } }),
+        span({ spanId: "s-r2", traceId: "t-r2", model: "gpt-4o-mini", inputTokens: 11, outputTokens: 13, attributes: { "user.id": "hank" } }),
+        span({ spanId: "s-r3", traceId: "t-r3", model: "claude-opus-4-8", inputTokens: 17, outputTokens: 19, attributes: { "user.id": "hank" } }),
+      ],
+      WS_A,
+    );
+    for (const id of ["s-r1", "s-r2", "s-r3"]) await retrodatar(id, 1);
+
+    const r = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A, { bucket: "day" });
+    const serie = r.users.find((u) => u.userId === "hank")?.series ?? [];
+    expect(serie).toHaveLength(1);
+    for (const ponto of serie) {
+      const casas = (String(ponto.costUsd).split(".")[1] ?? "").length;
+      expect(casas).toBeLessThanOrEqual(6);
+    }
+  });
+
+  // ADR-3 — a M142 está em produção lendo o formato sem `series`. Um campo novo obrigatório, ou uma
+  // lista vazia onde não foi pedida, derruba uma tela implantada.
+  it("M143 — SEM bucket a resposta é idêntica à de hoje, e `series` é undefined", async () => {
+    await repo.save(
+      [span({ spanId: "s-nb", traceId: "t-nb", model: "claude-opus-4-8", inputTokens: 10, outputTokens: 5, attributes: { "user.id": "alice" } })],
+      WS_A,
+    );
+    const r = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A);
+    expect(r.users[0]?.series).toBeUndefined();
+    expect(Object.keys(r).sort()).toEqual(["totalUsers", "unpricedSpans", "users", "windowDays"]);
+  });
+
+  // A decisão de ordenação da M140 pôs o balde junto das demais linhas justamente para o caso em que
+  // o tráfego não atribuído é o MAIOR consumidor. Sumir com ele no eixo do tempo desfaria isso.
+  it("M143 — o balde unattributed tem série como qualquer outro usuário", async () => {
+    await repo.save(
+      [
+        span({ spanId: "s-u1", traceId: "t-u1", model: "claude-opus-4-8", inputTokens: 80, outputTokens: 20 }),
+        span({ spanId: "s-u2", traceId: "t-u2", model: "claude-opus-4-8", inputTokens: 40, outputTokens: 10 }),
+      ],
+      WS_A,
+    );
+    await retrodatar("s-u1", 5);
+    await retrodatar("s-u2", 2);
+
+    const r = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A, { bucket: "day" });
+    const balde = r.users.find((u) => u.userId === UNATTRIBUTED_USER_ID);
+    expect(balde?.series).toHaveLength(2);
+  });
+
+  it("M143 — a soma dos custos da série é o custo do usuário", async () => {
+    await repo.save(
+      [
+        span({ spanId: "s-c1", traceId: "t-c1", model: "claude-opus-4-8", inputTokens: 1000, outputTokens: 500, attributes: { "user.id": "carol" } }),
+        span({ spanId: "s-c2", traceId: "t-c2", model: "claude-opus-4-8", inputTokens: 2000, outputTokens: 900, attributes: { "user.id": "carol" } }),
+      ],
+      WS_A,
+    );
+    await retrodatar("s-c1", 4);
+    await retrodatar("s-c2", 1);
+
+    const r = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A, { bucket: "day" });
+    const carol = r.users.find((u) => u.userId === "carol");
+    const somaDaSerie = carol?.series?.reduce((a, p) => a + p.costUsd, 0) ?? 0;
+    // tolerância de um centésimo de centavo: `roundUsd` arredonda cada ponto E o total
+    expect(Math.abs(somaDaSerie - (carol?.costUsd ?? 0))).toBeLessThan(0.0001);
+  });
+
+  // Um zero inventado num dia sem consumo é indistinguível de consumo real zero. A série vem com
+  // BURACO, e quem plota decide o que fazer com ele — decisão da milestone da tela, não desta.
+  it("M143 — um dia sem consumo NÃO vira um ponto zero", async () => {
+    await repo.save(
+      [
+        span({ spanId: "s-g1", traceId: "t-g1", model: "claude-opus-4-8", inputTokens: 10, outputTokens: 5, attributes: { "user.id": "dave" } }),
+        span({ spanId: "s-g3", traceId: "t-g3", model: "claude-opus-4-8", inputTokens: 10, outputTokens: 5, attributes: { "user.id": "dave" } }),
+      ],
+      WS_A,
+    );
+    await retrodatar("s-g1", 1);
+    await retrodatar("s-g3", 3); // nada no dia 2
+
+    const r = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A, { bucket: "day" });
+    expect(r.users.find((u) => u.userId === "dave")?.series).toHaveLength(2);
   });
 
   it("EC-5 guard: the fixture model really has no price", () => {
