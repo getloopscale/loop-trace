@@ -7,6 +7,10 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Roadmap emendado: **M144 — os dois gráficos de linha do consumo por end-user** (`/roadmap-feature`). Nomeado pelo out-of-scope da M143, que entregou o dado e adiou o desenho. **Duas decisões do owner viraram DoD verificável.** O buraco: a linha **quebra** no dia sem consumo — convenção medida, não afirmada de memória (`spanGaps`, `connectNulls` e `connectgaps` são `false` por padrão em Chart.js, Highcharts, Plotly, ECharts e Recharts; o Grafana usa *Connect null values: Never*), e é a única leitura honesta, já que ligar afirma continuidade que o dado não tem e zero é indistinguível de consumo real zero. A origem dos dados: o gráfico **reusa a chamada da tabela** — e isso trouxe uma consequência que virou DoD próprio, porque o teto do M143 com página de 50 linhas cobre 39 dias, então nas janelas de 90 e 365 a chamada não pode levar `bucket` sob pena de derrubar a tabela junto, e a tela tem de dizer por que o gráfico não está ali. **Um achado medido mudou o escopo:** o `seriesPath` do `@usetheo/ui` filtra o ponto ausente e liga os sobreviventes com `L`, desenhando linha contínua por cima da lacuna — o oposto da convenção. O milestone carrega um passo no repositório irmão `usetheodev/usetheo-ui`, declarado em vez de descoberto no meio.
+
 ## [0.67.0] - 2026-08-03
 
 ### Added
