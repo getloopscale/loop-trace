@@ -120,12 +120,17 @@ export function registerAnalyticsRoutes(app: Hono, repo: TraceReadRepository & A
     //
     // A mensagem nomeia OS DOIS parâmetros: dizer só um deixa o chamador girando o botão errado.
     if (bucketRaw === "day") {
-      const pontos = (days ?? 30) * (limit ?? 50);
+      // `days + 1`, e não `days`. A janela é ROLANTE (`now() - days`), não alinhada ao calendário,
+      // então uma janela de N dias que comece no meio de um dia atravessa N+1 dias de calendário e
+      // produz N+1 baldes. MEDIDO no review: `days=3` produziu **4** baldes. Sem o `+1` o teto
+      // orçava menos pontos do que a resposta pode carregar — erro por um dia, não por ordem de
+      // grandeza, mas o ADR-1 promete "o número de pontos no PIOR caso".
+      const pontos = ((days ?? 30) + 1) * (limit ?? 50);
       if (pontos > MAX_BUCKET_POINTS) {
         return c.json(
           apiError(
             "INVALID_QUERY",
-            `with bucket=day, days × limit must be at most ${MAX_BUCKET_POINTS} (asked for ${days ?? 30} × ${limit ?? 50} = ${pontos})`,
+            `with bucket=day, (days + 1) × limit must be at most ${MAX_BUCKET_POINTS} (asked for ${(days ?? 30) + 1} × ${limit ?? 50} = ${pontos})`,
           ),
           400,
         );

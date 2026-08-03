@@ -105,8 +105,15 @@ export const MAX_OFFSET = 10_000;
 /**
  * M143 — teto sobre o PRODUTO `limit × days` quando `bucket` está presente.
  *
- * Vive aqui pela MESMA razão que os três acima: a rota (que recusa) e o repositório (última linha de
- * defesa) precisam do mesmo número, e duas cópias derivam em silêncio.
+ * DIFERENTE dos três acima em UM ponto, e vale dizer em voz alta: este teto é aplicado **só na
+ * rota**. Os outros três o repositório também aplica, CLAMPANDO — um `limit` de 100000 vira 500 e a
+ * resposta segue correta, só menor. Um teto de PRODUTO não tem clamp equivalente: reduzir `limit`
+ * para caber devolveria menos usuários do que o pedido, em silêncio, que é exatamente o que o
+ * ADR-1 recusa. Recusar é decisão da fronteira, e a fronteira é a rota.
+ *
+ * A consequência honesta: um segundo chamador do port (`span-repository.ts`) — um worker, uma
+ * ferramenta MCP — chega ao repositório sem teto algum. Hoje o único chamador é a rota. Registrado
+ * como limite conhecido em vez de escondido atrás de uma promessa que o código não cumpre.
  *
  * O valor vem de medição, não de gosto (blueprint do M143, perfil denso em Postgres 17 com o mesmo
  * índice composto): `limit=50, days=365` produz 18.250 pontos e **1.591 kB** de JSON para uma tela;
@@ -149,5 +156,9 @@ export interface UsageByUserOptions {
   bucket?: "day";
 }
 
+/** M143 — o tipo do ponto da série. Sem ele, a assinatura de `serieOrdenada` reescrevia o formato
+ * inteiro à mão: uma TERCEIRA cópia do mesmo conhecimento (schema, acumulador, retorno). É a mesma
+ * classe de DRY que o #121 deste repositório já cobrou caro ao duplicar `roundUsd`. */
+export type UsageByUserSeriesPoint = z.infer<typeof usageByUserSeriesPointSchema>;
 export type UsageByUserRow = z.infer<typeof usageByUserRowSchema>;
 export type UsageByUserResponse = z.infer<typeof usageByUserResponseSchema>;

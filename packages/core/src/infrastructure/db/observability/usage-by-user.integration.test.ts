@@ -89,8 +89,11 @@ suite("M140 — usage by end user (integration)", () => {
   it("M143 — dois dias do MESMO usuário produzem duas entradas na série", async () => {
     await repo.save(
       [
-        span({ spanId: "s-d1", traceId: "t-d1", model: "claude-opus-4-8", inputTokens: 100, outputTokens: 50, attributes: { "user.id": "alice" } }),
-        span({ spanId: "s-d2", traceId: "t-d2", model: "claude-opus-4-8", inputTokens: 300, outputTokens: 70, attributes: { "user.id": "alice" } }),
+        // Tokens de CACHE no fixture: sem eles, zerar `cacheReadTokens`/`cacheCreationTokens` na
+        // série sobrevivia à suíte inteira — e são exatamente os campos que a tela já plota como
+        // "aproveitamento de cache". A soma abaixo cobre os QUATRO campos, não dois.
+        span({ spanId: "s-d1", traceId: "t-d1", model: "claude-opus-4-8", inputTokens: 100, outputTokens: 50, cacheReadTokens: 5000, cacheCreationTokens: 800, attributes: { "user.id": "alice" } }),
+        span({ spanId: "s-d2", traceId: "t-d2", model: "claude-opus-4-8", inputTokens: 300, outputTokens: 70, cacheReadTokens: 1200, cacheCreationTokens: 400, attributes: { "user.id": "alice" } }),
       ],
       WS_A,
     );
@@ -101,18 +104,27 @@ suite("M140 — usage by end user (integration)", () => {
     const alice = r.users.find((u) => u.userId === "alice");
     expect(alice?.series).toHaveLength(2);
     // a série soma o mesmo que a linha — senão o gráfico e a tabela contam histórias diferentes
-    expect(alice?.series?.reduce((a, p) => a + p.inputTokens + p.outputTokens, 0)).toBe(
-      (alice?.inputTokens ?? 0) + (alice?.outputTokens ?? 0),
-    );
+    // OS QUATRO campos. A versão anterior somava só entrada+saída, e uma regressão que zerasse as
+    // colunas de cache na série passava verde enquanto a LINHA continuava reportando-as.
+    const somaSerie = (campo: "inputTokens" | "outputTokens" | "cacheReadTokens" | "cacheCreationTokens"): number =>
+      alice?.series?.reduce((a, p) => a + p[campo], 0) ?? 0;
+    expect(somaSerie("inputTokens")).toBe(alice?.inputTokens);
+    expect(somaSerie("outputTokens")).toBe(alice?.outputTokens);
+    expect(somaSerie("cacheReadTokens")).toBe(alice?.cacheReadTokens);
+    expect(somaSerie("cacheCreationTokens")).toBe(alice?.cacheCreationTokens);
+    expect(alice?.cacheReadTokens).toBe(6200);
     // e os rótulos do eixo são dias distintos, não o mesmo timestamp repetido
     const dias = new Set(alice?.series?.map((p) => p.periodStart.slice(0, 10)));
     expect(dias.size).toBe(2);
-    // O rótulo é meia-noite: `date_trunc('day')` zera hora, minuto e segundo. Sem esta asserção,
-    // trocar o bucket para `hour` deixaria o teste verde — os spans estão em dias distintos, então
-    // a CONTAGEM de buckets não muda, e só o rótulo denuncia a granularidade.
-    for (const ponto of alice?.series ?? []) {
-      expect(ponto.periodStart).toMatch(/T00:00:00/);
-    }
+    // NÃO asserimos o rótulo literal (`/T00:00:00/`). `ingested_at` é `timestamptz`, então
+    // `date_trunc` corta na TimeZone da sessão do Postgres — medido no próprio container: o mesmo
+    // instante vira `2026-08-03T00:00:00Z` em UTC e `2026-08-02T03:00:00Z` em America/Sao_Paulo,
+    // e não é só o rótulo que muda, é o DIA a que o span pertence. Uma asserção de rótulo passaria
+    // só porque o container de teste é UTC.
+    //
+    // É a convenção que este repositório já documenta em `aggregate-repository.ts` para
+    // `aggregateCostByPeriod`: o teste soma sobre a janela em vez de afirmar o rótulo do balde. A
+    // discriminação entre dia e hora vem da CONTAGEM, no caso seguinte.
   });
 
   // O par que separa dia de hora pela CONTAGEM: mesmo dia, horas diferentes. Com `day` é UM ponto.
@@ -247,8 +259,10 @@ suite("M140 — usage by end user (integration)", () => {
     const r = await aggregateUsageByUser(db, DEFAULT_PRICES, WS_A, { bucket: "day" });
     const carol = r.users.find((u) => u.userId === "carol");
     const somaDaSerie = carol?.series?.reduce((a, p) => a + p.costUsd, 0) ?? 0;
-    // tolerância de um centésimo de centavo: `roundUsd` arredonda cada ponto E o total
-    expect(Math.abs(somaDaSerie - (carol?.costUsd ?? 0))).toBeLessThan(0.0001);
+    // 1e-9, não 1e-4. A deriva REAL medida sobre 60 baldes × 3 modelos é 1,4e-17 — uma tolerância
+    // de 1e-4 ficaria verde através de uma deriva 10^13 maior do que o código produz, o que é um
+    // oráculo que não mede nada.
+    expect(Math.abs(somaDaSerie - (carol?.costUsd ?? 0))).toBeLessThan(1e-9);
   });
 
   // Um zero inventado num dia sem consumo é indistinguível de consumo real zero. A série vem com

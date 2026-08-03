@@ -188,6 +188,24 @@ suite("M140 — usage-by-user through the real route", () => {
     expect(body.message).toMatch(/2000/);
   });
 
+  // F-4 do review: os dois casos de teto passavam AMBOS os parâmetros, então o ramo que substitui
+  // o default nunca era exercitado — e é justamente a forma que estoura o payload sem ninguém pedir
+  // um número grande. Medido: `?days=365&bucket=day` são 365 × 50 = 18.250 pontos.
+  it("M143 — o teto conta o default de limit quando ele e omitido", async () => {
+    const res = await get("/v1/analytics/usage-by-user?days=365&bucket=day", "a");
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { message: string }).message).toMatch(/18300/);
+  });
+
+  // F-5 do review: "no máximo 2000" e "menos que 2000" eram indistinguíveis para a suíte.
+  it("M143 — a fronteira do teto e INCLUSIVA", async () => {
+    // (4 + 1) × 400 = 2000, exatamente no teto. O `+1` é o dia extra que uma janela rolante
+    // atravessa — medido no review: `days=3` produz 4 baldes.
+    expect((await get("/v1/analytics/usage-by-user?days=4&limit=400&bucket=day", "a")).status).toBe(200);
+    // e um ponto acima já recusa
+    expect((await get("/v1/analytics/usage-by-user?days=4&limit=401&bucket=day", "a")).status).toBe(400);
+  });
+
   it("M143 — aceita o uso real do grafico (top-5 x 365 dias)", async () => {
     expect((await get("/v1/analytics/usage-by-user?limit=5&days=365&bucket=day", "a")).status).toBe(200);
   });

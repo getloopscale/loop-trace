@@ -425,5 +425,6 @@ export {
   usageByUserSeriesPointSchema,
   type UsageByUserOptions,
   type UsageByUserResponse,
+  type UsageByUserSeriesPoint,
   type UsageByUserRow,
 } from "./domain/observability/usage-by-user.js";

@@ -44,6 +44,7 @@ import {
   UNATTRIBUTED_USER_ID,
   type UsageByUserOptions,
   type UsageByUserResponse,
+  type UsageByUserSeriesPoint,
   type UsageByUserRow,
 } from "../../../domain/observability/usage-by-user.js";
 import { computeTraceCost, resolveModelPrice } from "../../../domain/observability/pricing.js";
@@ -79,9 +80,7 @@ const int = (v: unknown): number => {
  * ziguezague sobre dado monotônico. E a ordem que o Postgres devolve é detalhe do plano de execução,
  * não contrato — um `HashAggregate` pode mudá-la sem aviso.
  */
-export function serieOrdenada(
-  porBucket: Map<string, SeriesAcc> | undefined,
-): { periodStart: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number; costUsd: number }[] {
+export function serieOrdenada(porBucket: Map<string, SeriesAcc> | undefined): UsageByUserSeriesPoint[] {
   return [...(porBucket ?? new Map<string, SeriesAcc>()).entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([periodStart, acc]) => ({ periodStart, ...acc, costUsd: roundUsd(acc.costUsd) }));
