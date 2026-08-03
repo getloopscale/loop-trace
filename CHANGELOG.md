@@ -7,6 +7,10 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Roadmap emendado: **M143 — série temporal do consumo por end-user** (`/roadmap-feature`). Medido antes de propor: `/v1/dashboard/lens/observability` já entrega séries, mas por **modelo** e workspace-wide, e `lens-series.ts` não tem função alguma por `userId` — a série por end-user não existe em lugar nenhum do produto. Os spans já têm `user.id` e timestamp, e a M140 já agrupa por usuário dentro de uma janela; falta só o eixo. O DoD exige **medir o custo da query antes de escolher a forma** — cardinalidade é real (400 usuários × 365 dias são 146 mil linhas onde hoje há 400) e a escolha entre teto e top-N tem resposta empírica barata. A M141 não muda uma linha: o BFF repassa `r.URL.Query()` inteira, exatamente como o CHANGELOG dela previu.
+
 ## [0.66.0] - 2026-08-03
 
 ### Fixed
