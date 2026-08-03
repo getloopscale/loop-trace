@@ -18,9 +18,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type pg from "pg";
 
-import type { AuthVerifier, Principal } from "@usetheo/lens-core";
+import { MAX_OFFSET, type AuthVerifier, type Principal } from "@usetheo/lens-core";
 import { createSpanRepository, migrateLatest } from "@usetheo/lens-core/infra";
 import { createApp } from "./app.js";
+import { usageByUserReports } from "./metrics.js";
 
 const PG_URI = process.env["THEOLENS_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
@@ -46,20 +47,38 @@ const span = (over: Record<string, unknown>) => ({
   ...over,
 });
 
+// Workspace ids UNIQUE to this file. They used to be "ws-a"/"ws-b", which
+// `evaluation/labeling-queue.integration.test.ts` also owns and also seeds spans into — including
+// one with no `user.id`, which lands in the `unattributed` bucket and pushes this file's
+// `totalUsers` from 1 to 2. MEASURED: the full integration suite went red in 2 of 5 runs on a clean
+// database, and only when vitest's duration-based sequencer happened to order that file first. A
+// single-file run never reproduces it, and `fileParallelism: false` prevents interleaving, not
+// ordering — which is why this survived review until someone ran the whole suite five times.
+//
+// Two independent fixes, because either alone leaves the trap armed: unique ids so no other file
+// can seed into this one's workspaces, AND explicit cleanup so a previous run of THIS file cannot
+// double-seed (the config documents a per-file TRUNCATE convention this file never followed).
+const WS_A = "ws-usage-route-a";
+const WS_B = "ws-usage-route-b";
+
 suite("M140 — usage-by-user through the real route", () => {
   let pool: pg.Pool;
   let app: ReturnType<typeof createApp>;
+
+  const clearFixtures = async () =>
+    pool.query("DELETE FROM spans WHERE workspace_id = ANY($1)", [[WS_A, WS_B]]);
 
   beforeAll(async () => {
     const made = createSpanRepository(PG_URI as string);
     pool = made.pool;
     await migrateLatest(pool);
+    await clearFixtures();
     app = createApp(made.repo, undefined, {
       verifier: verifierFor({
         // Two tenants, and one key with no read scope — the three principals the assertions need.
-        a: principal(["observability:read"], "ws-a"),
-        b: principal(["observability:read"], "ws-b"),
-        noscope: principal(["observability:write"], "ws-a"),
+        a: principal(["observability:read"], WS_A),
+        b: principal(["observability:read"], WS_B),
+        noscope: principal(["observability:write"], WS_A),
       }),
       requireCredential: true,
     });
@@ -67,17 +86,18 @@ suite("M140 — usage-by-user through the real route", () => {
       [
         span({ spanId: "ra1", traceId: "tra", model: "claude-opus-4-8", inputTokens: 1000, outputTokens: 500, attributes: { "user.id": "alice" } }),
       ] as never,
-      "ws-a",
+      WS_A,
     );
     await made.repo.save(
       [
         span({ spanId: "rb1", traceId: "trb", model: "claude-opus-4-8", inputTokens: 7, outputTokens: 3, attributes: { "user.id": "bob" } }),
       ] as never,
-      "ws-b",
+      WS_B,
     );
   });
 
   afterAll(async () => {
+    await clearFixtures();
     await pool.end();
   });
 
@@ -106,7 +126,7 @@ suite("M140 — usage-by-user through the real route", () => {
 
   it("ignores ?workspaceId= — the workspace comes from the Principal, never from the caller", async () => {
     // The explicit leak attempt. If the route ever honours this parameter, B reads A's report.
-    const res = await get("/v1/analytics/usage-by-user?workspaceId=ws-a", "b");
+    const res = await get(`/v1/analytics/usage-by-user?workspaceId=${WS_A}`, "b");
     const body = (await res.json()) as { users: { userId: string }[] };
     expect(body.users.map((u) => u.userId)).not.toContain("alice");
   });
@@ -150,5 +170,37 @@ suite("M140 — usage-by-user through the real route", () => {
   it("honours a valid window instead of silently defaulting", async () => {
     const body = (await (await get("/v1/analytics/usage-by-user?days=7", "a")).json()) as { windowDays: number };
     expect(body.windowDays).toBe(7);
+  });
+
+  it("rejects an offset above the ceiling instead of answering 500 from the driver", async () => {
+    // `offset` was the one parameter with a shape check and no magnitude check. These two values
+    // are integers by `Number.isInteger` and are NOT representable as bigint, so they used to sail
+    // past validation and die in the driver as `invalid input syntax for type bigint` — surfacing
+    // as a generic 500 where this route's own contract promises a typed 400.
+    for (const qs of [`?offset=${MAX_OFFSET + 1}`, "?offset=1e21", "?offset=99999999999999999999"]) {
+      const res = await get(`/v1/analytics/usage-by-user${qs}`, "a");
+      expect(res.status, `${qs} must be rejected with a typed error`).toBe(400);
+      expect((await res.json()) as Record<string, unknown>).toMatchObject({ code: "INVALID_QUERY" });
+    }
+    // The ceiling itself stays valid — inclusive, like days/limit.
+    expect((await get(`/v1/analytics/usage-by-user?offset=${MAX_OFFSET}`, "a")).status).toBe(200);
+  });
+
+  it("counts every served report — the wiring triad's runtime pillar", async () => {
+    // Without this the feature is invisible in production: when it breaks or gets hammered, no
+    // counter moves. Asserting the DELTA rather than the absolute keeps it independent of test order.
+    const before = usageByUserReports.value;
+    await get("/v1/analytics/usage-by-user", "a");
+    expect(usageByUserReports.value).toBe(before + 1);
+    // …and a REJECTED request must not count as a served report.
+    await get("/v1/analytics/usage-by-user?days=abc", "a");
+    expect(usageByUserReports.value).toBe(before + 1);
+  });
+
+  it("marks the response private and uncacheable", async () => {
+    // The body is a list of client-chosen identities that may be PII (risk R1), and M141 puts a
+    // proxy in front of it.
+    const res = await get("/v1/analytics/usage-by-user", "a");
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
   });
 });

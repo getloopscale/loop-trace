@@ -19,3 +19,4 @@ export * from "./genai-attributes.js";
 export * from "./pricing.js";
 export * from "./default-prices.js";
 export * from "./cost.js";
+export * from "./usage-by-user.js";

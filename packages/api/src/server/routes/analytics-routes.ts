@@ -15,12 +15,14 @@ import {
   costByPeriodResponseSchema,
   usageByUserResponseSchema,
   MAX_LIMIT,
+  MAX_OFFSET,
   MAX_WINDOW_DAYS,
   type UsageByUserOptions,
   apiError,
 } from "@usetheo/lens-core";
 
 import { getPrincipal, requireScopeOnPrincipal } from "../auth/middleware.js";
+import { usageByUserReports } from "../metrics.js";
 
 // M130 (ISP) — narrowed from the composite `SpanRepository` to the exact roles used:
 // trace-read (listTracesForTool) + aggregates (agents/tool-stats/cost).
@@ -88,11 +90,26 @@ export function registerAnalyticsRoutes(app: Hono, repo: TraceReadRepository & A
     if (offset !== undefined && (!Number.isInteger(offset) || offset < 0)) {
       return c.json(apiError("INVALID_QUERY", "offset must be a non-negative integer"), 400);
     }
+    // `offset` was the only parameter with a shape check and no magnitude check, and the gap had
+    // two edges. `Number.isInteger` accepts `1e21` and `99999999999999999999`, which sailed past
+    // the line above and then died in the driver as `invalid input syntax for type bigint` — a
+    // generic 500 where the two branches above promise a typed 400. And a merely large offset is
+    // expensive: measured at 500k spans, `OFFSET 190000` doubled latency and spilled ~10 MB of
+    // temp sort to disk, on a number the caller picks.
+    if (offset !== undefined && offset > MAX_OFFSET) {
+      return c.json(apiError("INVALID_QUERY", `offset must be at most ${MAX_OFFSET}`), 400);
+    }
     const opts: UsageByUserOptions = {};
     if (days !== undefined) opts.days = days;
     if (limit !== undefined) opts.limit = limit;
     if (offset !== undefined) opts.offset = offset;
     const result = await repo.aggregateUsageByUser(opts, getPrincipal(c).workspaceId);
+    usageByUserReports.add(1);
+    // The response concentrates client-chosen identities that MAY be PII (risk R1). Nothing shared
+    // caches an Authorization-bearing response by default, so this is belt-and-braces rather than a
+    // fix for an observed leak — but it is the one read whose body is a list of people, and the M141
+    // BFF puts a proxy in front of it, which is where "by default" stops being a guarantee.
+    c.header("Cache-Control", "private, no-store");
     return c.json(usageByUserResponseSchema.parse(result), 200);
   });
 }

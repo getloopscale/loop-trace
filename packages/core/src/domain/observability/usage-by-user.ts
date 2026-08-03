@@ -65,15 +65,36 @@ export const usageByUserResponseSchema = z.object({
 export const MAX_WINDOW_DAYS = 365;
 /** Page-size ceiling. Same reason. */
 export const MAX_LIMIT = 500;
+/**
+ * Deep-page ceiling. It was the ONE parameter with no server-side bound, and the omission had two
+ * costs. Correctness: `Number.isInteger` accepts `1e21` and `99999999999999999999`, which pass
+ * validation and then die in the driver as `invalid input syntax for type bigint` — a generic 500
+ * where the route's own contract promises a typed 400. Cost: measured at 500k spans, `OFFSET
+ * 190000` doubled latency (393 ms → 831 ms) and spilled ~10 MB of temp sort to disk, driven purely
+ * by a caller-supplied integer.
+ *
+ * A caller genuinely needing rank 10,001+ by consumption narrows the window instead — a consumption
+ * report past rank 10,000 is not a report anyone reads.
+ */
+export const MAX_OFFSET = 10_000;
 
 /**
  * Query options for the report. Lives in the domain, not in the repository, so the port can be
  * declared without the domain importing infrastructure (`architecture.md` § 2).
  */
 export interface UsageByUserOptions {
-  /** Window in days over `ingested_at`. Clamped to [1, 365]; defaults to 30. */
+  /**
+   * Window in days over `ingested_at`; defaults to 30.
+   *
+   * The ROUTE **rejects** a value above `MAX_WINDOW_DAYS` with a typed 400 — it does not clamp.
+   * This doc used to say "clamped", which described the repository's last-line-of-defence and NOT
+   * what the public API does; a consumer reading it would expect a silently reduced window and get
+   * an error instead. The repository still clamps, for a caller that reaches it directly.
+   */
   days?: number;
+  /** Page size; defaults to 50. Rejected by the route above `MAX_LIMIT`, clamped here. */
   limit?: number;
+  /** Page offset; defaults to 0. Rejected by the route above `MAX_OFFSET`, clamped here. */
   offset?: number;
 }
 

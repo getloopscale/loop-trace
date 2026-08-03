@@ -68,6 +68,8 @@ import type {
   SpanFacetsResponse,
   TagBody,
   ToolStatsResponse,
+  UsageByUserOptions,
+  UsageByUserResponse,
   TraceCostResponse,
   TraceListResponse,
   TraceTagsResponse,
@@ -125,6 +127,22 @@ export class LensReadClient extends LensReadTransport {
   /** `GET /v1/analytics/tools` — tool-call usage stats. */
   toolStats(): Promise<ToolStatsResponse> {
     return this.request<ToolStatsResponse>("/v1/analytics/tools");
+  }
+
+  /**
+   * `GET /v1/analytics/usage-by-user` — token and cost consumption grouped by END USER (M140).
+   *
+   * Every sibling analytics read has had a method here since M117 established read parity; this one
+   * shipped with a named OpenAPI component and no client method, so the first-party client that
+   * serves all the other reads could not reach it. A value above any ceiling is REFUSED with a
+   * typed 400, never clamped — see `UsageByUserOptions`.
+   */
+  usageByUser(options: UsageByUserOptions = {}): Promise<UsageByUserResponse> {
+    return this.request<UsageByUserResponse>("/v1/analytics/usage-by-user", {
+      days: options.days,
+      limit: options.limit,
+      offset: options.offset,
+    });
   }
 
   /** `GET /v1/datasets` — the workspace's datasets, wrapped as `{ datasets: [...] }`. */

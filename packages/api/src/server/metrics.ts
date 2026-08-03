@@ -126,3 +126,9 @@ export const autoEvalJobsOrphaned = counter();
  * repeated here until self-review caught it.
  */
 export const autoEvalHeartbeatFailures = counter();
+// M140: consumption-by-end-user reports served. Distinct counter so this route is observable at
+// runtime (wiring-triad pillar c) — it is the one read that concentrates client-chosen identities
+// (risk R1) and can be asked to scan a 365-day window, so "who is calling it, how often" is the
+// question ops will actually have. Its sibling analytics reads have no counter; that is a
+// pre-existing gap on the whole GET surface, not a reason to ship a third blind route.
+export const usageByUserReports = counter();

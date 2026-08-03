@@ -107,7 +107,13 @@ route (the theo-lens paths are `/v1/traces/:id`, etc.):
 
 Groups your workspace's spans by the end-user identity your SDK recorded — `user.id`, falling back to
 the OpenTelemetry `gen_ai.user.id`. Windowed over ingestion time (`days`, default 30, max 365) and
-paged (`limit` default 50, max 500; `offset`).
+paged (`limit` default 50, max 500; `offset` default 0, max 10000).
+
+**A value above any ceiling is REFUSED with `400 INVALID_QUERY`, never quietly reduced.** The
+distinction matters when you page: `windowDays` is echoed in the response, but `limit` is not, so a
+silently-clamped `limit=100000` would hand you 500 rows with nothing saying so — and you would then
+advance `offset` by 100000 and read the wrong pages without any signal that something was wrong.
+The ceilings themselves are inclusive: `?days=365&limit=500&offset=10000` is valid.
 
 ```json
 {

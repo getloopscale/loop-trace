@@ -7,6 +7,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.66.0] - 2026-08-03
+
 ### Fixed
 
 - **O detalhe de um trace deixou de contradizer a listagem que o mostrou** (LT-034). `GET /v1/traces` listava o trace, `GET /v1/traces/{id}/cost` devolvia 200 com custo e tokens, e `GET /v1/traces/{id}` devolvia **404** — duas rotas do mesmo serviço afirmando que o trace existe e uma afirmando que não. Quem clicasse na linha recebia "não encontrado" para algo que o produto acabara de mostrar.
@@ -17,7 +19,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **`GET /v1/analytics/usage-by-user` — consumo de tokens e custo por end-user** (M140). O dado já estava sendo ingerido, indexado e retido: **49.375 de 49.376 spans** do ambiente de desenvolvimento carregam a identidade do usuário (`user.id`, com fallback para o `gen_ai.user.id` da convenção OpenTelemetry), e **nenhuma rota agrupava por ela** — quem opera um agente multi-usuário precisava exportar traces e agregar fora do produto, exatamente o trabalho que uma ferramenta de observabilidade deveria poupar. A resposta traz tokens (entrada, saída, cache de leitura e de criação), custo estimado, `totalUsers` e a janela aplicada; janela sobre o tempo de ingestão (padrão 30 dias, teto 365) e paginação com desempate total, para que um usuário não apareça em duas páginas nem desapareça entre elas.
+- **`GET /v1/analytics/usage-by-user` — consumo de tokens e custo por end-user** (M140). O dado já estava sendo ingerido, indexado e retido: **49.375 de 49.376 spans** do ambiente de desenvolvimento carregam a identidade do usuário (`user.id`, com fallback para o `gen_ai.user.id` da convenção OpenTelemetry), e **nenhuma rota agrupava por ela** — quem opera um agente multi-usuário precisava exportar traces e agregar fora do produto, exatamente o trabalho que uma ferramenta de observabilidade deveria poupar. A resposta traz tokens (entrada, saída, cache de leitura e de criação), custo estimado, `totalUsers` e a janela aplicada; janela sobre o tempo de ingestão (padrão 30 dias, teto 365) e paginação com desempate total, para que um usuário não apareça em duas páginas nem desapareça entre elas. **Pedir mais do que o teto é recusado com erro, não reduzido em silêncio** — a diferença importa porque a janela vem ecoada na resposta e o tamanho da página não: um `limit` cortado sem aviso devolveria 500 linhas enquanto você avança a paginação como se tivesse recebido cem mil, lendo as páginas erradas sem nenhum sinal.
 
   **`unpricedSpans` é obrigatório na resposta, não opcional.** Ele conta quantos spans tinham tokens mas nenhum preço na tabela — os tokens deles entram nos totais, o custo não. Um total silenciosamente baixo é lido como o gasto real, e um campo que pode ser omitido é lido como "não falta nada". O campo conta **apenas spans que consumiram tokens**: no workspace medido, 36.901 spans não têm modelo *nem* tokens (são chamadas de ferramenta e chains, sem nada a precificar) e contá-los reportaria uma lacuna 36.900× maior que a verdadeira.
 
