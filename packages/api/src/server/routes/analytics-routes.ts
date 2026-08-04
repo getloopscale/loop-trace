@@ -25,7 +25,7 @@ import {
 } from "@usetheo/lens-core";
 
 import { getPrincipal, requireScopeOnPrincipal } from "../auth/middleware.js";
-import { usageByUserReports } from "../metrics.js";
+import { usageByUserReports, promptUsageReports } from "../metrics.js";
 
 // M130 (ISP) — narrowed from the composite `SpanRepository` to the exact roles used:
 // trace-read (listTracesForTool) + aggregates (agents/tool-stats/cost).
@@ -73,6 +73,8 @@ export function registerAnalyticsRoutes(app: Hono, repo: TraceReadRepository & A
       windowDays = n;
     }
     const rows = await repo.aggregatePromptUsage(promptName, windowDays, getPrincipal(c).workspaceId);
+    // Wiring-triad pilar (c): sem isto, a rota é invisível em produção quando pesar.
+    promptUsageReports.add(1);
     return c.json(promptUsageResponseSchema.parse({ promptName, windowDays, rows }), 200);
   });
 
