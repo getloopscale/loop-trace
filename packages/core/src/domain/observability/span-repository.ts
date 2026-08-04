@@ -1,6 +1,7 @@
 import type { Span } from "./span.js";
 import type { ListTracesOptions, TraceListResponse } from "./trace-list.js";
 import type { CostByPeriodResponse, CostPeriod, TraceCost } from "./cost.js";
+import type { PromptUsageRow } from "./prompt-usage.js";
 import type { ToolStatsResponse } from "./tool-stats.js";
 import type { NorthStarResponse } from "./north-star.js";
 import type { ObservabilityRange, ObservabilityResponse } from "./observability.js";
@@ -62,6 +63,15 @@ export interface TraceReadRepository {
 export interface AggregateRepository {
   /** Cost aggregated into day/week time buckets (M5). */
   aggregateCostByPeriod(period: CostPeriod, workspaceId?: string): Promise<CostByPeriodResponse>;
+  /**
+   * Uso observado por REVISÃO de um prompt do `theo-promptly`, numa janela (M15).
+   * Custo atribuído por trace compartilhado — ver `prompt-usage.ts` para o limite.
+   */
+  aggregatePromptUsage(
+    promptName: string,
+    windowDays: number,
+    workspaceId?: string,
+  ): Promise<PromptUsageRow[]>;
   /** Per-tool operational stats (count/p50/p95/error-rate) over a recent window (M6). */
   aggregateToolStats(workspaceId?: string): Promise<ToolStatsResponse>;
   /** Record that a trace's replay was opened in the UI (M8 north-star). */

@@ -14,6 +14,8 @@ import {
   traceListResponseSchema,
   costByPeriodResponseSchema,
   usageByUserResponseSchema,
+  promptUsageResponseSchema,
+  MAX_PROMPT_USAGE_WINDOW_DAYS,
   MAX_BUCKET_POINTS,
   MAX_LIMIT,
   MAX_OFFSET,
@@ -46,6 +48,32 @@ export function registerAnalyticsRoutes(app: Hono, repo: TraceReadRepository & A
       getPrincipal(c).workspaceId,
     );
     return c.json(traceListResponseSchema.parse(list), 200);
+  });
+
+  // M15 (theo-promptly) — uso por REVISÃO de um prompt. O workspace vem do Principal e NUNCA de
+  // query param: um `?workspaceId=` aqui seria vazamento cross-tenant por desenho (M22).
+  app.get("/v1/analytics/prompt-usage", requireScopeOnPrincipal("observability:read"), async (c) => {
+    const promptName = c.req.query("prompt");
+    if (promptName === undefined || promptName.trim() === "") {
+      return c.json(apiError("INVALID_QUERY", "prompt is required"), 400);
+    }
+    // Fail-fast na janela (Rule 8): um valor fora de faixa é RECUSADO, não silenciosamente
+    // trocado por um default — senão o chamador recebe uma janela diferente da que pediu e
+    // atribui o resultado à janela errada.
+    const rawWindow = c.req.query("windowDays");
+    let windowDays = 7;
+    if (rawWindow !== undefined) {
+      const n = Number(rawWindow);
+      if (!Number.isInteger(n) || n < 1 || n > MAX_PROMPT_USAGE_WINDOW_DAYS) {
+        return c.json(
+          apiError("INVALID_QUERY", `windowDays must be an integer in 1..${String(MAX_PROMPT_USAGE_WINDOW_DAYS)}`),
+          400,
+        );
+      }
+      windowDays = n;
+    }
+    const rows = await repo.aggregatePromptUsage(promptName, windowDays, getPrincipal(c).workspaceId);
+    return c.json(promptUsageResponseSchema.parse({ promptName, windowDays, rows }), 200);
   });
 
   app.get("/v1/analytics/cost", requireScopeOnPrincipal("observability:read"), async (c) => {
