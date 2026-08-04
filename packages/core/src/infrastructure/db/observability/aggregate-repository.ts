@@ -76,7 +76,7 @@ export async function aggregateCostByPeriod(
   const res = await db.execute(sql`
     SELECT date_trunc(${trunc}, updated_at) AS bucket,
            coalesce(sum(cost_usd), 0)::double precision AS cost,
-           coalesce(sum(total_tokens), 0)::int AS tokens,
+           coalesce(sum(total_tokens), 0)::double precision AS tokens,
            count(*)::int AS n
     FROM traces
     WHERE updated_at >= now() - interval '90 days' AND workspace_id = ${workspaceId}
@@ -309,10 +309,10 @@ export async function aggregateObservability(
   const modelRes = await db.execute(sql`
     SELECT date_trunc(${trunc}, ingested_at) AS bucket,
            model,
-           coalesce(sum(input_tokens), 0)::int AS "inputTokens",
-           coalesce(sum(output_tokens), 0)::int AS "outputTokens",
-           coalesce(sum(cache_read_tokens), 0)::int AS "cacheReadTokens",
-           coalesce(sum(cache_creation_tokens), 0)::int AS "cacheCreationTokens"
+           coalesce(sum(input_tokens), 0)::double precision AS "inputTokens",
+           coalesce(sum(output_tokens), 0)::double precision AS "outputTokens",
+           coalesce(sum(cache_read_tokens), 0)::double precision AS "cacheReadTokens",
+           coalesce(sum(cache_creation_tokens), 0)::double precision AS "cacheCreationTokens"
     FROM spans
     WHERE ingested_at >= now() - ${sql.raw(`interval '${interval}'`)}
       AND model IS NOT NULL AND workspace_id = ${workspaceId}

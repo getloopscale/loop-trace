@@ -171,4 +171,44 @@ suite("aggregateObservability (integration, M11)", () => {
     expect(obs.tokensByModel).toEqual([]);
     expect(obs.range).toBe("1h");
   });
+
+  // theo-lens#136 — a janela de 30 dias derrubava a tela inteira com 500 INTERNAL, e a causa era de
+  // TIPO, não de volume: `sum()` sobre uma coluna int4 devolve int8, e o `::int` a espremia de volta
+  // em 4 bytes. Cada linha cabia; a soma do balde não. O Postgres levanta `22003 integer out of
+  // range` (int8.c, rotina int84) e o operador via "the lens service is not reachable".
+  //
+  // O fixture usa DUAS linhas que individualmente cabem em int4 — é o ponto: um teste com uma linha
+  // gigante testaria a coluna, não a SOMA, e passaria mesmo com o defeito de volta.
+  it("test_aggregate_observability_token_sum_above_int4_does_not_overflow", async () => {
+    const INT4_MAX = 2_147_483_647;
+    const metade = Math.floor(INT4_MAX / 2) + 1_000;
+    expect(metade).toBeLessThan(INT4_MAX); // cada linha cabe…
+    expect(metade * 2).toBeGreaterThan(INT4_MAX); // …e a soma não
+
+    // `cache_read_tokens` é o que estourou em produção (o Claude Code relê o cache a cada turno);
+    // `input_tokens` entra junto porque é ele que a resposta EXPÕE, e sem um campo exposto não há
+    // como afirmar valor exato — só "não explodiu", que é fraco demais.
+    await repo.save([
+      span({
+        spanId: "ov1",
+        traceId: "t-ov1",
+        model: "claude-sonnet",
+        inputTokens: metade,
+        cacheReadTokens: metade,
+      }),
+      span({
+        spanId: "ov2",
+        traceId: "t-ov2",
+        model: "claude-sonnet",
+        inputTokens: metade,
+        cacheReadTokens: metade,
+      }),
+    ]);
+
+    const obs = await repo.aggregateObservability("30d");
+    const soma = obs.tokensByModel.reduce((s, b) => s + b.totalTokens, 0);
+    // Valor EXATO, não apenas "não explodiu": uma coerção quebrada devolveria NaN ou 0, e ambas
+    // passariam por um `toBeGreaterThan`.
+    expect(soma).toBe(metade * 2);
+  });
 });

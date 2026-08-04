@@ -167,6 +167,14 @@ export function createApp(
   // Fail-loud, fail-clear (Rule 8): any unhandled error (e.g. Postgres
   // unavailable during repo.save) is logged with context and surfaced as 500.
   app.onError((err, c) => {
+    // theo-lens#136 — a resposta é opaca de propósito (nunca vazar interno ao cliente), mas o LOG
+    // precisa deixar de ser. Antes, um defeito de TIPO numa consulta (`22003 integer out of range`,
+    // que derrubava `range=30d`) chegava ao operador como `INTERNAL` aqui e `UPSTREAM_ERROR` no
+    // dashboard — indistinguível de "o serviço caiu". `code`/`routine` classificam, `query` localiza.
+    //
+    // `params` é deliberadamente OMITIDO: os valores ligados podem carregar conteúdo do usuário
+    // (termo de busca, span_query), e um log de erro não é lugar para isso.
+    const pg = err as Partial<{ code: string; routine: string; query: string }>;
     console.error(
       JSON.stringify({
         level: "error",
@@ -174,6 +182,9 @@ export function createApp(
         method: c.req.method,
         path: c.req.path,
         error: err instanceof Error ? err.message : String(err),
+        ...(typeof pg.code === "string" ? { dbErrorCode: pg.code } : {}),
+        ...(typeof pg.routine === "string" ? { dbRoutine: pg.routine } : {}),
+        ...(typeof pg.query === "string" ? { dbQuery: pg.query.replace(/\s+/g, " ").slice(0, 500) } : {}),
       }),
     );
     return c.json(apiError("INTERNAL", "internal error"), 500);
