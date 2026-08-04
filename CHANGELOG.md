@@ -7,6 +7,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.68.0] - 2026-08-04
+
 ### Added
 
 - **`GET /v1/analytics/prompt-usage` — uso observado por revisão de prompt do `theo-promptly` (M15 daquele projeto).** Uma leitura devolve **todas** as revisões do prompt na janela, com contagem de resoluções, tokens e custo. A atribuição de custo é **por trace compartilhado**: o SDK do promptly roda in-process, então o span `prompt.resolve` já nasce filho do trace da aplicação e divide o `traceId` com a chamada ao modelo — nenhuma app consumidora precisa marcar nada. O limite é honesto e a tela consumidora precisa dizê-lo: quem resolve o prompt fora do trace em que chama o modelo não correlaciona, e o custo sai vazio, nunca zero. O agregado **não re-soma spans**: junta `spans` a `traces` pela PK composta desta, que já mantém `total_tokens`/`cost_usd` — mesma razão do #73, onde a soma por span dava $0.0000 porque o custo mora no pai. `workspace_id` entra nos dois lados do join: o schema prevê o mesmo `trace_id` em dois inquilinos (M22 / F-sec-3), e omiti-lo num lado reabriria esse vazamento. Medido: **8,10 ms com 100 mil spans na tabela** (#m15-promptly)
