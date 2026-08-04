@@ -7,6 +7,10 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **`p50LatencyMs` no agregado de uso por revisão.** O DoD do milestone consumidor pede quatro números por revisão — chamadas, **latência mediana**, tokens e custo — e a primeira entrega trouxe dois. A mediana é da **resolução** (o que o span `prompt.resolve` mede), não do trace: o trace inclui a chamada ao modelo, que é ordens de grandeza mais lenta e responderia outra pergunta (#m15-promptly)
+
 ## [0.68.0] - 2026-08-04
 
 ### Added

@@ -174,6 +174,24 @@ suite("aggregatePromptUsage — uso por revisão (M15)", () => {
     expect(linhas.map((l) => l.revision)).toEqual([10, 9]);
   });
 
+  it("devolve a latencia MEDIANA da resolucao por revisao", async () => {
+    // O DoD-2 do M15 pede quatro números por revisão: chamadas, latência mediana, tokens e
+    // custo. A mediana é da RESOLUÇÃO — o que o span `prompt.resolve` mede —, não do trace:
+    // o trace inclui a chamada ao modelo, que é ordens de grandeza mais lenta e diria outra coisa.
+    await repo.save(
+      [
+        { ...resolucao("t1", "s1", 3), endTimeUnixNano: "1700000000005000000" }, //  5 ms
+        { ...resolucao("t2", "s2", 3), endTimeUnixNano: "1700000000015000000" }, // 15 ms
+        { ...resolucao("t3", "s3", 3), endTimeUnixNano: "1700000000025000000" }, // 25 ms
+      ] as Span[],
+      WS_A,
+    );
+
+    const linhas = await aggregatePromptUsage(db, "saudacao", 7, WS_A);
+
+    expect(linhas[0]?.p50LatencyMs).toBeCloseTo(15, 1);
+  });
+
   it("a consulta usa o indice — EXPLAIN nao mostra Seq Scan em spans", { timeout: 120_000 }, async () => {
     // Dado sintético, porque o app-dev não reproduz volume (ADR-3). Sem o índice
     // parcial a consulta é varredura, e a tela ficaria utilizável aqui e
