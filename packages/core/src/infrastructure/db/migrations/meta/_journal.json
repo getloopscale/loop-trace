@@ -225,6 +225,13 @@
       "when": 1784640656750,
       "tag": "0031_monitors_pkey_rename",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1784640657750,
+      "tag": "0032_prompt_resolve_idx",
+      "breakpoints": true
     }
   ]
 }

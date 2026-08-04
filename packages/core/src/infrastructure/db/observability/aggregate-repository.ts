@@ -15,6 +15,7 @@ import { round3, ERROR_STATUS_CODES } from "../../../domain/observability/tool-s
 import type { ToolStatsResponse } from "../../../domain/observability/tool-stats.js";
 import { type PriceTable } from "../../../domain/observability/pricing.js";
 import type { CostByPeriodResponse, CostPeriod } from "../../../domain/observability/cost.js";
+import type { PromptUsageRow } from "../../../domain/observability/prompt-usage.js";
 import { shapeNorthStarBuckets, bucketRowSchema, type NorthStarResponse } from "../../../domain/observability/north-star.js";
 import {
   shapeObservability,
@@ -75,7 +76,7 @@ export async function aggregateCostByPeriod(
   const res = await db.execute(sql`
     SELECT date_trunc(${trunc}, updated_at) AS bucket,
            coalesce(sum(cost_usd), 0)::double precision AS cost,
-           coalesce(sum(total_tokens), 0)::int AS tokens,
+           coalesce(sum(total_tokens), 0)::double precision AS tokens,
            count(*)::int AS n
     FROM traces
     WHERE updated_at >= now() - interval '90 days' AND workspace_id = ${workspaceId}
@@ -91,6 +92,72 @@ export async function aggregateCostByPeriod(
     totalTokens: r.tokens,
     traceCount: r.n }));
   return { period, buckets };
+}
+
+/**
+ * M15 (theo-promptly) — uso por revisão de um prompt, numa janela.
+ *
+ * NÃO é um self-join sobre `spans`. A tabela `traces` já mantém `total_tokens` e
+ * `cost_usd` por trace (PK composta `(workspace_id, trace_id)`), então o agregado
+ * junta `spans` a `traces` pela chave primária desta — o mesmo motivo do #73: o
+ * custo autoritativo vive no trace, e re-somar por span devolve zero quando o
+ * custo está no pai.
+ *
+ * `workspace_id` entra nos DOIS lados do join de propósito. O schema PREVÊ o mesmo
+ * `trace_id` em dois inquilinos (M22 / review F-sec-3); omiti-lo num lado
+ * reintroduz um vazamento cross-tenant já corrigido uma vez.
+ *
+ * Três detalhes que a leitura de `attributes` impõe:
+ *
+ * - `prompt.id` carrega o NOME do prompt (nomenclatura herdada), e é por ele que
+ *   se filtra — daí o índice parcial `spans_prompt_resolve_idx` ser sobre ele.
+ * - `attributes->>` devolve TEXTO: sem `::int`, a v10 ordena antes da v9.
+ * - `revision = -1` é o sentinela de "não encontrei o prompt" que o decorator
+ *   grava (`p?.version ?? -1`). Agrupar por ele criaria uma linha de uso fantasma.
+ */
+export async function aggregatePromptUsage(
+  db: NodePgDatabase,
+  promptName: string,
+  windowDays: number,
+  workspaceId: string = DEFAULT_WORKSPACE_ID,
+): Promise<PromptUsageRow[]> {
+  const res = await db.execute(sql`
+    SELECT (s.attributes->>'prompt.revision')::int          AS revision,
+           count(*)::int                                    AS resolutions,
+           coalesce(sum(t.total_tokens), 0)::double precision AS tokens,
+           sum(t.cost_usd)::double precision                AS cost,
+           -- Mediana da RESOLUÇÃO, não do trace: o trace inclui a chamada ao modelo, que é
+           -- ordens de grandeza mais lenta e responderia outra pergunta.
+           percentile_cont(0.5) WITHIN GROUP (
+             ORDER BY greatest(0, (s.end_time_unix_nano::numeric - s.start_time_unix_nano::numeric) / 1e6)
+           )::double precision                              AS p50_latency_ms
+      FROM spans s
+      LEFT JOIN traces t
+             ON t.workspace_id = s.workspace_id
+            AND t.trace_id     = s.trace_id
+     WHERE s.workspace_id = ${workspaceId}
+       AND s.name = 'prompt.resolve'
+       AND s.attributes->>'prompt.id' = ${promptName}
+       AND s.attributes->>'prompt.revision' <> '-1'
+       AND s.ingested_at >= now() - make_interval(days => ${windowDays})
+     GROUP BY 1
+     ORDER BY 1 DESC
+  `);
+  return (
+    res.rows as {
+      revision: number;
+      resolutions: number;
+      tokens: number;
+      cost: number | null;
+      p50_latency_ms: number | null;
+    }[]
+  ).map((r) => ({
+    revision: Number(r.revision),
+    resolutions: Number(r.resolutions),
+    totalTokens: Number(r.tokens),
+    costUsd: r.cost === null ? null : Number(r.cost),
+    p50LatencyMs: r.p50_latency_ms === null ? null : Number(r.p50_latency_ms),
+  }));
 }
 
 export async function aggregateToolStats(
@@ -242,10 +309,10 @@ export async function aggregateObservability(
   const modelRes = await db.execute(sql`
     SELECT date_trunc(${trunc}, ingested_at) AS bucket,
            model,
-           coalesce(sum(input_tokens), 0)::int AS "inputTokens",
-           coalesce(sum(output_tokens), 0)::int AS "outputTokens",
-           coalesce(sum(cache_read_tokens), 0)::int AS "cacheReadTokens",
-           coalesce(sum(cache_creation_tokens), 0)::int AS "cacheCreationTokens"
+           coalesce(sum(input_tokens), 0)::double precision AS "inputTokens",
+           coalesce(sum(output_tokens), 0)::double precision AS "outputTokens",
+           coalesce(sum(cache_read_tokens), 0)::double precision AS "cacheReadTokens",
+           coalesce(sum(cache_creation_tokens), 0)::double precision AS "cacheCreationTokens"
     FROM spans
     WHERE ingested_at >= now() - ${sql.raw(`interval '${interval}'`)}
       AND model IS NOT NULL AND workspace_id = ${workspaceId}

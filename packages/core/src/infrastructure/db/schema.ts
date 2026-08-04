@@ -102,6 +102,15 @@ export const spans = pgTable(
     index("spans_workspace_ingested_idx").on(t.workspaceId, t.ingestedAt),
     // M24: backs the full-text `search_tsv @@ websearch_to_tsquery(...)` filter.
     index("spans_search_tsv_gin_idx").using("gin", t.searchTsv),
+    // M15 (theo-promptly): índice PARCIAL de EXPRESSÃO que serve o agregado de uso por revisão.
+    // É a forma que a NOTE do M95 abaixo deixou em aberto — ela mediu que uma GIN não serve
+    // `attributes ->> key = value` e difere "a true attr-value index" para um milestone próprio.
+    // Este é esse milestone. Parcial porque só spans de resolução interessam (o índice fica
+    // pequeno e não onera a ingestão dos outros produtos); sobre `prompt.id` porque quem precisa
+    // de índice é o FILTRO — `prompt.revision` é apenas a chave do GROUP BY.
+    index("spans_prompt_resolve_idx")
+      .on(sql`(${t.attributes}->>'prompt.id')`, t.workspaceId, t.ingestedAt)
+      .where(sql`${t.name} = 'prompt.resolve'`),
     // M95 NOTE: a jsonb GIN on `attributes` was evaluated and DROPPED — it accelerates `@>`
     // containment, NOT the M92 `attributes ->> key = value` predicate (empirically `EXPLAIN`-proven:
     // the `->>=` filter Seq-Scans regardless of the GIN). The `spans_workspace_ingested_idx` composite

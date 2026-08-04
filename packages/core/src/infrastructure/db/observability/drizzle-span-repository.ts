@@ -38,6 +38,7 @@ import type {
   CostByPeriodResponse,
   CostPeriod,
   TraceCost } from "../../../domain/observability/cost.js";
+import type { PromptUsageRow } from "../../../domain/observability/prompt-usage.js";
 import {   type ToolStatsResponse } from "../../../domain/observability/tool-stats.js";
 import { parsePoolConfig, type PoolConfig } from "../../../domain/evaluation/evaluator-config.js";
 import {
@@ -114,6 +115,14 @@ export class DrizzleSpanRepository implements SpanRepository {
   }
   aggregateCostByPeriod(period: CostPeriod, workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<CostByPeriodResponse> {
     return aggregateRepo.aggregateCostByPeriod(this.db, period, workspaceId);
+  }
+
+  aggregatePromptUsage(
+    promptName: string,
+    windowDays: number,
+    workspaceId: string = DEFAULT_WORKSPACE_ID,
+  ): Promise<PromptUsageRow[]> {
+    return aggregateRepo.aggregatePromptUsage(this.db, promptName, windowDays, workspaceId);
   }
 
   aggregateToolStats(workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<ToolStatsResponse> {

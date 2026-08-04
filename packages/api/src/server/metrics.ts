@@ -132,3 +132,8 @@ export const autoEvalHeartbeatFailures = counter();
 // question ops will actually have. Its sibling analytics reads have no counter; that is a
 // pre-existing gap on the whole GET surface, not a reason to ship a third blind route.
 export const usageByUserReports = counter();
+// M15 (theo-promptly): agregados de uso por revisão servidos. Contador próprio pela MESMA razão
+// que o vizinho acima: é uma leitura que concentra um identificador escolhido pelo cliente (o
+// nome do prompt) e pode pedir uma janela de até 90 dias. "Quem está chamando, com que
+// frequência" é a pergunta que ops de fato terá quando a consulta pesar.
+export const promptUsageReports = counter();
