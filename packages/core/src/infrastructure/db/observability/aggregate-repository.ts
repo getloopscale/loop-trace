@@ -124,7 +124,7 @@ export async function aggregatePromptUsage(
   const res = await db.execute(sql`
     SELECT (s.attributes->>'prompt.revision')::int          AS revision,
            count(*)::int                                    AS resolutions,
-           coalesce(sum(t.total_tokens), 0)::int            AS tokens,
+           coalesce(sum(t.total_tokens), 0)::double precision AS tokens,
            sum(t.cost_usd)::double precision                AS cost,
            -- Mediana da RESOLUÇÃO, não do trace: o trace inclui a chamada ao modelo, que é
            -- ordens de grandeza mais lenta e responderia outra pergunta.

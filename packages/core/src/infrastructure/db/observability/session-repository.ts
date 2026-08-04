@@ -68,7 +68,7 @@ export async function listSessions(
            s.last_seen_at AS "lastSeenAt",
            count(t.trace_id)::int AS "traceCount",
            coalesce(sum(t.cost_usd), 0)::double precision AS "costUsd",
-           coalesce(sum(t.total_tokens), 0)::int AS "totalTokens",
+           coalesce(sum(t.total_tokens), 0)::double precision AS "totalTokens",
            count(t.trace_id) FILTER (WHERE t.status_code = 'error')::int AS "errorCount",
            (SELECT count(*)::int
               FROM span_evaluations se

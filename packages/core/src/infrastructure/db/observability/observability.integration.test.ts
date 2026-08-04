@@ -185,30 +185,57 @@ suite("aggregateObservability (integration, M11)", () => {
     expect(metade).toBeLessThan(INT4_MAX); // cada linha cabe…
     expect(metade * 2).toBeGreaterThan(INT4_MAX); // …e a soma não
 
-    // `cache_read_tokens` é o que estourou em produção (o Claude Code relê o cache a cada turno);
-    // `input_tokens` entra junto porque é ele que a resposta EXPÕE, e sem um campo exposto não há
-    // como afirmar valor exato — só "não explodiu", que é fraco demais.
+    // `cache_read_tokens` é o que estourou em produção (o Claude Code relê o cache a cada turno).
+    // As QUATRO colunas são semeadas de propósito: com `output_tokens` e `cache_creation_tokens` em
+    // zero, reverter o cast DELAS passaria por este teste — a soma nunca cruzaria o teto, e a
+    // asserção ficaria verde sobre um defeito de volta. Uma coluna não coberta é uma mutação viva.
+    //
+    // `input` e `output` ficam em traces SEPARADOS de propósito. Juntá-los num só faria o
+    // `traces.total_tokens` daquele trace — uma coluna `integer` — estourar no INSERT, testando a
+    // COLUNA em vez da SOMA. E seria um fixture infiel: em produção o balde é grande porque tem
+    // MUITOS traces pequenos, não um trace gigante (o maior medido no app-dev tem 992k tokens).
+    const s = (spanId: string, traceId: string, campos: Record<string, number>) =>
+      span({ spanId, traceId, model: "gpt-4o", ...campos });
     await repo.save([
-      span({
-        spanId: "ov1",
-        traceId: "t-ov1",
-        model: "claude-sonnet",
-        inputTokens: metade,
-        cacheReadTokens: metade,
-      }),
-      span({
-        spanId: "ov2",
-        traceId: "t-ov2",
-        model: "claude-sonnet",
-        inputTokens: metade,
-        cacheReadTokens: metade,
-      }),
+      s("ov1", "t-ov1", { inputTokens: metade, cacheReadTokens: metade, cacheCreationTokens: metade }),
+      s("ov2", "t-ov2", { inputTokens: metade, cacheReadTokens: metade, cacheCreationTokens: metade }),
+      s("ov3", "t-ov3", { outputTokens: metade }),
+      s("ov4", "t-ov4", { outputTokens: metade }),
     ]);
 
     const obs = await repo.aggregateObservability("30d");
-    const soma = obs.tokensByModel.reduce((s, b) => s + b.totalTokens, 0);
+    // `totalTokens` = input + output; cada um soma `metade * 2` e sozinho já cruza o teto.
+    const soma = obs.tokensByModel.reduce((s2, b) => s2 + b.totalTokens, 0);
     // Valor EXATO, não apenas "não explodiu": uma coerção quebrada devolveria NaN ou 0, e ambas
     // passariam por um `toBeGreaterThan`.
-    expect(soma).toBe(metade * 2);
+    expect(soma).toBe(metade * 4);
+    // E o custo, que é a única saída por onde os tokens de cache aparecem, precisa ser um número
+    // finito e positivo — se a soma deles voltasse como string ou NaN, ele viraria NaN aqui.
+    const custo = obs.tokensByModel.reduce((s, b) => s + b.costUsd, 0);
+    expect(Number.isFinite(custo)).toBe(true);
+    expect(custo).toBeGreaterThan(0);
+  });
+
+  // As outras duas agregações que compartilhavam o cast e não tinham cobertura alguma. Sem elas,
+  // reverter `aggregateCostByPeriod` ou `getSessionDetail` passava por toda a suíte.
+  it("test_cost_by_period_token_sum_above_int4_does_not_overflow", async () => {
+    const metade = Math.floor(2_147_483_647 / 2) + 1_000;
+    await repo.save([
+      span({ spanId: "cp1", traceId: "t-cp1", model: "gpt-4o", inputTokens: metade }),
+      span({ spanId: "cp2", traceId: "t-cp2", model: "gpt-4o", inputTokens: metade }),
+    ]);
+    const { buckets } = await repo.aggregateCostByPeriod("day");
+    const tokens = buckets.reduce((acc, b) => acc + b.totalTokens, 0);
+    expect(tokens).toBe(metade * 2);
+  });
+
+  it("test_session_detail_token_sum_above_int4_does_not_overflow", async () => {
+    const metade = Math.floor(2_147_483_647 / 2) + 1_000;
+    await repo.save([
+      span({ spanId: "sd1", traceId: "t-sd1", sessionId: "s-ov", model: "gpt-4o", inputTokens: metade }),
+      span({ spanId: "sd2", traceId: "t-sd2", sessionId: "s-ov", model: "gpt-4o", inputTokens: metade }),
+    ]);
+    const detalhe = await repo.getSessionDetail("s-ov");
+    expect(detalhe?.totalTokens).toBe(metade * 2);
   });
 });
