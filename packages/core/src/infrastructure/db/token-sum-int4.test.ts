@@ -37,12 +37,17 @@ const MARCADOR_DE_EXCECAO = "int4-alvo-ok";
  * porque não capam. Espaço no cast e caixa alta contam. Varre o arquivo inteiro, não linha a linha,
  * porque uma quebra de linha entre a soma e o cast escapava da versão anterior.
  *
- * O `[^:;]` entre a soma e o cast é o que impede o oposto do erro anterior. A segunda versão desta
- * guarda usava `[^;]`, que atravessa o SQL inteiro e casava `sum(cost_usd)::double precision` de uma
- * linha com o `count(*)::int` de outra — **cinco falso-positivos**, todos corretos no código. Proibir
- * `:` força o cast a ser o PRIMEIRO depois daquela soma, que é o único que se aplica a ela.
+ * Entre a soma e o cast só pode haver `[\s\d,)+]` — o rabo de um `coalesce(sum(x), 0)`, de um
+ * `(sum(a) + sum(b))`, ou nada. Isso é o que faz o cast pertencer ÀQUELA soma.
+ *
+ * A segunda versão usava `[^;]`, que atravessa o SQL inteiro e casava `sum(cost_usd)::double
+ * precision` de uma linha com o `count(*)::int` de outra — **cinco falso-positivos**, todos corretos
+ * no código. A terceira trocou por `[^:;]{0,40}`, que funcionava por **margem**: no próprio caso de
+ * falso-positivo sobravam 7 caracteres, e um SQL formatado mais compacto teria reintroduzido o erro.
+ * Um limite numérico arbitrário não é uma regra — é uma aposta na formatação alheia. O conjunto de
+ * caracteres é a regra de verdade, e não tem teto de comprimento.
  */
-const PADRAO = /sum\s*\((?:[^()]|\([^()]*\))*\)[^:;]{0,40}?::\s*int(?:4|eger)?\b/gis;
+const PADRAO = /sum\s*\((?:[^()]|\([^()]*\))*\)[\s\d,)+]*::\s*int(?:4|eger)?\b/gis;
 
 const RAIZ_PACOTES = fileURLToPath(new URL("../../../..", import.meta.url)); // …/packages
 
@@ -113,6 +118,10 @@ describe("guarda #136 — nenhuma soma volta a ser espremida em int4", () => {
       // `count(*)::int` legítimo mais adiante na mesma consulta.
       'coalesce(sum(cost_usd), 0)::double precision AS cost,\n           count(*)::int AS n',
       "ORDER BY sum(coalesce(s.input_tokens, 0)) DESC, s.model ASC\n  LIMIT $1\n) SELECT count(*)::int",
+      // O mesmo falso-positivo COMPACTO. A versão anterior passava por margem (7 caracteres de
+      // folga sobre um teto de 40); comprimida, ela teria voltado a acusar código correto.
+      "coalesce(sum(cost_usd),0)::double precision c,count(*)::int n",
+      "sum(x) DESC,count(*)::int",
     ];
     for (const caso of naoDeveriaPegar) {
       expect(ofensoresEm(caso), `NÃO deveria pegar: ${caso}`).toHaveLength(0);
