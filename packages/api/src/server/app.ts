@@ -167,13 +167,50 @@ export function createApp(
   // Fail-loud, fail-clear (Rule 8): any unhandled error (e.g. Postgres
   // unavailable during repo.save) is logged with context and surfaced as 500.
   app.onError((err, c) => {
+    // theo-lens#136 — a resposta é opaca de propósito (nunca vazar interno ao cliente), mas o LOG
+    // precisa deixar de ser. Antes, um defeito de TIPO numa consulta (`22003 integer out of range`,
+    // que derrubava `range=30d`) chegava ao operador como `INTERNAL` aqui e `UPSTREAM_ERROR` no
+    // dashboard — indistinguível de "o serviço caiu". `code`/`routine` classificam, `query` localiza.
+    //
+    // `params` é deliberadamente OMITIDO: os valores ligados podem carregar conteúdo do usuário
+    // (termo de busca, span_query), e um log de erro não é lugar para isso.
+    type ErroDeConsulta = Partial<{ code: string; routine: string; query: string; cause: unknown }>;
+    const alvo = err as ErroDeConsulta;
+    // O `drizzle` embrulha todo erro de `db.execute()` num `DrizzleQueryError`, que deixa o código do
+    // Postgres na CAUSA, não no objeto. Ler só a superfície devolvia `undefined` sempre — o campo
+    // existia no log e nunca era emitido. Forma travada em
+    // `packages/core/src/infrastructure/db/drizzle-error-shape.test.ts`.
+    const causa = (alvo.cause ?? {}) as ErroDeConsulta & { message?: string };
+    const bruto = alvo.code ?? causa.code;
+    // SQLSTATE do Postgres é SEMPRE cinco alfanuméricos maiúsculos. Sem esta checagem, um
+    // `ECONNREFUSED` de um `fetch` — alcançável de verdade: o juiz de LLM relança o erro nativo
+    // intacto — sairia rotulado como `dbErrorCode`, e o operador leria queda do provedor como falha
+    // de banco. Seria a mesma confusão que este log existe para acabar, na direção oposta.
+    const code = /^[0-9A-Z]{5}$/.test(bruto ?? "") ? bruto : undefined;
+    const routine = code ? (alvo.routine ?? causa.routine) : undefined;
+    const query = alvo.query ?? causa.query;
+    // A mensagem legível do Postgres ("integer out of range") vive na CAUSA. Sem ela sobram código,
+    // rotina e SQL — que classificam e localizam, mas não descrevem.
+    const detalhe = typeof causa.message === "string" ? causa.message : undefined;
+
+    // A `message` do `DrizzleQueryError` é `Failed query: <sql>\nparams: <valores ligados>` — e os
+    // valores ligados podem ser conteúdo do usuário (o `q` da busca livre de `listTraces` chega ali).
+    // Logar a mensagem crua vazava exatamente o que este handler diz não vazar.
+    const semParametros = (m: string): string => m.split("\nparams:")[0] ?? m;
+
     console.error(
       JSON.stringify({
         level: "error",
         msg: "request_failed",
         method: c.req.method,
         path: c.req.path,
-        error: err instanceof Error ? err.message : String(err),
+        // Truncado como o `dbQuery`: a mensagem do drizzle embute o SQL inteiro, então sem teto o
+        // mesmo texto ia duplicado e sem limite no mesmo registro.
+        error: (err instanceof Error ? semParametros(err.message) : String(err)).slice(0, 500),
+        ...(detalhe ? { dbMessage: detalhe } : {}),
+        ...(typeof code === "string" ? { dbErrorCode: code } : {}),
+        ...(typeof routine === "string" ? { dbRoutine: routine } : {}),
+        ...(typeof query === "string" ? { dbQuery: query.replace(/\s+/g, " ").slice(0, 500) } : {}),
       }),
     );
     return c.json(apiError("INTERNAL", "internal error"), 500);

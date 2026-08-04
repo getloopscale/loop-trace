@@ -68,7 +68,7 @@ export async function listSessions(
            s.last_seen_at AS "lastSeenAt",
            count(t.trace_id)::int AS "traceCount",
            coalesce(sum(t.cost_usd), 0)::double precision AS "costUsd",
-           coalesce(sum(t.total_tokens), 0)::int AS "totalTokens",
+           coalesce(sum(t.total_tokens), 0)::double precision AS "totalTokens",
            count(t.trace_id) FILTER (WHERE t.status_code = 'error')::int AS "errorCount",
            (SELECT count(*)::int
               FROM span_evaluations se
@@ -173,7 +173,7 @@ export async function getSessionDetail(
   const aggRes = await db.execute(sql`
     SELECT count(*)::int AS "traceCount",
            coalesce(sum(cost_usd), 0)::double precision AS "costUsd",
-           coalesce(sum(total_tokens), 0)::int AS "totalTokens",
+           coalesce(sum(total_tokens), 0)::double precision AS "totalTokens",
            count(*) FILTER (WHERE status_code = 'error')::int AS "errorCount",
            percentile_cont(0.5) WITHIN GROUP (ORDER BY ${sql.raw(LATENCY_MS_EXPR)})
              FILTER (WHERE start_time_unix_nano ~ '^\\d+$' AND end_time_unix_nano ~ '^\\d+$')::double precision AS p50,

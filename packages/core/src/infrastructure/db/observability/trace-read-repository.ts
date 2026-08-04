@@ -93,9 +93,13 @@ export async function save(
           (array_agg(name ORDER BY (parent_span_id IS NOT NULL), start_time_unix_nano::numeric))[1],
           min(start_time_unix_nano::numeric)::text,
           max(end_time_unix_nano::numeric)::text,
-          sum(input_tokens)::int,
-          sum(output_tokens)::int,
-          (coalesce(sum(input_tokens),0) + coalesce(sum(output_tokens),0))::int,
+          -- theo-lens#136: aqui o teto é a COLUNA (traces.input_tokens é integer), não o cast —
+          -- removê-lo não corrigiria nada, e a correção real seria migrar o tipo numa tabela quente.
+          -- A exposição também é outra: isto soma os spans de UM trace, e o maior trace medido no
+          -- app-dev tem 992k tokens, ~2000x abaixo do teto. Fora de escopo, declarado.
+          sum(input_tokens)::int, -- int4-alvo-ok
+          sum(output_tokens)::int, -- int4-alvo-ok
+          (coalesce(sum(input_tokens),0) + coalesce(sum(output_tokens),0))::int, -- int4-alvo-ok
           NULL,
           CASE WHEN bool_or(status_code IN (${sql.raw(errorList)})) THEN 'error' ELSE 'ok' END,
           now()
@@ -121,10 +125,10 @@ export async function save(
       // (M5 ADR D1), inside the SAME advisory lock → race-safe + idempotent.
       const usage = await tx.execute(sql`
         SELECT model,
-               coalesce(sum(input_tokens), 0)::int AS i,
-               coalesce(sum(output_tokens), 0)::int AS o,
-               coalesce(sum(cache_read_tokens), 0)::int AS cr,
-               coalesce(sum(cache_creation_tokens), 0)::int AS cc
+               coalesce(sum(input_tokens), 0)::double precision AS i,
+               coalesce(sum(output_tokens), 0)::double precision AS o,
+               coalesce(sum(cache_read_tokens), 0)::double precision AS cr,
+               coalesce(sum(cache_creation_tokens), 0)::double precision AS cc
         FROM spans WHERE trace_id = ${traceId} AND workspace_id = ${workspaceId} AND model IS NOT NULL
         GROUP BY model
       `);
