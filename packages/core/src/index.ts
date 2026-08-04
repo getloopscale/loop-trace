@@ -355,6 +355,13 @@ export {
   type CostPeriod,
 } from "./domain/observability/cost.js";
 export {
+  promptUsageRowSchema,
+  promptUsageResponseSchema,
+  MAX_PROMPT_USAGE_WINDOW_DAYS,
+  type PromptUsageRow,
+  type PromptUsageResponse,
+} from "./domain/observability/prompt-usage.js";
+export {
   northStarBucketSchema,
   northStarResponseSchema,
   shapeNorthStarBuckets,
