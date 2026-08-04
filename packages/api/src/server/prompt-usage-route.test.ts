@@ -29,7 +29,7 @@ function repoStub(): { repo: SpanRepository; visto: () => unknown[] } {
   const repo = {
     aggregatePromptUsage: async (...a: unknown[]) => {
       args = a;
-      return [{ revision: 6, resolutions: 12, totalTokens: 1500, costUsd: 0.031 }];
+      return [{ revision: 6, resolutions: 12, totalTokens: 1500, costUsd: 0.031, p50LatencyMs: 4.2 }];
     },
   } as unknown as SpanRepository;
   return { repo, visto: () => args };

@@ -23,6 +23,8 @@ export const promptUsageRowSchema = z
     resolutions: z.number().int(),
     totalTokens: z.number().int(),
     costUsd: z.number().nullable(),
+    /** Latência MEDIANA da própria resolução, em ms. `null` quando não há amostra. */
+    p50LatencyMs: z.number().nullable(),
   })
   .strict();
 

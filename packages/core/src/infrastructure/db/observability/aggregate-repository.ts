@@ -125,7 +125,12 @@ export async function aggregatePromptUsage(
     SELECT (s.attributes->>'prompt.revision')::int          AS revision,
            count(*)::int                                    AS resolutions,
            coalesce(sum(t.total_tokens), 0)::int            AS tokens,
-           sum(t.cost_usd)::double precision                AS cost
+           sum(t.cost_usd)::double precision                AS cost,
+           -- Mediana da RESOLUÇÃO, não do trace: o trace inclui a chamada ao modelo, que é
+           -- ordens de grandeza mais lenta e responderia outra pergunta.
+           percentile_cont(0.5) WITHIN GROUP (
+             ORDER BY greatest(0, (s.end_time_unix_nano::numeric - s.start_time_unix_nano::numeric) / 1e6)
+           )::double precision                              AS p50_latency_ms
       FROM spans s
       LEFT JOIN traces t
              ON t.workspace_id = s.workspace_id
@@ -139,12 +144,19 @@ export async function aggregatePromptUsage(
      ORDER BY 1 DESC
   `);
   return (
-    res.rows as { revision: number; resolutions: number; tokens: number; cost: number | null }[]
+    res.rows as {
+      revision: number;
+      resolutions: number;
+      tokens: number;
+      cost: number | null;
+      p50_latency_ms: number | null;
+    }[]
   ).map((r) => ({
     revision: Number(r.revision),
     resolutions: Number(r.resolutions),
     totalTokens: Number(r.tokens),
     costUsd: r.cost === null ? null : Number(r.cost),
+    p50LatencyMs: r.p50_latency_ms === null ? null : Number(r.p50_latency_ms),
   }));
 }
 
