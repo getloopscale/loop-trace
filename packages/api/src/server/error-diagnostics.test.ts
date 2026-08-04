@@ -81,5 +81,30 @@ describe("diagnóstico de falha (theo-lens#136)", () => {
     expect(log).toContain("sum(input_tokens)");
     // E JAMAIS os parâmetros — nem pela mensagem crua, que é por onde eles escapavam.
     expect(log).not.toContain("TERMO-SECRETO-DO-USUARIO");
+    // E a mensagem legível do Postgres, que vive na causa e sem a qual o log classifica sem descrever.
+    expect(log).toContain("integer out of range");
+  });
+
+  it("test_erro_que_nao_e_do_postgres_nao_e_rotulado_como_erro_de_banco", async () => {
+    // Caminho ALCANÇÁVEL, não hipotético: o juiz de LLM relança o `TypeError: fetch failed` nativo
+    // intacto, com `cause.code = "ECONNREFUSED"`. Sem discriminar, uma queda do provedor chegaria ao
+    // operador rotulada como falha de banco — a mesma confusão que este log existe para acabar.
+    const capturado: string[] = [];
+    vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
+      capturado.push(a.map(String).join(" "));
+    });
+    const doFetch = Object.assign(new TypeError("fetch failed"), {
+      cause: Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" }),
+    });
+    const app = createApp({
+      aggregateObservability: () => Promise.reject(doFetch),
+    } as unknown as SpanRepository);
+
+    expect((await app.request("/v1/metrics/observability?range=7d")).status).toBe(500);
+    const log = capturado.join("\n");
+    expect(log).toContain("request_failed");
+    expect(log).toContain("fetch failed");
+    // `ECONNREFUSED` não é SQLSTATE (cinco alfanuméricos) — não pode virar `dbErrorCode`.
+    expect(log).not.toContain("dbErrorCode");
   });
 });
