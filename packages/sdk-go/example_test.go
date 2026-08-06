@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	theolens "github.com/usetheodev/theo-lens/packages/sdk-go"
+	theolens "github.com/usetheoai/theo-lens/packages/sdk-go"
 )
 
 // ExampleClient_RecordRun records a Claude Code / @theokit/sdk run to Theo Lens. The call site

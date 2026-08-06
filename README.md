@@ -15,7 +15,7 @@ You need Docker and Node ≥ 20 (with `pnpm`).
 ### 1. Start the stack
 
 ```bash
-git clone https://github.com/usetheodev/theo-lens.git
+git clone https://github.com/usetheoai/theo-lens.git
 cd theo-lens
 docker compose up -d
 ```
@@ -26,8 +26,7 @@ origin. Open **http://localhost:4318** — the UI is there, ready and empty.
 
 ### 2. Instrument an agent
 
-The SDK instruments a TS/Node agent in ≤ 10 lines. The runnable example lives at
-[`examples/agent/index.ts`](examples/agent/index.ts):
+The SDK instruments a TS/Node agent in ≤ 10 lines:
 
 ```ts
 import { initTheoLens, startAgent, recordToolCall } from "@usetheo/lens-sdk";
@@ -41,10 +40,10 @@ const traceId = await startAgent(theo.tracer, "checkout", async (span) => {
 await theo.shutdown();
 ```
 
-Run the example against the running stack:
+Point your instrumented agent at the running stack and run it:
 
 ```bash
-THEOLENS_ENDPOINT=http://localhost:4318 pnpm tsx examples/agent/index.ts
+THEOLENS_ENDPOINT=http://localhost:4318 pnpm tsx path/to/your-agent.ts
 ```
 
 ### 3. See the trace
@@ -145,9 +144,9 @@ for one release; `/v1/monitors*` is canonical.
 
 The V1 ship criterion is a single automated end-to-end test that walks the whole
 journey from a clean `docker compose up`: bring up the stack, instrument and run
-the example agent, ingest spans over OTLP, see the execution tree in the
-Explorer, walk the session replay, and check cost + tool analytics. It is the
-binary gate — when it is green, the journey works end to end:
+an agent, ingest spans over OTLP, see the execution tree in the Explorer, walk
+the session replay, and check cost + tool analytics. It is the binary gate —
+when it is green, the journey works end to end:
 
 ```bash
 pnpm test:e2e   # includes the 6-step ship gate from a clean composed stack
@@ -187,7 +186,7 @@ Theo Lens is a **Level-2 (Model B) capability** behind the Theo unified edge at 
 uses it multi-tenant with a single `theo_live_*` platform key; the edge mints a per-tenant key and Theo
 Lens enforces scope per verb (`observability:read`/`observability:write`/`observability:delete`). All six data-plane invariants are
 closed — see [`.claude/knowledge-base/adrs/0001-model-b-level-2-graduation.md`](./.claude/knowledge-base/adrs/0001-model-b-level-2-graduation.md)
-and [`ROADMAP-edge-integration.md`](./ROADMAP-edge-integration.md) (M37–M43). Multi-tenant UI is the
+(the M37–M43 edge-integration roadmap was retired in `675e6cb`). Multi-tenant UI is the
 central Theo dashboard via the `/v1/dashboard/lens/*` read BFF (the same-origin SPA in this repo stays
 single-tenant / local-dev).
 
