@@ -107,7 +107,7 @@ jobs:
     # M137 — the gate. Removing this line reopens the hole that published rejected artifacts;
     # `packages/api/src/server/publish-gate.test.ts` fails if it goes.
     needs: [gate-ci, gate-contract, gate-sast, gate-eval, guard-release-on-main]
-    uses: usetheoai/theo/.github/workflows/build-publish.yml@develop
+    uses: usetheoai/theo/.github/workflows/build-publish.yml@d1f3c94762609d2732ae73624c333d36a350e6ab # develop
     with:
       image: theo-lens
       dockerfile: ./Dockerfile
