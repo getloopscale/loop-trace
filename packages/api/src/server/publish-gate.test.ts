@@ -73,14 +73,20 @@ function assertJobIsGated(name: string, job: Record<string, unknown> | undefined
  * job (`image-hotfix: uses: build-publish.yml`) survived the first version untouched, and so did
  * repointing `image` at a different workflow. Quantify over the effect, not over the name.
  */
+// The reusable can be referenced two ways, and BOTH must be recognised as publishing:
+// the vendored copy (`./.github/workflows/build-publish.yml`) and the upstream one
+// (`usetheoai/theo/.github/workflows/build-publish.yml@<ref>`). Matching only the local
+// form is what let the org-migration cutover pass the file while this gate went blind.
+const CALLS_BUILD_PUBLISH = /(^\.\/\.github\/workflows\/|\/)build-publish\.yml(@.+)?$/u;
+
 function assertImageIsGated(wf: Record<string, unknown>): void {
   const all = jobs(wf);
   const publishers = Object.entries(all).filter(([, j]) =>
-    String(j?.["uses"] ?? "").endsWith("build-publish.yml"),
+    CALLS_BUILD_PUBLISH.test(String(j?.["uses"] ?? "")),
   );
   if (publishers.length === 0) throw new Error("no job calls build-publish.yml — did `image` get repointed?");
-  if (all["image"]?.["uses"] !== "./.github/workflows/build-publish.yml") {
-    throw new Error("the `image` job no longer calls ./.github/workflows/build-publish.yml");
+  if (!CALLS_BUILD_PUBLISH.test(String(all["image"]?.["uses"] ?? ""))) {
+    throw new Error("the `image` job no longer calls build-publish.yml");
   }
   for (const [name, job] of publishers) assertJobIsGated(name, job);
 }
