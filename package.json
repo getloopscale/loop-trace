@@ -1,7 +1,7 @@
 {
   "name": "theo-lens-workspace",
   "version": "0.0.0",
-  "description": "Workspace root for Theo Lens — OpenTelemetry-native observability for AI agents",
+  "description": "Workspace root for Theo Lens \u2014 OpenTelemetry-native observability for AI agents",
   "type": "module",
   "license": "Apache-2.0",
   "private": true,
@@ -30,6 +30,8 @@
     "@testcontainers/postgresql": "^12.0.4",
     "@types/node": "^20.0.0",
     "@types/pg": "^8.11.0",
+    "@usetheo/lens-core": "workspace:*",
+    "@usetheo/lens-sdk": "workspace:*",
     "@vitest/coverage-v8": "^4.0.0",
     "drizzle-kit": "^0.31.0",
     "eslint": "^9.0.0",
@@ -39,7 +41,6 @@
     "typescript": "^5.4.0",
     "typescript-eslint": "^8.0.0",
     "vitest": "^4.0.0",
-    "yaml": "^2.9.0",
-    "@usetheo/lens-core": "workspace:*"
+    "yaml": "^2.9.0"
   }
 }

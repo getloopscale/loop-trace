@@ -1,6 +1,8 @@
 import { execSync } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
-import { createPool, migrateLatest } from "@usetheo/lens-core";
+// M122 — the infra concretes live behind the `/infra` subpath; the root barrel
+// exposes domain ports only (guarded by barrel-surface.test.ts).
+import { createPool, migrateLatest } from "@usetheo/lens-core/infra";
 
 /**
  * E2E global setup: bring up the full docker-compose stack (Postgres + API),

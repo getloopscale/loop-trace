@@ -1,6 +1,5 @@
 packages:
   - "packages/*"
-  - "examples/*"
 allowBuilds:
   # A dependency's build script runs arbitrary code at install time, so each one is an explicit
   # decision. `cpu-features` and `ssh2` arrive transitively via testcontainers (dockerode); both
