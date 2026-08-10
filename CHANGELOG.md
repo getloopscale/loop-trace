@@ -7,6 +7,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Hook de validação de comandos ficou mais rápido: ~6 processos por chamada de ferramenta em vez de ~50, sem mudança de comportamento
+
+- Commit em `workspace` não aciona mais a esteira: o `sdk-py` declarava `push` só com `paths:` e sem `branches:`, o que dispara em qualquer branch — a matriz Python 3.9/3.12 rodava em runner self-hosted a cada commit que tocasse o SDK. `push` agora restrito a `develop`/`main`; a cobertura vem do `pull_request`, que tem o mesmo filtro de paths.
+
 ## [0.69.0] - 2026-08-04
 
 ### Fixed
