@@ -3,8 +3,13 @@ name: sdk-py
 # Scoped Python job for packages/sdk-py (M124). The repo had no CI workflows before this — this is
 # additive and only runs when the SDK or its shared fixture changes. The hermetic engine e2e
 # (tests/test_e2e_engine.py) skips here (its THEO_LENS_E2E_* env vars are unset).
+# O `push` é FILTRADO por branch. Sem `branches:`, um `push` com apenas `paths:` dispara em
+# QUALQUER branch — inclusive `workspace`, onde todo trabalho nasce. Commit em `workspace` não
+# aciona esteira (decisão do dono, 2026-08-08); a matriz 3.9/3.12 em runner self-hosted rodava
+# a cada commit que tocasse o SDK. A cobertura vem do `pull_request` (mesmo filtro de paths).
 on:
   push:
+    branches: [develop, main]
     paths:
       - "packages/sdk-py/**"
       - "packages/core/src/domain/theokit/theokit-vectors.json"

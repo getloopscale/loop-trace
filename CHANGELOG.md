@@ -22,6 +22,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **`GET /v1/health` and `GET /v1/health/ready`** — the ecosystem-canonical spelling of the two probes this service already served as `/v1/healthz` and `/v1/healthz/ready`. The healthz pair is unchanged: the deploy gate points at it today, and removal is a separate item. Liveness stays database-independent; readiness still fails when the database does. (B-117)
+- **The generated `/openapi.json` now describes `/v1/health`, `/v1/health/ready` and `/v1/version`.** They answer unauthenticated to anyone who asks, so omitting them hid nothing — it only stopped the ecosystem contract checker, which reads the document and nothing else, from seeing that this service has an operational surface. The `/v1/admin` exclusion stays: those routes do NOT answer without a credential, so keeping them out of an anonymous spec is least privilege rather than obscurity. (B-117)
+
 - **`p50LatencyMs` no agregado de uso por revisão.** O DoD do milestone consumidor pede quatro números por revisão — chamadas, **latência mediana**, tokens e custo — e a primeira entrega trouxe dois. A mediana é da **resolução** (o que o span `prompt.resolve` mede), não do trace: o trace inclui a chamada ao modelo, que é ordens de grandeza mais lenta e responderia outra pergunta (#m15-promptly)
 
 ## [0.68.0] - 2026-08-04

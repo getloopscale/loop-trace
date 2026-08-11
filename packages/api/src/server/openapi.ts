@@ -164,8 +164,22 @@ function toOpenApiPath(honoPath: string): { path: string; params: string[] } {
   return { path, params };
 }
 
-/** Routes that are not part of the documented public data surface. */
-const EXCLUDED = new Set(["/v1/healthz", "/v1/healthz/ready", "/openapi.json", "/v1", "/v1/version", "/*"]);
+/**
+ * Routes that are not part of the documented public data surface.
+ *
+ * B-117 — `/v1/health`, `/v1/health/ready` and `/v1/version` LEFT this set. They answer
+ * unauthenticated to anyone who asks, so omitting them from the document hid nothing; it only
+ * stopped the ecosystem contract checker — which reads the document and nothing else — from
+ * seeing that this service has an operational surface at all.
+ *
+ * The `healthz` pair stays excluded: it is the same two answers under the pre-contract spelling,
+ * and documenting both would publish two names for one thing to every generated client.
+ *
+ * The `/v1/admin` exclusion below is a different kind and stays. Those routes do NOT answer
+ * without a credential, so keeping them out of an anonymous spec is least privilege rather than
+ * obscurity.
+ */
+const EXCLUDED = new Set(["/v1/healthz", "/v1/healthz/ready", "/openapi.json", "/v1", "/*"]);
 
 /**
  * A route excluded from the PUBLIC spec. Beyond the infra/discovery set, the admin key-lifecycle
