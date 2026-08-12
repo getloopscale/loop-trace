@@ -8,9 +8,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+
+- Abrir um PR não dispara mais esteira: o gatilho `pull_request` foi removido dos 7 workflows que o declaravam (`actionlint.yml`, `ci.yml`, `eval.yml`, `integration.yml`, `sdk-go.yml`, `sdk-py.yml`, `security-sast.yml`). CI passa a rodar **somente no merge** — push em `develop`/`main` — por decisão do dono (2026-08-12). A cobertura no merge não se perde: estes workflows são invocados como gate pelo `publish.yml`, que dispara no push para `develop`. Se este repositório tiver *required status checks* configurados no GitHub para PRs, eles precisam ser removidos lá, senão o PR fica travado esperando um check que nunca reporta.
 - Hook de validação de comandos ficou mais rápido: ~6 processos por chamada de ferramenta em vez de ~50, sem mudança de comportamento
 
-- Commit em `workspace` não aciona mais a esteira: o `sdk-py` declarava `push` só com `paths:` e sem `branches:`, o que dispara em qualquer branch — a matriz Python 3.9/3.12 rodava em runner self-hosted a cada commit que tocasse o SDK. `push` agora restrito a `develop`/`main`; a cobertura vem do `pull_request`, que tem o mesmo filtro de paths.
+- Commit em `workspace` não aciona mais a esteira: o `sdk-py` declarava `push` só com `paths:` e sem `branches:`, o que dispara em qualquer branch — a matriz Python 3.9/3.12 rodava em runner self-hosted a cada commit que tocasse o SDK. `push` agora restrito a `develop`/`main`, que passou a ser a única cobertura — o `pull_request` que a complementava foi removido na entrada acima, quando a esteira passou a rodar somente no merge.
 
 ## [0.69.0] - 2026-08-04
 

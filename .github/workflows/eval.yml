@@ -25,8 +25,6 @@ on:
   workflow_call:
   # PR mata o defeito antes do trunk. NÃO filtrado por `paths`: um filtro em `pull_request` deixa o
   # check "expected" e nunca reportado, prendendo o PR para sempre (mesma razão do ci.yml).
-  pull_request:
-    branches: [develop, main]
 
   # SEM gatilho `push`, de propósito (M137 review, F-sec-2). Num push para develop este workflow roda
   # EXCLUSIVAMENTE como `gate-eval` dentro do publish.yml. Manter um `push:` avulso ao lado do gate

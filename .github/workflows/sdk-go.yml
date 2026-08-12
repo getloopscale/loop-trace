@@ -22,10 +22,6 @@ on:
     paths:
       - "packages/sdk-go/**"
       - ".github/workflows/sdk-go.yml"
-  pull_request:
-    paths:
-      - "packages/sdk-go/**"
-      - ".github/workflows/sdk-go.yml"
 
 jobs:
   build-test-lint:

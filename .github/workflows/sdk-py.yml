@@ -14,11 +14,6 @@ on:
       - "packages/sdk-py/**"
       - "packages/core/src/domain/theokit/theokit-vectors.json"
       - ".github/workflows/sdk-py.yml"
-  pull_request:
-    paths:
-      - "packages/sdk-py/**"
-      - "packages/core/src/domain/theokit/theokit-vectors.json"
-      - ".github/workflows/sdk-py.yml"
 
 jobs:
   test:

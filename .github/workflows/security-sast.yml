@@ -11,13 +11,6 @@ on:
   # the build; closing the hole for only two of them left the recorded rationale claiming a fix the
   # diff did not make. Semgrep now gates the publish like the other two.
   workflow_call:
-  pull_request:
-    # Mesmo filtro do gatilho acima (racional lá).
-    paths-ignore:
-      - '.claude/**'
-      - '**/*.md'
-      - 'docs/**'
-      - 'knowledge-base/**'
   # NO `push:` trigger (M137 — same defect as ci.yml/integration.yml, observed LIVE on the first
   # gated develop push: the standalone run was CANCELLED while `gate-sast` survived). This workflow
   # is called as `gate-sast` by publish.yml; keeping a standalone push trigger made both runs compute
