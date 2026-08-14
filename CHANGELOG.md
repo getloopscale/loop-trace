@@ -7,6 +7,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+- **O isolamento entre inquilinos passou a ser aplicado pelo banco de dados.** Um cliente não consegue mais ler nem escrever traces, spans e avaliações de outro, mesmo que uma consulta esqueça o filtro. Antes não havia barreira alguma no banco: o que separava os dados era o filtro escrito à mão em cada consulta, e um esquecimento devolvia dados alheios sem erro, sem log e sem teste vermelho. Traces carregam prompts, argumentos de ferramenta e saída de modelo — uma leitura cruzada aqui vaza conversas inteiras. São 19 tabelas com política restritiva. A ausência de contexto agora devolve nada em vez de tudo. (migration 0033)
+- **O contexto do inquilino passou a viajar junto com a requisição**, vindo da credencial autenticada e nunca de algo que o cliente envia. É aplicado a cada conexão entregue aos repositórios, que não mudaram. Uma operação sem contexto **falha alto** em vez de devolver lista vazia — vazio é ambíguo e passa por "não há dados".
+- **A tabela de credenciais fica deliberadamente fora dessa proteção.** Resolver a credencial é o que DESCOBRE o inquilino: protegê-la por inquilino seria circular — seria preciso saber o inquilino para ler a linha que diz qual é o inquilino — e o efeito prático seria toda autenticação falhar. A decisão está registrada na própria migration, com o que protege a tabela no lugar disso.
+
 ### Changed
 
 - Abrir um PR não dispara mais esteira: o gatilho `pull_request` foi removido dos 7 workflows que o declaravam (`actionlint.yml`, `ci.yml`, `eval.yml`, `integration.yml`, `sdk-go.yml`, `sdk-py.yml`, `security-sast.yml`). CI passa a rodar **somente no merge** — push em `develop`/`main` — por decisão do dono (2026-08-12). A cobertura no merge não se perde: estes workflows são invocados como gate pelo `publish.yml`, que dispara no push para `develop`. Se este repositório tiver *required status checks* configurados no GitHub para PRs, eles precisam ser removidos lá, senão o PR fica travado esperando um check que nunca reporta.

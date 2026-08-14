@@ -71,6 +71,7 @@ export interface HealthApiDeps {
   /** ISO timestamp stamped at build. */
   builtAt?: string;
 }
+import { workspaceScope } from "./middleware/workspace-scope.js";
 import { bodyLimit } from "hono/body-limit";
 import { DEFAULT_MAX_INGEST_BYTES } from "@usetheo/lens-core";
 import { parseResourceSpansPartial } from "../otlp/parse-resource-spans.js";
@@ -316,6 +317,17 @@ export function createApp(
     const p = c.req.path;
     if (p === "/v1/admin" || p.startsWith("/v1/admin/")) return next();
     return dataBearer(c, next);
+  });
+
+  // Immediately after the Principal is resolved, and before any route can reach
+  // the database: bind the workspace so PostgreSQL enforces the boundary itself
+  // (migration 0033). Admin routes are skipped for the same reason they skip the
+  // data bearer — they cross workspaces by design and carry their own gate.
+  const scopeBinder = workspaceScope();
+  app.use("/v1/*", async (c, next) => {
+    const p = c.req.path;
+    if (p === "/v1/admin" || p.startsWith("/v1/admin/")) return next();
+    return scopeBinder(c, next);
   });
 
   app.post(

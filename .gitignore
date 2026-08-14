@@ -67,3 +67,6 @@ code-review-output/
 # loop-check-licence plugin local state (not versioned)
 .claude/check-licence-evidence.db
 .claude/check-licence-loop.local.md
+
+# Backups gerados por ferramenta de patch — nunca versionados
+.claude/.patch-backups/
