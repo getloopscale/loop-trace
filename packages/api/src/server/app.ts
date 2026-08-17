@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono , type Context } from "hono";
 import {
   type SpanRepository,
   type AuthVerifier,
@@ -71,6 +71,7 @@ export interface HealthApiDeps {
   /** ISO timestamp stamped at build. */
   builtAt?: string;
 }
+import { workspaceScope } from "./middleware/workspace-scope.js";
 import { bodyLimit } from "hono/body-limit";
 import { DEFAULT_MAX_INGEST_BYTES } from "@usetheo/lens-core";
 import { parseResourceSpansPartial } from "../otlp/parse-resource-spans.js";
@@ -224,8 +225,18 @@ export function createApp(
   // Liveness is DB-INDEPENDENT on purpose. A DB blip that fails liveness gets a recoverable
   // process killed; readiness is the probe that exists to say "alive but cannot serve" so a load
   // balancer drains instead of erroring.
-  app.get("/v1/healthz", (c) => c.json({ status: "ok", version: health?.version ?? "unknown" }, 200));
-  app.get("/v1/healthz/ready", async (c) => {
+  //
+  // B-117 — `/v1/health` and `/v1/health/ready` are the ECOSYSTEM's names for the same three
+  // questions (theo-contracts/httpsurface, D5). The argument above is the contract's argument,
+  // reached here independently; only the spelling differed. Measured across nine services the
+  // split was four `healthz` to three `health`, and the `z` suffix is a Kubernetes-era convention
+  // that means nothing to someone calling a `/v1` API.
+  //
+  // The healthz pair stays: the deploy gate described above points at it today, and the
+  // contract's migration is additive — removal is its own item after a deprecation deadline.
+  const liveness = (c: Context) =>
+    c.json({ status: "ok", version: health?.version ?? "unknown" }, 200);
+  const readiness = async (c: Context) => {
     try {
       // The timeout wraps the probe so a HUNG database cannot hang the readiness check itself —
       // a probe that never answers is worse than one that answers "not ready".
@@ -239,7 +250,12 @@ export function createApp(
     } catch {
       return c.json({ status: "not_ready", checks: { db: "fail" } }, 503);
     }
-  });
+  };
+
+  app.get("/v1/health", liveness);
+  app.get("/v1/health/ready", readiness);
+  app.get("/v1/healthz", liveness);
+  app.get("/v1/healthz/ready", readiness);
 
   // M96 — discovery surface, UNAUTHENTICATED and mounted before the /v1 bearer. `/openapi.json` is
   // generated from the Zod DTOs + the live router at request time (never drifts); `/v1` is the
@@ -301,6 +317,17 @@ export function createApp(
     const p = c.req.path;
     if (p === "/v1/admin" || p.startsWith("/v1/admin/")) return next();
     return dataBearer(c, next);
+  });
+
+  // Immediately after the Principal is resolved, and before any route can reach
+  // the database: bind the workspace so PostgreSQL enforces the boundary itself
+  // (migration 0033). Admin routes are skipped for the same reason they skip the
+  // data bearer — they cross workspaces by design and carry their own gate.
+  const scopeBinder = workspaceScope();
+  app.use("/v1/*", async (c, next) => {
+    const p = c.req.path;
+    if (p === "/v1/admin" || p.startsWith("/v1/admin/")) return next();
+    return scopeBinder(c, next);
   });
 
   app.post(

@@ -163,10 +163,24 @@ describe("M37 route guard enumeration", () => {
         .filter((route) => route.method !== "ALL")
         // M94 — /health + /ready are intentionally UNAUTHENTICATED probes (no scope guard).
         // M96 — /openapi.json + /v1 + /version are intentionally UNAUTHENTICATED discovery endpoints.
-        // Neither is part of the scoped data surface this audit enumerates.
+        // B-117 — /v1/health + /v1/health/ready are the ecosystem-canonical spelling of the same
+        // two probes (theo-contracts/httpsurface, D5), mounted alongside the healthz pair. Same
+        // reason for the exclusion: they are unauthenticated by design and are not data routes.
+        //
+        // This audit failing when they were added is the audit WORKING — it enumerates the live
+        // surface, so any route that appears has to be classified deliberately. Adding the two
+        // names here is that classification, not a silencing.
         .filter(
           (route) =>
-            !["/v1/healthz", "/v1/healthz/ready", "/openapi.json", "/v1", "/v1/version"].includes(route.path),
+            ![
+              "/v1/health",
+              "/v1/health/ready",
+              "/v1/healthz",
+              "/v1/healthz/ready",
+              "/openapi.json",
+              "/v1",
+              "/v1/version",
+            ].includes(route.path),
         )
         .map((route) => `${route.method} ${route.path}`),
     );

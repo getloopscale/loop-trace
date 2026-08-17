@@ -7,6 +7,24 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+- **O isolamento entre inquilinos passou a ser aplicado pelo banco de dados.** Um cliente não consegue mais ler nem escrever traces, spans e avaliações de outro, mesmo que uma consulta esqueça o filtro. Antes não havia barreira alguma no banco: o que separava os dados era o filtro escrito à mão em cada consulta, e um esquecimento devolvia dados alheios sem erro, sem log e sem teste vermelho. Traces carregam prompts, argumentos de ferramenta e saída de modelo — uma leitura cruzada aqui vaza conversas inteiras. São 19 tabelas com política restritiva. A ausência de contexto agora devolve nada em vez de tudo. (migration 0033)
+- **O contexto do inquilino passou a viajar junto com a requisição**, vindo da credencial autenticada e nunca de algo que o cliente envia. É aplicado a cada conexão entregue aos repositórios, que não mudaram. Uma operação sem contexto **falha alto** em vez de devolver lista vazia — vazio é ambíguo e passa por "não há dados".
+- **A tabela de credenciais fica deliberadamente fora dessa proteção.** Resolver a credencial é o que DESCOBRE o inquilino: protegê-la por inquilino seria circular — seria preciso saber o inquilino para ler a linha que diz qual é o inquilino — e o efeito prático seria toda autenticação falhar. A decisão está registrada na própria migration, com o que protege a tabela no lugar disso.
+
+### Fixed
+
+- **`withCrossWorkspaceScope` passou a recusar em vez de conceder uma travessia que nunca existiu.** O nome anunciava um escape hatch para trabalho que atravessa inquilinos; a implementação punha o contexto em string vazia, e a política compara a coluna contra exatamente esse valor — a "travessia" não casava com linha nenhuma. Quem chamasse recebia lista vazia e nenhum erro: o mesmo silêncio que toda esta linha de trabalho existe para eliminar, agora vestindo o nome da saída de emergência. Passa a lançar, com a mensagem dizendo por quê e apontando o caminho que funciona (`withWorkspaceScope`, inquilino a inquilino). Sob RLS fail-closed não existe travessia real em processo: ela exigiria uma policy nomeando um papel, que é decisão tomada em outro lugar, de propósito.
+
+
+### Changed
+
+- **A idade máxima de uma conexão entrou na configuração do pool** (`maxLifetimeSeconds`, padrão 1h, ajustável por `THEOLENS_PG_MAX_LIFETIME_S`). `idleTimeoutMillis` aposenta só a conexão OCIOSA; uma conexão em uso constante ficava viva indefinidamente e, depois de uma troca de servidor do banco, continuava sendo entregue apontando para um servidor que já não estava lá.
+- Abrir um PR não dispara mais esteira: o gatilho `pull_request` foi removido dos 7 workflows que o declaravam (`actionlint.yml`, `ci.yml`, `eval.yml`, `integration.yml`, `sdk-go.yml`, `sdk-py.yml`, `security-sast.yml`). CI passa a rodar **somente no merge** — push em `develop`/`main` — por decisão do dono (2026-08-12). A cobertura no merge não se perde: estes workflows são invocados como gate pelo `publish.yml`, que dispara no push para `develop`. Se este repositório tiver *required status checks* configurados no GitHub para PRs, eles precisam ser removidos lá, senão o PR fica travado esperando um check que nunca reporta.
+- Hook de validação de comandos ficou mais rápido: ~6 processos por chamada de ferramenta em vez de ~50, sem mudança de comportamento
+
+- Commit em `workspace` não aciona mais a esteira: o `sdk-py` declarava `push` só com `paths:` e sem `branches:`, o que dispara em qualquer branch — a matriz Python 3.9/3.12 rodava em runner self-hosted a cada commit que tocasse o SDK. `push` agora restrito a `develop`/`main`, que passou a ser a única cobertura — o `pull_request` que a complementava foi removido na entrada acima, quando a esteira passou a rodar somente no merge.
+
 ## [0.69.0] - 2026-08-04
 
 ### Fixed
@@ -16,6 +34,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - **a falha chegava anônima a quem precisava diagnosticá-la** (#136). O corpo da resposta segue opaco de propósito — nunca vazar interno ao cliente —, mas o log do serviço dizia apenas `request_failed` com a mensagem crua, e o dashboard, `UPSTREAM_ERROR`. Nenhum dos dois distingue *"esta consulta tem um defeito"* de *"o serviço caiu"*, e foi isso que transformou um bug de uma linha numa investigação. O log estruturado passa a carregar o código e a rotina do Postgres (que classificam) e o SQL da consulta que falhou (que localiza). Os **parâmetros** são deliberadamente omitidos: valores ligados podem carregar conteúdo do usuário — a busca livre de traces chega ali —, e log de erro não é lugar para isso. O código só é rotulado como sendo do banco quando **tem a forma de um**: SQLSTATE é sempre cinco alfanuméricos, e sem essa checagem um `ECONNREFUSED` do provedor de LLM — que o juiz relança intacto — sairia como erro de banco, exatamente a confusão que este log existe para acabar, na direção oposta. **A primeira versão desta correção não funcionava e o teste dizia que sim:** o `drizzle` embrulha todo erro de consulta e deixa o código do Postgres na **causa**, não no objeto, além de concatenar os parâmetros na própria mensagem. O teste fabricava a forma errada, passava, e certificava duas garantias falsas em produção — o código nunca seria emitido, e os parâmetros vazavam. A forma real agora está travada por um teste no pacote que tem a biblioteca, e quebra se uma versão futura mudá-la.
 
 ### Added
+
+- **`GET /v1/health` and `GET /v1/health/ready`** — the ecosystem-canonical spelling of the two probes this service already served as `/v1/healthz` and `/v1/healthz/ready`. The healthz pair is unchanged: the deploy gate points at it today, and removal is a separate item. Liveness stays database-independent; readiness still fails when the database does. (B-117)
+- **The generated `/openapi.json` now describes `/v1/health`, `/v1/health/ready` and `/v1/version`.** They answer unauthenticated to anyone who asks, so omitting them hid nothing — it only stopped the ecosystem contract checker, which reads the document and nothing else, from seeing that this service has an operational surface. The `/v1/admin` exclusion stays: those routes do NOT answer without a credential, so keeping them out of an anonymous spec is least privilege rather than obscurity. (B-117)
 
 - **`p50LatencyMs` no agregado de uso por revisão.** O DoD do milestone consumidor pede quatro números por revisão — chamadas, **latência mediana**, tokens e custo — e a primeira entrega trouxe dois. A mediana é da **resolução** (o que o span `prompt.resolve` mede), não do trace: o trace inclui a chamada ao modelo, que é ordens de grandeza mais lenta e responderia outra pergunta (#m15-promptly)
 

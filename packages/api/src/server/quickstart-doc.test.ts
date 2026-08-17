@@ -16,7 +16,11 @@ describe("README quickstart (M7, T2.3)", () => {
     const text = readFileSync(README, "utf8");
     expect(text).toContain("docker compose up");
     expect(text).toContain("http://localhost:4318");
-    // The onboarding instruments the example agent.
-    expect(text).toMatch(/examples\/agent/);
+    // The onboarding shows the instrumentation itself. It used to point at
+    // `examples/agent`, retired in 675e6cb — the runnable agent now lives in the
+    // e2e harness (tests/e2e/fixtures/), so the README teaches the SDK calls
+    // inline instead of linking a published example.
+    expect(text).toContain("initTheoLens");
+    expect(text).toContain("@usetheo/lens-sdk");
   });
 });

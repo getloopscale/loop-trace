@@ -101,6 +101,15 @@ export interface PoolConfig {
   idleTimeoutMillis: number;
   statement_timeout: number;
   query_timeout: number;
+  /**
+   * Idade máxima de uma conexão, em segundos. `idleTimeoutMillis` só aposenta a
+   * conexão OCIOSA; uma conexão em uso constante ficava viva indefinidamente. Depois
+   * de um failover do Postgres gerenciado, ou de um proxy reciclando conexões por
+   * baixo, o pool segue entregando clientes que apontam para um servidor que já não
+   * está lá — e o sintoma é um gotejar de queries com erro, não uma queda que alguém
+   * perceba. Aposentar por tempo troca isso por reconexão previsível.
+   */
+  maxLifetimeSeconds: number;
 }
 export const DEFAULT_POOL_CONFIG: PoolConfig = {
   max: 10,
@@ -108,6 +117,7 @@ export const DEFAULT_POOL_CONFIG: PoolConfig = {
   idleTimeoutMillis: 30_000,
   statement_timeout: 30_000,
   query_timeout: 30_000,
+  maxLifetimeSeconds: 3_600,
 };
 export function parsePoolConfig(env: NodeJS.ProcessEnv = process.env): PoolConfig {
   return {
@@ -116,6 +126,7 @@ export function parsePoolConfig(env: NodeJS.ProcessEnv = process.env): PoolConfi
     idleTimeoutMillis: positiveIntEnv(env, "THEOLENS_PG_IDLE_TIMEOUT_MS", DEFAULT_POOL_CONFIG.idleTimeoutMillis),
     statement_timeout: positiveIntEnv(env, "THEOLENS_PG_STATEMENT_TIMEOUT_MS", DEFAULT_POOL_CONFIG.statement_timeout),
     query_timeout: positiveIntEnv(env, "THEOLENS_PG_QUERY_TIMEOUT_MS", DEFAULT_POOL_CONFIG.query_timeout),
+    maxLifetimeSeconds: positiveIntEnv(env, "THEOLENS_PG_MAX_LIFETIME_S", DEFAULT_POOL_CONFIG.maxLifetimeSeconds),
   };
 }
 

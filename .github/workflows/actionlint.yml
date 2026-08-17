@@ -9,8 +9,6 @@
 # Precedente medido no theo-db: 95 de 100 runs perdidos exatamente assim.
 name: actionlint
 on:
-  pull_request:
-    branches: [develop, main]
   push:
     branches: [develop]
 permissions:

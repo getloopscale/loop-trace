@@ -8,7 +8,7 @@ third-party runtime dependency** (`net/http` + `encoding/json` + `context` only)
 ## Install
 
 ```sh
-go get github.com/usetheodev/theo-lens/packages/sdk-go
+go get github.com/usetheoai/theo-lens/packages/sdk-go
 ```
 
 ## Usage
@@ -20,7 +20,7 @@ import (
 	"context"
 	"log"
 
-	theolens "github.com/usetheodev/theo-lens/packages/sdk-go"
+	theolens "github.com/usetheoai/theo-lens/packages/sdk-go"
 )
 
 func main() {

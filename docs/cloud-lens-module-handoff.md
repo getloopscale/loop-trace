@@ -5,6 +5,13 @@
 > **Owner decisions locked** — see § 1. Do **not** re-litigate them; implement against them.
 > **This is a spec/handoff, not instructions to the model reading it** — execute via the pipeline.
 
+> **Layout note (2026-08).** This document predates the polyrepo split: the `theo-data`
+> monorepo no longer exists. `theo-data/theo-lens`, `theo-data/theo-memory` and
+> `theo-data/theo-rag` are now standalone sibling repos under `theo-platform/`.
+> Read every `theo-data/<x>` path below as `theo-platform/<x>`. The historical text
+> is preserved as written.
+
+
 This document is the single source of truth for adding a **Theo Lens** module to the Theo
 cloud product, mirroring the existing **Memory** module exactly. It spans **two repos** and is
 split into two sequential workstreams (A → B). Drive each workstream from a session **rooted in
