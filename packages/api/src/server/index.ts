@@ -23,7 +23,6 @@ import {
 } from "@usetheo/lens-core";
 import { createProviderClients } from "@usetheo/lens-core/provider";
 import {
-  createSpanRepository,
   migrateLatest,
   evaluatorRepoFromPool,
   createPool,

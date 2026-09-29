@@ -14,11 +14,13 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Images publish again.** Every `develop` push since 2026-08-17 stopped before the image job because the lint gate rejected an import the tenant-isolation change left unused; no image was built for any of those commits. The import is gone and the gate is green (usetheoai/theo#446)
 - **`withCrossWorkspaceScope` passou a recusar em vez de conceder uma travessia que nunca existiu.** O nome anunciava um escape hatch para trabalho que atravessa inquilinos; a implementação punha o contexto em string vazia, e a política compara a coluna contra exatamente esse valor — a "travessia" não casava com linha nenhuma. Quem chamasse recebia lista vazia e nenhum erro: o mesmo silêncio que toda esta linha de trabalho existe para eliminar, agora vestindo o nome da saída de emergência. Passa a lançar, com a mensagem dizendo por quê e apontando o caminho que funciona (`withWorkspaceScope`, inquilino a inquilino). Sob RLS fail-closed não existe travessia real em processo: ela exigiria uma policy nomeando um papel, que é decisão tomada em outro lugar, de propósito.
 
 
 ### Changed
 
+- **The `theo-lens` image is now also published to Amazon ECR, tagged with the full commit SHA**, so the platform can run an exact commit from the registry it pulls from. GHCR publishing is unchanged. The registry and the publish role come from the `ECR_REGISTRY` and `AWS_IMAGE_PUBLISH_ROLE_ARN` repository variables (usetheoai/theo#446)
 - **A idade máxima de uma conexão entrou na configuração do pool** (`maxLifetimeSeconds`, padrão 1h, ajustável por `THEOLENS_PG_MAX_LIFETIME_S`). `idleTimeoutMillis` aposenta só a conexão OCIOSA; uma conexão em uso constante ficava viva indefinidamente e, depois de uma troca de servidor do banco, continuava sendo entregue apontando para um servidor que já não estava lá.
 - Abrir um PR não dispara mais esteira: o gatilho `pull_request` foi removido dos 7 workflows que o declaravam (`actionlint.yml`, `ci.yml`, `eval.yml`, `integration.yml`, `sdk-go.yml`, `sdk-py.yml`, `security-sast.yml`). CI passa a rodar **somente no merge** — push em `develop`/`main` — por decisão do dono (2026-08-12). A cobertura no merge não se perde: estes workflows são invocados como gate pelo `publish.yml`, que dispara no push para `develop`. Se este repositório tiver *required status checks* configurados no GitHub para PRs, eles precisam ser removidos lá, senão o PR fica travado esperando um check que nunca reporta.
 - Hook de validação de comandos ficou mais rápido: ~6 processos por chamada de ferramenta em vez de ~50, sem mudança de comportamento
