@@ -1,6 +1,0 @@
-# Sem esta declaracao o actionlint rejeita a label da Blacksmith em TODOS os arquivos
-# (`label "blacksmith-8vcpu-ubuntu-2404" is unknown`) — o gate de workflows fica vermelho
-# por nao conhecer o runner, nao por defeito de workflow.
-self-hosted-runner:
-  labels:
-    - blacksmith-8vcpu-ubuntu-2404

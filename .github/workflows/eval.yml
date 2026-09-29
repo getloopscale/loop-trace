@@ -52,7 +52,7 @@ concurrency:
 jobs:
   eval:
     name: eval (deterministic rule evaluators)
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     # ORÇAMENTO. Os quatro gates do publish são `needs:` do job `image`, não uns dos outros — rodam
     # em PARALELO. O caminho crítico é `max(gates) + image`, e o gate mais lento hoje é
     # `gate-contract` com 82 s (medido). Enquanto este job terminar abaixo disso, ele fica na sombra
