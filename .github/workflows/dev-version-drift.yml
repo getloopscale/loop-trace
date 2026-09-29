@@ -47,7 +47,7 @@ concurrency:
 jobs:
   drift:
     name: dev host roda a última imagem publicada?
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       # MASCARA ANTES DE QUALQUER COISA. `::add-mask::` faz o Actions substituir o valor por `***`

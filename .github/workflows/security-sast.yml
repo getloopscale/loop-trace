@@ -31,7 +31,7 @@ jobs:
     name: semgrep (TypeScript / OWASP)
     # Self-hosted — GitHub-hosted minutes are billing-blocked org-wide, so `ubuntu-latest` jobs
     # never dispatch (they fail in seconds with no runner).
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 

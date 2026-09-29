@@ -20,7 +20,7 @@ jobs:
     # Self-hosted — GitHub-hosted minutes are billing-blocked org-wide, so an ubuntu-latest job
     # never starts ("The job was not started because recent account payments have failed").
     # These two lanes had been silently red on every commit for that reason alone.
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:

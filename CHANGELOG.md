@@ -14,6 +14,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **CI jobs run again.** Every job asked for the `blacksmith-8vcpu-ubuntu-2404` runner, which no runner in the organization serves any more, so jobs sat queued until they were cancelled and no gate or image ran (the Publish run for #146 was queued from 2026-09-29T20:46Z). Every job now runs on GitHub-hosted `ubuntu-latest`, following the engine's shared build workflow (#146)
 - **Images publish again.** Every `develop` push since 2026-08-17 stopped before the image job because the lint gate rejected an import the tenant-isolation change left unused; no image was built for any of those commits. The import is gone and the gate is green (usetheoai/theo#446)
 - **`withCrossWorkspaceScope` passou a recusar em vez de conceder uma travessia que nunca existiu.** O nome anunciava um escape hatch para trabalho que atravessa inquilinos; a implementação punha o contexto em string vazia, e a política compara a coluna contra exatamente esse valor — a "travessia" não casava com linha nenhuma. Quem chamasse recebia lista vazia e nenhum erro: o mesmo silêncio que toda esta linha de trabalho existe para eliminar, agora vestindo o nome da saída de emergência. Passa a lançar, com a mensagem dizendo por quê e apontando o caminho que funciona (`withWorkspaceScope`, inquilino a inquilino). Sob RLS fail-closed não existe travessia real em processo: ela exigiria uma policy nomeando um papel, que é decisão tomada em outro lugar, de propósito.
 
