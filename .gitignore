@@ -70,3 +70,4 @@ code-review-output/
 
 # Backups gerados por ferramenta de patch — nunca versionados
 .claude/.patch-backups/
+.claude/
