@@ -3,13 +3,13 @@ name: sdk-py
 # Scoped Python job for packages/sdk-py (M124). The repo had no CI workflows before this — this is
 # additive and only runs when the SDK or its shared fixture changes. The hermetic engine e2e
 # (tests/test_e2e_engine.py) skips here (its THEO_LENS_E2E_* env vars are unset).
+# O `push` é FILTRADO por branch. Sem `branches:`, um `push` com apenas `paths:` dispara em
+# QUALQUER branch — inclusive `workspace`, onde todo trabalho nasce. Commit em `workspace` não
+# aciona esteira (decisão do dono, 2026-08-08); a matriz 3.9/3.12 em runner self-hosted rodava
+# a cada commit que tocasse o SDK. A cobertura vem do `pull_request` (mesmo filtro de paths).
 on:
   push:
-    paths:
-      - "packages/sdk-py/**"
-      - "packages/core/src/domain/theokit/theokit-vectors.json"
-      - ".github/workflows/sdk-py.yml"
-  pull_request:
+    branches: [develop, main]
     paths:
       - "packages/sdk-py/**"
       - "packages/core/src/domain/theokit/theokit-vectors.json"
@@ -20,7 +20,7 @@ jobs:
     # Self-hosted — GitHub-hosted minutes are billing-blocked org-wide, so an ubuntu-latest job
     # never starts ("The job was not started because recent account payments have failed").
     # These two lanes had been silently red on every commit for that reason alone.
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:

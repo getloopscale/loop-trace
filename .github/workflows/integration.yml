@@ -16,13 +16,6 @@ on:
   # caller, so a secret with no consumer is pure surface. If an LLM-backed lane is added later, the
   # secret arrives in the SAME commit as its `env:` mapping and its test — never ahead of one.
   workflow_call:
-  pull_request:
-    # Mesmo filtro do gatilho acima (racional lá).
-    paths-ignore:
-      - '.claude/**'
-      - '**/*.md'
-      - 'docs/**'
-      - 'knowledge-base/**'
   # NO `push:` trigger (M137 review, F-sec-2/F-sec-4). On a develop push this runs EXCLUSIVELY as
   # `gate-contract` inside publish.yml. The standalone trigger collided with the gated call: both
   # resolved the same `concurrency` group (`integration-${{ github.ref }}` — in a called workflow
@@ -41,7 +34,7 @@ concurrency:
 jobs:
   integration:
     name: integration (postgres + test:integration)
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
 
     services:
       postgres:

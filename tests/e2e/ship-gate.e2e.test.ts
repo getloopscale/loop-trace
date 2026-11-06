@@ -9,7 +9,7 @@ import type { TraceTreeNode } from "../../packages/web/src/api/types.js";
 
 const BASE = process.env["THEOLENS_E2E_BASE"] ?? "http://localhost:44318";
 const EXAMPLE = fileURLToPath(
-  new URL("../../examples/agent/index.ts", import.meta.url),
+  new URL("./fixtures/instrumented-agent.ts", import.meta.url),
 );
 
 /**

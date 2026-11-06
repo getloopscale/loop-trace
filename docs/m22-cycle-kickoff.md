@@ -6,6 +6,13 @@
 > It also satisfies `theo-data/ROADMAP.md` **M2** ("theo-lens graduated to Level 2") — but the work,
 > commits, CHANGELOG, gates and PR all belong to the `theo-lens` repo (its own git + remote).
 
+> **Layout note (2026-08).** This document predates the polyrepo split: the `theo-data`
+> monorepo no longer exists. `theo-data/theo-lens`, `theo-data/theo-memory` and
+> `theo-data/theo-rag` are now standalone sibling repos under `theo-platform/`.
+> Read every `theo-data/<x>` path below as `theo-platform/<x>`. The historical text
+> is preserved as written.
+
+
 ## 0. Goal to set in the theo-lens session
 
 ```

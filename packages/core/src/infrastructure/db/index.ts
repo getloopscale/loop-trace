@@ -41,3 +41,16 @@ export async function runMigrations(pool: pg.Pool): Promise<void> {
   const migrationsFolder = fileURLToPath(new URL("./migrations", import.meta.url));
   await migrate(drizzle(pool), { migrationsFolder });
 }
+
+// Tenant isolation (migration 0033): the request-bound workspace scope and the
+// pool wrapper that pushes it down to PostgreSQL for the RLS policies.
+export {
+  withWorkspaceScope,
+  withCrossWorkspaceScope,
+  currentScope,
+  isCrossWorkspace,
+  WorkspaceScopeError,
+  type WorkspaceScope,
+  type CrossWorkspaceScope,
+} from "./workspace-scope.js";
+export { tenantScopedPool, describeScope } from "./tenant-scoped-pool.js";

@@ -14,8 +14,6 @@ on:
   # NOT filtered, on purpose. A path filter on `pull_request` makes a docs-only PR sit forever with
   # the check "expected" but never reported — GitHub does not mark a filtered-out required check as
   # passed, it simply never arrives.
-  pull_request:
-    branches: [develop, main]
   # NO `push:` trigger, on purpose (M137 review, F-sec-2/F-sec-4).
   #
   # On a develop push this workflow now runs EXCLUSIVELY as `gate-ci` inside publish.yml. Keeping a
@@ -33,7 +31,7 @@ permissions:
 jobs:
   ci:
     name: build + typecheck + lint
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:

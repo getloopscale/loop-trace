@@ -25,6 +25,9 @@ importers:
       '@usetheo/lens-core':
         specifier: workspace:*
         version: link:packages/core
+      '@usetheo/lens-sdk':
+        specifier: workspace:*
+        version: link:packages/sdk
       '@vitest/coverage-v8':
         specifier: ^4.0.0
         version: 4.1.9(vitest@4.1.9)
@@ -55,12 +58,6 @@ importers:
       yaml:
         specifier: ^2.9.0
         version: 2.9.0
-
-  examples/agent:
-    dependencies:
-      '@usetheo/lens-sdk':
-        specifier: workspace:*
-        version: link:../../packages/sdk
 
   packages/api:
     dependencies:

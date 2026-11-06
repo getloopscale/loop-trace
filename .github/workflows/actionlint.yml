@@ -9,15 +9,13 @@
 # Precedente medido no theo-db: 95 de 100 runs perdidos exatamente assim.
 name: actionlint
 on:
-  pull_request:
-    branches: [develop, main]
   push:
     branches: [develop]
 permissions:
   contents: read
 jobs:
   actionlint:
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:

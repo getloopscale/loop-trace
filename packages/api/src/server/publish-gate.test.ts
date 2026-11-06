@@ -73,14 +73,20 @@ function assertJobIsGated(name: string, job: Record<string, unknown> | undefined
  * job (`image-hotfix: uses: build-publish.yml`) survived the first version untouched, and so did
  * repointing `image` at a different workflow. Quantify over the effect, not over the name.
  */
+// The reusable can be referenced two ways, and BOTH must be recognised as publishing:
+// the vendored copy (`./.github/workflows/build-publish.yml`) and the upstream one
+// (`usetheoai/theo/.github/workflows/build-publish.yml@<ref>`). Matching only the local
+// form is what let the org-migration cutover pass the file while this gate went blind.
+const CALLS_BUILD_PUBLISH = /(^\.\/\.github\/workflows\/|\/)build-publish\.yml(@.+)?$/u;
+
 function assertImageIsGated(wf: Record<string, unknown>): void {
   const all = jobs(wf);
   const publishers = Object.entries(all).filter(([, j]) =>
-    String(j?.["uses"] ?? "").endsWith("build-publish.yml"),
+    CALLS_BUILD_PUBLISH.test(String(j?.["uses"] ?? "")),
   );
   if (publishers.length === 0) throw new Error("no job calls build-publish.yml — did `image` get repointed?");
-  if (all["image"]?.["uses"] !== "./.github/workflows/build-publish.yml") {
-    throw new Error("the `image` job no longer calls ./.github/workflows/build-publish.yml");
+  if (!CALLS_BUILD_PUBLISH.test(String(all["image"]?.["uses"] ?? ""))) {
+    throw new Error("the `image` job no longer calls build-publish.yml");
   }
   for (const [name, job] of publishers) assertJobIsGated(name, job);
 }
@@ -109,12 +115,12 @@ describe("M137 — publication gates", () => {
       },
     );
 
-    /**
-     * The PR trigger must survive: it is the reviewer-facing check, and it is deliberately NOT
-     * path-filtered (a filtered required check is never reported, leaving the PR unmergeable).
-     */
-    it("ci.yml keeps its pull_request trigger — the gate is additive, not a replacement", () => {
-      expect(triggers(workflow("ci.yml"))).toHaveProperty("pull_request");
+    // Inverted on purpose: `604b7ce` (owner decision, 2026-08-12) removed every `pull_request`
+    // trigger — the pipeline runs only on merge, through the gated `publish.yml`. The assertion
+    // above it was never updated, and it went unnoticed because the lint step failed first on every
+    // develop push after it, so the unit-test step never ran.
+    it("ci.yml has no pull_request trigger — CI runs only on merge, as a gate", () => {
+      expect(triggers(workflow("ci.yml"))).not.toHaveProperty("pull_request");
     });
   });
 
@@ -402,6 +408,69 @@ jobs:
       // `continue-on-error: true` existe no passo do split `dev`, logo abaixo. Aplicá-lo ao passo
       // que gateia deixaria o job verde sobre uma regressão — e nada impedia isso.
       expect(gating[0]).not.toHaveProperty("continue-on-error");
+    });
+  });
+
+  /**
+   * usetheoai/theo#446 — the platform runs theo-lens from Amazon ECR by commit SHA, so the image job
+   * must reach the ECR-capable reusable and hand it the registry and the role.
+   *
+   * Two failure modes are pinned here, and both are SILENT at startup — GitHub refuses the whole
+   * workflow with no job and no log:
+   *   - passing an input the pinned reusable does not declare (an `attest:` did exactly this in a
+   *     sibling repo, five runs dead in under a second);
+   *   - granting the job fewer permissions than the reusable declares.
+   */
+  describe("the image reaches Amazon ECR (usetheoai/theo#446)", () => {
+    const REUSABLE =
+      "usetheoai/theo/.github/workflows/build-publish.yml@1596e81f2ab64a4eb08a7d180e33639138f96b7f";
+    /** Declared by the reusable at the pinned SHA — `on.workflow_call.inputs`. */
+    const DECLARED_INPUTS = [
+      "image", "dockerfile", "context", "registry", "build_args", "sign", "verify", "trivy",
+      "dockerhub_image", "runner", "ecr_registry", "aws_role_arn",
+    ];
+    /** Declared by the reusable at the pinned SHA — its top-level `permissions:`. */
+    const REUSABLE_PERMISSIONS = {
+      contents: "read",
+      packages: "write",
+      "id-token": "write",
+      attestations: "write",
+    };
+
+    function assertInputsAreDeclared(job: Record<string, unknown> | undefined): void {
+      const passed = Object.keys((job?.["with"] ?? {}) as Record<string, unknown>);
+      const undeclared = passed.filter((k) => !DECLARED_INPUTS.includes(k));
+      if (undeclared.length > 0) {
+        throw new Error(`image passes input(s) the reusable does not declare: ${undeclared.join(", ")}`);
+      }
+    }
+
+    const image = () => jobs(workflow("publish.yml"))["image"];
+
+    it("image calls the ECR-capable reusable at its pinned SHA", () => {
+      expect(image()?.["uses"]).toBe(REUSABLE);
+    });
+
+    it("image passes only inputs the pinned reusable declares", () => {
+      expect(() => assertInputsAreDeclared(image())).not.toThrow();
+    });
+
+    it("an undeclared input is refused (negative case)", () => {
+      expect(() => assertInputsAreDeclared({ with: { image: "theo-lens", attest: true } })).toThrow(/attest/);
+    });
+
+    it("the ECR registry and role come from repository variables, never from text", () => {
+      const w = (image()?.["with"] ?? {}) as Record<string, unknown>;
+      expect(w["ecr_registry"]).toBe("${{ vars.ECR_REGISTRY }}");
+      expect(w["aws_role_arn"]).toBe("${{ vars.AWS_IMAGE_PUBLISH_ROLE_ARN }}");
+    });
+
+    it("the ECR repository is named after the one image this service runs", () => {
+      expect(((image()?.["with"] ?? {}) as Record<string, unknown>)["image"]).toBe("theo-lens");
+    });
+
+    it("image grants every permission the reusable declares", () => {
+      expect(image()?.["permissions"]).toEqual(REUSABLE_PERMISSIONS);
     });
   });
 });

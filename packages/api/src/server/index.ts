@@ -23,9 +23,11 @@ import {
 } from "@usetheo/lens-core";
 import { createProviderClients } from "@usetheo/lens-core/provider";
 import {
-  createSpanRepository,
   migrateLatest,
   evaluatorRepoFromPool,
+  createPool,
+  spanRepoFromPool,
+  tenantScopedPool,
 } from "@usetheo/lens-core/infra";
 import type pg from "pg";
 
@@ -61,8 +63,19 @@ export async function bootstrap(
   uri: string,
   webDistDir: string = DEFAULT_WEB_DIST,
 ): Promise<{ app: Hono; pool: pg.Pool; stop: () => void }> {
-  const { repo, pool } = createSpanRepository(uri);
-  await migrateLatest(pool);
+  // Two views of one database, and the split is the security boundary.
+  //
+  // `rawPool` runs the work that has no tenant and must not pretend to have
+  // one: schema migrations, and credential resolution — which is what
+  // DISCOVERS the workspace, so scoping it would be circular.
+  //
+  // `pool` is the workspace-scoped view every repository receives: each
+  // connection carries `app.workspace_id` from the request scope, which the
+  // fail-closed policies of migration 0033 read. Repository code is unchanged.
+  const rawPool = createPool(uri);
+  await migrateLatest(rawPool);
+  const pool = tenantScopedPool(rawPool);
+  const repo = spanRepoFromPool(pool);
   // M22: in multi-tenant mode (THEOLENS_REQUIRE_CREDENTIAL) resolve a Principal from
   // the per-tenant `theo_api_keys` table; single-tenant dev collapses to `default`.
   const requireCredential = parseRequireCredentialEnv(
@@ -74,9 +87,10 @@ export async function bootstrap(
       ? bootstrapRaw
       : undefined;
   const authOptions: Parameters<typeof createApp>[2] = {
-    pool,
+    // Raw: the API-key lookup runs before any scope is bound.
+    pool: rawPool,
     requireCredential,
-    ...(requireCredential ? { verifier: new ApiKeyAuthVerifier(pool) } : {}),
+    ...(requireCredential ? { verifier: new ApiKeyAuthVerifier(rawPool) } : {}),
     ...(bootstrapToken !== undefined ? { bootstrapToken } : {}),
   };
   // M36: wire the online-evaluators surface. The evaluator repo shares the pool;
