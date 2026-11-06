@@ -7,6 +7,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.69.1] - 2026-11-06
+
 ### Security
 - **O isolamento entre inquilinos passou a ser aplicado pelo banco de dados.** Um cliente não consegue mais ler nem escrever traces, spans e avaliações de outro, mesmo que uma consulta esqueça o filtro. Antes não havia barreira alguma no banco: o que separava os dados era o filtro escrito à mão em cada consulta, e um esquecimento devolvia dados alheios sem erro, sem log e sem teste vermelho. Traces carregam prompts, argumentos de ferramenta e saída de modelo — uma leitura cruzada aqui vaza conversas inteiras. São 19 tabelas com política restritiva. A ausência de contexto agora devolve nada em vez de tudo. (migration 0033)
 - **O contexto do inquilino passou a viajar junto com a requisição**, vindo da credencial autenticada e nunca de algo que o cliente envia. É aplicado a cada conexão entregue aos repositórios, que não mudaram. Uma operação sem contexto **falha alto** em vez de devolver lista vazia — vazio é ambíguo e passa por "não há dados".
