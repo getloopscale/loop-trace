@@ -115,7 +115,7 @@ jobs:
       packages: write
       id-token: write
       attestations: write
-    uses: usetheoai/theo/.github/workflows/build-publish.yml@1596e81f2ab64a4eb08a7d180e33639138f96b7f # develop
+    uses: getloopscale/engine/.github/workflows/build-publish.yml@1596e81f2ab64a4eb08a7d180e33639138f96b7f # develop
     with:
       # Also the ECR repository name: the reusable pushes `<ecr_registry>/theo-lens:<commit sha>`.
       image: theo-lens
@@ -126,7 +126,7 @@ jobs:
       sign: ${{ startsWith(github.ref, 'refs/tags/v') }}
       verify: ${{ startsWith(github.ref, 'refs/tags/v') }}
       # Amazon ECR, the registry the platform runs theo-lens from, by commit SHA
-      # (usetheoai/theo#446). Both are repository variables, so no account id is fixed in text;
+      # (getloopscale/engine#446). Both are repository variables, so no account id is fixed in text;
       # unset, the reusable skips ECR and GHCR publishes as before.
       ecr_registry: ${{ vars.ECR_REGISTRY }}
       aws_role_arn: ${{ vars.AWS_IMAGE_PUBLISH_ROLE_ARN }}
