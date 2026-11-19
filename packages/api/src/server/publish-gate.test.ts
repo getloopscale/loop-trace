@@ -75,7 +75,7 @@ function assertJobIsGated(name: string, job: Record<string, unknown> | undefined
  */
 // The reusable can be referenced two ways, and BOTH must be recognised as publishing:
 // the vendored copy (`./.github/workflows/build-publish.yml`) and the upstream one
-// (`usetheoai/theo/.github/workflows/build-publish.yml@<ref>`). Matching only the local
+// (`getloopscale/engine/.github/workflows/build-publish.yml@<ref>`). Matching only the local
 // form is what let the org-migration cutover pass the file while this gate went blind.
 const CALLS_BUILD_PUBLISH = /(^\.\/\.github\/workflows\/|\/)build-publish\.yml(@.+)?$/u;
 
@@ -423,7 +423,7 @@ jobs:
    */
   describe("the image reaches Amazon ECR (usetheoai/theo#446)", () => {
     const REUSABLE =
-      "usetheoai/theo/.github/workflows/build-publish.yml@1596e81f2ab64a4eb08a7d180e33639138f96b7f";
+      "getloopscale/engine/.github/workflows/build-publish.yml@1596e81f2ab64a4eb08a7d180e33639138f96b7f";
     /** Declared by the reusable at the pinned SHA — `on.workflow_call.inputs`. */
     const DECLARED_INPUTS = [
       "image", "dockerfile", "context", "registry", "build_args", "sign", "verify", "trivy",
