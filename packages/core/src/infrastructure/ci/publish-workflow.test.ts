@@ -30,7 +30,7 @@ const VENDORED = resolve(REPO_ROOT, '.github/workflows/build-publish.yml');
 const DEPLOY_COMPOSE = resolve(REPO_ROOT, 'docker-compose.deploy.yml');
 
 const LOCAL_REF = 'uses: ./.github/workflows/build-publish.yml';
-const UPSTREAM_REF = 'uses: usetheoai/theo/.github/workflows/build-publish.yml';
+const UPSTREAM_REF = 'uses: getloopscale/engine/.github/workflows/build-publish.yml';
 const EXPECTED_IDENTITY =
   String.raw`^https://github\.com/usetheoai/theo-lens/\.github/workflows/build-publish\.yml@`;
 
