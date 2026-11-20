@@ -423,7 +423,7 @@ jobs:
    */
   describe("the image reaches Amazon ECR (usetheoai/theo#446)", () => {
     const REUSABLE =
-      "getloopscale/engine/.github/workflows/build-publish.yml@1596e81f2ab64a4eb08a7d180e33639138f96b7f";
+      "getloopscale/engine/.github/workflows/build-publish.yml@34b1e37f41846cd8172f43748f0a5d7429eaacc2";
     /** Declared by the reusable at the pinned SHA — `on.workflow_call.inputs`. */
     const DECLARED_INPUTS = [
       "image", "dockerfile", "context", "registry", "build_args", "sign", "verify", "trivy",
