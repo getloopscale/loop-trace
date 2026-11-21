@@ -115,7 +115,7 @@ jobs:
       packages: write
       id-token: write
       attestations: write
-    uses: getloopscale/engine/.github/workflows/build-publish.yml@34b1e37f41846cd8172f43748f0a5d7429eaacc2 # develop
+    uses: getloopscale/loopzero/.github/workflows/build-publish.yml@6a07e48af6d1672af21adede244c0d32ed1eb731 # develop
     with:
       # Also the ECR repository name: the reusable pushes `<ecr_registry>/theo-lens:<commit sha>`.
       image: theo-lens
