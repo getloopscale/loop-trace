@@ -7,15 +7,17 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.70.0] - 2026-11-25
+
 ### Changed
 
-- The product is now named LoopTrace, and every environment variable starts with `LOOPTRACE_` (for example `LOOPTRACE_PG_URI`). Variables with the previous prefix are no longer read.
-- The npm packages are now `@looptrace/core`, `@looptrace/sdk`, `@looptrace/api` and `@looptrace/web`, and the SDK exports `initLoopTrace` and `LoopTraceError`.
-- The Go SDK module is now `github.com/getloopscale/looptrace/packages/sdk-go` (package `looptrace`), and the Python SDK is `looptrace-sdk` (import `looptrace_sdk`).
-- API keys now start with `looptrace_live_` and are stored in the `looptrace_api_keys` table. Keys issued with the previous prefix are refused, and a database created before this change has to be recreated.
-- The container image is now published as `looptrace`.
-- `scripts/looptrace-instrument-claude.sh` is the new name of the Claude Code instrumentation helper. In edge mode it accepts any `<issuer>_live_*` key.
-- The Trace Explorer stores its browser preferences under `looptrace.*` keys, so saved views and column choices from earlier versions are not carried over.
+- The product is now named LoopTrace, and every environment variable starts with `LOOPTRACE_` (for example `LOOPTRACE_PG_URI`). Variables with the previous prefix are no longer read. (#157)
+- The npm packages are now `@looptrace/core`, `@looptrace/sdk`, `@looptrace/api` and `@looptrace/web`, and the SDK exports `initLoopTrace` and `LoopTraceError`. (#157)
+- The Go SDK module is now `github.com/getloopscale/looptrace/packages/sdk-go` (package `looptrace`), and the Python SDK is `looptrace-sdk` (import `looptrace_sdk`). (#157)
+- API keys now start with `looptrace_live_` and are stored in the `looptrace_api_keys` table. Keys issued with the previous prefix are refused, and a database created before this change has to be recreated. (#157)
+- The container image is now published as `looptrace`. (#157)
+- `scripts/looptrace-instrument-claude.sh` is the new name of the Claude Code instrumentation helper. In edge mode it accepts any `<issuer>_live_*` key. (#157)
+- The Trace Explorer stores its browser preferences under `looptrace.*` keys, so saved views and column choices from earlier versions are not carried over. (#157)
 
 ## [0.69.1] - 2026-11-06
 
