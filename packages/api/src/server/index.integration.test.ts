@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createPool } from "@usetheo/lens-core/infra";
+import { createPool } from "@looptrace/core/infra";
 import type pg from "pg";
 
 import { bootstrap } from "./index.js";
@@ -8,9 +8,9 @@ import { bootstrap } from "./index.js";
  * Integration test for migrate-on-boot (T1.3, D2): against a *pristine* Postgres
  * (no migrations applied), `bootstrap` must apply the committed migrations and
  * the resulting app must round-trip a span — proving a clean `docker compose up`
- * is ready to ingest with NO external migration step. Gated by THEOLENS_PG_URI.
+ * is ready to ingest with NO external migration step. Gated by LOOPTRACE_PG_URI.
  */
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
 
 suite("composition root migrate-on-boot (integration)", () => {

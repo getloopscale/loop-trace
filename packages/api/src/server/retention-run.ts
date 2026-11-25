@@ -1,4 +1,4 @@
-import type { PruneStats, RetentionConfig, SpanRepository } from "@usetheo/lens-core";
+import type { PruneStats, RetentionConfig, SpanRepository } from "@looptrace/core";
 
 const DAY_MS = 86_400_000;
 

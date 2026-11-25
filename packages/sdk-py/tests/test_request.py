@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from theo_lens_sdk import record_run
+from looptrace_sdk import record_run
 
 from ._transport_stub import BASE, CapturingTransport
 
@@ -13,7 +13,7 @@ def test_record_run_sends_post_bearer_auth_and_json_content_type() -> None:
 
     call = transport.last
     assert call["method"] == "POST"
-    assert call["headers"]["authorization"] == "Bearer theo_live_x"
+    assert call["headers"]["authorization"] == "Bearer looptrace_live_x"
     assert call["headers"]["content-type"] == "application/json"
 
 

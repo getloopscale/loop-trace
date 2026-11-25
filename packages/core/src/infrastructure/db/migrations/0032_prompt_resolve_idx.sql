@@ -1,4 +1,4 @@
--- M15 (theo-promptly) — o índice que torna o agregado de uso por revisão barato.
+-- M15 (loopprompt) — o índice que torna o agregado de uso por revisão barato.
 --
 -- É a forma que a NOTE do M95 em `schema.ts` deixou explicitamente em aberto. Ela mediu, com
 -- EXPLAIN, que uma GIN sobre `attributes` acelera contenção `@>` e NÃO o predicado
@@ -11,7 +11,7 @@
 --
 -- Sobre `prompt.id` porque quem precisa de índice é o FILTRO. `prompt.revision` é apenas a chave
 -- do GROUP BY — indexá-la não evitaria varredura alguma. (E `prompt.id` carrega o NOME do prompt:
--- a nomenclatura mente desde o M5 do theo-promptly, e renomear é breaking para quem já consulta.)
+-- a nomenclatura mente desde o M5 do loopprompt, e renomear é breaking para quem já consulta.)
 CREATE INDEX IF NOT EXISTS "spans_prompt_resolve_idx"
   ON "spans" USING btree (("attributes"->>'prompt.id'), "workspace_id", "ingested_at")
   WHERE "name" = 'prompt.resolve';

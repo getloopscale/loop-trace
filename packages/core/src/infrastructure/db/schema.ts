@@ -19,7 +19,7 @@ import {
 
 /**
  * M22 multi-tenant workspace isolation. Every data row carries `workspace_id`
- * (== tenant_id; the data plane does not know about accounts — theo-data
+ * (== tenant_id; the data plane does not know about accounts — data-plane
  * invariant 2). Added `DEFAULT 'default' NOT NULL` so the migration is
  * non-destructive (PG-11 metadata-only) and a single-tenant deployment keeps
  * working via the seeded `default` workspace. Reused by every table below.
@@ -102,7 +102,7 @@ export const spans = pgTable(
     index("spans_workspace_ingested_idx").on(t.workspaceId, t.ingestedAt),
     // M24: backs the full-text `search_tsv @@ websearch_to_tsquery(...)` filter.
     index("spans_search_tsv_gin_idx").using("gin", t.searchTsv),
-    // M15 (theo-promptly): índice PARCIAL de EXPRESSÃO que serve o agregado de uso por revisão.
+    // M15 (loopprompt): índice PARCIAL de EXPRESSÃO que serve o agregado de uso por revisão.
     // É a forma que a NOTE do M95 abaixo deixou em aberto — ela mediu que uma GIN não serve
     // `attributes ->> key = value` e difere "a true attr-value index" para um milestone próprio.
     // Este é esse milestone. Parcial porque só spans de resolução interessam (o índice fica
@@ -371,7 +371,7 @@ export const datasets = pgTable(
       .notNull(),
   },
   // M22: the dedup unique is workspace-leading — the same dataset name in two
-  // workspaces must not collide (theo-data EC-12).
+  // workspaces must not collide (data-plane EC-12).
   (t) => [unique("datasets_workspace_id_name_uq").on(t.workspaceId, t.name)],
 );
 
@@ -416,7 +416,7 @@ export const datasetItems = pgTable(
 /**
  * M63: labeling-queue items. A span is enqueued for human review (`status = 'pending'`), a reviewer
  * resolves it with a label/score/note (`status = 'resolved'`), and resolved items export to a golden
- * dataset. `workspace_id`-scoped like every data row (theo-data invariant 2). The UNIQUE is a
+ * dataset. `workspace_id`-scoped like every data row (data-plane invariant 2). The UNIQUE is a
  * workspace-leading **partial** index `(workspace_id, trace_id, span_id) WHERE status = 'pending'`
  * (D1) so at most ONE pending item exists per span per workspace (enqueue is idempotent while
  * pending), yet a span **can** be re-enqueued after it is resolved (the resolved row leaves the
@@ -443,7 +443,7 @@ export const labelingQueueItems = pgTable(
   (t) => [
     // D1: workspace-leading PARTIAL unique — one PENDING item per span per workspace. Enqueue is
     // idempotent while pending; a resolved span leaves the index so it can be re-enqueued for a fresh
-    // review; a span in two tenants never collides (theo-data invariant 2).
+    // review; a span in two tenants never collides (data-plane invariant 2).
     uniqueIndex("labeling_queue_items_workspace_trace_span_pending_uq")
       .on(t.workspaceId, t.traceId, t.spanId)
       .where(sql`${t.status} = 'pending'`),
@@ -454,7 +454,7 @@ export const labelingQueueItems = pgTable(
 /**
  * M64: experiment runs. One execution of a dataset × a variant (model/prompt override) through the M33
  * provider path — the run carries the variant config + the computed aggregates (item/pass counts, avg
- * score, total cost). `workspace_id`-scoped like every data row (theo-data invariant 2). The `id` PK is
+ * score, total cost). `workspace_id`-scoped like every data row (data-plane invariant 2). The `id` PK is
  * globally unique; the workspace-leading index keeps per-tenant list queries fast.
  */
 export const experimentRuns = pgTable(
@@ -512,9 +512,9 @@ export const experimentRunItems = pgTable(
 
 /**
  * M22 — the tenant boundary. Every `workspace_id` on a data row references a row
- * here (logically; FK enforced on `theo_api_keys` only to keep ingest hot-path
+ * here (logically; FK enforced on `looptrace_api_keys` only to keep ingest hot-path
  * free). Seeded with a `default` workspace so single-tenant deployments work.
- * Ported from theo-memory migration 0016.
+ * Ported from loopmem migration 0016.
  */
 export const workspaces = pgTable("workspaces", {
   id: text("id").primaryKey(),
@@ -526,7 +526,7 @@ export const workspaces = pgTable("workspaces", {
 
 /**
  * M22 — workspace membership: a user's `role` WITHIN a workspace (orthogonal to a
- * key's scopes). PK (workspace_id, user_id). Ported from theo-memory 0017.
+ * key's scopes). PK (workspace_id, user_id). Ported from loopmem 0017.
  */
 export const workspaceUsers = pgTable(
   "workspace_users",
@@ -546,10 +546,10 @@ export const workspaceUsers = pgTable(
  * stored only as a SHA-256 hash (never the raw secret). `scopes` is jsonb holding
  * `observability:*` capabilities. `tenant_id` is the single-tenant-OSS isolation marker
  * (always `'self'` here). `workspace_id` binds the key to its tenant. Ported from
- * theo-memory migrations 0012/0016/0017.
+ * loopmem migrations 0012/0016/0017.
  */
-export const theoApiKeys = pgTable(
-  "theo_api_keys",
+export const looptraceApiKeys = pgTable(
+  "looptrace_api_keys",
   {
     id: varchar("id", { length: 20 }).primaryKey(),
     subject: text("subject").notNull(),
@@ -569,9 +569,9 @@ export const theoApiKeys = pgTable(
     rotatedFrom: varchar("rotated_from", { length: 20 }),
   },
   (t) => [
-    unique("theo_api_keys_key_hash_uq").on(t.keyHash),
-    index("theo_api_keys_subject_tenant_idx").on(t.subject, t.tenantId),
-    index("theo_api_keys_workspace_id_idx").on(t.workspaceId),
+    unique("looptrace_api_keys_key_hash_uq").on(t.keyHash),
+    index("looptrace_api_keys_subject_tenant_idx").on(t.subject, t.tenantId),
+    index("looptrace_api_keys_workspace_id_idx").on(t.workspaceId),
   ],
 );
 
@@ -624,7 +624,7 @@ export const evaluators = pgTable(
  * one of lt/lte/gt/gte/eq (over `threshold`) or label_eq (over `label_value`). A
  * breaching verdict flags the trace and, since M135, can notify. It NEVER blocks:
  * `guardrail` is a span KIND describing the inline blocker in the user's own app, which
- * theo-lens observes — it is not a theo-lens capability.
+ * looptrace observes — it is not a looptrace capability.
  * Workspace-leading (M22); deleting an evaluator cascades its monitors (EC-4).
  */
 export const monitors = pgTable(

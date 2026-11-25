@@ -51,15 +51,15 @@ describe("useColumnVisibility (M29d)", () => {
   });
 
   it("test_column_visibility_corrupt_storage_falls_back", () => {
-    localStorage.setItem("theolens.columnVisibility", "{not json");
+    localStorage.setItem("looptrace.columnVisibility", "{not json");
     expect(readHiddenColumns()).toEqual([]);
-    localStorage.setItem("theolens.columnVisibility", '"a string not an array"');
+    localStorage.setItem("looptrace.columnVisibility", '"a string not an array"');
     expect(readHiddenColumns()).toEqual([]);
   });
 
   it("test_column_visibility_filters_non_string_elements", () => {
     // a valid array with junk elements keeps only the strings (element-level guard)
-    localStorage.setItem("theolens.columnVisibility", '["cost", 5, null, "model"]');
+    localStorage.setItem("looptrace.columnVisibility", '["cost", 5, null, "model"]');
     expect(readHiddenColumns()).toEqual(["cost", "model"]);
   });
 

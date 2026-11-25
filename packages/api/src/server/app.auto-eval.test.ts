@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Span, SpanRepository } from "@usetheo/lens-core";
+import type { Span, SpanRepository } from "@looptrace/core";
 
 import { createApp } from "./app.js";
 import { autoEvalEnqueueFailures } from "./metrics.js";
@@ -131,7 +131,7 @@ describe("auto-eval ingest hook (M134 T5.1)", () => {
 
 describe("both ingest paths are hooked (M134 T5.1)", () => {
   it("test_every_repo_save_site_enqueues_auto_eval", () => {
-    // theo-lens has TWO ingest write points (OTLP and /v1/runs). Hooking one and
+    // looptrace has TWO ingest write points (OTLP and /v1/runs). Hooking one and
     // missing the other makes a whole route silently never auto-evaluate — a
     // failure with no error and no counter, visible only as "some traces are
     // never scored". This exact mistake happened while writing T5.1: a
@@ -151,12 +151,12 @@ describe("both ingest paths are hooked (M134 T5.1)", () => {
 
 describe("recursion tripwire (M134 ADR D3)", () => {
   it("test_judge_path_emits_no_spans_into_the_store", () => {
-    // ADR D3 skips the anti-recursion guard because theo-lens is in Opik's
+    // ADR D3 skips the anti-recursion guard because looptrace is in Opik's
     // position: evaluations emit SCORES, not traces, so the self-trigger edge
     // Langfuse guards against does not exist. That is a verified fact, not an
     // assumption — and this test is what keeps it a fact.
     //
-    // If judge calls ever start emitting spans into theo-lens (for judge
+    // If judge calls ever start emitting spans into looptrace (for judge
     // debuggability, which is exactly why the reference traces them), this
     // fails and the recursion requirement surfaces HERE — rather than as an
     // unbounded, self-amplifying judge bill in production, which is silent by

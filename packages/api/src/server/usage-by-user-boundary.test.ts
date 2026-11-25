@@ -1,7 +1,7 @@
 /**
  * M140 T4.4 (DoD-5) — the product boundary, enforced by a test rather than by good intentions.
  *
- * theo-lens REPORTS consumption it observed; theo-cloud is what BILLS (invariant 2 of the platform
+ * looptrace REPORTS consumption it observed; loopzero-cloud is what BILLS (invariant 2 of the platform
  * contract). The two are one field name apart: the moment `usage-by-user` grows an `invoice`,
  * `account` or `charge`, this endpoint stops being observability and starts being a billing surface
  * — with none of the guarantees a billing surface needs, and derived from a price table we already
@@ -42,7 +42,7 @@ const FILES = [
 
 /**
  * Strip comments before matching. The prose that EXPLAINS the boundary necessarily names the thing
- * on the other side of it ("theo-cloud is what charges") — measured: the first run of this test
+ * on the other side of it ("loopzero-cloud is what charges") — measured: the first run of this test
  * failed on its own explanatory comment. What must stay clean is the code: field names, types,
  * routes. A guard that forbids describing the rule cannot be lived with, and a rule nobody can live
  * with gets deleted.
@@ -57,8 +57,8 @@ describe("M140 — usage-by-user stays on the observability side of the boundary
       const hit = BILLING_TERMS.exec(src);
       expect(
         hit,
-        `${rel} uses billing vocabulary ("${hit?.[0]}"). theo-lens reports consumption; ` +
-          `theo-cloud bills. If this endpoint genuinely needs to charge, that is a different ` +
+        `${rel} uses billing vocabulary ("${hit?.[0]}"). looptrace reports consumption; ` +
+          `loopzero-cloud bills. If this endpoint genuinely needs to charge, that is a different ` +
           `milestone in a different repository — not a field added here.`,
       ).toBeNull();
     }
@@ -77,7 +77,7 @@ describe("M140 — usage-by-user stays on the observability side of the boundary
     // …and the legitimate consumption vocabulary must stay allowed, or the rule gets deleted.
     expect(BILLING_TERMS.test("costUsd, priceTable, usage, unpricedSpans")).toBe(false);
     // And the comment-stripper must not become an escape hatch: code still matches.
-    expect(stripComments("// theo-cloud charges\nconst invoice = 1;")).toContain("invoice");
-    expect(stripComments("// theo-cloud charges\nconst x = 1;")).not.toContain("charges");
+    expect(stripComments("// loopzero-cloud charges\nconst invoice = 1;")).toContain("invoice");
+    expect(stripComments("// loopzero-cloud charges\nconst x = 1;")).not.toContain("charges");
   });
 });

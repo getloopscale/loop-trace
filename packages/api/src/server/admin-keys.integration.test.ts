@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { createSpanRepository, migrateLatest } from "@usetheo/lens-core/infra";
+import { createSpanRepository, migrateLatest } from "@looptrace/core/infra";
 import type pg from "pg";
 import { createApp } from "./app.js";
 import { ApiKeyAuthVerifier } from "./auth/api-key-verifier.js";
 
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
-const BOOTSTRAP = "theolens_bootstrap_admin_secret";
+const BOOTSTRAP = "looptrace_bootstrap_admin_secret";
 
 suite("M22 admin keys (integration)", () => {
   let pool: pg.Pool;
@@ -24,7 +24,7 @@ suite("M22 admin keys (integration)", () => {
     });
   });
   beforeEach(async () => {
-    await pool.query("DELETE FROM theo_api_keys WHERE id LIKE 'apk-%'");
+    await pool.query("DELETE FROM looptrace_api_keys WHERE id LIKE 'apk-%'");
   });
   afterAll(async () => {
     await pool.end();
@@ -46,10 +46,10 @@ suite("M22 admin keys (integration)", () => {
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { id: string; secret: string };
-    expect(body.secret.startsWith("theo_live_")).toBe(true);
+    expect(body.secret.startsWith("looptrace_live_")).toBe(true);
     // The raw secret is NOT stored — only its SHA-256 hash.
     const { rows } = await pool.query<{ key_hash: string }>(
-      "SELECT key_hash FROM theo_api_keys WHERE id = $1",
+      "SELECT key_hash FROM looptrace_api_keys WHERE id = $1",
       [body.id],
     );
     expect(rows[0]?.key_hash).not.toBe(body.secret);
@@ -84,7 +84,7 @@ suite("M22 admin keys (integration)", () => {
     // committed atomically), with the normalized expiry stored.
     const id = ((await ok.json()) as { id: string }).id;
     const { rows } = await pool.query<{ expires_at: Date | null }>(
-      "SELECT expires_at FROM theo_api_keys WHERE id = $1",
+      "SELECT expires_at FROM looptrace_api_keys WHERE id = $1",
       [id],
     );
     expect(rows).toHaveLength(1);

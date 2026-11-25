@@ -3,14 +3,14 @@ import type { Context } from "hono";
 import {
   RateLimiter,
   type SpanRepository,
-} from "@usetheo/lens-core";
+} from "@looptrace/core";
 import {
   ChatError,
   ProviderBreakerOpenError,
   type ChatMessage,
   type ReplayClient,
   type ReplayResult,
-} from "@usetheo/lens-core/provider";
+} from "@looptrace/core/provider";
 
 import { replayHandler, type ReplayApiDeps } from "./replay.js";
 

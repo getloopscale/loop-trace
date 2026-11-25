@@ -1,6 +1,6 @@
 /**
  * M33 — shared OpenAI-compatible chat-completions path (extracted from the M36
- * `OpenAICompatibleJudge`, D1). One HTTP path + one env (`THEOLENS_JUDGE_*` via
+ * `OpenAICompatibleJudge`, D1). One HTTP path + one env (`LOOPTRACE_JUDGE_*` via
  * `parseJudgeConfig`) for ALL LLM calls: the M36 judge parses a verdict on top of it,
  * the M33 copilot returns the raw free-text answer. Native `fetch`, no SDK (Rule 9).
  * FAIL-CLOSED (`error-handling.md`): any non-2xx / network error / non-JSON / missing

@@ -8,7 +8,7 @@ import type { Span } from "../observability/span.js";
  * path: `target` narrows work within a trace the evaluator already owns;
  * `filter` decides whether the evaluator owns the trace at all.
  *
- * theo-lens evaluates this in memory against the spans it just saved. The
+ * looptrace evaluates this in memory against the spans it just saved. The
  * references had to re-fetch the entity and, for anything outside a small
  * column allowlist, fall back to an analytical query per config per trace —
  * the dominant cost of job creation there. Here the common case costs nothing.

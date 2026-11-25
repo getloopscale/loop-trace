@@ -1,8 +1,8 @@
 /**
  * BearerAuthVerifier — the env-key single-tenant bridge (M22). Ported from the
- * reference capability `theo-memory` (`auth/bearer-verifier.ts`) with a
- * `THEMEMORY_API_KEY` → `THEOLENS_API_KEY` env rename + `memory:` → `lens:` scope
- * swap. See `theo-data/README.md § 3.1`.
+ * reference capability `loopmem` (`auth/bearer-verifier.ts`) with a
+ * `THEMEMORY_API_KEY` → `LOOPTRACE_API_KEY` env rename + `memory:` → `lens:` scope
+ * swap. See `data-plane/README.md § 3.1`.
  *
  * Fail-closed sentinel (EC-1): empty/whitespace env value ⇒ auth required, no
  * token accepts; only `undefined` env ⇒ auth disabled. Constant-time compare with
@@ -17,9 +17,9 @@ import {
   type Principal,
   DEFAULT_OWNER_USER_ID,
   DEFAULT_WORKSPACE_ID,
-} from "@usetheo/lens-core";
+} from "@looptrace/core";
 
-const THEOLENS_API_KEY_ENV = "THEOLENS_API_KEY";
+const LOOPTRACE_API_KEY_ENV = "LOOPTRACE_API_KEY";
 
 /**
  * Resolve the configured API key from the environment with fail-closed sentinel
@@ -27,7 +27,7 @@ const THEOLENS_API_KEY_ENV = "THEOLENS_API_KEY";
  * (auth required, nothing accepts); non-empty ⇒ verbatim (no trim).
  */
 export function readApiKey(): string | undefined {
-  const raw = process.env[THEOLENS_API_KEY_ENV];
+  const raw = process.env[LOOPTRACE_API_KEY_ENV];
   if (raw === undefined) return undefined;
   if (raw.trim() === "") return "";
   return raw;

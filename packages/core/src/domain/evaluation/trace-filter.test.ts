@@ -15,7 +15,7 @@ import {
  * INSIDE a trace get scored. Conflating the two is the likeliest implementation
  * error in this milestone, so the two concepts never share a code path.
  *
- * theo-lens has an advantage the references do not: the spans are in hand at
+ * looptrace has an advantage the references do not: the spans are in hand at
  * ingest, so the common case costs no query at all.
  */
 function span(overrides: Partial<Span> = {}): Span {

@@ -36,8 +36,8 @@ describe("README write quickstart — doc-smoke (M110)", () => {
   it("runs the documented curate flow: createDataset → addDatasetItem → annotateTrace", async () => {
     // ─── BEGIN write quickstart (mirrored verbatim in README.md § Write — keep in sync) ───
     const client = new LensReadClient({
-      baseUrl: "https://api.usetheo.dev",
-      apiKey: process.env["LENS_API_KEY"] ?? "theo_live_demo",
+      baseUrl: "https://api.getloopscale.com",
+      apiKey: process.env["LENS_API_KEY"] ?? "looptrace_live_demo",
       fetch: mockEngine(), // in real code: omit `fetch`
     });
 

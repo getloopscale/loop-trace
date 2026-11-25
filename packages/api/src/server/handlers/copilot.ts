@@ -20,12 +20,12 @@ import {
   isErrorCode,
   type SpanRepository,
   type RateLimiter,
-} from "@usetheo/lens-core";
+} from "@looptrace/core";
 import {
   ChatError,
   ProviderBreakerOpenError,
   type ChatClient,
-} from "@usetheo/lens-core/provider";
+} from "@looptrace/core/provider";
 
 import { getPrincipal } from "../auth/middleware.js";
 import {

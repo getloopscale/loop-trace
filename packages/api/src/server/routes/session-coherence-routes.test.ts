@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
-import type { JudgeClient, TraceListItem, SessionVerdictWrite, RateLimiter } from "@usetheo/lens-core";
+import type { JudgeClient, TraceListItem, SessionVerdictWrite, RateLimiter } from "@looptrace/core";
 
 import { registerSessionCoherenceRoutes, type SessionCoherenceApiDeps } from "./session-coherence-routes.js";
 

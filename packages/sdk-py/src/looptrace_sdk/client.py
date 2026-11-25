@@ -16,9 +16,9 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from .errors import (
-    TheoLensError,
-    TheoLensSerializationError,
-    TheoLensTransportError,
+    LoopTraceError,
+    LoopTraceSerializationError,
+    LoopTraceTransportError,
 )
 from .messages import RunResult, SDKMessage
 
@@ -38,7 +38,7 @@ class Transport(Protocol):  # pragma: no cover - structural type only
     """The injectable HTTP seam. The default is :func:`urllib_transport`; tests pass a stub.
 
     A transport returns a :class:`Response` for ANY HTTP status (mapping non-2xx to a typed error is
-    ``record_run``'s job) and raises :class:`~theo_lens_sdk.errors.TheoLensTransportError` only when
+    ``record_run``'s job) and raises :class:`~looptrace_sdk.errors.LoopTraceTransportError` only when
     no response arrives (network failure).
     """
 
@@ -88,11 +88,11 @@ def urllib_transport(
     except urllib.error.HTTPError as exc:
         return Response(status=exc.code, headers=_normalize_headers(exc.headers), body=exc.read())
     except OSError as exc:  # URLError, TimeoutError, ConnectionResetError all subclass OSError
-        raise TheoLensTransportError(f"transport failure POSTing to {url}: {exc}") from exc
+        raise LoopTraceTransportError(f"transport failure POSTing to {url}: {exc}") from exc
     except http.client.HTTPException as exc:
         # #66 — a truncated body raises http.client.IncompleteRead (an HTTPException, NOT an OSError) from
         # resp.read(); honor the typed-error boundary instead of leaking the bare stdlib exception.
-        raise TheoLensTransportError(f"transport failure reading response from {url}: {exc}") from exc
+        raise LoopTraceTransportError(f"transport failure reading response from {url}: {exc}") from exc
 
 
 def record_run(
@@ -111,8 +111,8 @@ def record_run(
     Args:
         messages: the ``SDKMessage`` batch (opaque JSON — never validated).
         result: the terminal ``RunResult`` (usage/cost); omitted from the body when ``None``.
-        base_url: the engine origin, e.g. ``https://app.usetheo.dev`` or ``http://localhost:4000``.
-        api_key: a ``theo_live_*`` key sent as ``Authorization: Bearer``.
+        base_url: the engine origin, e.g. ``https://app.getloopscale.com`` or ``http://localhost:4000``.
+        api_key: a ``looptrace_live_*`` key sent as ``Authorization: Bearer``.
         base_path: ``/v1`` for the direct data API, ``/v1/lens`` for the unified edge.
         start_time_ms: optional base epoch-ms; omitted from the body when ``None``.
         timeout: per-request timeout in seconds.
@@ -122,9 +122,9 @@ def record_run(
         A :class:`RecordRunResult` on any 2xx.
 
     Raises:
-        TheoLensSerializationError: the payload is not JSON-serializable (before any I/O).
-        TheoLensError: the engine returned a non-2xx (carries ``status`` + parsed ``code``/``message``).
-        TheoLensTransportError: a network failure — the run is NOT retried.
+        LoopTraceSerializationError: the payload is not JSON-serializable (before any I/O).
+        LoopTraceError: the engine returned a non-2xx (carries ``status`` + parsed ``code``/``message``).
+        LoopTraceTransportError: a network failure — the run is NOT retried.
     """
     payload: dict[str, Any] = {"messages": messages}
     if result is not None:
@@ -135,7 +135,7 @@ def record_run(
     try:
         body = json.dumps(payload).encode("utf-8")
     except (TypeError, ValueError) as exc:
-        raise TheoLensSerializationError(f"run payload is not JSON-serializable: {exc}") from exc
+        raise LoopTraceSerializationError(f"run payload is not JSON-serializable: {exc}") from exc
 
     url = f"{base_url}{base_path}/runs"
     headers = {"authorization": f"Bearer {api_key}", "content-type": "application/json"}
@@ -166,12 +166,12 @@ def _parse_success(response: Response) -> RecordRunResult:
     )
 
 
-def _to_error(response: Response) -> TheoLensError:
+def _to_error(response: Response) -> LoopTraceError:
     data = _parse_json_body(response.body)
     code = data.get("code") if isinstance(data, dict) else None
     message = data.get("message") if isinstance(data, dict) else None
     retry_after = _parse_retry_after(response.headers) if response.status == 429 else None
-    return TheoLensError(
+    return LoopTraceError(
         status=response.status,
         code=code if isinstance(code, str) else "UNKNOWN",
         message=message if isinstance(message, str) else (_decode(response.body) or "request failed"),

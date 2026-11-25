@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Theo Lens is **pre-release**. Security fixes land on the latest published version only; there are
+LoopTrace is **pre-release**. Security fixes land on the latest published version only; there are
 no maintained backport branches yet. That will change when the project cuts `v1.0.0`.
 
 ## Reporting a vulnerability
@@ -40,7 +40,7 @@ The boundaries this project is responsible for enforcing:
 - **The single-use admin bootstrap** — the bootstrap token authenticates as a synthetic
   platform-admin **only** while it has not been consumed. The consume-first flip is a
   compare-and-set; two concurrent bootstrap mints must yield exactly one success.
-- **Fail-closed credential resolution** — with `THEOLENS_REQUIRE_CREDENTIAL=true`, a request that
+- **Fail-closed credential resolution** — with `LOOPTRACE_REQUIRE_CREDENTIAL=true`, a request that
   resolves no principal returns 401. It must never collapse into a default owner principal.
 - **Secret handling** — credentials leaking into logs, traces, error messages, or span attributes.
   This one deserves emphasis for a tracing product: **spans are the payload**. A defect that copies
@@ -56,14 +56,14 @@ The boundaries this project is responsible for enforcing:
 - The security of *your* Postgres deployment, network, or reverse proxy.
 - Denial of service through resource exhaustion on a self-hosted instance you control.
 - Anything requiring an already-compromised host or database superuser.
-- Running with `THEOLENS_REQUIRE_CREDENTIAL` unset or false. That is a local-development
+- Running with `LOOPTRACE_REQUIRE_CREDENTIAL` unset or false. That is a local-development
   affordance — it resolves a default principal and is not a supported deployment posture.
 - Findings from an automated scanner with no demonstrated exploit path — we will read them, but a
   report without a reproduction is triaged as a bug, not a vulnerability.
 
 ## A note on ingested telemetry
 
-Theo Lens stores what your agents emit and answers questions from it. It does **not** classify span
+LoopTrace stores what your agents emit and answers questions from it. It does **not** classify span
 contents for sensitivity, and neither the copilot nor the LLM judge re-checks whether a span is
 trustworthy before it reaches the model.
 

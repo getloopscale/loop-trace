@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { type SpanRepository } from "@usetheo/lens-core";
-import { createSpanRepository, migrateLatest } from "@usetheo/lens-core/infra";
-import { createApp } from "@usetheo/lens-api";
+import { type SpanRepository } from "@looptrace/core";
+import { createSpanRepository, migrateLatest } from "@looptrace/core/infra";
+import { createApp } from "@looptrace/api";
 import type pg from "pg";
 
 import { LensReadClient } from "./client.js";
@@ -12,12 +12,12 @@ import { LensReadClient } from "./client.js";
  * this contract test proves the RUNTIME path each method walks — engine-relative URL, query mapping,
  * the shared transport, and the real handler → repo → DB → envelope round-trip. Drives the SDK against
  * the REAL engine (`createApp(repo)` over Testcontainers Postgres, `app.fetch` injected). Gated on
- * THEOLENS_PG_URI (Testcontainers globalSetup provides it).
+ * LOOPTRACE_PG_URI (Testcontainers globalSetup provides it).
  *
  * The paired `listLabelingQueue`/`getLabelingItem` reads feed `enqueueForLabeling`'s returned id back
  * into the read (Corner 1 write→read round-trip #2), proving the asymmetry is closed at runtime.
  */
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
 
 suite("LensReadClient ↔ engine — M117 GENERATED read parity (T1.3)", () => {
@@ -36,7 +36,7 @@ suite("LensReadClient ↔ engine — M117 GENERATED read parity (T1.3)", () => {
       app.fetch(new Request(typeof input === "string" ? input : input.toString(), init));
     client = new LensReadClient({
       baseUrl: "http://engine.local",
-      apiKey: "theo_live_contract_test",
+      apiKey: "looptrace_live_contract_test",
       fetch: engineFetch,
     });
   });

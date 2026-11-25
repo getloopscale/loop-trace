@@ -7,7 +7,7 @@ import {
   sdkMessagesToOtlp,
   type SDKMessage,
   type TheokitRunResult,
-} from "@usetheo/lens-core";
+} from "@looptrace/core";
 
 import {
   bearerAuth,
@@ -39,7 +39,7 @@ import { registerDatasetRoutes } from "./routes/dataset-routes.js";
 import { registerLabelingQueueRoutes } from "./routes/labeling-queue-routes.js";
 import { registerExperimentRoutes } from "./routes/experiment-routes.js";
 import type { ExperimentApiDeps } from "./handlers/experiment.js";
-import type { RateLimiter, Span } from "@usetheo/lens-core";
+import type { RateLimiter, Span } from "@looptrace/core";
 
 /**
  * M93 — OTLP ingest hardening deps (all optional; a test app without them keeps the pre-M93 behavior
@@ -73,7 +73,7 @@ export interface HealthApiDeps {
 }
 import { workspaceScope } from "./middleware/workspace-scope.js";
 import { bodyLimit } from "hono/body-limit";
-import { DEFAULT_MAX_INGEST_BYTES } from "@usetheo/lens-core";
+import { DEFAULT_MAX_INGEST_BYTES } from "@looptrace/core";
 import { parseResourceSpansPartial } from "../otlp/parse-resource-spans.js";
 import { OtlpParseError, OtlpTooLargeError } from "../otlp/otlp-error.js";
 import { decodeOtlpBody } from "../otlp/decode-protobuf.js";
@@ -168,7 +168,7 @@ export function createApp(
   // Fail-loud, fail-clear (Rule 8): any unhandled error (e.g. Postgres
   // unavailable during repo.save) is logged with context and surfaced as 500.
   app.onError((err, c) => {
-    // theo-lens#136 — a resposta é opaca de propósito (nunca vazar interno ao cliente), mas o LOG
+    // looptrace#136 — a resposta é opaca de propósito (nunca vazar interno ao cliente), mas o LOG
     // precisa deixar de ser. Antes, um defeito de TIPO numa consulta (`22003 integer out of range`,
     // que derrubava `range=30d`) chegava ao operador como `INTERNAL` aqui e `UPSTREAM_ERROR` no
     // dashboard — indistinguível de "o serviço caiu". `code`/`routine` classificam, `query` localiza.
@@ -217,7 +217,7 @@ export function createApp(
     return c.json(apiError("INTERNAL", "internal error"), 500);
   });
 
-  // M94 probes, moved to the CD playbook's canonical paths so every Theo capability answers the
+  // M94 probes, moved to the CD playbook's canonical paths so every LoopZero capability answers the
   // same three questions at the same URLs — a deploy gate that has to learn per-service paths is
   // a deploy gate nobody reuses. UNAUTHENTICATED and mounted before the /v1 bearer: the gate runs
   // before any credential exists on the box.
@@ -227,7 +227,7 @@ export function createApp(
   // balancer drains instead of erroring.
   //
   // B-117 — `/v1/health` and `/v1/health/ready` are the ECOSYSTEM's names for the same three
-  // questions (theo-contracts/httpsurface, D5). The argument above is the contract's argument,
+  // questions (loopzero-contracts/httpsurface, D5). The argument above is the contract's argument,
   // reached here independently; only the spelling differed. Measured across nine services the
   // split was four `healthz` to three `health`, and the `z` suffix is a Kubernetes-era convention
   // that means nothing to someone calling a `/v1` API.
@@ -267,7 +267,7 @@ export function createApp(
   app.get("/v1/version", (c) =>
     c.json(
       {
-        name: "theo-lens",
+        name: "looptrace",
         version: health?.version ?? "unknown",
         git_sha: health?.gitSha ?? "unknown",
         built_at: health?.builtAt ?? "unknown",
@@ -279,7 +279,7 @@ export function createApp(
   app.get("/v1", (c) =>
     c.json(
       {
-        service: "theo-lens",
+        service: "looptrace",
         version: health?.version ?? "unknown",
         capability: "observability",
         openapi: "/openapi.json",

@@ -4,7 +4,7 @@ import { LensReadClient } from "./client.js";
 import { LensApiError } from "./errors.js";
 
 const BASE = "https://lens.example.com";
-const KEY = "theo_live_abc123";
+const KEY = "looptrace_live_abc123";
 
 /** A mock `fetch` that records the last call and returns a canned JSON 200 (override per test). */
 function mockFetch(body: unknown, init?: { status?: number; text?: string }) {
@@ -110,7 +110,7 @@ describe("LensReadClient — transport (T2.1)", () => {
   });
 
   it("basePath /v1/lens maps the discovery root /v1 → /v1/lens", async () => {
-    const fetchFn = mockFetch({ service: "theo-lens", version: "x", capability: "observability", openapi: "/openapi.json", docs: "/openapi.json" });
+    const fetchFn = mockFetch({ service: "looptrace", version: "x", capability: "observability", openapi: "/openapi.json", docs: "/openapi.json" });
     const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, basePath: "/v1/lens", fetch: fetchFn });
     await client.capabilities();
     expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1/lens");
@@ -221,7 +221,7 @@ describe("LensReadClient — the 7 typed read methods (T2.2)", () => {
 
   it("capabilities hits /v1 and returns service + version + openapi pointer", async () => {
     const fetchFn = mockFetch({
-      service: "theo-lens",
+      service: "looptrace",
       version: "1.2.3",
       capability: "observability",
       openapi: "/openapi.json",
@@ -230,7 +230,7 @@ describe("LensReadClient — the 7 typed read methods (T2.2)", () => {
     const client = new LensReadClient({ baseUrl: BASE, apiKey: KEY, fetch: fetchFn });
     const res = await client.capabilities();
     expect(new URL(calledUrl(fetchFn)).pathname).toBe("/v1");
-    expect(res.service).toBe("theo-lens");
+    expect(res.service).toBe("looptrace");
     expect(res.version).toBe("1.2.3");
     expect(res.openapi).toBe("/openapi.json");
   });

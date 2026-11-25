@@ -43,7 +43,7 @@ beforeEach(() => {
 describe("AgentFlowView (M30b cross-tab)", () => {
   it("test_agent_flow_picker_filtered_by_span_query", async () => {
     // the shared span-query filters which traces the picker offers
-    localStorage.setItem("theolens.spanQuery", "kind:llm");
+    localStorage.setItem("looptrace.spanQuery", "kind:llm");
     renderFlow();
     await waitFor(() =>
       expect(client.listTraces).toHaveBeenCalledWith(

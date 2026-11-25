@@ -1,21 +1,21 @@
 #!/usr/bin/env node
 /**
- * M33 copilot-overhead benchmark — measures the theo-side latency of the
+ * M33 copilot-overhead benchmark — measures the looptrace-side latency of the
  * `POST /v1/traces/:traceId/ask` endpoint (rate-limit check + trace read + prompt
  * assembly + response cap), with a DETERMINISTIC mock chat client so the (provider-
- * bound) LLM round-trip is excluded. Isolates what theo-lens adds on top of the LLM.
- * Requires THEOLENS_PG_URI. Reports p50/p95/mean±std over RUNS runs. NO fabricated
+ * bound) LLM round-trip is excluded. Isolates what looptrace adds on top of the LLM.
+ * Requires LOOPTRACE_PG_URI. Reports p50/p95/mean±std over RUNS runs. NO fabricated
  * numbers — every figure is a real timed run.
  *
- *   THEOLENS_PG_URI=… node benchmarks/copilot-overhead.mjs
+ *   LOOPTRACE_PG_URI=… node benchmarks/copilot-overhead.mjs
  */
 import { createSpanRepository, migrateLatest, RateLimiter } from "../packages/core/dist/index.js";
 import { createApp } from "../packages/api/dist/server/app.js";
 import { performance } from "node:perf_hooks";
 
-const URI = process.env.THEOLENS_PG_URI;
+const URI = process.env.LOOPTRACE_PG_URI;
 if (!URI) {
-  console.error("THEOLENS_PG_URI required");
+  console.error("LOOPTRACE_PG_URI required");
   process.exit(1);
 }
 
@@ -31,7 +31,7 @@ function stats(xs) {
   return { mean, std, p50: pct(50), p95: pct(95) };
 }
 
-// A deterministic mock chat — returns instantly, isolating theo-side overhead.
+// A deterministic mock chat — returns instantly, isolating looptrace-side overhead.
 const mockChat = { ask: async () => "This step called a tool and returned a result." };
 
 async function seed(spanRepo) {
@@ -99,7 +99,7 @@ async function main() {
   const out = {
     N,
     RUNS,
-    note: "theo-side overhead only — mock chat client (LLM latency excluded)",
+    note: "looptrace-side overhead only — mock chat client (LLM latency excluded)",
     latency_ms: {
       p50: stats(runP50),
       p95: stats(runP95),

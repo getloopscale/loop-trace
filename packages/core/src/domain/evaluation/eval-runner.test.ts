@@ -6,8 +6,8 @@
  * exemplo cujo split contém `regression` → regressão; `dev` roda e não gateia. Sem estado, sem
  * baseline (ADR D1) — o `expected` mora no dataset.
  *
- * T2.2 é a parte que importa mais, e vem do theo-memory
- * (`theo-memory/packages/eval/src/run.test.ts:15-35`): a mutação é SEMEADA DENTRO DO TESTE, então a
+ * T2.2 é a parte que importa mais, e vem do loopmem
+ * (`loopmem/packages/eval/src/run.test.ts:15-35`): a mutação é SEMEADA DENTRO DO TESTE, então a
  * prova de que o gate reprova roda em toda execução da suíte — para sempre. Uma prova executada uma
  * vez à mão decai para folclore, e o defeito que este milestone existe para impedir (o
  * `dev-version-drift` da M138, verde em todo run sem medir nada) era exatamente um gate que ninguém

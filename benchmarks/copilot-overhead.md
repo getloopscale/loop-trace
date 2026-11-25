@@ -6,13 +6,13 @@
 
 ## What is measured
 
-The **theo-side latency** of `POST /v1/traces/:traceId/ask` — everything theo-lens does
+The **looptrace-side latency** of `POST /v1/traces/:traceId/ask` — everything looptrace does
 around the LLM call: the per-workspace rate-limit check (D3), the `getTraceTree` read,
 the bounded prompt assembly (`buildCopilotPrompt`), and the 32 KiB answer cap (EC-6).
 
 A **deterministic in-process mock chat client** (`ask()` returns a fixed string
 instantly) stands in for the provider, so the figure excludes the (provider-bound) LLM
-round-trip. This isolates what theo-lens adds on top of the model — the model latency is
+round-trip. This isolates what looptrace adds on top of the model — the model latency is
 the dominant, provider-dependent term in production and is measured separately, not here.
 
 Every figure is a real timed `app.request` against a real DB — no fabricated numbers.
@@ -29,22 +29,22 @@ Every figure is a real timed `app.request` against a real DB — no fabricated n
 
 ## Interpretation
 
-- Theo-side overhead is **~1.4 ms mean / ~2.1 ms p95** — negligible next to a real LLM
+- LoopTrace-side overhead is **~1.4 ms mean / ~2.1 ms p95** — negligible next to a real LLM
   call (typically 100s of ms to seconds). The endpoint is dominated by the provider
-  round-trip, exactly as designed: theo-lens grounds + bounds the request cheaply and
+  round-trip, exactly as designed: looptrace grounds + bounds the request cheaply and
   lets the model do the expensive work.
-- The dominant theo-side cost is the single `getTraceTree` DB read; rate-limit check and
+- The dominant looptrace-side cost is the single `getTraceTree` DB read; rate-limit check and
   prompt assembly are in-memory and sub-millisecond.
 - **Fail-closed is free:** the 503 (no provider) / 429 (rate-limited) paths short-circuit
   before the DB read, so a disabled or throttled deployment answers even faster.
 - **Optimization headroom (follow-up):** none warranted — the endpoint is LLM-bound in
-  production; optimizing a ~1.4 ms theo-side path would be premature (YAGNI).
+  production; optimizing a ~1.4 ms looptrace-side path would be premature (YAGNI).
 
 ## Reproduce
 
 ```bash
-docker compose up -d postgres            # (THEOLENS_PG_PORT=55432)
+docker compose up -d postgres            # (LOOPTRACE_PG_PORT=55432)
 pnpm build                               # compiles dist + copies migrations
-THEOLENS_PG_URI="postgresql://theolens:theolens@localhost:55432/theolens" \
+LOOPTRACE_PG_URI="postgresql://looptrace:looptrace@localhost:55432/looptrace" \
   node benchmarks/copilot-overhead.mjs
 ```

@@ -3,16 +3,16 @@ import { describe, expect, it } from "vitest";
 import * as rootBarrel from "./index.js";
 
 /**
- * M123 findability regroup guard: the `@usetheo/lens-core` root barrel public
+ * M123 findability regroup guard: the `@looptrace/core` root barrel public
  * surface is frozen here; a rename that drifts an export name fails.
  * (182 names — M139 added 3 eval-harness names (parseEvalDataset, runEvalDataset, RegressionError) —
  * only what the CLI consumes; the review flagged the other two as orphan exports: the dataset + runner are pure domain, and the CLI
  * `scripts/run-eval.mjs` — the only layer with I/O — consumes them through this barrel; M134 added 5 auto-eval predicates (shouldSample, matchesFilter + its column registry) because the claim daemon lives in `packages/api` and core never imports api; M128 moved 3 test-support values, MAPPER_VECTORS/MAPPER_VECTOR_T0/
- * flattenOtlp, off the prod barrel to the `@usetheo/lens-core/testing` subpath;
+ * flattenOtlp, off the prod barrel to the `@looptrace/core/testing` subpath;
  * M129 moved the 10 provider VALUE symbols — ChatError, openaiChatCompletion,
  * openaiChatCompletionWithUsage, OpenAICompatibleChat, OpenAICompatibleReplay,
  * ProviderBreaker, ProviderBreakerOpenError, DEFAULT_PROVIDER_BREAKER,
- * createProviderClients, positiveIntEnv — to the `@usetheo/lens-core/provider`
+ * createProviderClients, positiveIntEnv — to the `@looptrace/core/provider`
  * subpath. The evaluation-domain provider-adjacent names, e.g. OpenAICompatibleJudge,
  * JudgeError, CopilotError, InvalidFeedbackError, parseProviderRetry/Breaker,
  * DEFAULT_PROVIDER_RETRY, stay on the root barrel — they are NOT in domain/provider.)

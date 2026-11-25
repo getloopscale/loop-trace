@@ -12,17 +12,17 @@
  * comment must not spell the marker tokens out — the counter takes the FIRST
  * line matching each, so a mention up here would swallow the whole preamble.
  */
-import { initTheoLens, startAgent, recordToolCall } from "@usetheo/lens-sdk";
+import { initLoopTrace, startAgent, recordToolCall } from "@looptrace/sdk";
 
-const endpoint = process.env["THEOLENS_ENDPOINT"] ?? "http://localhost:4318";
-// theo:instrument:start — everything between the markers is the instrumentation a
+const endpoint = process.env["LOOPTRACE_ENDPOINT"] ?? "http://localhost:4318";
+// looptrace:instrument:start — everything between the markers is the instrumentation a
 // user writes; the M2 promise is that this body is ≤10 lines (enforced by the e2e).
-const theo = initTheoLens({ endpoint, serviceName: "example-agent" });
-const traceId = await startAgent(theo.tracer, "checkout", async (span) => {
+const looptrace = initLoopTrace({ endpoint, serviceName: "example-agent" });
+const traceId = await startAgent(looptrace.tracer, "checkout", async (span) => {
   span.setModel("gpt-4o").setProvider("openai").setUsage({ inputTokens: 12, outputTokens: 8 });
   recordToolCall(span, "search-products", { query: "running shoes" });
   return span.raw.spanContext().traceId;
 });
-await theo.shutdown();
-// theo:instrument:end
-console.log(`THEOLENS_TRACE_ID=${traceId}`); // for the e2e / curl to fetch the trace
+await looptrace.shutdown();
+// looptrace:instrument:end
+console.log(`LOOPTRACE_TRACE_ID=${traceId}`); // for the e2e / curl to fetch the trace

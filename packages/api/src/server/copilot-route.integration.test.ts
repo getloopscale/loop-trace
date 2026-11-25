@@ -3,13 +3,13 @@ import {
   RateLimiter,
   type Principal,
   type AuthVerifier,
-} from "@usetheo/lens-core";
+} from "@looptrace/core";
 import {
   ChatError,
   type ChatClient,
   type ChatMessage,
-} from "@usetheo/lens-core/provider";
-import { createSpanRepository, migrateLatest } from "@usetheo/lens-core/infra";
+} from "@looptrace/core/provider";
+import { createSpanRepository, migrateLatest } from "@looptrace/core/infra";
 import type pg from "pg";
 
 import { createApp } from "./app.js";
@@ -19,7 +19,7 @@ import {
   copilotAsksUnavailable,
 } from "./metrics.js";
 
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
 
 function verifierFor(map: Record<string, Principal>): AuthVerifier {

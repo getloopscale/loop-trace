@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { encodeOtlpProtobuf } from "../../packages/api/src/otlp/__fixtures__/otlp-protobuf.js";
 
-const BASE = process.env["THEOLENS_E2E_BASE"] ?? "http://localhost:44318";
+const BASE = process.env["LOOPTRACE_E2E_BASE"] ?? "http://localhost:44318";
 
 // Buffer ids → the API normalizes to lowercase hex; compute the expected hex.
 const traceIdBytes = Buffer.from([0xaa, 0xbb, 0xcc, 0xdd]);

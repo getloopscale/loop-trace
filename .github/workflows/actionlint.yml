@@ -6,7 +6,7 @@
 # dizia por que. Um workflow invalido NAO FALHA — ele simplesmente nao roda, e isso e
 # indistinguivel de "passou" em varias telas.
 #
-# Precedente medido no theo-db: 95 de 100 runs perdidos exatamente assim.
+# Precedente medido no loopdb: 95 de 100 runs perdidos exatamente assim.
 name: actionlint
 on:
   push:
@@ -25,7 +25,7 @@ jobs:
         # baixava e executava um script do branch `main` de um repo de terceiros: ref mutavel
         # + execucao arbitraria no runner, num repo que pina todas as demais actions por SHA.
         # A disciplina de supply-chain nao pode valer para 40 actions e falhar justamente no
-        # gate de qualidade. Mesmo digest usado em theo-rag e theo-traefik-mcp.
+        # gate de qualidade. Mesmo digest usado em looprag e loopmcp.
         run: |
           docker run --rm -v "$PWD:/repo" --workdir /repo \
             rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 \

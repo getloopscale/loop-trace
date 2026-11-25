@@ -3,7 +3,7 @@ import type pg from "pg";
 
 import { createPool, runMigrations, evaluatorRepoFromPool, spanRepoFromPool } from "../index.js";
 
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
 
 const WS = "ws-guard-window";
@@ -11,7 +11,7 @@ const WS = "ws-guard-window";
 /**
  * M135 T2.1 — the carrier: per-guard breach counts over a window.
  *
- * The distinction this exists to carry is the one theo-cloud#247 was missing:
+ * The distinction this exists to carry is the one loopzero-cloud#247 was missing:
  * `breachCount: 0, hasData: true` is a real zero (traces were evaluated, none
  * breached) while `hasData: false` is absence (nothing to evaluate). Collapsing
  * them is what let a traffic-free workspace fire a below-threshold rule forever.
@@ -108,7 +108,7 @@ suite("guard breach window (integration, M135 T2.1)", () => {
   });
 
   it("test_an_empty_window_is_absence_not_zero", async () => {
-    // Nothing to evaluate. Collapsing this into `0` is exactly theo-cloud#247.
+    // Nothing to evaluate. Collapsing this into `0` is exactly loopzero-cloud#247.
     const { g } = await guardOver("toxicity", "gt", 0.5);
 
     const r = await evaluatorRepo.monitorBreachWindow(g.id, 3600, WS);
@@ -149,7 +149,7 @@ suite("guard breach window (integration, M135 T2.1)", () => {
   // ── The distinction the first draft of this endpoint could not express ─────────────────────────
   //
   // An unknown guard and a real guard with an empty window BOTH returned {hasData:false, 0, 0}.
-  // theo-cloud then built two mechanisms on a 404 this endpoint never emits: create-time ownership
+  // loopzero-cloud then built two mechanisms on a 404 this endpoint never emits: create-time ownership
   // validation, and auto-disabling a rule whose guard was deleted. Both were dead code, and the
   // second produced exactly the state it claimed to prevent — an armed rule that can never fire.
   //

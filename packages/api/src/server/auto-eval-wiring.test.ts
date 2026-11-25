@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { EvaluatorRecord, Queryable } from "@usetheo/lens-core";
+import type { EvaluatorRecord, Queryable } from "@looptrace/core";
 
 import { makeEnqueueAutoEval } from "./auto-eval-wiring.js";
 

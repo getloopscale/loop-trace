@@ -1,4 +1,4 @@
-import type { TraceListItem } from "@usetheo/lens-core";
+import type { TraceListItem } from "@looptrace/core";
 
 /** The exported columns (a fixed, small set — hand-serialized, no CSV lib needed). */
 const COLUMNS = [

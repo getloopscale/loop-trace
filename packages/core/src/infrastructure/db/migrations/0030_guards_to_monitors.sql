@@ -1,6 +1,6 @@
 -- M136 Phase 1 — rename the capability to match what it actually does.
 --
--- "Guard" promises request-path enforcement theo-lens does not do. Both reference implementations
+-- "Guard" promises request-path enforcement looptrace does not do. Both reference implementations
 -- reserve GUARDRAIL for a span KIND that labels the inline blocker running in the user's own app;
 -- a threshold over async verdicts is what the field calls a Monitor.
 --

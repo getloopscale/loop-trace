@@ -7,10 +7,10 @@ on:
     branches: [develop, main]
     # Commit só-de-documentação não exercita código e não deve consumir a fila do runner compartilhado: cada repositório tem seu PRÓPRIO processo de runner, mas os cinco
     # rodam no MESMO host de 2 vCPU / 2 GB. A disputa é por CPU e RAM, não por um slot de fila —
-    # medido em 2026-07-27: os runners de theo-rag, theo-memory, theo-cloud e theo-db aparecem
+    # medido em 2026-07-27: os runners de looprag, loopmem, loopzero-cloud e loopdb aparecem
     # `busy=true` simultaneamente. Cada job desperdiçado aqui rouba CPU dos outros quatro repos. Medido em 2026-07-27: 47% dos últimos
     # 40 commits deste repo tocam apenas .md / docs/ / knowledge-base/ / .claude/.
-    # Mesmo padrão já adotado em theo-memory.
+    # Mesmo padrão já adotado em loopmem.
     # SEM `paths-ignore` junto de `paths`. O GitHub PROIBE os dois filtros no mesmo evento, e
     # a recusa nao e um aviso: o workflow morre no PARSE, sem criar job algum e sem log. Foi o
     # que manteve este gate vermelho em TODOS os runs — `jobs=0`, `runner_name` vazio, nada na
@@ -47,7 +47,7 @@ jobs:
         run: go vet ./...
 
       - name: golangci-lint
-        # Action v9.3.0 + golangci-lint v2.6.0 — o MESMO par ja verde em theo-storage.
+        # Action v9.3.0 + golangci-lint v2.6.0 — o MESMO par ja verde em loopstore.
         # O par anterior (action v6 + version v2.1) era INCOMPATIVEL, e a propria action dizia:
         # "golangci-lint v2 is not supported by golangci-lint-action v6, you must update to v7".
         # Resultado: 8 de 8 runs vermelhos, em develop e workspace. Nao era flaky nem lento —

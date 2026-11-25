@@ -1,9 +1,9 @@
 /**
  * Runnable sample — create a dataset and add a synthetic example. Run against a real engine:
- *   LENS_BASE_URL=https://api.usetheo.dev LENS_API_KEY=theo_live_… npx tsx examples/curate-dataset.ts
+ *   LENS_BASE_URL=https://api.getloopscale.com LENS_API_KEY=looptrace_live_… npx tsx examples/curate-dataset.ts
  * Skips honestly (no crash) when the env is unset. Operates on a clearly-named example dataset.
  */
-import { LensReadClient } from "@usetheo/lens-sdk";
+import { LensReadClient } from "@looptrace/sdk";
 
 const baseUrl = process.env["LENS_BASE_URL"];
 const apiKey = process.env["LENS_API_KEY"];

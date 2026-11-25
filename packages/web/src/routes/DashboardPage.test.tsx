@@ -98,7 +98,7 @@ describe("DashboardPage (M20 Pinned Charts)", () => {
   });
 
   it("metrics_dashboard_honours_persisted_global_range", async () => {
-    localStorage.setItem("theolens.range", "30d");
+    localStorage.setItem("looptrace.range", "30d");
     vi.mocked(client.getObservability).mockResolvedValue(obs);
     renderPage();
     await waitFor(() => expect(client.getObservability).toHaveBeenCalledWith("30d"));

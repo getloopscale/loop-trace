@@ -1,5 +1,5 @@
 /**
- * Span-query DSL (M30) — the first query language in Theo Lens. A space-separated
+ * Span-query DSL (M30) — the first query language in LoopTrace. A space-separated
  * list of `field:value` clauses (implicit AND), e.g. `kind:llm status:error
  * model:gpt-4o name:"Chat Open AI"`. Pure + TOTAL: it never throws — any token it
  * cannot turn into a valid clause is collected in `ignored` (mirroring the M24

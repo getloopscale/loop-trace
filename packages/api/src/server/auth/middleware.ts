@@ -1,7 +1,7 @@
 /**
  * Hono bearer-auth middleware factory (M22). Ported from the reference capability
- * `theo-memory` (`auth/middleware.ts`) with a `memory:` → `lens:` scope swap. See
- * `theo-data/README.md § 3.1`/`§ 3.3`/`§ 3.4`.
+ * `loopmem` (`auth/middleware.ts`) with a `memory:` → `lens:` scope swap. See
+ * `data-plane/README.md § 3.1`/`§ 3.3`/`§ 3.4`.
  *
  * Resolves a {@link Principal} from the credential and sets it on context; handlers
  * read the workspace from the Principal, never the body (invariant 3). Fail-closed:
@@ -15,7 +15,7 @@ import {
   DEFAULT_OWNER_USER_ID,
   DEFAULT_WORKSPACE_ID,
   roleSatisfies,
-} from "@usetheo/lens-core";
+} from "@looptrace/core";
 import type { Context, MiddlewareHandler } from "hono";
 
 import { BearerAuthVerifier, readApiKey } from "./bearer-verifier.js";
@@ -105,7 +105,7 @@ async function resolvePrincipalFrom(
 }
 
 /**
- * Parse `THEOLENS_REQUIRE_CREDENTIAL`. Only the literal `"true"`/`"1"` (case-
+ * Parse `LOOPTRACE_REQUIRE_CREDENTIAL`. Only the literal `"true"`/`"1"` (case-
  * insensitive) enable fail-closed mode; everything else leaves the single-tenant
  * default.
  */
@@ -116,7 +116,7 @@ export function parseRequireCredentialEnv(raw: string | undefined): boolean {
 }
 
 /**
- * Build the bearer-auth middleware. No `THEOLENS_API_KEY` + no override + not
+ * Build the bearer-auth middleware. No `LOOPTRACE_API_KEY` + no override + not
  * multi-tenant → collapse to the `default` workspace (single-tenant). Multi-tenant
  * mode rejects a missing credential with 401.
  */

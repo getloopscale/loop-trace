@@ -1,14 +1,14 @@
 # AGENTS.md
 
-Guidance for Codex-compatible agents working in `theo-lens`.
+Guidance for Codex-compatible agents working in `looptrace`.
 
 ## Purpose
 
-Theo Lens is an OpenTelemetry-native trace explorer for AI agents.
+LoopTrace is an OpenTelemetry-native trace explorer for AI agents.
 
 Core product loop:
 
-1. Instrument an agent with `@usetheo/lens-sdk`.
+1. Instrument an agent with `@looptrace/sdk`.
 2. Send OTLP traces to the API at `POST /v1/traces`.
 3. Persist spans in Postgres.
 4. Explore traces, sessions, replay, costs, tools, evaluators, and agents in the web UI.
@@ -69,8 +69,8 @@ docker compose down
 Useful targeted workflows:
 
 ```bash
-pnpm --filter @usetheo/lens-web dev
-pnpm --filter @usetheo/lens-sdk pack --pack-destination .
+pnpm --filter @looptrace/web dev
+pnpm --filter @looptrace/sdk pack --pack-destination .
 pnpm db:seed:demo
 pnpm db:prune
 ```
@@ -108,7 +108,7 @@ Before finishing:
 
 - The web app is routed from `packages/web/src/main.tsx`; there is no central `App.tsx`.
 - Prefer extending existing pages, hooks, and components over adding parallel patterns.
-- Keep operator workflows dense and practical; Theo Lens is an observability tool, not a marketing site.
+- Keep operator workflows dense and practical; LoopTrace is an observability tool, not a marketing site.
 
 ## Backend Notes
 
@@ -123,4 +123,4 @@ Before finishing:
 
 ## Platform Context
 
-This repo also contains a `CLAUDE.md` with a pointer to the wider Theo platform local integration workflow. Use it when the task involves the shared Theo platform or unified edge, not for ordinary repo-local changes.
+This repo also contains a `CLAUDE.md` with a pointer to the wider LoopZero platform local integration workflow. Use it when the task involves the shared LoopZero platform or unified edge, not for ordinary repo-local changes.

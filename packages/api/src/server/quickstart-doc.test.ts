@@ -20,7 +20,7 @@ describe("README quickstart (M7, T2.3)", () => {
     // `examples/agent`, retired in 675e6cb — the runnable agent now lives in the
     // e2e harness (tests/e2e/fixtures/), so the README teaches the SDK calls
     // inline instead of linking a published example.
-    expect(text).toContain("initTheoLens");
-    expect(text).toContain("@usetheo/lens-sdk");
+    expect(text).toContain("initLoopTrace");
+    expect(text).toContain("@looptrace/sdk");
   });
 });

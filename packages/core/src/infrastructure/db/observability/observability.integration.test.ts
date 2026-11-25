@@ -7,7 +7,7 @@ import type pg from "pg";
 import type { Span } from "../../../domain/observability/span.js";
 import { createPool, DrizzleSpanRepository } from "./drizzle-span-repository.js";
 
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const MIGRATIONS = fileURLToPath(new URL("../migrations", import.meta.url));
 const suite = PG_URI ? describe : describe.skip;
 
@@ -102,7 +102,7 @@ suite("aggregateObservability (integration, M11)", () => {
   });
 
   it("test_latency_reflects_llm_request_spans_not_interaction_wall_clock", async () => {
-    // M53 / theo-lens#74: an interaction trace's wall-clock is minutes (human thinking/typing) — that
+    // M53 / looptrace#74: an interaction trace's wall-clock is minutes (human thinking/typing) — that
     // is NOT request latency. The metric must reflect the child `llm_request` spans (real model-call
     // latency), so a 40-min interaction with a 5s request yields a p95 of ~5s, not ~40min.
     await repo.save([
@@ -172,7 +172,7 @@ suite("aggregateObservability (integration, M11)", () => {
     expect(obs.range).toBe("1h");
   });
 
-  // theo-lens#136 — a janela de 30 dias derrubava a tela inteira com 500 INTERNAL, e a causa era de
+  // looptrace#136 — a janela de 30 dias derrubava a tela inteira com 500 INTERNAL, e a causa era de
   // TIPO, não de volume: `sum()` sobre uma coluna int4 devolve int8, e o `::int` a espremia de volta
   // em 4 bytes. Cada linha cabia; a soma do balde não. O Postgres levanta `22003 integer out of
   // range` (int8.c, rotina int84) e o operador via "the lens service is not reachable".

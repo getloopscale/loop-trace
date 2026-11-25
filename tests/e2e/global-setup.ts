@@ -2,7 +2,7 @@ import { execSync } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 // M122 — the infra concretes live behind the `/infra` subpath; the root barrel
 // exposes domain ports only (guarded by barrel-surface.test.ts).
-import { createPool, migrateLatest } from "@usetheo/lens-core/infra";
+import { createPool, migrateLatest } from "@looptrace/core/infra";
 
 /**
  * E2E global setup: bring up the full docker-compose stack (Postgres + API),
@@ -11,15 +11,15 @@ import { createPool, migrateLatest } from "@usetheo/lens-core/infra";
  * — e2e never silently skips (unlike env-gated integration tests).
  */
 
-const PG_PORT = process.env["THEOLENS_PG_PORT"] ?? "55432";
-const API_PORT = process.env["THEOLENS_API_PORT"] ?? "44318";
-const PG_URI = `postgresql://theolens:theolens@localhost:${PG_PORT}/theolens`;
+const PG_PORT = process.env["LOOPTRACE_PG_PORT"] ?? "55432";
+const API_PORT = process.env["LOOPTRACE_API_PORT"] ?? "44318";
+const PG_URI = `postgresql://looptrace:looptrace@localhost:${PG_PORT}/looptrace`;
 const BASE = `http://localhost:${API_PORT}`;
 
 const composeEnv = {
   ...process.env,
-  THEOLENS_PG_PORT: PG_PORT,
-  THEOLENS_API_PORT: API_PORT,
+  LOOPTRACE_PG_PORT: PG_PORT,
+  LOOPTRACE_API_PORT: API_PORT,
 };
 
 async function waitForApi(timeoutMs: number): Promise<void> {
@@ -37,10 +37,10 @@ async function waitForApi(timeoutMs: number): Promise<void> {
   throw new Error(`API did not become reachable at ${BASE} within ${timeoutMs}ms`);
 }
 
-// When THEOLENS_E2E_EXTERNAL=1, run against an already-running stack (CI / local
-// server) instead of managing docker compose here. THEOLENS_E2E_BASE + PG must
+// When LOOPTRACE_E2E_EXTERNAL=1, run against an already-running stack (CI / local
+// server) instead of managing docker compose here. LOOPTRACE_E2E_BASE + PG must
 // already point at it. The default path (unset) still builds + runs compose.
-const EXTERNAL = process.env["THEOLENS_E2E_EXTERNAL"] === "1";
+const EXTERNAL = process.env["LOOPTRACE_E2E_EXTERNAL"] === "1";
 
 export async function setup(): Promise<void> {
   if (!EXTERNAL) {
@@ -58,7 +58,7 @@ export async function setup(): Promise<void> {
     await pool.end();
   }
 
-  process.env["THEOLENS_E2E_BASE"] = BASE;
+  process.env["LOOPTRACE_E2E_BASE"] = BASE;
 }
 
 export async function teardown(): Promise<void> {

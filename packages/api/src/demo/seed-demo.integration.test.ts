@@ -2,15 +2,15 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   type SpanRepository,
   type TraceTreeNode,
-} from "@usetheo/lens-core";
-import { createSpanRepository, migrateLatest } from "@usetheo/lens-core/infra";
+} from "@looptrace/core";
+import { createSpanRepository, migrateLatest } from "@looptrace/core/infra";
 import type pg from "pg";
 
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
 import { buildTravelAgentEnvelope } from "./travel-agent-fixture.js";
 import { main as seedMain } from "../bin/seed-demo.js";
 
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
 
 function countSpans(node: TraceTreeNode): number {
@@ -80,7 +80,7 @@ suite("travel-agent demo seed (integration)", () => {
   it("test_main_seeds_end_to_end", async () => {
     // Exercise the real CLI happy-path (env → build → parse → save → log), not
     // just the inline seed(): proves the bin wiring works end-to-end.
-    await seedMain(); // THEOLENS_PG_URI is set for the integration run
+    await seedMain(); // LOOPTRACE_PG_URI is set for the integration run
     const { traces } = await repo.listTraces({ limit: 100 });
     expect(traces.some((t) => t.name === "TripAgentGraph")).toBe(true);
   });

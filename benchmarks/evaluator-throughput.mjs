@@ -2,10 +2,10 @@
 /**
  * M36 evaluator-throughput benchmark — measures evals/sec for a rule evaluator and a
  * mocked-judge evaluator (deterministic stub, no live LLM) over N traces, against a
- * real Postgres. Requires THEOLENS_PG_URI. Reports mean ± std over RUNS runs. NO
+ * real Postgres. Requires LOOPTRACE_PG_URI. Reports mean ± std over RUNS runs. NO
  * fabricated numbers — every figure is a real timed run.
  *
- *   THEOLENS_PG_URI=… node benchmarks/evaluator-throughput.mjs
+ *   LOOPTRACE_PG_URI=… node benchmarks/evaluator-throughput.mjs
  */
 import {
   createSpanRepository,
@@ -15,9 +15,9 @@ import {
 } from "../packages/core/dist/index.js";
 import { performance } from "node:perf_hooks";
 
-const URI = process.env.THEOLENS_PG_URI;
+const URI = process.env.LOOPTRACE_PG_URI;
 if (!URI) {
-  console.error("THEOLENS_PG_URI required");
+  console.error("LOOPTRACE_PG_URI required");
   process.exit(1);
 }
 

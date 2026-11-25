@@ -1,12 +1,12 @@
 /**
- * Runnable sample — record a Claude Code / @theokit/sdk run to Theo Lens in ≤ 10 lines.
+ * Runnable sample — record a Claude Code / @theokit/sdk run to LoopTrace in ≤ 10 lines.
  * Feed the buffered `SDKMessage` stream (+ the terminal `RunResult`) to `recordRun`; it translates
  * the run to OTLP and POSTs `/v1/traces`, where the `theokit-sdk` adapter normalizes it.
  *
  * Run against a real engine (or the unified edge, with basePath `/v1/lens`):
- *   LENS_BASE_URL=https://api.usetheo.dev LENS_API_KEY=theo_live_… npx tsx examples/theokit-record-run.ts
+ *   LENS_BASE_URL=https://api.getloopscale.com LENS_API_KEY=looptrace_live_… npx tsx examples/theokit-record-run.ts
  */
-import { recordRun, type SDKMessage, type TheokitRunResult } from "@usetheo/lens-sdk";
+import { recordRun, type SDKMessage, type TheokitRunResult } from "@looptrace/sdk";
 
 const baseUrl = process.env["LENS_BASE_URL"];
 const apiKey = process.env["LENS_API_KEY"];
@@ -27,4 +27,4 @@ const messages: SDKMessage[] = [
 const result: TheokitRunResult = { usage: { inputTokens: 210, outputTokens: 15 }, cost: { totalUsd: 0.0031 } };
 
 await recordRun({ messages, result }, { baseUrl, apiKey /*, basePath: "/v1/lens" for the edge */ });
-console.log(`Recorded run ${runId} to Theo Lens — open it in the Traces screen.`);
+console.log(`Recorded run ${runId} to LoopTrace — open it in the Traces screen.`);

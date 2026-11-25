@@ -10,9 +10,9 @@ import { createPool, DrizzleSpanRepository } from "./drizzle-span-repository.js"
 import { aggregatePromptUsage } from "./aggregate-repository.js";
 
 /**
- * M15 (theo-promptly) — uso por REVISÃO de prompt.
+ * M15 (loopprompt) — uso por REVISÃO de prompt.
  *
- * O `theo-promptly` marca `prompt.id` (que carrega o **nome**) e `prompt.revision`
+ * O `loopprompt` marca `prompt.id` (que carrega o **nome**) e `prompt.revision`
  * em cada span `prompt.resolve`. A atribuição de custo é **por trace**: o span de
  * resolução nasce filho do trace da aplicação, então ele e a chamada ao modelo
  * compartilham `traceId` sem ninguém combinar contrato algum.
@@ -22,7 +22,7 @@ import { aggregatePromptUsage } from "./aggregate-repository.js";
  * está no pai). O agregado junta `spans` a `traces` pela PK de `traces`.
  */
 
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const MIGRATIONS = fileURLToPath(new URL("../migrations", import.meta.url));
 const suite = PG_URI ? describe : describe.skip;
 

@@ -21,7 +21,7 @@ export const RANGE_OPTIONS = [
   { label: "Last 30 days", value: "30d" },
 ] as const satisfies ReadonlyArray<{ label: string; value: ObservabilityRange }>;
 
-const STORAGE_KEY = "theolens.range";
+const STORAGE_KEY = "looptrace.range";
 const DEFAULT_RANGE: ObservabilityRange = "7d";
 const ALLOWED: ReadonlyArray<ObservabilityRange> = ["1h", "24h", "7d", "30d"];
 

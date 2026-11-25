@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { RateLimiter, type EvaluatorRecord } from "@usetheo/lens-core";
+import { RateLimiter, type EvaluatorRecord } from "@looptrace/core";
 
 import { createApp } from "./app.js";
 import type { EvaluatorApiDeps } from "./handlers/evaluators.js";

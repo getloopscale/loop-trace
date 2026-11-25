@@ -1,10 +1,10 @@
-# @usetheo/lens-sdk
+# @looptrace/sdk
 
-Emit traces to Theo Lens and read your observability data back — from TypeScript/Node, in a few lines.
+Emit traces to LoopTrace and read your observability data back — from TypeScript/Node, in a few lines.
 
-- **Write** (ingest): `initTheoLens()` emits OTLP `gen_ai` spans (see below).
+- **Write** (ingest): `initLoopTrace()` emits OTLP `gen_ai` spans (see below).
 - **Read** (query): `LensReadClient` reads traces, spans, sessions, metrics, cost, tool stats and
-  datasets back — fully typed, authenticated with your `theo_live_*` key.
+  datasets back — fully typed, authenticated with your `looptrace_live_*` key.
 
 The read client is **beta**: the surface is stable and typed against the engine's OpenAPI, but it has
 not yet accrued sustained production usage. Feedback welcome.
@@ -12,7 +12,7 @@ not yet accrued sustained production usage. Feedback welcome.
 ## Install
 
 ```bash
-npm install @usetheo/lens-sdk
+npm install @looptrace/sdk
 ```
 
 Requires Node 20+ (uses the platform-native `fetch`).
@@ -20,11 +20,11 @@ Requires Node 20+ (uses the platform-native `fetch`).
 ## Quickstart — read your data
 
 ```ts
-import { LensReadClient, LensApiError } from "@usetheo/lens-sdk";
+import { LensReadClient, LensApiError } from "@looptrace/sdk";
 
 const client = new LensReadClient({
-  baseUrl: "https://api.usetheo.dev",
-  apiKey: process.env.LENS_API_KEY ?? "theo_live_demo",
+  baseUrl: "https://api.getloopscale.com",
+  apiKey: process.env.LENS_API_KEY ?? "looptrace_live_demo",
 });
 
 const { traces } = await client.listTraces({ limit: 50 });
@@ -39,17 +39,17 @@ try {
 }
 ```
 
-Your `theo_live_*` key resolves your workspace at the edge — you never pass a workspace/tenant
+Your `looptrace_live_*` key resolves your workspace at the edge — you never pass a workspace/tenant
 parameter. The client sends `Authorization: Bearer <apiKey>` on every request.
 
 ### Reaching Lens through the unified edge
 
-If your `theo_live_*` key reaches Lens through the Theo **unified edge** (where the capability lives
+If your `loopzero_live_*` platform key reaches Lens through the LoopZero **unified edge** (where the capability lives
 under `/v1/lens/*`), set `basePath` so the client composes the right URLs:
 
 ```ts
 const client = new LensReadClient({
-  baseUrl: "https://api.usetheo.dev",
+  baseUrl: "https://api.getloopscale.com",
   apiKey: process.env.LENS_API_KEY,
   basePath: "/v1/lens", // default is "/v1" (talking to the engine directly)
 });
@@ -141,7 +141,7 @@ surfaces the error so a lost response can never double-run / double-bill.
 
 ```ts
 const { service, version, openapi } = await client.capabilities();
-// → { service: "theo-lens", version: "…", openapi: "/openapi.json", … }
+// → { service: "looptrace", version: "…", openapi: "/openapi.json", … }
 ```
 
 Fetch `baseUrl + openapi` for the machine-readable contract.
@@ -152,14 +152,14 @@ See [`examples/`](./examples) — each runs against a real engine when `LENS_BAS
 `LENS_API_KEY` are set, and skips with a clear message otherwise:
 
 ```bash
-LENS_BASE_URL=https://api.usetheo.dev LENS_API_KEY=theo_live_… npx tsx examples/list-traces.ts
+LENS_BASE_URL=https://api.getloopscale.com LENS_API_KEY=looptrace_live_… npx tsx examples/list-traces.ts
 ```
 
 ## Write (ingest) — the other half
 
 ```ts
-import { initTheoLens } from "@usetheo/lens-sdk";
-initTheoLens({ serviceName: "my-agent", endpoint: "https://api.usetheo.dev" });
+import { initLoopTrace } from "@looptrace/sdk";
+initLoopTrace({ serviceName: "my-agent", endpoint: "https://api.getloopscale.com" });
 ```
 
 Emits OTLP `gen_ai` spans. See the platform docs for the full ingest guide.

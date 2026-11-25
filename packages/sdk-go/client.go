@@ -1,4 +1,4 @@
-package theolens
+package looptrace
 
 import (
 	"bytes"
@@ -25,10 +25,10 @@ type config struct {
 // Option configures a Client (at New) or a single RecordRun call (per-call overrides win).
 type Option func(*config)
 
-// WithBaseURL sets the engine or edge origin, e.g. https://app.usetheo.dev (no trailing slash).
+// WithBaseURL sets the engine or edge origin, e.g. https://app.getloopscale.com (no trailing slash).
 func WithBaseURL(baseURL string) Option { return func(c *config) { c.baseURL = baseURL } }
 
-// WithAPIKey sets the theo_live_* per-tenant key, sent as Authorization: Bearer (observability:write).
+// WithAPIKey sets the looptrace_live_* per-tenant key, sent as Authorization: Bearer (observability:write).
 func WithAPIKey(apiKey string) Option { return func(c *config) { c.apiKey = apiKey } }
 
 // WithBasePath sets the path root: "/v1" (direct) or "/v1/lens" (unified edge).
@@ -80,7 +80,7 @@ type runsBody struct {
 // this client encodes NO OTLP. Per-call opts extend/override the Client's config.
 //
 // Returns the parsed *RunOutcome on any 2xx (a populated partialSuccess is a non-error signal). A
-// non-2xx becomes a *TheoLensError (Status + parsed code/message; 429 surfaces Retry-After). A
+// non-2xx becomes a *LoopTraceError (Status + parsed code/message; 429 surfaces Retry-After). A
 // network failure is wrapped errors.Is-friendly (ErrTransport). ctx cancellation aborts the in-flight
 // POST. A run POST is non-idempotent and is NEVER retried on an ambiguous timeout (M108).
 func (c *Client) RecordRun(ctx context.Context, messages []SDKMessage, result *RunResult, opts ...Option) (*RunOutcome, error) {
@@ -89,7 +89,7 @@ func (c *Client) RecordRun(ctx context.Context, messages []SDKMessage, result *R
 		o(&cfg)
 	}
 	if cfg.apiKey == "" {
-		return nil, fmt.Errorf("theolens: apiKey is required (use WithAPIKey)")
+		return nil, fmt.Errorf("looptrace: apiKey is required (use WithAPIKey)")
 	}
 	if messages == nil {
 		messages = []SDKMessage{} // always serialize `messages` as an array, never null
@@ -97,13 +97,13 @@ func (c *Client) RecordRun(ctx context.Context, messages []SDKMessage, result *R
 
 	body, err := json.Marshal(runsBody{Messages: messages, Result: result, StartTimeMs: cfg.startTimeMs})
 	if err != nil {
-		return nil, fmt.Errorf("theolens: marshaling run payload: %w", err)
+		return nil, fmt.Errorf("looptrace: marshaling run payload: %w", err)
 	}
 
 	url := cfg.baseURL + cfg.basePath + "/runs"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("theolens: building request: %w", err)
+		return nil, fmt.Errorf("looptrace: building request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+cfg.apiKey)
 	req.Header.Set("Content-Type", "application/json")
@@ -150,9 +150,9 @@ func parseOutcome(url string, body []byte) (*RunOutcome, error) {
 	return &RunOutcome{RejectedSpans: env.PartialSuccess.RejectedSpans, ErrorMessage: env.PartialSuccess.ErrorMessage}, nil
 }
 
-// toError builds a *TheoLensError from a non-2xx response, parsing the {code,message} envelope and
+// toError builds a *LoopTraceError from a non-2xx response, parsing the {code,message} envelope and
 // surfacing Retry-After on a 429.
-func toError(resp *http.Response, body []byte) *TheoLensError {
+func toError(resp *http.Response, body []byte) *LoopTraceError {
 	code, message := parseErrorEnvelope(body)
 	if code == "" {
 		code = "UNKNOWN"
@@ -160,7 +160,7 @@ func toError(resp *http.Response, body []byte) *TheoLensError {
 	if message == "" {
 		message = "request failed"
 	}
-	tle := &TheoLensError{Status: resp.StatusCode, Code: code, Message: message}
+	tle := &LoopTraceError{Status: resp.StatusCode, Code: code, Message: message}
 	if resp.StatusCode == http.StatusTooManyRequests {
 		tle.RetryAfter = resp.Header.Get("Retry-After")
 	}

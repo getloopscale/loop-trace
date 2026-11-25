@@ -1,4 +1,4 @@
-package theolens_test
+package looptrace_test
 
 import (
 	"context"
@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	theolens "github.com/usetheoai/theo-lens/packages/sdk-go"
+	looptrace "github.com/getloopscale/looptrace/packages/sdk-go"
 )
 
-// ExampleClient_RecordRun records a Claude Code / @theokit/sdk run to Theo Lens. The call site
+// ExampleClient_RecordRun records a Claude Code / @theokit/sdk run to LoopTrace. The call site
 // (construct client → build the batch → RecordRun → handle) is the ≤10-line happy path. The
 // httptest.Server stands in for the real engine so the example is hermetic.
 func ExampleClient_RecordRun() {
@@ -20,9 +20,9 @@ func ExampleClient_RecordRun() {
 	defer engine.Close()
 
 	in, out := 1200, 340
-	client := theolens.New(theolens.WithBaseURL(engine.URL), theolens.WithAPIKey("theo_live_xxx"))
-	msgs := []theolens.SDKMessage{{Type: "system", Subtype: "init", AgentID: "agent-1", RunID: "run-1"}}
-	result := &theolens.RunResult{Usage: &theolens.TokenUsage{InputTokens: &in, OutputTokens: &out}}
+	client := looptrace.New(looptrace.WithBaseURL(engine.URL), looptrace.WithAPIKey("looptrace_live_xxx"))
+	msgs := []looptrace.SDKMessage{{Type: "system", Subtype: "init", AgentID: "agent-1", RunID: "run-1"}}
+	result := &looptrace.RunResult{Usage: &looptrace.TokenUsage{InputTokens: &in, OutputTokens: &out}}
 	outcome, err := client.RecordRun(context.Background(), msgs, result)
 	if err != nil {
 		log.Fatal(err)

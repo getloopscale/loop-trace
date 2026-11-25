@@ -1,9 +1,9 @@
 # Hermetic ForwardAuth edge stack for the M22 invariant-6 proof (`make e2e-edge`
-# pattern). Self-contained — NO theo-cloud dependency:
+# pattern). Self-contained — NO loopzero-cloud dependency:
 #
 #   client ──(X-Customer-Key: cust_<tenant>)──▶ Traefik :8090
 #                                                  │ forwardAuth → broker shim
-#                                                  │   (mints per-tenant theo_live_* via
+#                                                  │   (mints per-tenant looptrace_live_* via
 #                                                  │    the REAL /v1/admin/keys + bootstrap)
 #                                                  │ strip X-Customer-Key
 #                                                  ▼ Authorization: Bearer <minted>
@@ -17,11 +17,11 @@ services:
   edge-postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: theolens
-      POSTGRES_PASSWORD: theolens
-      POSTGRES_DB: theolens
+      POSTGRES_USER: looptrace
+      POSTGRES_PASSWORD: looptrace
+      POSTGRES_DB: looptrace
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U theolens -d theolens"]
+      test: ["CMD-SHELL", "pg_isready -U looptrace -d looptrace"]
       interval: 3s
       timeout: 3s
       retries: 10
@@ -35,10 +35,10 @@ services:
       edge-postgres:
         condition: service_healthy
     environment:
-      THEOLENS_PG_URI: postgresql://theolens:theolens@edge-postgres:5432/theolens
-      THEOLENS_PORT: "4318"
-      THEOLENS_REQUIRE_CREDENTIAL: "true"
-      THEOLENS_PLATFORM_ADMIN_BOOTSTRAP: ${EDGE_BOOTSTRAP:-edge-boot-secret-do-not-use-in-prod}
+      LOOPTRACE_PG_URI: postgresql://looptrace:looptrace@edge-postgres:5432/looptrace
+      LOOPTRACE_PORT: "4318"
+      LOOPTRACE_REQUIRE_CREDENTIAL: "true"
+      LOOPTRACE_PLATFORM_ADMIN_BOOTSTRAP: ${EDGE_BOOTSTRAP:-edge-boot-secret-do-not-use-in-prod}
     ports:
       - "4319:4318"   # direct access for the "customer key never reaches service" assertion
 

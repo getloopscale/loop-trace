@@ -4,10 +4,10 @@ Proves the migration-0025 composite/covering indexes are the **correct, planner-
 for the multi-tenant read hot-paths, and measures the gain at N / 2N / 4N. Run:
 
 ```bash
-THEOLENS_PG_URI=postgres://… node benchmarks/query-layer.mjs
+LOOPTRACE_PG_URI=postgres://… node benchmarks/query-layer.mjs
 ```
 
-Missing `THEOLENS_PG_URI` → the script **skips** (exit 0). No PG, no fabricated numbers.
+Missing `LOOPTRACE_PG_URI` → the script **skips** (exit 0). No PG, no fabricated numbers.
 
 ## What it measures
 

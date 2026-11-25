@@ -1,7 +1,7 @@
 {
-  "name": "@usetheo/lens-core",
+  "name": "@looptrace/core",
   "version": "0.0.0",
-  "description": "Domain + persistence for Theo Lens (spans, repository port, Drizzle adapter)",
+  "description": "Domain + persistence for LoopTrace (spans, repository port, Drizzle adapter)",
   "type": "module",
   "license": "Apache-2.0",
   "private": true,

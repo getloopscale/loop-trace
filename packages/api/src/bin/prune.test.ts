@@ -22,22 +22,22 @@ describe("db:prune CLI fail-loud (M23 T2.1)", () => {
   });
 
   it("prune_cli_exits_when_pg_uri_missing", async () => {
-    delete process.env["THEOLENS_PG_URI"];
+    delete process.env["LOOPTRACE_PG_URI"];
     await main();
     expect(exit).toHaveBeenCalledWith(1);
     expect(err).toHaveBeenCalledWith(
-      expect.stringContaining("THEOLENS_PG_URI is required"),
+      expect.stringContaining("LOOPTRACE_PG_URI is required"),
     );
   });
 
   it("prune_cli_exits_when_retention_disabled", async () => {
     // a connection string but no retention window → refuse (never guess a window)
-    process.env["THEOLENS_PG_URI"] = "postgresql://x:y@localhost:5/z";
-    delete process.env["THEOLENS_RETENTION_DAYS"];
+    process.env["LOOPTRACE_PG_URI"] = "postgresql://x:y@localhost:5/z";
+    delete process.env["LOOPTRACE_RETENTION_DAYS"];
     await main();
     expect(exit).toHaveBeenCalledWith(1);
     expect(err).toHaveBeenCalledWith(
-      expect.stringContaining("THEOLENS_RETENTION_DAYS"),
+      expect.stringContaining("LOOPTRACE_RETENTION_DAYS"),
     );
   });
 });

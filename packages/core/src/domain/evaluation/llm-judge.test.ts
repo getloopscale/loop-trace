@@ -88,52 +88,52 @@ describe("M36 OpenAICompatibleJudge (T4.1)", () => {
 describe("M36 evaluator-config (T4.1)", () => {
   it("test_parse_judge_config_missing_disables_judge", () => {
     expect(parseJudgeConfig({})).toBeNull();
-    expect(parseJudgeConfig({ THEOLENS_JUDGE_BASE_URL: "http://x" })).toBeNull(); // model missing
+    expect(parseJudgeConfig({ LOOPTRACE_JUDGE_BASE_URL: "http://x" })).toBeNull(); // model missing
     expect(
-      parseJudgeConfig({ THEOLENS_JUDGE_BASE_URL: "http://x", THEOLENS_JUDGE_MODEL: "m" }),
+      parseJudgeConfig({ LOOPTRACE_JUDGE_BASE_URL: "http://x", LOOPTRACE_JUDGE_MODEL: "m" }),
     ).toEqual({ baseUrl: "http://x", model: "m", apiKey: undefined });
   });
 
   it("test_parse_eval_sweep_hours_default_off", () => {
     expect(parseEvalSweepHours({})).toBe(0);
-    expect(parseEvalSweepHours({ THEOLENS_EVAL_SWEEP_HOURS: "0" })).toBe(0);
-    expect(parseEvalSweepHours({ THEOLENS_EVAL_SWEEP_HOURS: "bad" })).toBe(0);
-    expect(parseEvalSweepHours({ THEOLENS_EVAL_SWEEP_HOURS: "6" })).toBe(6);
+    expect(parseEvalSweepHours({ LOOPTRACE_EVAL_SWEEP_HOURS: "0" })).toBe(0);
+    expect(parseEvalSweepHours({ LOOPTRACE_EVAL_SWEEP_HOURS: "bad" })).toBe(0);
+    expect(parseEvalSweepHours({ LOOPTRACE_EVAL_SWEEP_HOURS: "6" })).toBe(6);
   });
 
   it("test_parse_backfill_max_default_500", () => {
     expect(parseBackfillMax({})).toBe(500);
-    expect(parseBackfillMax({ THEOLENS_EVAL_BACKFILL_MAX: "0" })).toBe(500);
-    expect(parseBackfillMax({ THEOLENS_EVAL_BACKFILL_MAX: "100" })).toBe(100);
+    expect(parseBackfillMax({ LOOPTRACE_EVAL_BACKFILL_MAX: "0" })).toBe(500);
+    expect(parseBackfillMax({ LOOPTRACE_EVAL_BACKFILL_MAX: "100" })).toBe(100);
   });
 });
 
 describe("M94 resilience config", () => {
   it("parsePoolConfig defaults + env override + invalid fallback", () => {
     expect(parsePoolConfig({})).toEqual(DEFAULT_POOL_CONFIG);
-    expect(parsePoolConfig({ THEOLENS_PG_POOL_MAX: "25" }).max).toBe(25);
-    expect(parsePoolConfig({ THEOLENS_PG_STATEMENT_TIMEOUT_MS: "5000" }).statement_timeout).toBe(5000);
+    expect(parsePoolConfig({ LOOPTRACE_PG_POOL_MAX: "25" }).max).toBe(25);
+    expect(parsePoolConfig({ LOOPTRACE_PG_STATEMENT_TIMEOUT_MS: "5000" }).statement_timeout).toBe(5000);
     // invalid (0/negative/NaN) → default, never breaks the pool
-    expect(parsePoolConfig({ THEOLENS_PG_POOL_MAX: "0" }).max).toBe(DEFAULT_POOL_CONFIG.max);
-    expect(parsePoolConfig({ THEOLENS_PG_POOL_MAX: "-1" }).max).toBe(DEFAULT_POOL_CONFIG.max);
-    expect(parsePoolConfig({ THEOLENS_PG_CONNECT_TIMEOUT_MS: "bad" }).connectionTimeoutMillis).toBe(
+    expect(parsePoolConfig({ LOOPTRACE_PG_POOL_MAX: "0" }).max).toBe(DEFAULT_POOL_CONFIG.max);
+    expect(parsePoolConfig({ LOOPTRACE_PG_POOL_MAX: "-1" }).max).toBe(DEFAULT_POOL_CONFIG.max);
+    expect(parsePoolConfig({ LOOPTRACE_PG_CONNECT_TIMEOUT_MS: "bad" }).connectionTimeoutMillis).toBe(
       DEFAULT_POOL_CONFIG.connectionTimeoutMillis,
     );
   });
 
   it("parseHttpRequestTimeoutMs + parseShutdownDrainMs default + override", () => {
     expect(parseHttpRequestTimeoutMs({})).toBe(30_000);
-    expect(parseHttpRequestTimeoutMs({ THEOLENS_HTTP_REQUEST_TIMEOUT_MS: "10000" })).toBe(10_000);
-    expect(parseHttpRequestTimeoutMs({ THEOLENS_HTTP_REQUEST_TIMEOUT_MS: "0" })).toBe(30_000);
+    expect(parseHttpRequestTimeoutMs({ LOOPTRACE_HTTP_REQUEST_TIMEOUT_MS: "10000" })).toBe(10_000);
+    expect(parseHttpRequestTimeoutMs({ LOOPTRACE_HTTP_REQUEST_TIMEOUT_MS: "0" })).toBe(30_000);
     expect(parseShutdownDrainMs({})).toBe(10_000);
-    expect(parseShutdownDrainMs({ THEOLENS_SHUTDOWN_DRAIN_MS: "3000" })).toBe(3_000);
+    expect(parseShutdownDrainMs({ LOOPTRACE_SHUTDOWN_DRAIN_MS: "3000" })).toBe(3_000);
   });
 
   it("parseProviderRetry default (2 attempts, 60s backoff cap) + override + invalid fallback", () => {
     expect(parseProviderRetry({})).toEqual({ maxAttempts: 2, baseDelayMs: 250, maxBackoffMs: 60_000 });
-    expect(parseProviderRetry({ THEOLENS_PROVIDER_MAX_ATTEMPTS: "3" }).maxAttempts).toBe(3);
-    expect(parseProviderRetry({ THEOLENS_PROVIDER_MAX_BACKOFF_MS: "5000" }).maxBackoffMs).toBe(5000);
+    expect(parseProviderRetry({ LOOPTRACE_PROVIDER_MAX_ATTEMPTS: "3" }).maxAttempts).toBe(3);
+    expect(parseProviderRetry({ LOOPTRACE_PROVIDER_MAX_BACKOFF_MS: "5000" }).maxBackoffMs).toBe(5000);
     // never < 1 attempt (an invalid value keeps the default; the call always runs once)
-    expect(parseProviderRetry({ THEOLENS_PROVIDER_MAX_ATTEMPTS: "0" }).maxAttempts).toBe(2);
+    expect(parseProviderRetry({ LOOPTRACE_PROVIDER_MAX_ATTEMPTS: "0" }).maxAttempts).toBe(2);
   });
 });

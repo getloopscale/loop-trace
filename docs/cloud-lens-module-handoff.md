@@ -1,18 +1,18 @@
-# Theo Lens — Cloud Module Implementation Handoff
+# LoopTrace — Cloud Module Implementation Handoff
 
 > **Status:** PLANNING COMPLETE — ready for the Cycle 6+1 loop. No code written yet.
-> **Author:** planning session (theo-cloud-rooted), 2026-06-30.
+> **Author:** planning session (loopzero-cloud-rooted), 2026-06-30.
 > **Owner decisions locked** — see § 1. Do **not** re-litigate them; implement against them.
 > **This is a spec/handoff, not instructions to the model reading it** — execute via the pipeline.
 
-> **Layout note (2026-08).** This document predates the polyrepo split: the `theo-data`
-> monorepo no longer exists. `theo-data/theo-lens`, `theo-data/theo-memory` and
-> `theo-data/theo-rag` are now standalone sibling repos under `theo-platform/`.
-> Read every `theo-data/<x>` path below as `theo-platform/<x>`. The historical text
+> **Layout note (2026-08).** This document predates the polyrepo split: the `data-plane`
+> monorepo no longer exists. `looptrace`, `loopmem` and
+> `looprag` are now standalone sibling repos under `loopscale/`.
+> Read every `data-plane/<x>` path below as `loopscale/<x>`. The historical text
 > is preserved as written.
 
 
-This document is the single source of truth for adding a **Theo Lens** module to the Theo
+This document is the single source of truth for adding a **LoopTrace** module to the LoopZero
 cloud product, mirroring the existing **Memory** module exactly. It spans **two repos** and is
 split into two sequential workstreams (A → B). Drive each workstream from a session **rooted in
 its own repo** (the Cycle 6+1 pipeline, git, CHANGELOG and release are per-repo).
@@ -21,20 +21,20 @@ its own repo** (the Cycle 6+1 pipeline, git, CHANGELOG and release are per-repo)
 
 ## 0. What & why (one screen)
 
-**Theo Lens** (`theo-data/theo-lens`) is an **OpenTelemetry-native trace explorer for AI agents**
+**LoopTrace** (`looptrace`) is an **OpenTelemetry-native trace explorer for AI agents**
 ("Jaeger for AI agents"): instrument an agent in a few lines, send spans over OTLP, and explore
 every execution, session replay, cost, and tool-call breakdown. It is a sibling data-plane
-capability of `theo-memory` in the `theo-data` monorepo.
+capability of `loopmem` in the `data-plane` monorepo.
 
-The goal: surface Lens in the **Theo cloud product** the same way **Memory** is surfaced today —
+The goal: surface Lens in the **LoopZero cloud product** the same way **Memory** is surfaced today —
 a cloud-API proxy slice (`internal/themory` → `internal/thelens`) plus a dashboard module
 (`pages/memory.tsx` → `pages/lens.tsx`), talking to the backend service over **HTTP only**
-(acyclic invariant — `theo-cloud` never imports Go from `theo-lens`).
+(acyclic invariant — `loopzero-cloud` never imports Go from `looptrace`).
 
 The design assets for the dashboard already exist at
-`theo-cloud/theo-cloud/dashboard/docs/theo-lens/` (Violet Forge DS bundle + the **TraceList**
+`loopzero-cloud/dashboard/docs/looptrace/` (Violet Forge DS bundle + the **TraceList**
 template). The professional design handoff lives at
-`theo-data/theo-lens/docs/design/theo-lens-design-handoff.md`.
+`looptrace/docs/design/looptrace-design-handoff.md`.
 
 ---
 
@@ -43,14 +43,14 @@ template). The professional design handoff lives at
 | # | Decision | Value |
 |---|---|---|
 | D1 | **Dashboard UI scope (v1)** | **Landing + TraceList** (metrics landing page *plus* a navigable trace table). **TraceDetail 3-pane is deferred** to a later milestone. |
-| D2 | **Tenancy technique** | **Exactly the `theo-memory` convention** — i.e. the `theo-data` house pattern: edge ForwardAuth mints a per-tenant key → service enforces scope per verb → `workspace_id == tenant_id` → resolve a `Principal`, never trust the body → fail-closed → prove isolation through the real edge. |
+| D2 | **Tenancy technique** | **Exactly the `loopmem` convention** — i.e. the `data-plane` house pattern: edge ForwardAuth mints a per-tenant key → service enforces scope per verb → `workspace_id == tenant_id` → resolve a `Principal`, never trust the body → fail-closed → prove isolation through the real edge. |
 | D3 | **Memory subsystems to mirror** | **Mirror everything**: client + broker + admin + contract test, routes, **webhooks + exports + delivery history + background worker**, PG migrations, dashboard page, nav, governance, openapi. |
 | D4 | **Repo split** | **Both repos, same program**, sequenced **A → B** (real integration, not contract-first-dark). |
 | D5 | **Pipeline** | **Full Cycle 6+1 loop** per repo (`/auto-plan` full-pipeline, which pauses at plan-confidence, review, and the human PR-approval gate). |
 
-> **Consequence of D2 + the current state of theo-lens:** the `theo-memory` tenancy technique
-> depends on capabilities `theo-lens` **does not have yet** (no auth, no `workspace_id`, no
-> scope-in-path, no admin-key API). Therefore **Workstream A (theo-lens M22) is a hard
+> **Consequence of D2 + the current state of looptrace:** the `loopmem` tenancy technique
+> depends on capabilities `looptrace` **does not have yet** (no auth, no `workspace_id`, no
+> scope-in-path, no admin-key API). Therefore **Workstream A (looptrace M22) is a hard
 > prerequisite** and must ship before B's integration is real.
 
 ---
@@ -58,40 +58,40 @@ template). The professional design handoff lives at
 ## 2. The two workstreams & sequencing
 
 ```
-RUN 1 — Workstream A · theo-lens M22  (repo: theo-data, service: theo-lens)
-  Give theo-lens its half of the theo-data tenant-isolation convention:
+RUN 1 — Workstream A · looptrace M22  (repo: data-plane, service: looptrace)
+  Give looptrace its half of the data-plane tenant-isolation convention:
     Bearer auth + workspace_id on every table + scope-in-path endpoints + admin-key minting.
-  ~60% can be copied/adapted from theo-memory. Est. ~1 week (19–28h senior).
-  Exit: develop→main PR in theo-data, semver tag.
+  ~60% can be copied/adapted from loopmem. Est. ~1 week (19–28h senior).
+  Exit: develop→main PR in data-plane, semver tag.
         ↓ (prerequisite for B's real tenant isolation)
-RUN 2 — Workstream B · theo-cloud Lens module  (repo: theo-cloud, the cloud-API + dashboard)
-  Mirror the Memory vertical slice for Lens, talking HTTP-only to theo-lens.
-  ~22 files / ~8.5k LoC. Exit: develop→main PR in theo-cloud, semver tag.
+RUN 2 — Workstream B · loopzero-cloud Lens module  (repo: loopzero-cloud, the cloud-API + dashboard)
+  Mirror the Memory vertical slice for Lens, talking HTTP-only to looptrace.
+  ~22 files / ~8.5k LoC. Exit: develop→main PR in loopzero-cloud, semver tag.
 ```
 
-**How to run each:** open a session **rooted at the repo** (`theo-data` for A, `theo-cloud/theo-cloud`
+**How to run each:** open a session **rooted at the repo** (`data-plane` for A, `loopzero-cloud`
 for B), confirm branch `develop`, then `/auto-plan "{slug}"` (full pipeline). Each run gates at
 plan-confidence, review, and a human-approved PR (never auto-merge to `main` — Unbreakable Rule 4).
 
-> The planning session that produced this handoff was anchored to `theo-cloud` and **cannot drive
-> theo-data's pipeline** (sibling repo, cwd is pinned). That is the *only* reason this is a handoff
+> The planning session that produced this handoff was anchored to `loopzero-cloud` and **cannot drive
+> data-plane's pipeline** (sibling repo, cwd is pinned). That is the *only* reason this is a handoff
 > rather than an in-place execution.
 
 ---
 
-## 3. Workstream A — theo-lens M22 (repo: `theo-data`, service `theo-lens`)
+## 3. Workstream A — looptrace M22 (repo: `data-plane`, service `looptrace`)
 
-**Roadmap anchor:** `theo-data/theo-lens/ROADMAP-v3.md:209` — *M22 — Auth + ingestion API keys +
+**Roadmap anchor:** `looptrace/ROADMAP-v3.md:209` — *M22 — Auth + ingestion API keys +
 projects/multi-tenant (P0)*. Currently `[ ]` (not shipped).
 
 ### 3.1 Current state (the gap)
-- **No auth** anywhere — `theo-data/theo-lens/packages/api/src/server/app.ts:1-425` mounts zero auth middleware.
-- **No tenant discriminator** — `theo-data/theo-lens/packages/core/src/infrastructure/db/schema.ts:30-259`: `spans`, `traces`, `sessions`, `annotations`, `datasets` have **no** `workspace_id`/`subject`.
+- **No auth** anywhere — `looptrace/packages/api/src/server/app.ts:1-425` mounts zero auth middleware.
+- **No tenant discriminator** — `looptrace/packages/core/src/infrastructure/db/schema.ts:30-259`: `spans`, `traces`, `sessions`, `annotations`, `datasets` have **no** `workspace_id`/`subject`.
 - **No admin/control-plane API** for minting per-tenant keys.
 - Endpoints are global: `GET /v1/traces`, `POST /v1/traces`, `GET /v1/sessions`, `GET /v1/spans/:id`, `/v1/analytics/*`, `/v1/metrics/*`.
 
-### 3.2 The `theo-data` convention to satisfy (6 invariants)
-Source of truth: `theo-data/CLAUDE.md` (lines 36–66) + reference impl `theo-memory`.
+### 3.2 The `data-plane` convention to satisfy (6 invariants)
+Source of truth: `data-plane/CLAUDE.md` (lines 36–66) + reference impl `loopmem`.
 1. **Close CWE-441 with both halves:** edge strips the customer key (ForwardAuth `Del`-then-set) so the service only sees a gateway-minted per-tenant key; **the service enforces scope per verb**.
 2. **`workspace_id == tenant_id`** — every row carries `workspace_id`; every query scoped by the resolved Principal's workspace.
 3. **Resolve a `Principal`, never trust the body** — auth resolves `Principal{workspaceId, role, scopes}` from the credential; handlers read workspace from the Principal.
@@ -99,45 +99,45 @@ Source of truth: `theo-data/CLAUDE.md` (lines 36–66) + reference impl `theo-me
 5. **Fail closed** — missing/unresolvable credential → `401` in multi-tenant mode.
 6. **Prove isolation through the REAL edge** — a hermetic ForwardAuth e2e job asserting cross-tenant isolation + fail-closed deny (`make e2e-edge`, the `#113` pattern).
 
-### 3.3 theo-memory reference (copy ~60%)
-| What | theo-memory file:line |
+### 3.3 loopmem reference (copy ~60%)
+| What | loopmem file:line |
 |---|---|
-| App + bearer middleware mount | `theo-data/theo-memory/packages/api/src/server/app.ts:9-58, 176-406` |
+| App + bearer middleware mount | `loopmem/packages/api/src/server/app.ts:9-58, 176-406` |
 | `bearerAuth` + `requireScopeOnPrincipal` + `getPrincipal` | `…/auth/middleware.ts:13-216` |
 | Scope hierarchy (admin ⊃ read/write/delete) | `…/auth/scope-hierarchy.ts` |
 | Bearer/API-key verifiers | `…/auth/bearer-verifier.ts`, `…/auth/api-key-verifier.ts` |
 | Admin key-minting handler (`POST /v1/admin/keys` + list/delete/rotate/lineage) | `…/handlers/admin-keys.ts:171-438` |
 | Scope verifier (admin gate) | `…/auth/scope-verifier.ts:77-157` |
-| Schema: workspaces / theo_api_keys / admin_config | `…/core/src/infrastructure/db/schema.ts:83-135, 590-641` |
-| Migrations to mirror | `…/core/dist/infrastructure/db/migrations/0012_theo_api_keys.sql`, `0016_workspaces.sql`, `0017_workspace_members.sql` |
+| Schema: workspaces / looptrace_api_keys / admin_config | `…/core/src/infrastructure/db/schema.ts:83-135, 590-641` |
+| Migrations to mirror | `…/core/dist/infrastructure/db/migrations/0012_looptrace_api_keys.sql`, `0016_workspaces.sql`, `0017_workspace_members.sql` |
 
 ### 3.4 A — implementation checklist (TDD per the cycle)
 1. **Scopes enum:** `lens:ingest` (POST traces), `lens:read` (GET traces/sessions/analytics/metrics), `lens:write` (tags/annotations/datasets mutations), `lens:admin` (admin routes). `lens:platform-admin` ⊃ `lens:admin` only.
-2. **Schema migration (non-destructive):** add `workspace_id text NOT NULL DEFAULT 'default'` to `spans`, `traces`, `sessions`, `replay_sessions`, `trace_tags`, `span_evaluations`, `annotations` (decide if `datasets` are global or scoped). Add `workspaces`, `users`/`members`, `theo_api_keys`, `admin_config` tables (copy from theo-memory). Backfill existing rows → `workspace_id='default'`; seed a `default` workspace + bootstrap admin.
+2. **Schema migration (non-destructive):** add `workspace_id text NOT NULL DEFAULT 'default'` to `spans`, `traces`, `sessions`, `replay_sessions`, `trace_tags`, `span_evaluations`, `annotations` (decide if `datasets` are global or scoped). Add `workspaces`, `users`/`members`, `looptrace_api_keys`, `admin_config` tables (copy from loopmem). Backfill existing rows → `workspace_id='default'`; seed a `default` workspace + bootstrap admin.
 3. **Auth middleware:** copy `bearerAuth`, `requireScopeOnPrincipal`, scope-hierarchy, verifiers; mount on `/v1/*` before data routes. Dev fallback `DEFAULT_PRINCIPAL` (workspace `default`) for single-tenant local mode.
 4. **Repository scoping:** every read query gets `AND workspace_id = $principal.workspaceId`; every ingest `INSERT` sets `workspace_id` from the Principal (never the body).
-5. **Endpoints — scope-in-path** (mirror theo-memory's `/v1/scopes/:type/:id/...`):
+5. **Endpoints — scope-in-path** (mirror loopmem's `/v1/scopes/:type/:id/...`):
    - ingest: `POST /v1/scopes/lens/:projectId/traces` (OTLP)
    - reads: `GET /v1/scopes/:type/:id/traces`, `…/traces/:traceId`, `…/spans/:spanId`, `…/sessions`, `…/sessions/:id`, `…/analytics/*`, `…/metrics/*`
    - Keep legacy global `/v1/*` only as a `default`-workspace fallback behind `requireScopeOnPrincipal('lens:read')` if backward-compat with existing OTLP exporters is needed (decide in plan).
-6. **Admin API:** copy `POST /v1/admin/keys` (+ list/delete/rotate/lineage), gated `lens:admin`; bootstrap token `THEOLENS_ADMIN_BOOTSTRAP_TOKEN` (single-use, atomic consume).
-7. **Edge wiring:** register the ForwardAuth route per `theo-cloud/theo-workspace/docs/adding-a-microservice.md` + `tenancy-contract.md`; the cloud-side ForwardAuth reference is `theo-cloud/internal/routes/forward_auth.go`.
+6. **Admin API:** copy `POST /v1/admin/keys` (+ list/delete/rotate/lineage), gated `lens:admin`; bootstrap token `LOOPTRACE_ADMIN_BOOTSTRAP_TOKEN` (single-use, atomic consume).
+7. **Edge wiring:** register the ForwardAuth route per `loopzero-workspace/docs/adding-a-microservice.md` + `tenancy-contract.md`; the cloud-side ForwardAuth reference is `loopzero-cloud/internal/routes/forward_auth.go`.
 8. **Tests (critical):** contract tests assert every query carries the `workspace_id` filter; hermetic ForwardAuth e2e asserts cross-tenant isolation + fail-closed (`make e2e-edge`). This is the M22 ship gate.
 
 ### 3.5 A — risks
 - **Cross-workspace leak** (a query missing `WHERE workspace_id`) — CRITICAL. Mitigate with contract tests per query.
 - **Breaking existing OTLP exporters** hitting global `/v1/traces` — keep a `default`-workspace fallback or a deprecation window.
-- **Key-rotation lineage / bootstrap atomicity** — copy theo-memory's constraints + tests verbatim.
+- **Key-rotation lineage / bootstrap atomicity** — copy loopmem's constraints + tests verbatim.
 
 ---
 
-## 4. Workstream B — theo-cloud Lens module (repo: `theo-cloud/theo-cloud`)
+## 4. Workstream B — loopzero-cloud Lens module (repo: `loopzero-cloud`)
 
 Mirror of the Memory vertical slice. **Reference everything against the Memory files cited below.**
-Talk to theo-lens **over HTTP only** (acyclic invariant — `theo-cloud/CLAUDE.md` Rule 6).
+Talk to looptrace **over HTTP only** (acyclic invariant — `loopzero-cloud/CLAUDE.md` Rule 6).
 
 ### 4.1 The seam contract (`openapi/thelens.yaml`)
-Author a `theo-cloud/openapi/thelens.yaml` that mirrors `theo-cloud/openapi/themory.yaml`'s shape
+Author a `loopzero-cloud/openapi/thelens.yaml` that mirrors `loopzero-cloud/openapi/themory.yaml`'s shape
 but for the **scoped Lens endpoints that A exposes** (the subset the cloud-API actually calls):
 `GET /v1/scopes/{type}/{id}/traces`, `…/traces/{traceId}`, `…/sessions`, `…/sessions/{id}`,
 `…/analytics/cost`, `…/analytics/tools`, `…/metrics/observability`, `…/metrics/north-star`,
@@ -202,7 +202,7 @@ CREATE TABLE lens_exports (
 ### 4.5 B — webhook events & export semantics (decide in `/to-plan`)
 - **Events:** Lens is read-mostly, so candidate events are observability-shaped, e.g.
   `lens.trace.errored`, `lens.trace.ingested`, `lens.eval.completed`. Confirm the real set against
-  what theo-lens can emit (it may need an outbound hook in A — coordinate across the seam).
+  what looptrace can emit (it may need an outbound hook in A — coordinate across the seam).
 - **Export:** "export" of a Lens dataset = paginate traces (or a dataset) → JSON file, mirroring
   `memory_exports` worker. Confirm whether the unit of export is traces, sessions, or datasets.
 
@@ -212,7 +212,7 @@ CREATE TABLE lens_exports (
   observability charts **+ a navigable TraceList table** of `GET /v1/dashboard/lens/list`.
 - DS: import from `@usetheo/ui` (`Alert`, `Button`, `Card`, `PageShell`, `Skeleton`, `StatTile`,
   `TokenUsageChart`, `Table`/`DataTable`) — the Violet Forge bundle + the **TraceList** reference
-  template are already at `dashboard/docs/theo-lens/`.
+  template are already at `dashboard/docs/looptrace/`.
 - Nav/sidebar: register the Lens route alongside Memory.
 - **CR-9 (cloud abstraction):** never leak internal infra terms in user-facing strings
   (`Kubernetes`/`cluster`/`tenant_id`/etc.) — use product language (trace, run, span, cost).
@@ -220,35 +220,35 @@ CREATE TABLE lens_exports (
 
 ---
 
-## 5. theo-lens API surface (what B proxies) — current global form
-Source: `theo-data/theo-lens/packages/api/src/server/app.ts:44-65` (will become scope-in-path after A).
+## 5. looptrace API surface (what B proxies) — current global form
+Source: `looptrace/packages/api/src/server/app.ts:44-65` (will become scope-in-path after A).
 - Ingest: `POST /v1/traces` (OTLP json/protobuf+gzip)
 - Traces: `GET /v1/traces` (filters: status/model/from/to/order_by/dir/limit/q/span_query/tag/format), `GET /v1/traces/:id` (span tree), `GET /v1/traces/:id/cost`, `GET /v1/spans/:id`
 - Sessions: `GET /v1/sessions`, `GET /v1/sessions/:id`
 - Analytics/metrics: `GET /v1/analytics/cost`, `/v1/analytics/tools`, `/v1/agents`, `/v1/metrics/north-star`, `/v1/metrics/observability`, `/v1/metrics/evaluators`
 - Tags / annotations / datasets / replay-sessions (later milestones).
-- Health: `GET /v1/health`, `GET /v1/health/db`. Port `:4318` (`THEOLENS_PORT`).
+- Health: `GET /v1/health`, `GET /v1/health/db`. Port `:4318` (`LOOPTRACE_PORT`).
 
 `TraceListItem` shape: `traceId, sessionId?, name?, startTimeUnixNano, durationMs, statusCode,
 totalTokens, model?, costUsd?, inputPreview?, outputPreview?, evaluationsCount?`
-(`theo-data/theo-lens/packages/core/src/domain/trace-list.ts`).
+(`looptrace/packages/core/src/domain/trace-list.ts`).
 
 ---
 
 ## 6. References
-- **theo-lens** README `theo-data/theo-lens/README.md`; routes `…/packages/api/src/server/app.ts`; schema `…/packages/core/src/infrastructure/db/schema.ts`; roadmap `…/ROADMAP-v3.md`; design handoff `…/docs/design/theo-lens-design-handoff.md`.
-- **theo-memory** (reference impl for A): `theo-data/theo-memory/packages/api/src/server/{app.ts,auth/,handlers/admin-keys.ts}`.
-- **theo-data convention:** `theo-data/CLAUDE.md` (6 invariants); edge wiring `theo-cloud/theo-workspace/docs/{adding-a-microservice,tenancy-contract,local-env-system-design}.md`.
-- **theo-cloud Memory slice (reference impl for B):** `internal/themory/`, `internal/routes/memory*.go`, `internal/memory_webhook_worker/`, `dashboard/src/pages/memory.tsx`, `openapi/themory.yaml`, `docs/dashboard-governance.md`, `internal/routes/forward_auth.go`.
-- **Dashboard design assets:** `theo-cloud/theo-cloud/dashboard/docs/theo-lens/` (Violet Forge DS + TraceList template).
+- **looptrace** README `looptrace/README.md`; routes `…/packages/api/src/server/app.ts`; schema `…/packages/core/src/infrastructure/db/schema.ts`; roadmap `…/ROADMAP-v3.md`; design handoff `…/docs/design/looptrace-design-handoff.md`.
+- **loopmem** (reference impl for A): `loopmem/packages/api/src/server/{app.ts,auth/,handlers/admin-keys.ts}`.
+- **data-plane convention:** `data-plane/CLAUDE.md` (6 invariants); edge wiring `loopzero-workspace/docs/{adding-a-microservice,tenancy-contract,local-env-system-design}.md`.
+- **loopzero-cloud Memory slice (reference impl for B):** `internal/themory/`, `internal/routes/memory*.go`, `internal/memory_webhook_worker/`, `dashboard/src/pages/memory.tsx`, `openapi/themory.yaml`, `docs/dashboard-governance.md`, `internal/routes/forward_auth.go`.
+- **Dashboard design assets:** `loopzero-cloud/dashboard/docs/looptrace/` (Violet Forge DS + TraceList template).
 
 ---
 
 ## 7. How to start (per repo)
-1. **RUN 1 (theo-data):** open a session rooted at `<workspace>/theo-data`,
-   confirm `git branch --show-current` == `develop`, then `/auto-plan "theo-lens-m22-auth-tenancy"`
-   (cite this handoff § 3 as prior art). Ship the develop→main PR for the `theo-lens` service.
-2. **RUN 2 (theo-cloud):** after A is merged, open a session rooted at
-   `<workspace>/theo-cloud/theo-cloud`, confirm `develop`, then
-   `/auto-plan "theo-cloud-lens-module"` (cite this handoff § 4 as prior art).
+1. **RUN 1 (data-plane):** open a session rooted at `<workspace>/data-plane`,
+   confirm `git branch --show-current` == `develop`, then `/auto-plan "looptrace-m22-auth-tenancy"`
+   (cite this handoff § 3 as prior art). Ship the develop→main PR for the `looptrace` service.
+2. **RUN 2 (loopzero-cloud):** after A is merged, open a session rooted at
+   `<workspace>/loopzero-cloud`, confirm `develop`, then
+   `/auto-plan "loopzero-cloud-lens-module"` (cite this handoff § 4 as prior art).
 3. Both runs gate at plan-confidence, review, and a **human-approved** PR. Never auto-merge `main`.

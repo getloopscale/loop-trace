@@ -9,7 +9,7 @@ import { resourceFromAttributes } from "@opentelemetry/resources";
 import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
 
 export interface InitOptions {
-  /** Theo Lens base URL, e.g. "http://localhost:4318". `/v1/traces` is appended. */
+  /** LoopTrace base URL, e.g. "http://localhost:4318". `/v1/traces` is appended. */
   endpoint: string;
   /** service.name resource attribute for the agent. */
   serviceName: string;
@@ -17,7 +17,7 @@ export interface InitOptions {
   exporter?: SpanExporter;
 }
 
-export interface TheoLens {
+export interface LoopTrace {
   tracer: Tracer;
   /** Flush buffered spans and shut down. Resolves even if the flush fails (EC-2). */
   shutdown(): Promise<void>;
@@ -28,7 +28,7 @@ function logError(stage: string, err: unknown): void {
   console.error(
     JSON.stringify({
       level: "error",
-      msg: "theo_lens_sdk_error",
+      msg: "looptrace_sdk_error",
       stage,
       error: err instanceof Error ? err.message : String(err),
     }),
@@ -36,12 +36,12 @@ function logError(stage: string, err: unknown): void {
 }
 
 /**
- * Initialize Theo Lens instrumentation. Encapsulates the OTel tracer provider +
+ * Initialize LoopTrace instrumentation. Encapsulates the OTel tracer provider +
  * OTLP exporter + batch processor so user code is ≤10 lines and never writes
  * flush boilerplate. Call `await shutdown()` before the process exits so buffered
  * spans are flushed (BatchSpanProcessor would otherwise drop them).
  */
-export function initTheoLens(opts: InitOptions): TheoLens {
+export function initLoopTrace(opts: InitOptions): LoopTrace {
   const url = `${opts.endpoint.replace(/\/+$/, "")}/v1/traces`;
   const exporter = opts.exporter ?? new OTLPTraceExporter({ url });
   const provider = new NodeTracerProvider({
@@ -50,7 +50,7 @@ export function initTheoLens(opts: InitOptions): TheoLens {
   });
 
   return {
-    tracer: provider.getTracer("@usetheo/lens-sdk"),
+    tracer: provider.getTracer("@looptrace/sdk"),
     async shutdown(): Promise<void> {
       try {
         await provider.forceFlush();

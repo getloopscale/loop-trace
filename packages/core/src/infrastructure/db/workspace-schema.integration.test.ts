@@ -7,7 +7,7 @@ import type pg from "pg";
 
 import { createPool } from "./observability/drizzle-span-repository.js";
 
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const MIGRATIONS = fileURLToPath(new URL("./migrations", import.meta.url));
 const suite = PG_URI ? describe : describe.skip;
 
@@ -51,7 +51,7 @@ suite("M22 workspace schema (integration)", () => {
   });
 
   it("test_integration_auth_tables_present_with_default_seed", async () => {
-    for (const t of ["theo_api_keys", "workspaces", "workspace_users"]) {
+    for (const t of ["looptrace_api_keys", "workspaces", "workspace_users"]) {
       const { rows } = await pool.query(
         `SELECT 1 FROM information_schema.tables WHERE table_name = $1`,
         [t],
@@ -67,7 +67,7 @@ suite("M22 workspace schema (integration)", () => {
   });
 
   it("test_integration_dataset_name_unique_is_workspace_leading", async () => {
-    // The same dataset name in two workspaces must NOT collide (theo-data EC-12).
+    // The same dataset name in two workspaces must NOT collide (data-plane EC-12).
     await db.execute(sql`DELETE FROM datasets WHERE name = 'dup-probe'`);
     await db.execute(
       sql`INSERT INTO datasets (workspace_id, name) VALUES ('ws-a', 'dup-probe')`,

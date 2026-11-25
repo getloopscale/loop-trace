@@ -8,7 +8,7 @@
  *
  * Scalability: the two bottlenecks are removed — the POST no longer blocks on the fan-out
  * (no timeout, scales with N), and the fan-out is bounded-concurrent (no serial stall, no
- * provider flood). v1 keeps the registry IN-MEMORY (theo-lens is single-process), so job
+ * provider flood). v1 keeps the registry IN-MEMORY (looptrace is single-process), so job
  * state is lost on restart; a durable, multi-instance store (Postgres / a queue) is the
  * documented follow-up.
  */

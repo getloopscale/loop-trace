@@ -49,8 +49,8 @@ function listQueryString(
   return s ? `?${s}` : "";
 }
 
-/** Base URL of the M1 ingestion/read API. Override via `VITE_THEOLENS_API`. */
-const BASE = import.meta.env["VITE_THEOLENS_API"] ?? "http://localhost:4318";
+/** Base URL of the M1 ingestion/read API. Override via `VITE_LOOPTRACE_API`. */
+const BASE = import.meta.env["VITE_LOOPTRACE_API"] ?? "http://localhost:4318";
 
 /** Thrown on a non-2xx API response so react-query surfaces an error state. */
 export class ApiError extends Error {

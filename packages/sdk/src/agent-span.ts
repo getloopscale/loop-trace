@@ -82,7 +82,7 @@ function wrap(span: Span, tracer: Tracer): AgentSpan {
  * Nesting note (M2): child spans nest correctly ONLY when created through this
  * SDK's helpers (e.g. {@link recordToolCall}), because the parent context is
  * rebuilt from the handle. The SDK does NOT call `provider.register()` in M2 (so
- * `initTheoLens` stays side-effect-free and multiple inits / tests stay isolated),
+ * `initLoopTrace` stays side-effect-free and multiple inits / tests stay isolated),
  * which means a bare `tracer.startSpan()` or a third-party OTel instrumentation
  * running inside `fn` will NOT auto-nest under the agent span. Auto-instrumentation
  * (enabling a global context manager) is deferred to a later milestone.

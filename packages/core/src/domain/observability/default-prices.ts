@@ -1,7 +1,7 @@
 import type { PriceTable } from "./pricing.js";
 
 /**
- * Public list price (USD per 1M tokens) → per-token. Cache rates (M52 / theo-lens#71
+ * Public list price (USD per 1M tokens) → per-token. Cache rates (M52 / looptrace#71
  * Finding 1) are derived from the input rate with the authoritative Anthropic multipliers
  * (claude-api pricing ref): prompt-cache READ = 0.1× input, prompt-cache CREATION
  * (ephemeral 5-min, which Claude Code uses) = 1.25× input. OpenAI cached input is also

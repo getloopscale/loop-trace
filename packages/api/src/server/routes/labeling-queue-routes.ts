@@ -13,7 +13,7 @@ import {
   normalizeLabelResolution,
   type LabelingQueueStatus,
   apiError,
-} from "@usetheo/lens-core";
+} from "@looptrace/core";
 
 import { getPrincipal, requireScopeOnPrincipal } from "../auth/middleware.js";
 import { labelingItemsEnqueued, labelingItemsResolved, labelingQueueExports } from "../metrics.js";

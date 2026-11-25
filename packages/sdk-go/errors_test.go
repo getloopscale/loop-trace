@@ -1,4 +1,4 @@
-package theolens
+package looptrace
 
 import (
 	"errors"
@@ -6,17 +6,17 @@ import (
 	"testing"
 )
 
-// A non-2xx surfaces an explicit typed *TheoLensError carrying the parsed {code,message}
+// A non-2xx surfaces an explicit typed *LoopTraceError carrying the parsed {code,message}
 // envelope + the HTTP Status, recoverable via errors.As (error-handling.md §2).
-func TestTheoLensErrorCarriesStatusAndCode(t *testing.T) {
+func TestLoopTraceErrorCarriesStatusAndCode(t *testing.T) {
 	body := []byte(`{"code":"PAYLOAD_TOO_LARGE","message":"run body exceeds the ingest size limit"}`)
 	code, message := parseErrorEnvelope(body)
 
-	err := error(&TheoLensError{Status: 413, Code: code, Message: message})
+	err := error(&LoopTraceError{Status: 413, Code: code, Message: message})
 
-	var tle *TheoLensError
+	var tle *LoopTraceError
 	if !errors.As(err, &tle) {
-		t.Fatalf("errors.As failed to recover *TheoLensError from %v", err)
+		t.Fatalf("errors.As failed to recover *LoopTraceError from %v", err)
 	}
 	if tle.Status != 413 {
 		t.Errorf("Status = %d, want 413", tle.Status)

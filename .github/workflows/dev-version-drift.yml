@@ -10,7 +10,7 @@
 # estar FORA dele, senão observa a si mesmo.
 #
 # POR QUE ELE PERGUNTA NA PORTA E NÃO NO EDGE. A primeira versão deste arquivo consultava
-# `https://app-dev.usetheo.dev/v1/lens/version` para não citar host algum. Media 401: `/v1/lens/*`
+# `https://app-dev.getloopscale.com/v1/lens/version` para não citar host algum. Media 401: `/v1/lens/*`
 # está atrás do ForwardAuth fail-closed (`dev/traefik/dynamic.yml` router `lens-edge`), e o curl ia
 # sem credencial. O ramo de divergência era INALCANÇÁVEL — o gate saía 0 em todo run e reportava
 # cobertura que não existia. Um detector que nunca detecta é pior que nenhum: substitui vigilância
@@ -20,8 +20,8 @@
 # *variable* do Actions **não é conteúdo do repositório**: não entra no git, não é publicada quando
 # o repo abre. O Passo 7 do runbook proíbe IP, caminho e usuário **em arquivos**, e nenhum aparece
 # aqui. O que a M138 removeu e ROTACIONOU foi `DEV_SSH_KEY` — acesso de shell ao host, uma exposição
-# de natureza inteiramente diferente de um endpoint de versão somente-leitura. `theo-memory` e
-# `theo-rag` já operam exatamente assim.
+# de natureza inteiramente diferente de um endpoint de versão somente-leitura. `loopmem` e
+# `looprag` já operam exatamente assim.
 #
 # O que SOBRARIA de exposição são os logs de Actions, que ficam públicos junto com o repo — e é por
 # isso que o primeiro passo faz `::add-mask::` no host. Sem ele, o valor apareceria em claro em toda
@@ -85,7 +85,7 @@ jobs:
       - name: Compara o SHA do dev host com a última imagem publicada
         env:
           DEV_HOST: ${{ vars.DEV_HOST }}
-          THEOLENS_PORT: '18084'
+          LOOPTRACE_PORT: '18084'
           # O token do próprio repositório basta: o `publish` que consultamos é DESTE repo.
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -93,7 +93,7 @@ jobs:
 
           # O ESPERADO É O ÚLTIMO `publish` BEM-SUCEDIDO, NÃO O TIP DE `develop`.
           #
-          # Neste repo o argumento é mais forte que no theo-rag: a M137 deu ao `publish` um
+          # Neste repo o argumento é mais forte que no looprag: a M137 deu ao `publish` um
           # `paths-ignore`, então a branch avança legitimamente sem produzir imagem. Comparar com o
           # tip acusaria drift a cada commit de documentação — e um alarme que grita sem motivo é
           # desligado pelas pessoas. O head_sha do último run verde é, por construção, o commit
@@ -107,7 +107,7 @@ jobs:
             exit 0
           fi
 
-          URL="http://${DEV_HOST}:${THEOLENS_PORT}/v1/version"
+          URL="http://${DEV_HOST}:${LOOPTRACE_PORT}/v1/version"
           echo "esperado (último publish verde): ${EXPECTED}"
 
           # RETRY COM PROPÓSITO, não superstição: o timer do reconciliador dispara a cada 5 min e só
@@ -159,8 +159,8 @@ jobs:
                 echo ""
                 echo "No host:"
                 echo '```'
-                echo "systemctl --user status theolens-reconcile.timer"
-                echo "journalctl --user -u theolens-reconcile.service -n 50 --no-pager"
+                echo "systemctl --user status looptrace-reconcile.timer"
+                echo "journalctl --user -u looptrace-reconcile.service -n 50 --no-pager"
                 echo '```'
               else
                 echo "O host roda um commit que NÃO é ancestral da última publicação —"
@@ -168,7 +168,7 @@ jobs:
               fi
             else
               echo "O commit do host é DESCONHECIDO neste repositório. Imagem de outra origem, ou o"
-              echo "container subiu sem a env de proveniência (\`THEOLENS_GIT_SHA\` ausente → \`unknown\`)."
+              echo "container subiu sem a env de proveniência (\`LOOPTRACE_GIT_SHA\` ausente → \`unknown\`)."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           exit 1

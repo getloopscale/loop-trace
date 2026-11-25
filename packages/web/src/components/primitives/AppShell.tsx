@@ -78,7 +78,7 @@ export function AppShell() {
       <CommandPalette />
       <Sidebar role="navigation" aria-label="Primary">
         <Sidebar.Header>
-          <span className="text-title-md font-display">Theo Lens</span>
+          <span className="text-title-md font-display">LoopTrace</span>
         </Sidebar.Header>
         <Sidebar.Section title="Observability">
           {NAV.map((item) => (
@@ -98,7 +98,7 @@ export function AppShell() {
       <div className="flex min-w-0 flex-1 flex-col">
         <TopNav>
           <TopNav.Left>
-            <span className="text-label font-display">Theo Lens</span>
+            <span className="text-label font-display">LoopTrace</span>
           </TopNav.Left>
           <TopNav.Right>
             <LiveToggle />

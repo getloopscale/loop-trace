@@ -29,7 +29,7 @@ import {
   monitorRecordSchema,
   monitorsListResponseSchema,
   evaluatorRunJobResponseSchema,
-} from "@usetheo/lens-core";
+} from "@looptrace/core";
 
 import { getPrincipal } from "../auth/middleware.js";
 import { evaluatorRunRateLimited, evaluatorRunsStarted, evaluatorsCreated, monitorsCreated } from "../metrics.js";
@@ -244,11 +244,11 @@ export async function deleteMonitorHandler(c: Context, deps: EvaluatorApiDeps): 
 }
 
 /**
- * M135 T3.0 — the windowed breach summary theo-cloud's alert evaluator reads.
+ * M135 T3.0 — the windowed breach summary loopzero-cloud's alert evaluator reads.
  *
  * `window` is VALIDATED, never defaulted on garbage: silently coercing an unparseable window into
  * a default would read a different span of time than the caller asked for. That is the same class
- * of silent coercion as theo-cloud#247 one layer up — the caller believes it asked a question it
+ * of silent coercion as loopzero-cloud#247 one layer up — the caller believes it asked a question it
  * did not ask.
  */
 export async function monitorBreachWindowHandler(c: Context, deps: EvaluatorApiDeps): Promise<Response> {
@@ -263,7 +263,7 @@ export async function monitorBreachWindowHandler(c: Context, deps: EvaluatorApiD
     getPrincipal(c).workspaceId,
   );
   // M136: `monitorExists` is canonical; `guardExists` is the deprecated twin kept for one release.
-  // theo-cloud shipped a consumer of `guardExists` in v0.61.0 — dropping it here would break that
+  // loopzero-cloud shipped a consumer of `guardExists` in v0.61.0 — dropping it here would break that
   // consumer through the compatibility alias itself, which is the one thing an alias must not do.
   return c.json({ ...summary, monitorExists: summary.guardExists, windowSeconds }, 200);
 }

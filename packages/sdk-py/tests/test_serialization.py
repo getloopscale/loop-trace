@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from theo_lens_sdk import RunResult, record_run
+from looptrace_sdk import RunResult, record_run
 
 from ._transport_stub import BASE, CapturingTransport
 

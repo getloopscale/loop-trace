@@ -1,7 +1,7 @@
 {
-  "name": "@usetheo/lens-web",
+  "name": "@looptrace/web",
   "version": "0.0.0",
-  "description": "Theo Lens Trace Explorer — React + Vite UI for exploring agent execution traces",
+  "description": "LoopTrace Trace Explorer — React + Vite UI for exploring agent execution traces",
   "type": "module",
   "license": "Apache-2.0",
   "private": true,

@@ -1,6 +1,6 @@
 /**
  * GenAI span attribute names the SDK emits. These MUST match exactly the names
- * the M1 ingestion reads (`@usetheo/lens-core` extractGenAi) so the typed
+ * the M1 ingestion reads (`@looptrace/core` extractGenAi) so the typed
  * columns (model/provider/tokens) populate — see m1-contract test (EC-2).
  */
 export const GEN_AI = {

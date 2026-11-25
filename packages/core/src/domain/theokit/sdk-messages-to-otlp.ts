@@ -1,6 +1,6 @@
 /**
  * M116 (core copy of the M115 mapper) — translate a Claude Code / `@theokit/sdk` `SDKMessage` stream (+ terminal `RunResult`) into
- * an OTLP `resourceSpans` envelope Theo Lens ingests at `POST /v1/traces`. The engine's `theokit-sdk`
+ * an OTLP `resourceSpans` envelope LoopTrace ingests at `POST /v1/traces`. The engine's `theokit-sdk`
  * adapter (selected by `service.name=theokit-sdk`) normalizes it. The mapper is PURE + deterministic
  * (inject `startTimeMs` for tests) and is the shared core M116's native endpoint reuses.
  *

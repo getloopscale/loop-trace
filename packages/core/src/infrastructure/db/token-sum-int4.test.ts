@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * theo-lens#136 — guarda de CLASSE, não de instância.
+ * looptrace#136 — guarda de CLASSE, não de instância.
  *
  * `sum()` sobre uma coluna `integer` devolve `bigint`. Espremê-la de volta em `::int` faz o Postgres
  * levantar `22003 integer out of range` assim que o grupo acumula mais de 2.147.483.647 — cada linha

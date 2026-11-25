@@ -14,7 +14,7 @@ import {
   reclaimStale,
 } from "./eval-job-claim.js";
 
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const MIGRATIONS = fileURLToPath(
   new URL("../../infrastructure/db/migrations", import.meta.url),
 );

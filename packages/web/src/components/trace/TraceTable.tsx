@@ -64,7 +64,7 @@ function QuickAnnotate({ traceId }: { traceId: string }) {
   );
 }
 
-/** Trace nano-timestamp → Unix ms (theo-ui Timestamp expects ms), BigInt-safe. */
+/** Trace nano-timestamp → Unix ms (the shared UI kit Timestamp expects ms), BigInt-safe. */
 function nanoToMs(nano: string | undefined): number | undefined {
   if (nano == null) return undefined;
   try {
@@ -211,7 +211,7 @@ export const TOGGLEABLE_COLUMNS: { key: string; label: string }[] = columns
   .map((c) => ({ key: c.key, label: c.label as string }));
 
 /**
- * Arize-style dense executions table (M18). Built on theo-ui DataTable: sortable
+ * Arize-style dense executions table (M18). Built on the shared UI kit DataTable: sortable
  * (server-controlled), sticky header; the expandable row shows the span tree inline
  * (M29d). Sort is controlled by the page (mapped to the M9 ListTracesQuery). Column
  * visibility (M29d) is controlled by the page via `hiddenColumns` (default: none).

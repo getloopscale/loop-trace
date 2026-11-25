@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { type SpanRepository } from "@usetheo/lens-core";
-import { createSpanRepository, migrateLatest } from "@usetheo/lens-core/infra";
-import { createApp } from "@usetheo/lens-api";
+import { type SpanRepository } from "@looptrace/core";
+import { createSpanRepository, migrateLatest } from "@looptrace/core/infra";
+import { createApp } from "@looptrace/api";
 import type pg from "pg";
 
 import { LensReadClient } from "./client.js";
@@ -12,9 +12,9 @@ import { LensApiError } from "./errors.js";
  * (`createApp(repo)` + a real repo + a real Postgres from the Testcontainers globalSetup, `app.fetch`
  * injected as the transport) and asserts the mutation is observable — the write-side analogue of the
  * M105 read contract. Independently validates the M108 idempotency behavior and proves each
- * hand-written request body (M107) is accepted by the real engine. Gated on THEOLENS_PG_URI.
+ * hand-written request body (M107) is accepted by the real engine. Gated on LOOPTRACE_PG_URI.
  */
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
 
 suite("LensReadClient write↔read contract (M109)", () => {
@@ -33,7 +33,7 @@ suite("LensReadClient write↔read contract (M109)", () => {
       app.fetch(new Request(typeof input === "string" ? input : input.toString(), init));
     client = new LensReadClient({
       baseUrl: "http://engine.local",
-      apiKey: "theo_live_contract_test",
+      apiKey: "looptrace_live_contract_test",
       fetch: engineFetch,
     });
   });

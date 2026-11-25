@@ -1,4 +1,4 @@
-package theolens
+package looptrace
 
 import (
 	"context"
@@ -67,7 +67,7 @@ func TestAll18VectorsMarshalToRunsBody(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			c := New(WithBaseURL(srv.URL), WithAPIKey("theo_live_vec"))
+			c := New(WithBaseURL(srv.URL), WithAPIKey("looptrace_live_vec"))
 			if _, err := c.RecordRun(context.Background(), msgs, result); err != nil {
 				t.Fatalf("RecordRun error = %v", err)
 			}
@@ -91,18 +91,18 @@ func TestAll18VectorsMarshalToRunsBody(t *testing.T) {
 }
 
 // Gated hermetic e2e: POST each of the 18 shared batches to a REAL running engine /v1/runs and
-// assert a 200 with a clean partialSuccess (no rejectedSpans). Skipped unless THEO_LENS_E2E_URL is
-// set, so the default suite needs no engine. Requires THEO_LENS_E2E_KEY (a theo_live_* key).
+// assert a 200 with a clean partialSuccess (no rejectedSpans). Skipped unless LOOPTRACE_E2E_URL is
+// set, so the default suite needs no engine. Requires LOOPTRACE_E2E_KEY (a looptrace_live_* key).
 func TestAll18VectorsAcceptedByEngine(t *testing.T) {
-	baseURL := os.Getenv("THEO_LENS_E2E_URL")
+	baseURL := os.Getenv("LOOPTRACE_E2E_URL")
 	if baseURL == "" {
-		t.Skip("THEO_LENS_E2E_URL unset — skipping hermetic engine e2e")
+		t.Skip("LOOPTRACE_E2E_URL unset — skipping hermetic engine e2e")
 	}
-	apiKey := os.Getenv("THEO_LENS_E2E_KEY")
+	apiKey := os.Getenv("LOOPTRACE_E2E_KEY")
 	if apiKey == "" {
-		t.Fatal("THEO_LENS_E2E_URL is set but THEO_LENS_E2E_KEY (a theo_live_* key) is required")
+		t.Fatal("LOOPTRACE_E2E_URL is set but LOOPTRACE_E2E_KEY (a looptrace_live_* key) is required")
 	}
-	basePath := os.Getenv("THEO_LENS_E2E_BASE_PATH")
+	basePath := os.Getenv("LOOPTRACE_E2E_BASE_PATH")
 
 	vectors := loadVectors(t)
 	if len(vectors) != 18 {

@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-base";
-import { spanSchema, extractGenAi } from "@usetheo/lens-core";
+import { spanSchema, extractGenAi } from "@looptrace/core";
 // Test-only coupling: the contract test verifies the SDK's output is accepted by
 // the REAL M1 receiver, so it imports the actual parser (not a hand-rolled stand-in).
 // Production SDK code stays decoupled from the server packages.
-import { parseResourceSpans } from "@usetheo/lens-api";
+import { parseResourceSpans } from "@looptrace/api";
 
-import { initTheoLens } from "./sdk.js";
+import { initLoopTrace } from "./sdk.js";
 import { startAgent } from "./agent-span.js";
 import { collectingExporter } from "./__fixtures__/collecting-exporter.js";
 
@@ -69,11 +69,11 @@ function toOtlpEnvelope(s: ReadableSpan): unknown {
 
 async function captureAgentSpan(): Promise<ReadableSpan> {
   const { exporter, spans } = collectingExporter();
-  const theo = initTheoLens({ endpoint: "http://x", serviceName: "t", exporter });
-  await startAgent(theo.tracer, "agent", async (span) => {
+  const looptrace = initLoopTrace({ endpoint: "http://x", serviceName: "t", exporter });
+  await startAgent(looptrace.tracer, "agent", async (span) => {
     span.setModel("gpt-4o").setProvider("openai").setUsage({ inputTokens: 12, outputTokens: 4 });
   });
-  await theo.shutdown();
+  await looptrace.shutdown();
   return spans.find((x) => x.name === "agent")!;
 }
 

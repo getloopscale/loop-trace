@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { AutoRefreshControl } from "./AutoRefreshControl.js";
 import { AutoRefreshProvider } from "../../hooks/useAutoRefresh.js";
 
-const KEY = "theolens.autoRefreshMs";
+const KEY = "looptrace.autoRefreshMs";
 
 function withProvider(ui: ReactNode) {
   return <AutoRefreshProvider>{ui}</AutoRefreshProvider>;

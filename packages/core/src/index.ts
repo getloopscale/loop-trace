@@ -1,5 +1,5 @@
 /**
- * @usetheo/lens-core barrel — domain types, repository port, and Drizzle adapter.
+ * @looptrace/core barrel — domain types, repository port, and Drizzle adapter.
  */
 export { type Span, spanSchema } from "./domain/observability/span.js";
 export {
@@ -20,7 +20,7 @@ export { type ApiErrorBody, type FieldIssue, apiError, zodFieldErrors } from "./
 // M118 (D3) — the single typed error envelope: a stable code union + `errorBody` (shape == apiError).
 export { ERROR_CODES, type ErrorCode, isErrorCode, errorBody } from "./domain/error-envelope.js";
 export { type SqlResult, rowsAs } from "./domain/sql-rows.js";
-// M22: multi-tenant workspace-isolation domain types (ported from theo-memory).
+// M22: multi-tenant workspace-isolation domain types (ported from loopmem).
 export {
   type Workspace,
   type WorkspaceRole,
@@ -113,7 +113,7 @@ export {
   type ExampleResult,
 } from "./domain/evaluation/eval-runner.js";
 // M129: the `provider` domain (chat, breaker, env, client factory) is NO LONGER on the root barrel.
-// It moved behind the `@usetheo/lens-core/provider` subpath (packages/core/src/domain/provider/index.ts)
+// It moved behind the `@looptrace/core/provider` subpath (packages/core/src/domain/provider/index.ts)
 // to shrink the root god-barrel; composition roots + handlers import provider symbols from there.
 // Guarded by barrel-public-surface.test.ts.
 export {
@@ -125,7 +125,7 @@ export {
 } from "./domain/evaluation/copilot.js";
 export { RateLimiter } from "./domain/rate-limiter.js";
 // M118 (D2) — provider circuit breaker (ProviderBreaker/ProviderBreakerOpenError/DEFAULT_PROVIDER_BREAKER)
-// moved to the `@usetheo/lens-core/provider` subpath in M129 (see the note above).
+// moved to the `@looptrace/core/provider` subpath in M129 (see the note above).
 // M118 (D4) — zod-at-the-boundary response schemas for the advanced write routes (server-side single
 // source of truth; lifted from the M117 SDK hand-types, wire shape unchanged).
 export {
@@ -177,7 +177,7 @@ export {
   DEFAULT_PROVIDER_RETRY,
 } from "./domain/evaluation/evaluator-config.js";
 // M129: positiveIntEnv (env leaf) + createProviderClients/ProviderClients (client factory) moved to the
-// `@usetheo/lens-core/provider` subpath (see the note above).
+// `@looptrace/core/provider` subpath (see the note above).
 export {
   runEvaluator,
   runSweep,
@@ -402,7 +402,7 @@ export {
   parseRetentionConfig,
 } from "./domain/observability/retention.js";
 // M122: the infra concretes (Drizzle repos + raw table schemas) are NOT part of the
-// domain public API — they live behind the @usetheo/lens-core/infra subpath
+// domain public API — they live behind the @looptrace/core/infra subpath
 // (packages/core/src/infrastructure/db/index.ts). Composition roots import them from
 // there; the root barrel exposes domain ports/types/DTOs only. Guarded by
 // barrel-surface.test.ts (test_root_barrel_exports_no_infra_symbol).
@@ -412,9 +412,9 @@ export { sdkMessagesToOtlp, THEOKIT_SERVICE_NAME } from "./domain/theokit/sdk-me
 export type { OtlpTraces } from "./domain/theokit/sdk-messages-to-otlp.js";
 export type { SDKMessage, RunResult as TheokitRunResult } from "./domain/theokit/sdk-message.js";
 // M128 — the shared SDKMessage→OTLP mapper drift-guard fixture (MAPPER_VECTORS/flattenOtlp/… — TEST support)
-// is NO LONGER on the production root barrel. It now lives behind the dedicated `@usetheo/lens-core/testing`
+// is NO LONGER on the production root barrel. It now lives behind the dedicated `@looptrace/core/testing`
 // subpath (see package.json `exports`), so the prod public API stops carrying test-only exports. The SDK
-// mapper-drift test imports it from `@usetheo/lens-core/testing`; core's own tests import it directly from
+// mapper-drift test imports it from `@looptrace/core/testing`; core's own tests import it directly from
 // `./domain/theokit/theokit-vectors.js`.
 
 // M140 — consumption grouped by end user (report contract + the unattributed bucket).

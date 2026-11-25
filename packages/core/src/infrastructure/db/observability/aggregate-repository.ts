@@ -48,7 +48,7 @@ export const tokensByModelRowSchema = z.object({
   model: z.string(),
   inputTokens: z.number(),
   outputTokens: z.number(),
-  // M52 / theo-lens#71 Finding 1 — cache tokens are billable and must feed the cost trend.
+  // M52 / looptrace#71 Finding 1 — cache tokens are billable and must feed the cost trend.
   cacheReadTokens: z.number().optional(),
   cacheCreationTokens: z.number().optional(),
 });
@@ -95,7 +95,7 @@ export async function aggregateCostByPeriod(
 }
 
 /**
- * M15 (theo-promptly) — uso por revisão de um prompt, numa janela.
+ * M15 (loopprompt) — uso por revisão de um prompt, numa janela.
  *
  * NÃO é um self-join sobre `spans`. A tabela `traces` já mantém `total_tokens` e
  * `cost_usd` por trace (PK composta `(workspace_id, trace_id)`), então o agregado
@@ -281,7 +281,7 @@ export async function aggregateObservability(
     ORDER BY bucket ASC
   `);
 
-  // Latency percentiles over clamped duration (ms). M53 / theo-lens#74: the metric measures REAL
+  // Latency percentiles over clamped duration (ms). M53 / looptrace#74: the metric measures REAL
   // model-call latency — the duration of `llm_request` spans — NOT a trace's wall-clock. An
   // `interaction` trace's wall-clock is minutes (human thinking/typing) and would poison the
   // percentile (a p95 of "32m"); `llm_request` spans are the actual request latency (seconds).

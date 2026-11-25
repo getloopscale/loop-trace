@@ -1,4 +1,4 @@
-import { mapPool, type ClaimedJob } from "@usetheo/lens-core";
+import { mapPool, type ClaimedJob } from "@looptrace/core";
 
 /**
  * M134 T4.1 — the in-process auto-evaluation daemon.

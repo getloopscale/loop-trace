@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
-// M128 — the shared drift-guard fixture is now behind the dedicated `@usetheo/lens-core/testing` subpath
+// M128 — the shared drift-guard fixture is now behind the dedicated `@looptrace/core/testing` subpath
 // (it was moved off the production root barrel; the prod API no longer ships test-only exports).
-import { MAPPER_VECTORS, flattenOtlp } from "@usetheo/lens-core/testing";
+import { MAPPER_VECTORS, flattenOtlp } from "@looptrace/core/testing";
 import { sdkMessagesToOtlp } from "./theokit.js";
 
 /**
  * M119 (D1) — the SDK copy of the SDKMessage→OTLP mapper is guarded by the SHARED 18-behavior vector
- * fixture (`@usetheo/lens-core` `MAPPER_VECTORS`) that the core copy's test imports too. Feeding both
+ * fixture (`@looptrace/core` `MAPPER_VECTORS`) that the core copy's test imports too. Feeding both
  * copies through the ONE fixture pins the two ADR-1 duplicates to identical documented behavior; adding
  * a behavior edits the fixture once and both copies re-pin (blueprint D1). This file drives the SDK
  * copy; the core test additionally asserts `coreMapper ≡ sdkMapper` per deterministic vector.

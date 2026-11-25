@@ -1,10 +1,10 @@
 /**
  * Scope verifier middleware — gates `/v1/admin/keys/*` (M22). Ported from the
- * reference capability `theo-memory` (`auth/scope-verifier.ts`) with a `memory:` →
- * `lens:` swap. See `theo-data/README.md § 4`.
+ * reference capability `loopmem` (`auth/scope-verifier.ts`) with a `memory:` →
+ * `lens:` swap. See `data-plane/README.md § 4`.
  *
- * Compatible only with `theo_live_*` keys: hashes the token, looks up
- * `theo_api_keys.scopes`, checks the required scope (honoring `scopeSatisfies` so
+ * Compatible only with `looptrace_live_*` keys: hashes the token, looks up
+ * `looptrace_api_keys.scopes`, checks the required scope (honoring `scopeSatisfies` so
  * `observability:platform-admin` reaches the `observability:admin` gate). A bootstrap admin token
  * (env) bypasses the scope check — it IS admin by definition (bootstraps the first
  * admin key). Mounted on the admin sub-app BEFORE the generic bearer middleware.
@@ -21,10 +21,10 @@ import type { MiddlewareHandler } from "hono";
 import type { AuthPool } from "./api-key-verifier.js";
 import { scopeSatisfies } from "./scope-hierarchy.js";
 
-const PREFIX = "theo_live_";
+const PREFIX = "looptrace_live_";
 
 const SELECT_SCOPES_BY_HASH_SQL = `\
-SELECT scopes FROM theo_api_keys
+SELECT scopes FROM looptrace_api_keys
  WHERE key_hash = $1
    AND revoked_at IS NULL
    AND (expires_at IS NULL OR expires_at > NOW())

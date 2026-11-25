@@ -24,11 +24,11 @@ import {
   type SpanRepository,
   type EvaluatorRepository,
   type JudgeClient,
-} from "@usetheo/lens-core";
+} from "@looptrace/core";
 import {
   ProviderBreakerOpenError,
   type ReplayClient,
-} from "@usetheo/lens-core/provider";
+} from "@looptrace/core/provider";
 
 import { getPrincipal } from "../auth/middleware.js";
 import { experimentRunsStarted, experimentRowsScored, experimentRunsUnavailable } from "../metrics.js";

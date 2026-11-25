@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ClaimedJob } from "@usetheo/lens-core";
+import type { ClaimedJob } from "@looptrace/core";
 
 import {
   startAutoEvalScheduler,

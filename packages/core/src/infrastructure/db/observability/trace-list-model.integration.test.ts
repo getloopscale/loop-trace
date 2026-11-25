@@ -8,7 +8,7 @@ import type { Span } from "../../../domain/observability/span.js";
 import { createPool, DrizzleSpanRepository } from "./drizzle-span-repository.js";
 import { listTraces } from "./trace-read-repository.js";
 
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const MIGRATIONS = fileURLToPath(new URL("../migrations", import.meta.url));
 const suite = PG_URI ? describe : describe.skip;
 
@@ -21,7 +21,7 @@ function span(overrides: Partial<Span> & Pick<Span, "spanId" | "traceId">): Span
   };
 }
 
-// M53 / theo-lens#76: the trace list must attribute a MODEL to `interaction` traces (whose ROOT
+// M53 / looptrace#76: the trace list must attribute a MODEL to `interaction` traces (whose ROOT
 // span has no model — the model lives on the child llm_request spans). Derive the DOMINANT model
 // (most tokens) instead of the root-span model.
 suite("listTraces derives the dominant child model for interaction traces (M53 / #76)", () => {

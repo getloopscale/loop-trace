@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AuthVerifier, Principal, SpanRepository } from "@usetheo/lens-core";
+import type { AuthVerifier, Principal, SpanRepository } from "@looptrace/core";
 
 import { createApp } from "./app.js";
 import type { EvaluatorApiDeps } from "./handlers/evaluators.js";
@@ -17,7 +17,7 @@ const EXPECTED_DATA_ROUTES = new Set([
   "DELETE /v1/traces/:traceId/tags",
   "GET /v1/agents",
   "GET /v1/analytics/cost",
-  // M15 (theo-promptly): uso por revisão de prompt. Mesmo escopo dos demais agregados.
+  // M15 (loopprompt): uso por revisão de prompt. Mesmo escopo dos demais agregados.
   "GET /v1/analytics/prompt-usage",
   "GET /v1/analytics/usage-by-user",
   "GET /v1/analytics/tools",
@@ -164,7 +164,7 @@ describe("M37 route guard enumeration", () => {
         // M94 — /health + /ready are intentionally UNAUTHENTICATED probes (no scope guard).
         // M96 — /openapi.json + /v1 + /version are intentionally UNAUTHENTICATED discovery endpoints.
         // B-117 — /v1/health + /v1/health/ready are the ecosystem-canonical spelling of the same
-        // two probes (theo-contracts/httpsurface, D5), mounted alongside the healthz pair. Same
+        // two probes (loopzero-contracts/httpsurface, D5), mounted alongside the healthz pair. Same
         // reason for the exclusion: they are unauthenticated by design and are not data routes.
         //
         // This audit failing when they were added is the audit WORKING — it enumerates the live
@@ -185,7 +185,7 @@ describe("M37 route guard enumeration", () => {
         .map((route) => `${route.method} ${route.path}`),
     );
     expect(liveRoutes).toEqual(EXPECTED_DATA_ROUTES);
-    expect(liveRoutes.size).toBe(63); // M116: + POST /v1/runs; M133: + GET /v1/evaluator-run-jobs/:id; M135: + GET /v1/guards/:id/breach-window; M136: + 5 canonical /v1/monitors* (the /v1/guards* set stays as the deprecated alias, removed next release → back to 56); M140: + GET /v1/analytics/usage-by-user; M15 (theo-promptly): + GET /v1/analytics/prompt-usage
+    expect(liveRoutes.size).toBe(63); // M116: + POST /v1/runs; M133: + GET /v1/evaluator-run-jobs/:id; M135: + GET /v1/guards/:id/breach-window; M136: + 5 canonical /v1/monitors* (the /v1/guards* set stays as the deprecated alias, removed next release → back to 56); M140: + GET /v1/analytics/usage-by-user; M15 (loopprompt): + GET /v1/analytics/prompt-usage
   });
 
   it("asserts every mounted data route carries a per-verb scope middleware", () => {

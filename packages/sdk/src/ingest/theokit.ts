@@ -1,6 +1,6 @@
 /**
  * M115 — translate a Claude Code / `@theokit/sdk` `SDKMessage` stream (+ terminal `RunResult`) into
- * an OTLP `resourceSpans` envelope Theo Lens ingests at `POST /v1/traces`. The engine's `theokit-sdk`
+ * an OTLP `resourceSpans` envelope LoopTrace ingests at `POST /v1/traces`. The engine's `theokit-sdk`
  * adapter (selected by `service.name=theokit-sdk`) normalizes it. The mapper is PURE + deterministic
  * (inject `startTimeMs` for tests) and is the shared core M116's native endpoint reuses.
  *
@@ -221,9 +221,9 @@ export interface TheokitRun {
 }
 
 export interface RecordRunOptions {
-  /** Engine or edge base URL, e.g. `https://app.usetheo.dev` (no trailing slash). */
+  /** Engine or edge base URL, e.g. `https://app.getloopscale.com` (no trailing slash). */
   readonly baseUrl: string;
-  /** A `theo_live_*` per-tenant key. Sent as `Authorization: Bearer <apiKey>` (`observability:write`). */
+  /** A `looptrace_live_*` per-tenant key. Sent as `Authorization: Bearer <apiKey>` (`observability:write`). */
   readonly apiKey: string;
   /** Path root. Default `/v1`; consumers behind the unified edge set `/v1/lens` (the #49 fix). */
   readonly basePath?: string;
@@ -234,7 +234,7 @@ export interface RecordRunOptions {
 }
 
 /**
- * Record a Claude Code / `@theokit/sdk` run to Theo Lens.
+ * Record a Claude Code / `@theokit/sdk` run to LoopTrace.
  *
  * Prefers the NATIVE `POST /v1/runs` endpoint (M116): it takes the raw `SDKMessage` batch
  * (`{ messages, result, startTimeMs }`) and maps it to spans server-side with the SAME

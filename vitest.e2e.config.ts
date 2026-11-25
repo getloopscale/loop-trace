@@ -10,11 +10,11 @@ export default defineConfig({
   resolve: {
     alias: {
       // M122: specific-before-base — the subpath alias MUST precede the bare
-      // `@usetheo/lens-core` alias so vite's prefix matcher routes /infra correctly.
-      "@usetheo/lens-core/infra": fileURLToPath(
+      // `@looptrace/core` alias so vite's prefix matcher routes /infra correctly.
+      "@looptrace/core/infra": fileURLToPath(
         new URL("./packages/core/src/infrastructure/db/index.ts", import.meta.url),
       ),
-      "@usetheo/lens-core": fileURLToPath(
+      "@looptrace/core": fileURLToPath(
         new URL("./packages/core/src/index.ts", import.meta.url),
       ),
     },

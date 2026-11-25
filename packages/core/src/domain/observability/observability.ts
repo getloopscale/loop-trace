@@ -121,7 +121,7 @@ export function shapeObservability(
               model: r.model,
               inputTokens: r.inputTokens || 0,
               outputTokens: r.outputTokens || 0,
-              // M52 / theo-lens#71 Finding 1: cache tokens are billable — include them.
+              // M52 / looptrace#71 Finding 1: cache tokens are billable — include them.
               cacheReadTokens: r.cacheReadTokens || 0,
               cacheCreationTokens: r.cacheCreationTokens || 0,
             },

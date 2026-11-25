@@ -1,10 +1,10 @@
 /**
- * ApiKeyAuthVerifier — the multi-tenant `theo_api_keys` verifier (M22). Ported
- * from the reference capability `theo-memory` (`auth/api-key-verifier.ts`) — see
- * `theo-data/README.md § 3.1`. The `theo_api_keys` table is generic (scopes is
+ * ApiKeyAuthVerifier — the multi-tenant `looptrace_api_keys` verifier (M22). Ported
+ * from the reference capability `loopmem` (`auth/api-key-verifier.ts`) — see
+ * `data-plane/README.md § 3.1`. The `looptrace_api_keys` table is generic (scopes is
  * jsonb), so it holds `observability:*` scopes with no shape change.
  *
- * Stripe-shape: (1) `theo_live_` prefix + length check BEFORE hashing;
+ * Stripe-shape: (1) `looptrace_live_` prefix + length check BEFORE hashing;
  * (2) single-pass SHA-256 of the raw token (256-bit entropy → no bcrypt);
  * (3) SELECT the Principal filtered by active key (`revoked_at IS NULL` AND
  * `expires_at` NULL-or-future) — a revoked/expired key resolves to no row → null
@@ -17,7 +17,7 @@ import {
   type AuthVerifier,
   type Principal,
   type WorkspaceRole,
-} from "@usetheo/lens-core";
+} from "@looptrace/core";
 
 /**
  * Minimal pool surface — DIP-clean. Production wires `pg.Pool` (satisfies it
@@ -35,11 +35,11 @@ export interface AuthPool {
   connect?(): Promise<AuthPoolClient>;
 }
 
-const PREFIX = "theo_live_";
+const PREFIX = "looptrace_live_";
 
 /** Boolean liveness — parameterized, single-tenant-isolated (`tenant_id='self'`). */
 const SELECT_ACTIVE_BY_HASH_SQL = `\
-SELECT id FROM theo_api_keys
+SELECT id FROM looptrace_api_keys
  WHERE key_hash = $1
    AND revoked_at IS NULL
    AND (expires_at IS NULL OR expires_at > NOW())
@@ -53,7 +53,7 @@ SELECT id FROM theo_api_keys
  */
 const SELECT_PRINCIPAL_BY_HASH_SQL = `\
 SELECT k.workspace_id, k.user_id, k.scopes, m.role
- FROM theo_api_keys k
+ FROM looptrace_api_keys k
  LEFT JOIN workspace_users m
    ON m.workspace_id = k.workspace_id AND m.user_id = k.user_id
  WHERE k.key_hash = $1
@@ -62,7 +62,7 @@ SELECT k.workspace_id, k.user_id, k.scopes, m.role
    AND k.tenant_id = 'self'
  LIMIT 1`;
 
-const UPDATE_LAST_USED_SQL = `UPDATE theo_api_keys SET last_used_at = NOW() WHERE key_hash = $1`;
+const UPDATE_LAST_USED_SQL = `UPDATE looptrace_api_keys SET last_used_at = NOW() WHERE key_hash = $1`;
 
 export class ApiKeyAuthVerifier implements AuthVerifier {
   readonly #pool: AuthPool;
@@ -125,7 +125,7 @@ export class ApiKeyAuthVerifier implements AuthVerifier {
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);
          
-        console.warn(`[theo-lens] last_used_at update failed: ${msg}`);
+        console.warn(`[looptrace] last_used_at update failed: ${msg}`);
       });
   }
 }

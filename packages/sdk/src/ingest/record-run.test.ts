@@ -4,7 +4,7 @@ import { LensApiError } from "../read/errors.js";
 import type { SDKMessage } from "./sdk-message.js";
 
 const msgs: SDKMessage[] = [{ type: "system", subtype: "init", agent_id: "a", run_id: "r", model: "gpt-4o" }];
-const base = { baseUrl: "http://engine.local", apiKey: "theo_live_x", startTimeMs: 1_700_000_000_000 };
+const base = { baseUrl: "http://engine.local", apiKey: "looptrace_live_x", startTimeMs: 1_700_000_000_000 };
 
 /** A fetch returning queued responses in order (last item repeats if calls exceed the queue). */
 function seqFetch(items: Response[]) {
@@ -23,7 +23,7 @@ describe("recordRun — native /v1/runs first (M117)", () => {
     // The native endpoint gets the raw SDKMessage batch — NOT client-side OTLP.
     expect(url).toBe("http://engine.local/v1/runs");
     expect(init.method).toBe("POST");
-    expect((init.headers as Record<string, string>)["authorization"]).toBe("Bearer theo_live_x");
+    expect((init.headers as Record<string, string>)["authorization"]).toBe("Bearer looptrace_live_x");
     const body = JSON.parse(init.body as string);
     expect(Array.isArray(body.messages)).toBe(true);
     expect(body.messages[0].type).toBe("system");

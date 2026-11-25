@@ -6,7 +6,7 @@ import type pg from "pg";
 
 import { createPool } from "./observability/drizzle-span-repository.js";
 
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const MIGRATIONS = fileURLToPath(new URL("./migrations", import.meta.url));
 const suite = PG_URI ? describe : describe.skip;
 
@@ -20,7 +20,7 @@ const EV_B = "22222222-2222-2222-2222-222222222222";
  * blueprint recorded why (AP-1): the reference deduped with a read-then-write
  * and no unique index, which races under exactly the traffic that makes dedup
  * matter — a trace is upserted many times as it streams, and ingestion retries
- * at-least-once. theo-lens already learned this once in M36, where the `guards`
+ * at-least-once. looptrace already learned this once in M36, where the `guards`
  * table needed NULLS NOT DISTINCT before its dedup actually fired.
  *
  * These tests exercise the constraint at the SQL level, which is where the

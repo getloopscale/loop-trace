@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { runPrune } from "./retention-run.js";
-import type { PruneStats } from "@usetheo/lens-core";
+import type { PruneStats } from "@looptrace/core";
 
 const STATS: PruneStats = {
   cutoff: "2026-03-26T00:00:00.000Z",

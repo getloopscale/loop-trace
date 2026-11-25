@@ -1,6 +1,6 @@
 /**
  * Per-model USD price, per single token, split by input vs output (M5 ADR D1).
- * Cache rates (M52 / theo-lens#71 Finding 1) are OPTIONAL for backward compatibility:
+ * Cache rates (M52 / looptrace#71 Finding 1) are OPTIONAL for backward compatibility:
  * a price row without them prices cache tokens at 0. Authoritative Anthropic multipliers
  * (claude-api pricing ref): cache-read = 0.1× input, cache-creation (ephemeral 5-min,
  * which Claude Code uses) = 1.25× input.
@@ -50,7 +50,7 @@ export function resolveModelPrice(
 /**
  * Total USD cost of a trace: `Σ (inputTokens·inputPerToken + outputTokens·outputPerToken
  * + cacheReadTokens·cacheReadPerToken + cacheCreationTokens·cacheCreationPerToken)` over
- * each model's usage (M52 / theo-lens#71 Finding 1 — cache tokens were previously excluded,
+ * each model's usage (M52 / looptrace#71 Finding 1 — cache tokens were previously excluded,
  * materially understating cost for cache-heavy agents like Claude Code). Pure + deterministic
  * (no clock/IO). A model with no matching price (exact or prefix) contributes 0 (documented
  * degradation — risk #1); a cache token count with no matching cache rate also contributes 0

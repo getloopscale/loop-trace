@@ -6,7 +6,7 @@ import { EmptyState } from "../primitives/States.js";
 
 const DASH = "—";
 
-/** ISO timestamp → Unix ms (theo-ui Timestamp expects ms). NaN-safe. */
+/** ISO timestamp → Unix ms (the shared UI kit Timestamp expects ms). NaN-safe. */
 function isoToMs(iso: string): number | undefined {
   const ms = new Date(iso).getTime();
   return Number.isNaN(ms) ? undefined : ms;
@@ -102,7 +102,7 @@ const columns: DataTableColumn<SessionListItem>[] = [
 ];
 
 /**
- * Arize-style dense sessions table (M20). Built on theo-ui DataTable, led by the
+ * Arize-style dense sessions table (M20). Built on the shared UI kit DataTable, led by the
  * session's first user message (M20 query enrichment); each row links to the
  * session view. Empty state documents the honest D3 fallback (sessions require a
  * session.id; ungrouped traces stay standalone, not fabricated into sessions).

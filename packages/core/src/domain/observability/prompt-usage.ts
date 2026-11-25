@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 /**
- * M15 (theo-promptly) — uso observado por REVISÃO de prompt.
+ * M15 (loopprompt) — uso observado por REVISÃO de prompt.
  *
- * O `theo-promptly` marca `prompt.id` (que carrega o **nome** do prompt — a
+ * O `loopprompt` marca `prompt.id` (que carrega o **nome** do prompt — a
  * nomenclatura mente desde o M5 daquele projeto, e renomear é breaking) e
  * `prompt.revision` em cada span `prompt.resolve`.
  *
@@ -14,7 +14,7 @@ import { z } from "zod";
  * na tela: uma app que resolve o prompt fora do trace em que chama o modelo não
  * correlaciona, e o custo aparece vazio — nunca zero.
  *
- * `costUsd` é `null` quando o `theo-lens` não soube precificar o modelo. Vazio
+ * `costUsd` é `null` quando o `looptrace` não soube precificar o modelo. Vazio
  * com razão, jamais estimado.
  */
 export const promptUsageRowSchema = z

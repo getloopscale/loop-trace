@@ -5,9 +5,9 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 // Test-only coupling to the engine (same rationale as m1-contract.test.ts): the drift gate
 // rebuilds the live OpenAPI doc and asserts the committed snapshot still matches it. Under the
-// contract vitest config, @usetheo/lens-api resolves to src, so this reflects the current engine.
-import { buildOpenApiDocument, createApp } from "@usetheo/lens-api";
-import type { SpanRepository } from "@usetheo/lens-core";
+// contract vitest config, @looptrace/api resolves to src, so this reflects the current engine.
+import { buildOpenApiDocument, createApp } from "@looptrace/api";
+import type { SpanRepository } from "@looptrace/core";
 
 // MUST match scripts/generate-types.ts so the rebuilt doc is byte-identical to the snapshot's.
 const SNAPSHOT_VERSION = "sdk-snapshot";

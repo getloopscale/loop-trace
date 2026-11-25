@@ -25,7 +25,7 @@ import type {
   LabelingQueueItem,
   LabelingQueuePage,
   NormalizedResolution,
-} from "@usetheo/lens-core";
+} from "@looptrace/core";
 
 import { createApp } from "./app.js";
 import { spansIngested, tracesIngested, evaluationsExtracted, annotationsWritten, datasetItemsAdded, spansRejected, ingestRateLimited } from "./metrics.js";
@@ -522,7 +522,7 @@ describe("createApp (contract, stub repo)", () => {
   it("m96_v1_index_and_version_are_served", async () => {
     const v1 = await app.request("/v1");
     expect(v1.status).toBe(200);
-    expect(await v1.json()).toMatchObject({ service: "theo-lens", capability: "observability", openapi: "/openapi.json" });
+    expect(await v1.json()).toMatchObject({ service: "looptrace", capability: "observability", openapi: "/openapi.json" });
     const ver = await app.request("/v1/version");
     expect(ver.status).toBe(200);
     expect((await ver.json()) as { version: string }).toHaveProperty("version");
@@ -1633,7 +1633,7 @@ describe("M93 ingest durability & backpressure", () => {
   });
 
   it.each(INGEST_ROUTES)("post_ingest_flood_past_window_returns_429_per_workspace [$path]", async ({ path, validBody }) => {
-    const { RateLimiter } = await import("@usetheo/lens-core");
+    const { RateLimiter } = await import("@looptrace/core");
     let now = 1_000_000;
     const app = createApp(repo, undefined, {}, undefined, undefined, undefined, undefined, {
       limiter: new RateLimiter(2), // 2 per window

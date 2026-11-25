@@ -64,7 +64,7 @@ export interface AggregateRepository {
   /** Cost aggregated into day/week time buckets (M5). */
   aggregateCostByPeriod(period: CostPeriod, workspaceId?: string): Promise<CostByPeriodResponse>;
   /**
-   * Uso observado por REVISÃO de um prompt do `theo-promptly`, numa janela (M15).
+   * Uso observado por REVISÃO de um prompt do `loopprompt`, numa janela (M15).
    * Custo atribuído por trace compartilhado — ver `prompt-usage.ts` para o limite.
    */
   aggregatePromptUsage(

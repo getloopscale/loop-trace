@@ -5,13 +5,13 @@
 #
 # Postgres is deliberately left alone: it holds real data and outlives any deploy. It is brought
 # up in the same command only so compose keeps all services on one network — a failed recreate
-# that detaches the API from the DB network is a documented failure mode from theo-rag's pipeline.
+# that detaches the API from the DB network is a documented failure mode from looprag's pipeline.
 #
 # Exits non-zero unless BOTH gates pass, because a deploy that reports success without proving
 # the new code is serving is worse than one that fails: it retires the question.
 set -euo pipefail
 
-PORT="${THEOLENS_API_PORT:-18084}"
+PORT="${LOOPTRACE_API_PORT:-18084}"
 COMPOSE=(docker compose -f docker-compose.yaml -f docker-compose.deploy.yml)
 
 cd "$(dirname "$0")/.."
@@ -28,7 +28,7 @@ cd "$(dirname "$0")/.."
 # with the right config — a wrong image with a right .env would still pass. The label is baked
 # into the image itself.
 EXPECTED_SHA="${EXPECTED_SHA:-$(git rev-parse HEAD)}"
-RUNNING_SHA="$(docker inspect theolens_api \
+RUNNING_SHA="$(docker inspect looptrace_api \
   --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' 2>/dev/null || true)"
 
 if [ "$RUNNING_SHA" != "$EXPECTED_SHA" ]; then

@@ -19,7 +19,7 @@ import {
   sessionCoherenceResponseSchema,
   SESSION_COHERENCE_NAME,
   apiError,
-} from "@usetheo/lens-core";
+} from "@looptrace/core";
 
 import { getPrincipal, requireScopeOnPrincipal } from "../auth/middleware.js";
 

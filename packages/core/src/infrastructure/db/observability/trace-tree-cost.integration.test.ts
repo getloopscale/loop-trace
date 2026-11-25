@@ -8,7 +8,7 @@ import type { Span } from "../../../domain/observability/span.js";
 import { createPool, DrizzleSpanRepository } from "./drizzle-span-repository.js";
 import { getTraceTree } from "./trace-read-repository.js";
 
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const MIGRATIONS = fileURLToPath(new URL("../migrations", import.meta.url));
 const suite = PG_URI ? describe : describe.skip;
 
@@ -21,7 +21,7 @@ function span(overrides: Partial<Span> & Pick<Span, "spanId" | "traceId">): Span
   };
 }
 
-// M53 / theo-lens#73: the trace-detail tree root must carry the trace's STORED cost so the
+// M53 / looptrace#73: the trace-detail tree root must carry the trace's STORED cost so the
 // detail header matches the list (both read the same authoritative `traces.cost_usd`), instead
 // of the detail re-summing per-span costs (which are absent for interaction/tool spans → $0.0000).
 suite("getTraceTree attaches the stored trace cost to the root (M53 / #73)", () => {

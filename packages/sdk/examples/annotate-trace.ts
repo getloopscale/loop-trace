@@ -1,9 +1,9 @@
 /**
  * Runnable sample — annotate the most recent trace. Run against a real engine:
- *   LENS_BASE_URL=https://api.usetheo.dev LENS_API_KEY=theo_live_… npx tsx examples/annotate-trace.ts
+ *   LENS_BASE_URL=https://api.getloopscale.com LENS_API_KEY=looptrace_live_… npx tsx examples/annotate-trace.ts
  * Skips honestly (no crash) when the env is unset or there are no traces yet.
  */
-import { LensReadClient, LensApiError } from "@usetheo/lens-sdk";
+import { LensReadClient, LensApiError } from "@looptrace/sdk";
 
 const baseUrl = process.env["LENS_BASE_URL"];
 const apiKey = process.env["LENS_API_KEY"];

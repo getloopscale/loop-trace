@@ -52,7 +52,7 @@ jobs:
   # runs on 2026-07-28: publish 103 s, integration 84 s, ci 55 s, sast 40 s. The gated path is
   # therefore max(55, 84, 40) + 103 ≈ 187 s → +84 s (+82%). The ≈ is the honest part: no gated
   # end-to-end run had been observed when this was written, so the composite is arithmetic on
-  # measured parts, not an observed duration. Paid deliberately against theo-memory's measured 8.2%
+  # measured parts, not an observed duration. Paid deliberately against loopmem's measured 8.2%
   # of pushes that published an image with the suite red on the same commit. If it bites, the lever
   # is opik's registry layer cache, not removing the gate.
   gate-ci:
@@ -117,15 +117,15 @@ jobs:
       attestations: write
     uses: getloopscale/loopzero/.github/workflows/build-publish.yml@6a07e48af6d1672af21adede244c0d32ed1eb731 # develop
     with:
-      # Also the ECR repository name: the reusable pushes `<ecr_registry>/theo-lens:<commit sha>`.
-      image: theo-lens
+      # Also the ECR repository name: the reusable pushes `<ecr_registry>/looptrace:<commit sha>`.
+      image: looptrace
       dockerfile: ./Dockerfile
       trivy: true
       # Signing is release-only: a keyless cosign signature is a claim about a released artifact,
       # and signing every develop build would make the signature mean nothing.
       sign: ${{ startsWith(github.ref, 'refs/tags/v') }}
       verify: ${{ startsWith(github.ref, 'refs/tags/v') }}
-      # Amazon ECR, the registry the platform runs theo-lens from, by commit SHA
+      # Amazon ECR, the registry the platform runs looptrace from, by commit SHA
       # (getloopscale/engine#446). Both are repository variables, so no account id is fixed in text;
       # unset, the reusable skips ECR and GHCR publishes as before.
       ecr_registry: ${{ vars.ECR_REGISTRY }}
@@ -139,7 +139,7 @@ jobs:
   # eles em `.github/` não retorne nada, e prosa histórica contando o grep seria uma falha do gate
   # por uma razão sem valor — mas afrouxar o grep para tolerar comentários seria pior, porque um uso
   # real comentado-e-descomentado passaria igual.) Foi substituído por um reconciliador PULL que
-  # vive em `theo-workspace/dev/theo-lens/` e roda NO host por systemd timer.
+  # vive em `loopzero-workspace/dev/looptrace/` e roda NO host por systemd timer.
   #
   # DUAS RAZÕES, e a primeira não se desfaz depois:
   #   1. Este repositório é Apache-2.0 e vai ser publicado. Um repo público não carrega IP, caminho,

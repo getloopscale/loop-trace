@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from theo_lens_sdk import TheoLensSerializationError, record_run
+from looptrace_sdk import LoopTraceSerializationError, record_run
 
 from ._transport_stub import BASE, CapturingTransport
 
@@ -26,7 +26,7 @@ def test_non_serializable_input_raises_typed_serialization_error() -> None:
     transport = CapturingTransport()
     messages: list[Any] = [{"type": "tool_call", "agent_id": "a", "run_id": "r", "call_id": "c", "name": "X", "status": "completed", "args": {"weird": {1, 2, 3}}}]
 
-    with pytest.raises(TheoLensSerializationError):
+    with pytest.raises(LoopTraceSerializationError):
         record_run(messages, transport=transport, **BASE)
 
     # Fail-fast BEFORE any I/O — the transport is never touched.

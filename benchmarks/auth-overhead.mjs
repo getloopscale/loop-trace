@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
  * M22 auth-overhead benchmark — measures the per-request latency the multi-tenant
- * auth path adds (bearerAuth + requireScopeOnPrincipal + the SHA-256 `theo_api_keys`
+ * auth path adds (bearerAuth + requireScopeOnPrincipal + the SHA-256 `looptrace_api_keys`
  * lookup) vs single-tenant (no verifier, DEFAULT_PRINCIPAL), on the read + ingest
- * hot paths. Requires THEOLENS_PG_URI (a real Postgres). Run from packages/api so
+ * hot paths. Requires LOOPTRACE_PG_URI (a real Postgres). Run from packages/api so
  * the workspace deps resolve:
- *   THEOLENS_PG_URI=… node ../../benchmarks/auth-overhead.mjs   (or via the repo root with the script path)
+ *   LOOPTRACE_PG_URI=… node ../../benchmarks/auth-overhead.mjs   (or via the repo root with the script path)
  *
  * Reports p50/p95 + mean ± std dev over N iterations × 3 runs. NO fabricated
  * numbers — every figure comes from a real timed request against a real DB.
@@ -16,9 +16,9 @@ import { createSpanRepository, migrateLatest } from "../packages/core/dist/index
 import { createHash, randomBytes } from "node:crypto";
 import { performance } from "node:perf_hooks";
 
-const URI = process.env.THEOLENS_PG_URI;
+const URI = process.env.LOOPTRACE_PG_URI;
 if (!URI) {
-  console.error("THEOLENS_PG_URI required");
+  console.error("LOOPTRACE_PG_URI required");
   process.exit(1);
 }
 
@@ -62,15 +62,15 @@ async function main() {
   const { repo, pool } = createSpanRepository(URI);
   await migrateLatest(pool);
 
-  // Seed a real per-tenant key in theo_api_keys for the authed app.
-  const secret = "theo_live_" + randomBytes(32).toString("base64url");
+  // Seed a real per-tenant key in looptrace_api_keys for the authed app.
+  const secret = "looptrace_live_" + randomBytes(32).toString("base64url");
   const hash = createHash("sha256").update(secret).digest("hex");
   const id = "apk-" + randomBytes(8).toString("hex");
   await pool.query(
     `INSERT INTO workspaces (id, name) VALUES ('bench-ws','bench-ws') ON CONFLICT DO NOTHING`,
   );
   await pool.query(
-    `INSERT INTO theo_api_keys (id, subject, tenant_id, workspace_id, key_name, key_hash, key_prefix, scopes)
+    `INSERT INTO looptrace_api_keys (id, subject, tenant_id, workspace_id, key_name, key_hash, key_prefix, scopes)
      VALUES ($1,'bench','self','bench-ws','bench',$2,$3,$4::jsonb)`,
     [id, hash, secret.slice(0, 12), JSON.stringify(["lens:read", "lens:write"])],
   );
@@ -125,7 +125,7 @@ async function main() {
 
   console.log(JSON.stringify({ N, RUNS, results, readDeltaP50Ms: readDelta, ingestDeltaP50Ms: ingestDelta }, null, 2));
 
-  await pool.query(`DELETE FROM theo_api_keys WHERE id = $1`, [id]);
+  await pool.query(`DELETE FROM looptrace_api_keys WHERE id = $1`, [id]);
   await pool.end();
 }
 

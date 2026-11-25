@@ -1,5 +1,5 @@
 /**
- * `LensReadTransport` — the shared HTTP transport base of `@usetheo/lens-sdk`'s read client (M103,
+ * `LensReadTransport` — the shared HTTP transport base of `@looptrace/sdk`'s read client (M103,
  * split out in M117 to keep `client.ts` under the file-size budget).
  *
  * A thin wrapper over the platform-native `fetch` (parsimony: no HTTP dependency). It owns the
@@ -7,8 +7,8 @@
  * transport (`send`/`request`), and the typed error mapping. `LensReadClient` extends it and adds one
  * public method per route — the transport internals are `protected` so only the subclass reaches them.
  *
- * Auth is a `theo_live_*` key sent as `Authorization: Bearer <key>`; the per-tenant key resolves the
- * workspace at the edge, so the client NEVER sends a workspace parameter (theo-data invariant 2/3).
+ * Auth is a `looptrace_live_*` key sent as `Authorization: Bearer <key>`; the per-tenant key resolves the
+ * workspace at the edge, so the client NEVER sends a workspace parameter (data-plane invariant 2/3).
  *
  * Failures surface as a typed {@link LensApiError} (M104); transient ones (408/429/5xx/network/timeout)
  * are retried with bounded exp-backoff honoring `Retry-After`, while a fatal 4xx fails fast. A request
@@ -17,13 +17,13 @@
 import { errorFromReject, errorFromResponse, invalidBodyError } from "./errors.js";
 
 export interface LensReadClientOptions {
-  /** Engine base URL, e.g. `https://api.usetheo.dev` (a trailing slash is tolerated). */
+  /** Engine base URL, e.g. `https://api.getloopscale.com` (a trailing slash is tolerated). */
   baseUrl: string;
-  /** A `theo_live_*` per-tenant key. Sent as `Authorization: Bearer <apiKey>`. */
+  /** A `looptrace_live_*` per-tenant key. Sent as `Authorization: Bearer <apiKey>`. */
   apiKey: string;
   /**
    * The API version root the routes live under (default `/v1` — talking to the engine directly).
-   * A customer whose `theo_live_*` key reaches the capability through the **unified edge** sets this to
+   * A customer whose `loopzero_live_*` platform key reaches the capability through the **unified edge** sets this to
    * the capability prefix (e.g. `/v1/lens`); the edge rewrites `/v1/lens/*` → `/v1/*` upstream. The SDK
    * swaps the `/v1` root of every route for this value (see #49).
    */

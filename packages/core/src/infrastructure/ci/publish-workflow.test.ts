@@ -12,11 +12,11 @@
  *    não falha, ela ACEITA assinatura produzida pelo workflow daquele repo (confused-deputy).
  *    A cópia veio justamente de outro repo, então este é o erro mais provável de todos;
  *  - o compose de deploy puxar de um namespace diferente do que o build publica → CI verde e
- *    `403 Forbidden` só no deploy. Aconteceu de verdade no theo-rag (CM3).
+ *    `403 Forbidden` só no deploy. Aconteceu de verdade no looprag (CM3).
  *
- * Quando `usetheodev/theo` migrar para `usetheoai`: apague `.github/workflows/build-publish.yml`,
- * devolva o `uses:` ao reusable e atualize este teste NO MESMO COMMIT. Se um andar sem o outro,
- * isto fica vermelho — que é o ponto.
+ * The reusable lives in `getloopscale/loopzero` and no vendored copy exists today. If a copy comes
+ * back, the `uses:` line and this test change IN THE SAME COMMIT; one moving without the other
+ * turns this red, which is the point.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -32,7 +32,10 @@ const DEPLOY_COMPOSE = resolve(REPO_ROOT, 'docker-compose.deploy.yml');
 const LOCAL_REF = 'uses: ./.github/workflows/build-publish.yml';
 const UPSTREAM_REF = 'uses: getloopscale/loopzero/.github/workflows/build-publish.yml';
 const EXPECTED_IDENTITY =
-  String.raw`^https://github\.com/usetheoai/theo-lens/\.github/workflows/build-publish\.yml@`;
+  String.raw`^https://github\.com/getloopscale/looptrace/\.github/workflows/build-publish\.yml@`;
+
+// Any GHCR namespace but the one this repository publishes to.
+const FOREIGN_GHCR_NAMESPACE = /ghcr\.io\/(?!getloopscale\/|getloopscale"|getloopscale$)/u;
 
 const read = (p: string): string => readFileSync(p, 'utf8');
 
@@ -61,10 +64,10 @@ describe('vendored build-publish', () => {
     const vendored = read(VENDORED);
     expect(
       vendored.includes(EXPECTED_IDENTITY),
-      'a cópia não fixa a identidade cosign em usetheoai/theo-lens',
+      'a cópia não fixa a identidade cosign em getloopscale/looptrace',
     ).toBe(true);
 
-    for (const foreign of ['usetheoai/theo-rag', 'usetheoai/theo-memory', 'usetheoai/theo-traefik-mcp']) {
+    for (const foreign of ['getloopscale/looprag', 'getloopscale/loopmem', 'getloopscale/loopmcp']) {
       expect(
         vendored.includes(`${foreign}/.github/workflows/build-publish`),
         `identidade cosign ainda aponta para ${foreign} — assinatura daquele repo seria ACEITA aqui`,
@@ -76,20 +79,20 @@ describe('vendored build-publish', () => {
     if (!existsSync(VENDORED)) return;
 
     const vendored = read(VENDORED);
-    expect(vendored).toContain('default: "ghcr.io/usetheoai"');
+    expect(vendored).toContain('default: "ghcr.io/getloopscale"');
 
     // Comentários são ignorados de propósito: o cabeçalho EXPLICA por que o namespace antigo
     // não serve, e casar o arquivo inteiro sinalizaria a própria explicação como o defeito.
     const offending = vendored
       .split('\n')
-      .filter((l) => !l.trimStart().startsWith('#') && l.includes('ghcr.io/usetheodev'));
+      .filter((l) => !l.trimStart().startsWith('#') && FOREIGN_GHCR_NAMESPACE.test(l));
     expect(
       offending,
-      'linha ativa ainda aponta para ghcr.io/usetheodev — um run de usetheoai não tem push lá (403)',
+      'an active line points at a GHCR namespace other than getloopscale; a run of this repository cannot push there (403)',
     ).toEqual([]);
   });
 
-  // A licao do theo-rag (CM3): o guard acima cobre o lado que EMPURRA a imagem, e o deploy
+  // A licao do looprag (CM3): o guard acima cobre o lado que EMPURRA a imagem, e o deploy
   // quebrou no lado que a PUXA — `403 Forbidden` no host, DEPOIS de o build ter passado e
   // publicado normalmente. Sao arquivos distintos, sem compilador nem tipo em comum.
   test('o compose de deploy puxa do MESMO namespace que o build publica', () => {
@@ -97,15 +100,15 @@ describe('vendored build-publish', () => {
 
     const stale = compose
       .split('\n')
-      .filter((l) => !l.trimStart().startsWith('#') && l.includes('ghcr.io/usetheodev'));
+      .filter((l) => !l.trimStart().startsWith('#') && FOREIGN_GHCR_NAMESPACE.test(l));
     expect(
       stale,
-      'o compose de deploy puxa de ghcr.io/usetheodev — o host recebe 403 e o deploy falha com a CI verde',
+      'the deploy compose pulls from a GHCR namespace other than getloopscale; the host gets 403 and the deploy fails with CI green',
     ).toEqual([]);
 
     expect(
-      compose.includes('ghcr.io/usetheoai/theo-lens'),
-      'o compose de deploy nao referencia a imagem publicada em ghcr.io/usetheoai',
+      compose.includes('ghcr.io/getloopscale/looptrace'),
+      'o compose de deploy nao referencia a imagem publicada em ghcr.io/getloopscale',
     ).toBe(true);
   });
 

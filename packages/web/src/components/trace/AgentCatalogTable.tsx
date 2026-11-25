@@ -83,7 +83,7 @@ const columns: DataTableColumn<Agent>[] = [
 /**
  * Agents catalog table (M32): one row per declared agent (by `agent.name`), with
  * versions / tools / latest system prompt / latest-seen + health badges. Read-only,
- * derived — built on theo-ui DataTable. Dark + token-based.
+ * derived — built on the shared UI kit DataTable. Dark + token-based.
  */
 export function AgentCatalogTable({ agents }: { agents: Agent[] }) {
   if (agents.length === 0) {

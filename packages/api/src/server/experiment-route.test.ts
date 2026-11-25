@@ -1,18 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { RateLimiter } from "@usetheo/lens-core";
+import { RateLimiter } from "@looptrace/core";
 import type {
   SpanRepository,
   EvaluatorRepository,
   EvaluatorRecord,
   DatasetDetail,
   ExperimentRun,
-} from "@usetheo/lens-core";
+} from "@looptrace/core";
 import {
   ChatError,
   type ChatMessage,
   type ReplayClient,
   type ReplayResult,
-} from "@usetheo/lens-core/provider";
+} from "@looptrace/core/provider";
 
 import { createApp } from "./app.js";
 import type { ExperimentApiDeps } from "./handlers/experiment.js";

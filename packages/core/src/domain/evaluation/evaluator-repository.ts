@@ -52,7 +52,7 @@ export interface EvaluatorRepository {
    * traces were evaluated and none breached (`hasData: true, breachCount: 0`)
    * is a MEASUREMENT of zero; a window with nothing to evaluate
    * (`hasData: false`) is ABSENCE. Collapsing the two is precisely
-   * theo-cloud#247, where an empty window read as a real zero and fired every
+   * loopzero-cloud#247, where an empty window read as a real zero and fired every
    * below-threshold rule permanently.
    */
   monitorBreachWindow(

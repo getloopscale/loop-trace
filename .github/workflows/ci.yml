@@ -4,7 +4,7 @@
 # ORDEM DOS STEPS IMPORTA: Build vem ANTES de Lint. As regras `@typescript-eslint/no-unsafe-*`
 # sao TYPE-AWARE: num checkout limpo, sem `dist/`, os imports entre pacotes do workspace
 # resolvem para `any` e disparam erros em codigo intocado. Foi o defeito que ficou meses
-# invisivel no theo-memory, mascarado por instabilidade do runner self-hosted.
+# invisivel no loopmem, mascarado por instabilidade do runner self-hosted.
 name: CI
 on:
   # M137 — callable as a gate. `publish.yml` runs this as `gate-ci` BEFORE the image job, so a red
@@ -23,7 +23,7 @@ on:
   # call, so with `cancel-in-progress: true` one cancelled the other. A cancelled `gate-contract`
   # leaves `needs:` unsatisfiable and blocks the image on a perfectly green commit.
   #
-  # This is also what the workspace's model does: theo-memory's ci.yml has `workflow_call` +
+  # This is also what the workspace's model does: loopmem's ci.yml has `workflow_call` +
   # `pull_request` and no `push`. The docs-only filter lives in the CALLER (publish.yml), because a
   # callee's path filter is not evaluated for a `workflow_call` invocation at all.
 permissions:

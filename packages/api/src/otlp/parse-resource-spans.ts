@@ -4,7 +4,7 @@ import {
   extractEvaluations,
   selectAdapter,
   type Span,
-} from "@usetheo/lens-core";
+} from "@looptrace/core";
 
 import { normalizeId } from "./normalize-id.js";
 import { OtlpParseError } from "./otlp-error.js";

@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest";
 
-const BASE = process.env["THEOLENS_E2E_BASE"] ?? "http://localhost:44318";
+const BASE = process.env["LOOPTRACE_E2E_BASE"] ?? "http://localhost:44318";
 const EXAMPLE = fileURLToPath(
   new URL("./fixtures/instrumented-agent.ts", import.meta.url),
 );
@@ -13,9 +13,9 @@ describe("Example agent ingestion (e2e)", () => {
     // Run the ≤10-line example against the live stack; it prints its trace id.
     const out = execFileSync("pnpm", ["tsx", EXAMPLE], {
       encoding: "utf8",
-      env: { ...process.env, THEOLENS_ENDPOINT: BASE },
+      env: { ...process.env, LOOPTRACE_ENDPOINT: BASE },
     });
-    const traceId = /THEOLENS_TRACE_ID=([0-9a-f]+)/.exec(out)?.[1];
+    const traceId = /LOOPTRACE_TRACE_ID=([0-9a-f]+)/.exec(out)?.[1];
     expect(traceId, `example stdout: ${out}`).toBeTruthy();
 
     const res = await fetch(`${BASE}/v1/traces/${traceId}`);
@@ -32,13 +32,13 @@ describe("Example agent ingestion (e2e)", () => {
 
   it("example_instrumentation_is_at_most_10_lines", () => {
     // The M2 onboarding promise measures ONLY the user-written instrumentation,
-    // delimited in the example by `// theo:instrument:start/end` markers — so the
+    // delimited in the example by `// looptrace:instrument:start/end` markers — so the
     // e2e-only harness (env default, trace-id print) is genuinely excluded, not
     // just claimed to be (review F-test-7).
     const src = readFileSync(EXAMPLE, "utf8");
     const all = src.split("\n");
-    const start = all.findIndex((l) => l.includes("theo:instrument:start"));
-    const end = all.findIndex((l) => l.includes("theo:instrument:end"));
+    const start = all.findIndex((l) => l.includes("looptrace:instrument:start"));
+    const end = all.findIndex((l) => l.includes("looptrace:instrument:end"));
     expect(start, "instrumentation start marker missing").toBeGreaterThanOrEqual(0);
     expect(end, "instrumentation end marker missing").toBeGreaterThan(start);
     const body = all

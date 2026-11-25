@@ -772,8 +772,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.theo_api_keys": {
-      "name": "theo_api_keys",
+    "public.looptrace_api_keys": {
+      "name": "looptrace_api_keys",
       "schema": "",
       "columns": {
         "id": {
@@ -865,8 +865,8 @@
         }
       },
       "indexes": {
-        "theo_api_keys_subject_tenant_idx": {
-          "name": "theo_api_keys_subject_tenant_idx",
+        "looptrace_api_keys_subject_tenant_idx": {
+          "name": "looptrace_api_keys_subject_tenant_idx",
           "columns": [
             {
               "expression": "subject",
@@ -886,8 +886,8 @@
           "method": "btree",
           "with": {}
         },
-        "theo_api_keys_workspace_id_idx": {
-          "name": "theo_api_keys_workspace_id_idx",
+        "looptrace_api_keys_workspace_id_idx": {
+          "name": "looptrace_api_keys_workspace_id_idx",
           "columns": [
             {
               "expression": "workspace_id",
@@ -905,8 +905,8 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "theo_api_keys_key_hash_uq": {
-          "name": "theo_api_keys_key_hash_uq",
+        "looptrace_api_keys_key_hash_uq": {
+          "name": "looptrace_api_keys_key_hash_uq",
           "nullsNotDistinct": false,
           "columns": [
             "key_hash"

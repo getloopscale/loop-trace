@@ -10,7 +10,7 @@
  * is a serialization concern of THIS projection only — the circular-degrade behavior it stands in
  * for is the TS mapper's, out of scope for a downstream client's serialize-and-POST contract.
  *
- * Run:  pnpm --filter @usetheo/lens-core exec tsx scripts/export-theokit-vectors.ts
+ * Run:  pnpm --filter @looptrace/core exec tsx scripts/export-theokit-vectors.ts
  * The committed output is guarded against drift by `theokit-vectors-json.test.ts`.
  */
 import { writeFileSync } from "node:fs";

@@ -55,7 +55,7 @@ describe("computeTraceCost", () => {
   });
 
   it("compute_trace_cost_includes_cache_read_and_creation_tokens", () => {
-    // theo-lens#71 Finding 1: Claude Code caches heavily; cache tokens MUST be priced.
+    // looptrace#71 Finding 1: Claude Code caches heavily; cache tokens MUST be priced.
     // opus rates: input $5/M, output $25/M, cacheRead 0.1× input = $0.5/M, cacheCreation 1.25× = $6.25/M
     const t: PriceTable = {
       opus: {
@@ -107,7 +107,7 @@ describe("computeTraceCost", () => {
 
 describe("default price table cache rates", () => {
   it("default_prices_derive_cache_rates_from_input_read_0_1x_creation_1_25x", () => {
-    // theo-lens#71 Finding 1: authoritative Anthropic multipliers (claude-api pricing ref):
+    // looptrace#71 Finding 1: authoritative Anthropic multipliers (claude-api pricing ref):
     // cache-read = 0.1× input, cache-creation (ephemeral 5-min) = 1.25× input.
     const opus = DEFAULT_PRICES["claude-opus-4"];
     expect(opus.inputPerToken).toBe(5e-6); // Finding 2 WITHDRAWN — $5/M is the correct opus-4-8 rate
@@ -116,7 +116,7 @@ describe("default price table cache rates", () => {
   });
 });
 
-describe("opus-4-8 rate resolution (theo-lens#71 Finding 2 — DoD regression)", () => {
+describe("opus-4-8 rate resolution (looptrace#71 Finding 2 — DoD regression)", () => {
   // The dated / context-window opus ids resolve to the current base key "claude-opus-4" = $5/$25 per M
   // via longest-prefix. A wrong constant (e.g. accidentally repricing to the legacy $15/$75) fails here.
   it("resolves_claude_opus_4_8_to_5_25_per_million", () => {

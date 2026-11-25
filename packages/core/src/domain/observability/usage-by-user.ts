@@ -4,7 +4,7 @@
  * put in `user.id` (falling back to the OTel semantic-convention `gen_ai.user.id`) — see
  * END_USER_ID_SQL in `infrastructure/db/repo-shared.ts` for the single definition.
  *
- * This is an OBSERVABILITY report, not a bill. theo-lens reports consumption it observed; theo-cloud
+ * This is an OBSERVABILITY report, not a bill. looptrace reports consumption it observed; loopzero-cloud
  * is what charges. The vocabulary here stays on the consumption side deliberately.
  */
 import { z } from "zod";

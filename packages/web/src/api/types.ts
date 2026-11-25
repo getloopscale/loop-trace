@@ -1,6 +1,6 @@
 /**
  * UI-local copies of the M1 HTTP contract. Declared here (NOT imported from
- * `@usetheo/lens-core`) so the UI depends only on the stable HTTP shape, never on
+ * `@looptrace/core`) so the UI depends only on the stable HTTP shape, never on
  * the server's domain/persistence types (ROADMAP M3 risk #2 / ADR D2).
  */
 /** A normalized OTLP span event (M12). */

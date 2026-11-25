@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
 
-import { createSpanRepository, migrateLatest } from "@usetheo/lens-core/infra";
+import { createSpanRepository, migrateLatest } from "@looptrace/core/infra";
 
 import { parseResourceSpans } from "../otlp/parse-resource-spans.js";
 import {
@@ -14,19 +14,19 @@ import {
  * ingestion), and `save` it via the span repository. Idempotent — deterministic ids
  * + `onConflictDoNothing` mean re-seeding never duplicates. Fails loud (exit 1) on a
  * missing connection string (Rule 8 — never guess a default DB). Exported for testing
- * the fail-loud path. `THEOLENS_DEMO_TRACES` / `THEOLENS_DEMO_SESSIONS` tune the size.
+ * the fail-loud path. `LOOPTRACE_DEMO_TRACES` / `LOOPTRACE_DEMO_SESSIONS` tune the size.
  */
 export async function main(): Promise<void> {
-  const uri = process.env["THEOLENS_PG_URI"];
+  const uri = process.env["LOOPTRACE_PG_URI"];
   if (!uri) {
     console.error(
-      JSON.stringify({ level: "error", msg: "THEOLENS_PG_URI is required" }),
+      JSON.stringify({ level: "error", msg: "LOOPTRACE_PG_URI is required" }),
     );
     process.exit(1);
     return;
   }
-  const traces = Number(process.env["THEOLENS_DEMO_TRACES"] ?? 8);
-  const sessions = Number(process.env["THEOLENS_DEMO_SESSIONS"] ?? 3);
+  const traces = Number(process.env["LOOPTRACE_DEMO_TRACES"] ?? 8);
+  const sessions = Number(process.env["LOOPTRACE_DEMO_SESSIONS"] ?? 3);
 
   const spans = parseResourceSpans(buildTravelAgentEnvelope({ traces, sessions }));
   const { repo, pool } = createSpanRepository(uri);

@@ -3,14 +3,14 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "theo-lens-sdk"
+name = "looptrace-sdk"
 version = "0.1.0"
-description = "Thin, stdlib-only Python client that records a Claude Code / @theokit/sdk SDKMessage run to Theo Lens via the native POST /v1/runs (the engine maps it to spans — zero client-side OTLP)."
+description = "Thin, stdlib-only Python client that records a Claude Code / @theokit/sdk SDKMessage run to LoopTrace via the native POST /v1/runs (the engine maps it to spans — zero client-side OTLP)."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "Apache-2.0" }
-authors = [{ name = "Theo" }]
-keywords = ["theo", "observability", "otel", "agents", "llm"]
+authors = [{ name = "LoopScale" }]
+keywords = ["looptrace", "observability", "otel", "agents", "llm"]
 # ZERO runtime dependencies — stdlib urllib + json only (ADR D2).
 dependencies = []
 
@@ -18,13 +18,13 @@ dependencies = []
 dev = ["pytest>=7", "ruff>=0.5", "mypy>=1.8"]
 
 [project.urls]
-Homepage = "https://usetheo.dev"
+Homepage = "https://getloopscale.com"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-theo_lens_sdk = ["py.typed"]
+looptrace_sdk = ["py.typed"]
 
 [tool.ruff]
 line-length = 110

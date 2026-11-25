@@ -54,6 +54,6 @@ describe("TraceListPage auto-refresh wiring (T3.2)", () => {
     const user = userEvent.setup();
     renderWithProvider();
     await user.selectOptions(screen.getByLabelText("Auto-refresh"), "10s");
-    expect(localStorage.getItem("theolens.autoRefreshMs")).toBe("10000");
+    expect(localStorage.getItem("looptrace.autoRefreshMs")).toBe("10000");
   });
 });

@@ -23,7 +23,7 @@ knowledge-base/references/*/
 
 # Claude Code working directory — estado de sessão por desenvolvedor, nunca commitado.
 #
-# DESVERSIONADO ao preparar a publicação, seguindo o theo-memory — o único dos três
+# DESVERSIONADO ao preparar a publicação, seguindo o loopmem — o único dos três
 # repos irmãos que já fez esta limpeza. Eram 799 arquivos, dos quais 402 em
 # `knowledge-base/`: planos, reviews, auditorias e evidências de dogfood. Planejamento
 # interno e detalhes de infraestrutura num repositório Apache-2.0 a caminho de ficar

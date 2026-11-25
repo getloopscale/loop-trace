@@ -11,7 +11,7 @@ already-persisted single-span traces, off the ingest hot path (ADR D5):
 - **rule** — `status:error` predicate (deterministic, no network).
 - **llm_judge (mocked)** — a deterministic in-process judge stub (`judge()` returns a
   fixed verdict). The stub isolates the engine + DB cost from real LLM latency, so the
-  number reflects theo-lens throughput, not the model's.
+  number reflects looptrace throughput, not the model's.
 
 Every figure is a real timed `runEvaluator` against a real DB — no fabricated numbers.
 
@@ -40,8 +40,8 @@ Every figure is a real timed `runEvaluator` against a real DB — no fabricated 
 ## Reproduce
 
 ```bash
-docker compose up -d postgres            # (THEOLENS_PG_PORT=55432)
+docker compose up -d postgres            # (LOOPTRACE_PG_PORT=55432)
 pnpm build                               # compiles dist + copies migrations
-THEOLENS_PG_URI="postgresql://theolens:theolens@localhost:55432/theolens" \
+LOOPTRACE_PG_URI="postgresql://looptrace:looptrace@localhost:55432/looptrace" \
   node benchmarks/evaluator-throughput.mjs
 ```

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { AuthVerifier, Principal, SpanRepository } from "@usetheo/lens-core";
+import type { AuthVerifier, Principal, SpanRepository } from "@looptrace/core";
 import { createApp } from "./app.js";
 import type { EvaluatorApiDeps } from "./handlers/evaluators.js";
 import type { CopilotApiDeps } from "./handlers/copilot.js";

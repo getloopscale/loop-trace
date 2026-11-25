@@ -65,7 +65,7 @@ if (el) {
         defaultMode="dark"
         themes={[violetForge]}
         defaultDensity="compact"
-        storageKey="theo-lens:theme"
+        storageKey="looptrace:theme"
       >
         <QueryClientProvider client={queryClient}>
           <AutoRefreshProvider>

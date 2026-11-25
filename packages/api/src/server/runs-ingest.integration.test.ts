@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { type SpanRepository, type SDKMessage, type TheokitRunResult } from "@usetheo/lens-core";
-import { createSpanRepository, migrateLatest } from "@usetheo/lens-core/infra";
+import { type SpanRepository, type SDKMessage, type TheokitRunResult } from "@looptrace/core";
+import { createSpanRepository, migrateLatest } from "@looptrace/core/infra";
 import type pg from "pg";
 import { createApp } from "./app.js";
 
@@ -10,9 +10,9 @@ import { createApp } from "./app.js";
  * fail-fast boundary. Per-tenant isolation is inherited from the SAME `repo.save(spans, ws)` path as
  * /v1/traces (proven exhaustively in `core/.../cross-tenant-isolation.integration.test.ts`); here the
  * engine runs single-tenant (default workspace) so the focus is the request/response contract.
- * Gated on THEOLENS_PG_URI.
+ * Gated on LOOPTRACE_PG_URI.
  */
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
 
 const RUN = "runs-endpoint-1";

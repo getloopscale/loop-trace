@@ -22,7 +22,7 @@ import {
   MAX_WINDOW_DAYS,
   type UsageByUserOptions,
   apiError,
-} from "@usetheo/lens-core";
+} from "@looptrace/core";
 
 import { getPrincipal, requireScopeOnPrincipal } from "../auth/middleware.js";
 import { usageByUserReports, promptUsageReports } from "../metrics.js";
@@ -50,7 +50,7 @@ export function registerAnalyticsRoutes(app: Hono, repo: TraceReadRepository & A
     return c.json(traceListResponseSchema.parse(list), 200);
   });
 
-  // M15 (theo-promptly) — uso por REVISÃO de um prompt. O workspace vem do Principal e NUNCA de
+  // M15 (loopprompt) — uso por REVISÃO de um prompt. O workspace vem do Principal e NUNCA de
   // query param: um `?workspaceId=` aqui seria vazamento cross-tenant por desenho (M22).
   app.get("/v1/analytics/prompt-usage", requireScopeOnPrincipal("observability:read"), async (c) => {
     const promptName = c.req.query("prompt");
@@ -91,8 +91,8 @@ export function registerAnalyticsRoutes(app: Hono, repo: TraceReadRepository & A
     return c.json(costByPeriodResponseSchema.parse(result), 200);
   });
 
-  // M140 — consumption grouped by END USER. Observability, not billing: theo-lens reports what it
-  // observed; theo-cloud is what charges. The workspace comes from the Principal and never from a
+  // M140 — consumption grouped by END USER. Observability, not billing: looptrace reports what it
+  // observed; loopzero-cloud is what charges. The workspace comes from the Principal and never from a
   // query param — a `?workspaceId=` here would be a cross-tenant leak by design (M22).
   app.get("/v1/analytics/usage-by-user", requireScopeOnPrincipal("observability:read"), async (c) => {
     // Fail-fast on each param (Rule 8): a non-numeric or out-of-range value is rejected rather than

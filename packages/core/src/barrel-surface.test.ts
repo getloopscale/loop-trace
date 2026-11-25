@@ -4,12 +4,12 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import * as rootBarrel from "./index.js";
-import * as infra from "@usetheo/lens-core/infra";
+import * as infra from "@looptrace/core/infra";
 
 /**
- * M122 boundary guard: the root barrel (`@usetheo/lens-core`) is the DOMAIN public
+ * M122 boundary guard: the root barrel (`@looptrace/core`) is the DOMAIN public
  * API. The 13 infrastructure concretes (7 Drizzle repo symbols + 6 raw table
- * schemas) live ONLY behind the `@usetheo/lens-core/infra` subpath. These tests are
+ * schemas) live ONLY behind the `@looptrace/core/infra` subpath. These tests are
  * the permanent re-leak guard — re-exporting any infra symbol from the root fails here.
  */
 const INFRA_SYMBOLS = [

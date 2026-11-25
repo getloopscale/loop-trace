@@ -1,5 +1,5 @@
 # Static security analysis over the production TypeScript surface (OWASP A05 / CWE-1059).
-# Adopted from the ecosystem CD playbook — theo-rag is the reference implementation.
+# Adopted from the ecosystem CD playbook — looprag is the reference implementation.
 #
 # Third-party study material under .claude/knowledge-base/references/ is excluded: it is other
 # projects' code, cloned to read, and its findings are not ours to fix.

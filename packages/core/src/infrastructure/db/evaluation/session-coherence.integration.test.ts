@@ -15,7 +15,7 @@ import { createPool, DrizzleSpanRepository } from "../observability/drizzle-span
 import { getSessionDetail } from "../observability/session-repository.js";
 import { getSessionVerdict, upsertSessionVerdict } from "./session-evaluation-repository.js";
 
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const MIGRATIONS = fileURLToPath(new URL("../migrations", import.meta.url));
 const suite = PG_URI ? describe : describe.skip;
 
