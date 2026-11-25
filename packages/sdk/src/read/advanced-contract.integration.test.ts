@@ -2,13 +2,13 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   RateLimiter,
   type EngineDeps,
-  type SpanRepository, EvaluatorRunJobRegistry } from "@usetheo/lens-core";
+  type SpanRepository, EvaluatorRunJobRegistry } from "@looptrace/core";
 import {
   createSpanRepository,
   evaluatorRepoFromPool,
   migrateLatest,
-} from "@usetheo/lens-core/infra";
-import { createApp } from "@usetheo/lens-api";
+} from "@looptrace/core/infra";
+import { createApp } from "@looptrace/api";
 import type pg from "pg";
 
 import { LensReadClient } from "./client.js";
@@ -19,9 +19,9 @@ import { LensReadClient } from "./client.js";
  * and asserts the mutation is observable. A `rule` evaluator's `runEvaluator` needs no LLM provider, so
  * it runs hermetically; the `llm_judge` / replay / experiment paths (provider-gated) are proven at the
  * unit layer (M111/M113) + would 503 fail-closed here without a provider, so they are not driven live.
- * Gated on THEOLENS_PG_URI.
+ * Gated on LOOPTRACE_PG_URI.
  */
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
 
 suite("LensReadClient advanced-write contract (M114)", () => {
@@ -48,7 +48,7 @@ suite("LensReadClient advanced-write contract (M114)", () => {
       app.fetch(new Request(typeof input === "string" ? input : input.toString(), init));
     client = new LensReadClient({
       baseUrl: "http://engine.local",
-      apiKey: "theo_live_contract_test",
+      apiKey: "looptrace_live_contract_test",
       fetch: engineFetch,
     });
   });

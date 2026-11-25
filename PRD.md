@@ -1,12 +1,12 @@
-# PRD — Theo Lens
+# PRD — LoopTrace
 
 ## Overview
 
-Theo Lens é uma plataforma open source de observabilidade para agentes de IA.
+LoopTrace é uma plataforma open source de observabilidade para agentes de IA.
 
 Ela permite que equipes entendam exatamente o que aconteceu durante uma execução, reproduzam comportamentos, identifiquem falhas, analisem ferramentas utilizadas e monitorem custos operacionais.
 
-Theo Lens é para agentes de IA o que Jaeger é para microsserviços.
+LoopTrace é para agentes de IA o que Jaeger é para microsserviços.
 
 ---
 

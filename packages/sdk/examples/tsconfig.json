@@ -6,7 +6,7 @@
     "incremental": false,
     "baseUrl": ".",
     "paths": {
-      "@usetheo/lens-sdk": ["../src/index.ts"]
+      "@looptrace/sdk": ["../src/index.ts"]
     }
   },
   "include": ["**/*.ts"]

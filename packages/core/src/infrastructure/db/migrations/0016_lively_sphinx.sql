@@ -1,4 +1,4 @@
-CREATE TABLE "theo_api_keys" (
+CREATE TABLE "looptrace_api_keys" (
 	"id" varchar(20) PRIMARY KEY NOT NULL,
 	"subject" text NOT NULL,
 	"tenant_id" text DEFAULT 'self' NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE "theo_api_keys" (
 	"expires_at" timestamp with time zone,
 	"revoked_at" timestamp with time zone,
 	"rotated_from" varchar(20),
-	CONSTRAINT "theo_api_keys_key_hash_uq" UNIQUE("key_hash")
+	CONSTRAINT "looptrace_api_keys_key_hash_uq" UNIQUE("key_hash")
 );
 --> statement-breakpoint
 CREATE TABLE "workspace_users" (
@@ -39,8 +39,8 @@ ALTER TABLE "span_evaluations" ADD COLUMN "workspace_id" text DEFAULT 'default' 
 ALTER TABLE "spans" ADD COLUMN "workspace_id" text DEFAULT 'default' NOT NULL;--> statement-breakpoint
 ALTER TABLE "trace_tags" ADD COLUMN "workspace_id" text DEFAULT 'default' NOT NULL;--> statement-breakpoint
 ALTER TABLE "traces" ADD COLUMN "workspace_id" text DEFAULT 'default' NOT NULL;--> statement-breakpoint
-CREATE INDEX "theo_api_keys_subject_tenant_idx" ON "theo_api_keys" USING btree ("subject","tenant_id");--> statement-breakpoint
-CREATE INDEX "theo_api_keys_workspace_id_idx" ON "theo_api_keys" USING btree ("workspace_id");--> statement-breakpoint
+CREATE INDEX "looptrace_api_keys_subject_tenant_idx" ON "looptrace_api_keys" USING btree ("subject","tenant_id");--> statement-breakpoint
+CREATE INDEX "looptrace_api_keys_workspace_id_idx" ON "looptrace_api_keys" USING btree ("workspace_id");--> statement-breakpoint
 CREATE INDEX "workspace_users_workspace_id_idx" ON "workspace_users" USING btree ("workspace_id");--> statement-breakpoint
 CREATE INDEX "sessions_workspace_id_idx" ON "sessions" USING btree ("workspace_id");--> statement-breakpoint
 CREATE INDEX "spans_workspace_id_idx" ON "spans" USING btree ("workspace_id");--> statement-breakpoint

@@ -4,7 +4,7 @@ import type pg from "pg";
 import { createPool } from "./observability/drizzle-span-repository.js";
 import { DEFAULT_POOL_CONFIG } from "../../domain/evaluation/evaluator-config.js";
 
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
 
 suite("M94 pool resilience config (integration)", () => {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # M22 invariant-6 proof: cross-tenant isolation + fail-closed deny through a REAL
-# Traefik ForwardAuth edge (hermetic — no theo-cloud). Brings up the edge overlay,
+# Traefik ForwardAuth edge (hermetic — no loopzero-cloud). Brings up the edge overlay,
 # asserts the contract end-to-end with curl, tears everything down.
 #
 #   pnpm test:e2e:edge        (or)  bash scripts/e2e-edge.sh
@@ -61,7 +61,7 @@ code=$(curl -s -o /dev/null -w '%{http_code}' "$EDGE/v1/traces")
 [ "$code" = "401" ] && pass "no-key request denied at the edge (401)" || fail "no-key expected 401, got $code"
 
 # 5) The raw customer key sent DIRECTLY to the service is rejected — it only honors
-#    minted theo_live_* keys (proves the edge MUST strip+mint; a leaked customer key
+#    minted looptrace_live_* keys (proves the edge MUST strip+mint; a leaked customer key
 #    cannot authenticate against the data plane).
 code=$(curl -s -o /dev/null -w '%{http_code}' "$DIRECT/v1/traces" -H 'authorization: Bearer cust_bob')
 [ "$code" = "401" ] && pass "raw customer key rejected directly by the service (401)" || fail "direct customer key expected 401, got $code"

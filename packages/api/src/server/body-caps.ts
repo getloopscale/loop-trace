@@ -8,7 +8,7 @@
  */
 import type { MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { errorBody } from "@usetheo/lens-core";
+import { errorBody } from "@looptrace/core";
 
 /**
  * Per-route pre-parse ceilings (bytes). The value reuses each route's existing post-parse cap where one

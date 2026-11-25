@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-const BASE = process.env["THEOLENS_E2E_BASE"] ?? "http://localhost:44318";
+const BASE = process.env["LOOPTRACE_E2E_BASE"] ?? "http://localhost:44318";
 
 describe("OTLP span round-trip (e2e)", () => {
   it("span_roundtrip_from_clean_compose", async () => {

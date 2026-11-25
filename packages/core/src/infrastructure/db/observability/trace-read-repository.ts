@@ -93,7 +93,7 @@ export async function save(
           (array_agg(name ORDER BY (parent_span_id IS NOT NULL), start_time_unix_nano::numeric))[1],
           min(start_time_unix_nano::numeric)::text,
           max(end_time_unix_nano::numeric)::text,
-          -- theo-lens#136: aqui o teto é a COLUNA (traces.input_tokens é integer), não o cast —
+          -- looptrace#136: aqui o teto é a COLUNA (traces.input_tokens é integer), não o cast —
           -- removê-lo não corrigiria nada, e a correção real seria migrar o tipo numa tabela quente.
           -- A exposição também é outra: isto soma os spans de UM trace, e o maior trace medido no
           -- app-dev tem 992k tokens, ~2000x abaixo do teto. Fora de escopo, declarado.
@@ -132,7 +132,7 @@ export async function save(
         FROM spans WHERE trace_id = ${traceId} AND workspace_id = ${workspaceId} AND model IS NOT NULL
         GROUP BY model
       `);
-      // M52 / theo-lens#71 Finding 1: include cache_read + cache_creation tokens in the cost
+      // M52 / looptrace#71 Finding 1: include cache_read + cache_creation tokens in the cost
       // — Claude Code caches heavily, so excluding them understated cost by ~14× on real traces.
       const cost = computeTraceCost(
         (usage.rows as { model: string; i: number; o: number; cr: number; cc: number }[]).map(
@@ -278,7 +278,7 @@ export async function getTraceTree(
     (effectiveParent(node) ?? primary).children.push(node);
   }
 
-  // M53 / theo-lens#73: surface the trace's STORED cost on the root so the detail header matches
+  // M53 / looptrace#73: surface the trace's STORED cost on the root so the detail header matches
   // the list (both read the authoritative `traces.cost_usd`), instead of the client re-summing
   // per-span costs (absent for interaction/tool spans → a misleading $0.0000). Only a real positive
   // cost is attached; 0/absent leaves `costUsd` undefined so the UI renders an em-dash.
@@ -465,7 +465,7 @@ export async function listTraces(
   const rows = await db
     .select({
       ...getTableColumns(traces),
-      // M53 / theo-lens#76: attribute a MODEL to `interaction` traces (whose root span has none —
+      // M53 / looptrace#76: attribute a MODEL to `interaction` traces (whose root span has none —
       // the model lives on child `llm_request` spans). Take the DOMINANT model (most tokens) across
       // the trace's spans, deterministic tie-break by name; fall back to the root-span model. This
       // correlated subquery runs per RETURNED row (page-bounded by `limit`), not per total trace.

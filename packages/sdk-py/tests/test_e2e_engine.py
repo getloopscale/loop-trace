@@ -1,6 +1,6 @@
 """T3.2 — gated hermetic e2e: POST all 18 vectors to a real engine and assert 200 partialSuccess.
 
-Skipped unless ``THEO_LENS_E2E_URL`` + ``THEO_LENS_E2E_KEY`` are set (the engine is not running in
+Skipped unless ``LOOPTRACE_E2E_URL`` + ``LOOPTRACE_E2E_KEY`` are set (the engine is not running in
 CI). This is the real proof that the batches are actually accepted by ``/v1/runs``; the serialization
 contract test (``test_vectors_contract``) is the CI-safe proof of the same shape.
 """
@@ -14,11 +14,11 @@ from typing import Any, cast
 
 import pytest
 
-from theo_lens_sdk import record_run
+from looptrace_sdk import record_run
 
-E2E_URL = os.environ.get("THEO_LENS_E2E_URL")
-E2E_KEY = os.environ.get("THEO_LENS_E2E_KEY")
-E2E_BASE_PATH = os.environ.get("THEO_LENS_E2E_BASE_PATH", "/v1")
+E2E_URL = os.environ.get("LOOPTRACE_E2E_URL")
+E2E_KEY = os.environ.get("LOOPTRACE_E2E_KEY")
+E2E_BASE_PATH = os.environ.get("LOOPTRACE_E2E_BASE_PATH", "/v1")
 
 VECTORS_PATH = (
     Path(__file__).resolve().parents[2] / "core" / "src" / "domain" / "theokit" / "theokit-vectors.json"
@@ -26,7 +26,7 @@ VECTORS_PATH = (
 
 pytestmark = pytest.mark.skipif(
     not (E2E_URL and E2E_KEY),
-    reason="set THEO_LENS_E2E_URL + THEO_LENS_E2E_KEY to run the hermetic engine e2e",
+    reason="set LOOPTRACE_E2E_URL + LOOPTRACE_E2E_KEY to run the hermetic engine e2e",
 )
 
 

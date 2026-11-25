@@ -1,4 +1,4 @@
-# One-command stack for Theo Lens (M7).
+# One-command stack for LoopTrace (M7).
 #
 # Two services: a plain Postgres (no pgvector — blueprint D2) and the API. The
 # API migrates the schema on boot and serves BOTH the ingestion API (/v1/*) and
@@ -10,18 +10,18 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: theolens_postgres
+    container_name: looptrace_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${THEOLENS_PG_USER:-theolens}
-      POSTGRES_PASSWORD: ${THEOLENS_PG_PASSWORD:-theolens}
-      POSTGRES_DB: ${THEOLENS_PG_DB:-theolens}
+      POSTGRES_USER: ${LOOPTRACE_PG_USER:-looptrace}
+      POSTGRES_PASSWORD: ${LOOPTRACE_PG_PASSWORD:-looptrace}
+      POSTGRES_DB: ${LOOPTRACE_PG_DB:-looptrace}
     ports:
-      - "${THEOLENS_PG_PORT:-5432}:5432"
+      - "${LOOPTRACE_PG_PORT:-5432}:5432"
     volumes:
-      - theolens_pgdata:/var/lib/postgresql/data
+      - looptrace_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${THEOLENS_PG_USER:-theolens} -d ${THEOLENS_PG_DB:-theolens}"]
+      test: ["CMD-SHELL", "pg_isready -U ${LOOPTRACE_PG_USER:-looptrace} -d ${LOOPTRACE_PG_DB:-looptrace}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -31,23 +31,23 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: theolens_api
+    container_name: looptrace_api
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      THEOLENS_PG_URI: postgresql://${THEOLENS_PG_USER:-theolens}:${THEOLENS_PG_PASSWORD:-theolens}@postgres:5432/${THEOLENS_PG_DB:-theolens}
-      THEOLENS_PORT: "4318"
+      LOOPTRACE_PG_URI: postgresql://${LOOPTRACE_PG_USER:-looptrace}:${LOOPTRACE_PG_PASSWORD:-looptrace}@postgres:5432/${LOOPTRACE_PG_DB:-looptrace}
+      LOOPTRACE_PORT: "4318"
       # Pass-through runtime config. Defaulted so a clean `docker compose up` still works, and
       # supplied by the dev host's .env at deploy — the values are secrets and never live here.
-      THEOLENS_REQUIRE_CREDENTIAL: ${THEOLENS_REQUIRE_CREDENTIAL:-false}
-      THEOLENS_PLATFORM_ADMIN_BOOTSTRAP: ${THEOLENS_PLATFORM_ADMIN_BOOTSTRAP:-}
-      THEOLENS_JUDGE_BASE_URL: ${THEOLENS_JUDGE_BASE_URL:-}
-      THEOLENS_JUDGE_API_KEY: ${THEOLENS_JUDGE_API_KEY:-}
+      LOOPTRACE_REQUIRE_CREDENTIAL: ${LOOPTRACE_REQUIRE_CREDENTIAL:-false}
+      LOOPTRACE_PLATFORM_ADMIN_BOOTSTRAP: ${LOOPTRACE_PLATFORM_ADMIN_BOOTSTRAP:-}
+      LOOPTRACE_JUDGE_BASE_URL: ${LOOPTRACE_JUDGE_BASE_URL:-}
+      LOOPTRACE_JUDGE_API_KEY: ${LOOPTRACE_JUDGE_API_KEY:-}
       DISABLE_ERROR_REPORTING: ${DISABLE_ERROR_REPORTING:-0}
     ports:
-      - "${THEOLENS_API_PORT:-4318}:4318"
+      - "${LOOPTRACE_API_PORT:-4318}:4318"
     healthcheck:
       # LIVENESS only, never readiness. A DB blip must not make Docker restart a process that is
       # perfectly alive; readiness is a different question, asked by the deploy gate and the LB.
@@ -58,5 +58,5 @@ services:
       start_period: 20s
 
 volumes:
-  theolens_pgdata:
-    name: theolens_pgdata
+  looptrace_pgdata:
+    name: looptrace_pgdata

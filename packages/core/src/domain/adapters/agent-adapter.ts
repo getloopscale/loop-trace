@@ -13,7 +13,7 @@ export interface AdapterSpanEvent {
 
 /**
  * An adapter maps ONE external agent's OTLP span attribute convention into the
- * normalized typed fields (model/provider/tokens/input/output/tool) Theo Lens
+ * normalized typed fields (model/provider/tokens/input/output/tool) LoopTrace
  * stores (M15). Adapters are selected by `service.name` (a resource attribute),
  * so adding a new agent (Codex, …) is "implement this interface + register one
  * entry" — the pipeline, schema, DTOs, and UI never change per agent (D1).

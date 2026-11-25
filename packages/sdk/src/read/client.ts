@@ -1,5 +1,5 @@
 /**
- * `LensReadClient` — the typed read/write surface of `@usetheo/lens-sdk` (M103).
+ * `LensReadClient` — the typed read/write surface of `@looptrace/sdk` (M103).
  *
  * One typed method per route. Responses are typed from the generated OpenAPI
  * (`../__generated__/openapi.ts`) for zod-backed routes, or hand-authored (drift-guarded by a contract
@@ -9,8 +9,8 @@
  * typed error mapping) lives in {@link LensReadTransport} (`./transport.ts`, split out in M117 to keep
  * this file under the size budget). This class extends it and adds one public method per route.
  *
- * Auth is a `theo_live_*` key sent as `Authorization: Bearer <key>`; the per-tenant key resolves the
- * workspace at the edge, so the client NEVER sends a workspace parameter (theo-data invariant 2/3).
+ * Auth is a `looptrace_live_*` key sent as `Authorization: Bearer <key>`; the per-tenant key resolves the
+ * workspace at the edge, so the client NEVER sends a workspace parameter (data-plane invariant 2/3).
  */
 import { LensReadTransport } from "./transport.js";
 import type {
@@ -83,7 +83,7 @@ const RUN_JOB_POLL_TIMEOUT_MS = 300_000;
 /** Gap between run-job polls. */
 const RUN_JOB_POLL_INTERVAL_MS = 500;
 
-// Re-export so existing consumers of `LensReadClientOptions` from `@usetheo/lens-sdk` (and the barrel
+// Re-export so existing consumers of `LensReadClientOptions` from `@looptrace/sdk` (and the barrel
 // `index.ts`, which imports it from this module) keep resolving after the M117 transport split.
 export type { LensReadClientOptions } from "./transport.js";
 

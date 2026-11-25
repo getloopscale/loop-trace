@@ -1,6 +1,6 @@
-# Theo Lens image — multi-stage pnpm workspace build (M7: one image serves API + UI).
-# Stage 1 builds @usetheo/lens-core + @usetheo/lens-api AND the web bundle
-# (built with an empty VITE_THEOLENS_API so the UI calls the API same-origin).
+# LoopTrace image — multi-stage pnpm workspace build (M7: one image serves API + UI).
+# Stage 1 builds @looptrace/core + @looptrace/api AND the web bundle
+# (built with an empty VITE_LOOPTRACE_API so the UI calls the API same-origin).
 # Stage 2 ships only prod deps + the compiled API dist + the static web dist;
 # the API serves both /v1/* and the UI at one port (D1).
 
@@ -18,7 +18,7 @@ COPY packages ./packages
 # their deps are intentionally not installed here).
 RUN pnpm exec tsc -b packages/api
 # Same-origin: empty base → the client fetches /v1/... relative (D1).
-RUN VITE_THEOLENS_API="" pnpm --filter @usetheo/lens-web build
+RUN VITE_LOOPTRACE_API="" pnpm --filter @looptrace/web build
 
 FROM node:22-alpine AS runtime
 
@@ -58,7 +58,7 @@ COPY --from=build /app/packages/api/dist ./packages/api/dist
 COPY --from=build /app/packages/core/src/infrastructure/db/migrations ./packages/core/dist/infrastructure/db/migrations
 # Static UI bundle served by the API at runtime (CWD-relative root, EC-1).
 COPY --from=build /app/packages/web/dist ./packages/web/dist
-ENV THEOLENS_PORT=4318
+ENV LOOPTRACE_PORT=4318
 EXPOSE 4318
 
 # Drop root. The `node` user ships with the base image (uid 1000), so this needs no useradd —

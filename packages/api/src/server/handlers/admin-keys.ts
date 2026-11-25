@@ -1,12 +1,12 @@
 /**
  * Admin key lifecycle — `POST/GET/DELETE /v1/admin/keys[*]` (M22). The admin
- * surface the theo-cloud gateway (Model B broker) mints per-tenant keys against.
- * Ported from the reference `theo-memory` (`handlers/admin-keys.ts`), focused on
+ * surface the loopzero-cloud gateway (Model B broker) mints per-tenant keys against.
+ * Ported from the reference `loopmem` (`handlers/admin-keys.ts`), focused on
  * the security-critical core: mint / list / revoke with anti-escalation. (Key
  * rotation = revoke + mint via these endpoints; a dedicated rotate route is not
  * shipped in M22 — YAGNI until a caller needs atomic rotate-in-place.)
  *
- * Key format `theo_live_` + 32 random bytes (base64url); stored ONLY as a SHA-256
+ * Key format `looptrace_live_` + 32 random bytes (base64url); stored ONLY as a SHA-256
  * hash (the raw secret is returned ONCE on mint, never persisted). Gated upstream
  * by `requireScope('observability:admin')` (a `observability:platform-admin` key satisfies it via the
  * scope hierarchy). Anti-escalation (the CWE-441 mint guard):
@@ -21,7 +21,7 @@ import { scopeSatisfies } from "../auth/scope-hierarchy.js";
 import { constantTimeEqual } from "../auth/scope-verifier.js";
 import type { AuthPool } from "../auth/api-key-verifier.js";
 
-const PREFIX = "theo_live_";
+const PREFIX = "looptrace_live_";
 const VALID_SCOPES = new Set([
   "observability:read",
   "observability:write",
@@ -63,7 +63,7 @@ async function resolveCaller(
   }
   const hash = createHash("sha256").update(token).digest("hex");
   const { rows } = await pool.query<{ workspace_id: string; scopes: unknown }>(
-    `SELECT workspace_id, scopes FROM theo_api_keys
+    `SELECT workspace_id, scopes FROM looptrace_api_keys
       WHERE key_hash = $1 AND revoked_at IS NULL
         AND (expires_at IS NULL OR expires_at > NOW()) AND tenant_id = 'self' LIMIT 1`,
     [hash],
@@ -169,7 +169,7 @@ export async function createKeyHandler(
   const id = newId();
   const { secret, hash, prefix } = newKey();
   const WORKSPACE_SQL = `INSERT INTO workspaces (id, name) VALUES ($1, $1) ON CONFLICT DO NOTHING`;
-  const KEY_SQL = `INSERT INTO theo_api_keys (id, subject, tenant_id, workspace_id, key_name, key_hash, key_prefix, scopes, expires_at)
+  const KEY_SQL = `INSERT INTO looptrace_api_keys (id, subject, tenant_id, workspace_id, key_name, key_hash, key_prefix, scopes, expires_at)
      VALUES ($1, $2, 'self', $3, $4, $5, $6, $7::jsonb, $8)`;
   const keyParams = [id, targetWorkspace, targetWorkspace, name, hash, prefix, JSON.stringify(scopesIn), expiresAt];
   // Atomic (LENS-AUTH-4): the workspace upsert + key insert run in ONE transaction
@@ -216,7 +216,7 @@ export async function listKeysHandler(
     created_at: Date;
     expires_at: Date | null;
   }>(
-    `SELECT id, key_name, key_prefix, scopes, created_at, expires_at FROM theo_api_keys
+    `SELECT id, key_name, key_prefix, scopes, created_at, expires_at FROM looptrace_api_keys
       WHERE workspace_id = $1 AND tenant_id = 'self' AND revoked_at IS NULL
       ORDER BY created_at DESC LIMIT 100`,
     [caller.workspaceId],
@@ -249,7 +249,7 @@ export async function revokeKeyHandler(
   if (caller === null) return c.json({ code: "AUTH_REQUIRED", message: "caller could not be resolved" }, 401);
   // Existence-leak guard: not-yours / gone / already-revoked all read as 404.
   const { rows } = await pool.query<{ id: string }>(
-    `UPDATE theo_api_keys SET revoked_at = NOW()
+    `UPDATE looptrace_api_keys SET revoked_at = NOW()
       WHERE id = $1 AND workspace_id = $2 AND tenant_id = 'self' AND revoked_at IS NULL RETURNING id`,
     [id, caller.workspaceId],
   );

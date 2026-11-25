@@ -1,8 +1,8 @@
 /**
- * M140.4 — unit test da wiring do consumidor BM25 (`searchBm25`). Mocka `db.execute` (não requer TheoDB/
- * theodb_rs), então roda no CI normal do theo-lens: prova a lógica do helper (mapeia `(id, score)`, valida
+ * M140.4 — unit test da wiring do consumidor BM25 (`searchBm25`). Mocka `db.execute` (não requer LoopDB/
+ * loopdb_rs), então roda no CI normal do looptrace: prova a lógica do helper (mapeia `(id, score)`, valida
  * `k`, emite uma query `bm25_search`). A prova ponta-a-ponta contra a engine real está no
- * `theo-db/scripts/m140-4-consumer-theolens.sh` (CONSUMER_OK).
+ * `loopdb/scripts/m140-4-consumer-looptrace.sh` (CONSUMER_OK).
  */
 import { describe, expect, it, vi } from "vitest";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";

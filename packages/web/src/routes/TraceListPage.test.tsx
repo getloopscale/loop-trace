@@ -198,7 +198,7 @@ describe("TraceListPage (integration)", () => {
     // M31: in Live mode the list must use an OPEN upper bound (no `to`) so traces
     // ingested after page-load appear on the next poll — the frozen window's `to`
     // (M29b) would otherwise hide them. The `from` lower bound stays.
-    localStorage.setItem("theolens.live", "true");
+    localStorage.setItem("looptrace.live", "true");
     vi.mocked(client.listTraces).mockResolvedValue({ traces: [] });
     renderPage();
     await waitFor(() => expect(client.listTraces).toHaveBeenCalled());
@@ -210,7 +210,7 @@ describe("TraceListPage (integration)", () => {
   it("test_trace_list_reads_span_query_from_provider", async () => {
     // M30b: the span-query is now the GLOBAL shared spine (the bar lives in the AppShell
     // toolbar, not this page). A seeded provider value drives the list query.
-    localStorage.setItem("theolens.spanQuery", "kind:tool");
+    localStorage.setItem("looptrace.spanQuery", "kind:tool");
     vi.mocked(client.listTraces).mockResolvedValue({ traces: [] });
     renderPage();
     await waitFor(() =>

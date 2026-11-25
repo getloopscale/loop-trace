@@ -12,7 +12,7 @@ export interface SavedView {
   query: ListTracesQuery;
 }
 
-const STORAGE_KEY = "theolens.savedViews";
+const STORAGE_KEY = "looptrace.savedViews";
 
 /** Drop the time window — it is owned by the global range, not by a saved view. */
 function stripTime(query: ListTracesQuery): ListTracesQuery {

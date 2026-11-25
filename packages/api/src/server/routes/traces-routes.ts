@@ -22,7 +22,7 @@ import {
   DEFAULT_ANNOTATOR_KIND,
   apiError,
   zodFieldErrors,
-} from "@usetheo/lens-core";
+} from "@looptrace/core";
 
 import { getPrincipal, requireScopeOnPrincipal } from "../auth/middleware.js";
 import { bodyLimit413, DEFAULT_ADVANCED_MAX_BYTES } from "../body-caps.js"; // M118 (D1)
@@ -78,7 +78,7 @@ export function registerTracesRoutes(app: Hono, repo: TraceReadRepository & Anno
       // current filter; bounded by the validated limit (never a full-table dump).
       return c.body(tracesToCsv(list.traces), 200, {
         "content-type": "text/csv; charset=utf-8",
-        "content-disposition": 'attachment; filename="theo-lens-traces.csv"',
+        "content-disposition": 'attachment; filename="looptrace-traces.csv"',
       });
     }
     return c.json(list, 200);

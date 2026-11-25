@@ -17,7 +17,7 @@ export const AUTO_REFRESH_OPTIONS = [
   { label: "1m", ms: 60000 },
 ] as const satisfies ReadonlyArray<{ label: string; ms: AutoRefreshValue }>;
 
-const STORAGE_KEY = "theolens.autoRefreshMs";
+const STORAGE_KEY = "looptrace.autoRefreshMs";
 const ALLOWED_MS = [5000, 10000, 30000, 60000];
 
 /**
@@ -26,7 +26,7 @@ const ALLOWED_MS = [5000, 10000, 30000, 60000];
  * a hammer. Built on M16 polling (no SSE, no new dependency — D2).
  */
 export const LIVE_MS = 2000;
-const STORAGE_KEY_LIVE = "theolens.live";
+const STORAGE_KEY_LIVE = "looptrace.live";
 
 /** Read the persisted Live flag; defensive (disabled/corrupt store) → false. */
 export function readStoredLive(): boolean {

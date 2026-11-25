@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
-from theo_lens_sdk import record_run
+from looptrace_sdk import record_run
 
 from ._transport_stub import BASE, CapturingTransport
 

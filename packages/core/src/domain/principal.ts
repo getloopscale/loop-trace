@@ -1,15 +1,15 @@
 /**
  * Principal + Workspace — the multi-tenant workspace-isolation domain types
- * (M22). Ported from the reference data-plane capability `theo-memory`
+ * (M22). Ported from the reference data-plane capability `loopmem`
  * (`packages/core/src/domain/principal.ts`) with a mechanical `memory:` → `lens:`
- * scope swap — see `theo-data/README.md § 3.1` (the contract this capability copies).
+ * scope swap — see `data-plane/README.md § 3.1` (the contract this capability copies).
  *
  * A {@link Principal} is what an {@link AuthVerifier} resolves FROM a credential:
  * it answers "whose key is this?" (the tenant + its granted scopes), not merely
  * "is this key valid?". Every authenticated request carries a Principal; every
  * row belongs to the Principal's {@link Workspace}; every query is scoped by
  * `workspaceId`. `workspaceId == tenant_id` — the data plane does NOT know about
- * accounts (theo-data/CLAUDE.md inviolable invariant 2).
+ * accounts (data-plane/CLAUDE.md inviolable invariant 2).
  */
 
 /** The tenant boundary. Every row belongs to exactly one workspace. */
@@ -51,9 +51,9 @@ export function roleSatisfies(role: WorkspaceRole, min: WorkspaceRole): boolean 
  * Resolved from a credential by {@link AuthVerifier.resolvePrincipal}. Carries
  * the tenant (`workspaceId`), the member the key acts as (`userId`, null for
  * legacy keys), that member's workspace `role`, and the key's capability set
- * (`scopes`, mirroring the `theo_api_keys.scopes` JSONB shape). `workspaceId` is
+ * (`scopes`, mirroring the `looptrace_api_keys.scopes` JSONB shape). `workspaceId` is
  * injected server-side into every scoped query and MUST NOT be taken from the
- * request body (theo-data/CLAUDE.md invariant 3).
+ * request body (data-plane/CLAUDE.md invariant 3).
  */
 export interface Principal {
   /** The tenant the credential belongs to. */

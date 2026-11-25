@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
-import type { AuthVerifier, Principal, SpanRepository } from "@usetheo/lens-core";
+import type { AuthVerifier, Principal, SpanRepository } from "@looptrace/core";
 
 import { createApp } from "./app.js";
 import { promptUsageReports } from "./metrics.js";
 
 /**
- * M15 (theo-promptly) — a rota `GET /v1/analytics/prompt-usage` na fronteira HTTP.
+ * M15 (loopprompt) — a rota `GET /v1/analytics/prompt-usage` na fronteira HTTP.
  *
  * O que a integração contra Postgres já prova é a CONSULTA. O que só aqui se prova é a
  * fronteira: o workspace vem do Principal e nunca de query param, a janela inválida é

@@ -19,5 +19,5 @@ def test_example_is_at_most_ten_lines_of_code() -> None:
 
 def test_example_imports_and_calls_record_run() -> None:
     text = EXAMPLE.read_text(encoding="utf-8")
-    assert "from theo_lens_sdk import" in text
+    assert "from looptrace_sdk import" in text
     assert "record_run(" in text

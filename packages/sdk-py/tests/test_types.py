@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import json
 
-from theo_lens_sdk import SDKMessage, record_run
-from theo_lens_sdk.messages import (
+from looptrace_sdk import SDKMessage, record_run
+from looptrace_sdk.messages import (
     SDKAssistantMessage,
     SDKObjectDelta,
     SDKRequestMessage,

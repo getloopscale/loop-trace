@@ -1,4 +1,4 @@
-package theolens
+package looptrace
 
 import (
 	"context"

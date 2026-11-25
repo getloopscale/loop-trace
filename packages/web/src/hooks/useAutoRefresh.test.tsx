@@ -11,8 +11,8 @@ import {
   LIVE_MS,
 } from "./useAutoRefresh.js";
 
-const KEY = "theolens.autoRefreshMs";
-const LIVE_KEY = "theolens.live";
+const KEY = "looptrace.autoRefreshMs";
+const LIVE_KEY = "looptrace.live";
 
 function wrapper({ children }: { children: ReactNode }) {
   return <AutoRefreshProvider>{children}</AutoRefreshProvider>;

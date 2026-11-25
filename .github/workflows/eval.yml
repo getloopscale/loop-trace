@@ -13,7 +13,7 @@
 #
 # SEM BASELINE. O `expected` mora no dataset. A regressão é "um exemplo do split `regression`
 # falhou", sem estado entre execuções — o modelo do Phoenix
-# (`knowledge-base/references/phoenix/evals/pxi/harness/run_experiment.py:238-259`). O theo-memory
+# (`knowledge-base/references/phoenix/evals/pxi/harness/run_experiment.py:238-259`). O loopmem
 # precisa de baseline com banda de tolerância porque as métricas dele são contínuas e vêm de um LLM
 # (`packages/eval/src/regression.ts:3-4`); as nossas são booleanas e determinísticas. Sem baseline,
 # não existe o risco de alguém regravá-lo quando o gate reprova.
@@ -81,7 +81,7 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # BUILD ANTES DE RODAR, não por zelo: o CLI importa `@usetheo/lens-core` pelo `dist/`, e num
+      # BUILD ANTES DE RODAR, não por zelo: o CLI importa `@looptrace/core` pelo `dist/`, e num
       # checkout limpo esse `dist/` não existe. Mesma razão pela qual o `Build` precede o `Lint` no
       # ci.yml — lá as regras type-aware resolviam para `any`; aqui o import simplesmente não existe.
       - name: Build

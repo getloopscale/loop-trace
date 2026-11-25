@@ -46,9 +46,9 @@ describe("saved-views (M29b)", () => {
   });
 
   it("test_saved_views_corrupt_storage_falls_back", () => {
-    localStorage.setItem("theolens.savedViews", "{not json");
+    localStorage.setItem("looptrace.savedViews", "{not json");
     expect(listViews()).toEqual([]);
-    localStorage.setItem("theolens.savedViews", '"a string not an array"');
+    localStorage.setItem("looptrace.savedViews", '"a string not an array"');
     expect(listViews()).toEqual([]);
   });
 

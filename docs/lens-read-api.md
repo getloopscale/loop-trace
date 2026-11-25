@@ -1,15 +1,15 @@
-# theo-lens read API — traces
+# looptrace read API — traces
 
 A stable, per-tenant **read API** for pulling your observability data into your own tooling. This is
-the same contract the Theo dashboard consumes; documented here (M56) so you can consume it directly
-with a `theo_live_*` key.
+the same contract the LoopZero dashboard consumes; documented here (M56) so you can consume it directly
+with a `looptrace_live_*` key.
 
 ## Authentication (per-tenant, Model B)
 
-Call the API through the Theo unified edge with a customer API key:
+Call the API through the LoopZero unified edge with a customer API key:
 
 ```
-Authorization: Bearer theo_live_...
+Authorization: Bearer looptrace_live_...
 ```
 
 - The edge (`/v1/lens`) strips your customer key and mints a **per-tenant** gateway key (Model B), so
@@ -25,7 +25,7 @@ Returns the newest-first trace list for your workspace, honoring the filter para
 
 ```
 GET https://<your-edge-host>/v1/lens/traces?status=error&model=claude-opus-4-8&limit=500
-Authorization: Bearer theo_live_...
+Authorization: Bearer looptrace_live_...
 ```
 
 ### Filter parameters
@@ -57,7 +57,7 @@ GET /v1/lens/traces?status=error&limit=500&offset=500
 ...
 ```
 
-Stop when a page returns fewer than 500 rows (that is the last page). The Theo dashboard's **Export**
+Stop when a page returns fewer than 500 rows (that is the last page). The LoopZero dashboard's **Export**
 action does exactly this, bounded by a documented **export cap of 5,000 rows** (10 pages of 500) with
 an explicit "Exported N traces / export cap reached — narrow filters" disclosure — it never silently
 truncates. Programmatic consumers page with `offset` up to whatever bound they choose.
@@ -94,8 +94,8 @@ same columns (formula-injection-safe + RFC-4180).
 
 ## Related endpoints
 
-Same per-tenant edge + auth (`theo_live_*` + `observability:read`); the `/v1/lens` prefix is the edge
-route (the theo-lens paths are `/v1/traces/:id`, etc.):
+Same per-tenant edge + auth (`looptrace_live_*` + `observability:read`); the `/v1/lens` prefix is the edge
+route (the looptrace paths are `/v1/traces/:id`, etc.):
 
 - `GET /v1/lens/traces/:id` — the reconstructed span tree for one trace.
 - `GET /v1/lens/traces/:id/cost` — the per-trace cost summary.
@@ -129,7 +129,7 @@ The ceilings themselves are inclusive: `?days=365&limit=500&offset=10000` is val
 
 Three things worth knowing before you act on the numbers:
 
-- **`costUsd` is an estimate of observed consumption, not a bill.** theo-lens reports what it saw;
+- **`costUsd` is an estimate of observed consumption, not a bill.** looptrace reports what it saw;
   billing lives elsewhere. The figure is derived from a price table that may not cover every model.
 - **`unpricedSpans` is how that gap is made visible.** It counts spans that carried tokens but whose
   model had no price entry — their tokens are in the totals, their cost is not. When it is non-zero,
@@ -142,7 +142,7 @@ Three things worth knowing before you act on the numbers:
 
 ## Dashboard equivalent (browser session)
 
-The Theo dashboard reaches the same data through a **BFF** at `GET /v1/dashboard/lens/traces?<same
-params>`, authenticated by a **browser session JWT** (not a `theo_live_*` key). The filter contract is
+The LoopZero dashboard reaches the same data through a **BFF** at `GET /v1/dashboard/lens/traces?<same
+params>`, authenticated by a **browser session JWT** (not a `looptrace_live_*` key). The filter contract is
 identical; the difference is only the auth surface (session JWT vs. customer API key). Programmatic
-customers use `GET /v1/lens/traces` with a `theo_live_*` key as documented above.
+customers use `GET /v1/lens/traces` with a `looptrace_live_*` key as documented above.

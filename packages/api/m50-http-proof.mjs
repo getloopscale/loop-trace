@@ -4,11 +4,11 @@
 // cross-workspace isolation (ws-A key cannot read ws-B data).
 import { readFileSync } from "node:fs";
 
-process.env.THEOLENS_REQUIRE_CREDENTIAL = "1";
-process.env.THEOLENS_PLATFORM_ADMIN_BOOTSTRAP = "dev-bootstrap-token-change-me-min-32-chars";
+process.env.LOOPTRACE_REQUIRE_CREDENTIAL = "1";
+process.env.LOOPTRACE_PLATFORM_ADMIN_BOOTSTRAP = "dev-bootstrap-token-change-me-min-32-chars";
 
 const { bootstrap } = await import("./dist/server/index.js");
-const PG_URI = process.env.THEOLENS_PG_URI;
+const PG_URI = process.env.LOOPTRACE_PG_URI;
 const payload = readFileSync(new URL("./m50-cc-otlp-fixture.json", import.meta.url), "utf8");
 
 const { app, pool } = await bootstrap(PG_URI);

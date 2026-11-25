@@ -1,7 +1,7 @@
 /**
  * Local mirror of the Claude Code / `@theokit/sdk` `SDKMessage` stream union + `RunResult`
  * usage/cost (M115, ADR-2). We mirror rather than `import type` from `@theokit/sdk` so
- * `@usetheo/lens-sdk` stays standalone (the v11/v12 constraint) and is not coupled to a
+ * `@looptrace/sdk` stays standalone (the v11/v12 constraint) and is not coupled to a
  * fast-moving SDK version. The hermetic contract test (`theokit-contract.integration.test.ts`)
  * is the drift guard: it proves the mapping against the real engine.
  *

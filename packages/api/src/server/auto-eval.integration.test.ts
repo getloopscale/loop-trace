@@ -5,14 +5,14 @@ import {
   spanRepoFromPool,
   evaluatorRepoFromPool,
   runMigrations,
-} from "@usetheo/lens-core/infra";
-import type { EngineDeps, Span } from "@usetheo/lens-core";
+} from "@looptrace/core/infra";
+import type { EngineDeps, Span } from "@looptrace/core";
 
 import { buildAutoEvalSweepDeps, makeEnqueueAutoEval } from "./auto-eval-wiring.js";
 import { sweepOnce } from "./auto-eval-scheduler.js";
 import { autoEvalJobsCompleted } from "./metrics.js";
 
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
 
 /**
@@ -261,7 +261,7 @@ suite("auto-evaluation end to end (integration, M134)", () => {
     // and was NEVER evaluated — silently, with the row sitting in `queued`
     // looking healthy: no error, no metric, no attempt increment.
     //
-    // Not an edge case for this product. theo-lens observes LLM agents, where a
+    // Not an edge case for this product. looptrace observes LLM agents, where a
     // session emitting spans over minutes is an ordinary trace. EC-8 bounded
     // the identical unbounded-loop shape on the failure path with MAX_ATTEMPTS;
     // this is that discipline applied to the re-arm.

@@ -133,7 +133,7 @@ describe("run-eval.mjs — the process contract the CI observes", () => {
   it("the CLI default dataset is the same file the shipped-dataset test reads", () => {
     const fromCli = execFileSync(
       process.execPath,
-      ["-e", "import('@usetheo/lens-core').then(m => console.log(m.SHIPPED_DATASET_PATH))"],
+      ["-e", "import('@looptrace/core').then(m => console.log(m.SHIPPED_DATASET_PATH))"],
       { cwd: REPO_ROOT, encoding: "utf8" },
     ).trim();
     expect(fromCli).toBe(SHIPPED_DATASET_PATH);

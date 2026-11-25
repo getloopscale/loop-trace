@@ -1,14 +1,14 @@
-# theolens — Go ingest client for Theo Lens
+# looptrace — Go ingest client for LoopTrace
 
-A thin, **stdlib-only** Go client that records a Claude Code / [`@theokit/sdk`](https://github.com/usetheodev)
-run to Theo Lens. It POSTs an `SDKMessage` batch to the native `POST /v1/runs` endpoint; the
+A thin, **stdlib-only** Go client that records a Claude Code / [`@theokit/sdk`](https://github.com/getloopscale)
+run to LoopTrace. It POSTs an `SDKMessage` batch to the native `POST /v1/runs` endpoint; the
 **engine** maps the batch to spans — the client performs **zero OTLP encoding** and has **no
 third-party runtime dependency** (`net/http` + `encoding/json` + `context` only).
 
 ## Install
 
 ```sh
-go get github.com/usetheoai/theo-lens/packages/sdk-go
+go get github.com/getloopscale/looptrace/packages/sdk-go
 ```
 
 ## Usage
@@ -20,20 +20,20 @@ import (
 	"context"
 	"log"
 
-	theolens "github.com/usetheoai/theo-lens/packages/sdk-go"
+	looptrace "github.com/getloopscale/looptrace/packages/sdk-go"
 )
 
 func main() {
-	client := theolens.New(
-		theolens.WithBaseURL("https://app.usetheo.dev"),
-		theolens.WithAPIKey("theo_live_xxx"), // a per-tenant key (Authorization: Bearer)
+	client := looptrace.New(
+		looptrace.WithBaseURL("https://app.getloopscale.com"),
+		looptrace.WithAPIKey("looptrace_live_xxx"), // a per-tenant key (Authorization: Bearer)
 	)
 
 	in, out := 1200, 340
-	msgs := []theolens.SDKMessage{
+	msgs := []looptrace.SDKMessage{
 		{Type: "system", Subtype: "init", AgentID: "agent-1", RunID: "run-1", Model: []byte(`"claude-opus-4-8"`)},
 	}
-	result := &theolens.RunResult{Usage: &theolens.TokenUsage{InputTokens: &in, OutputTokens: &out}}
+	result := &looptrace.RunResult{Usage: &looptrace.TokenUsage{InputTokens: &in, OutputTokens: &out}}
 
 	outcome, err := client.RecordRun(context.Background(), msgs, result)
 	if err != nil {
@@ -45,14 +45,14 @@ func main() {
 
 ## Behind the unified edge
 
-Direct consumers use the default base path `/v1`. Consumers behind the Theo unified edge (one
-`theo_live_*` key, per-tenant isolation) swap the path root to `/v1/lens`:
+Direct consumers use the default base path `/v1`. Consumers behind the LoopZero unified edge (one
+`looptrace_live_*` key, per-tenant isolation) swap the path root to `/v1/lens`:
 
 ```go
-client := theolens.New(
-	theolens.WithBaseURL("https://app.usetheo.dev"),
-	theolens.WithAPIKey("theo_live_xxx"),
-	theolens.WithBasePath("/v1/lens"), // → POST https://app.usetheo.dev/v1/lens/runs
+client := looptrace.New(
+	looptrace.WithBaseURL("https://app.getloopscale.com"),
+	looptrace.WithAPIKey("looptrace_live_xxx"),
+	looptrace.WithBasePath("/v1/lens"), // → POST https://app.getloopscale.com/v1/lens/runs
 )
 ```
 
@@ -63,7 +63,7 @@ client := theolens.New(
 ```go
 outcome, err := client.RecordRun(ctx, msgs, result)
 
-var apiErr *theolens.TheoLensError
+var apiErr *looptrace.LoopTraceError
 switch {
 case err == nil:
 	if !outcome.OK() {
@@ -76,7 +76,7 @@ case errors.As(err, &apiErr):
 	// UNSUPPORTED_MEDIA_TYPE / RATE_LIMITED / …). On a 429, apiErr.RetryAfter carries the
 	// Retry-After header — the caller owns backoff; the client never auto-retries.
 	log.Printf("engine error %d %s", apiErr.Status, apiErr.Code)
-case errors.Is(err, theolens.ErrTransport):
+case errors.Is(err, looptrace.ErrTransport):
 	// A network failure. A run POST is non-idempotent (M108) so it is NOT retried here.
 	log.Printf("transport failure: %v", err)
 }
@@ -89,7 +89,7 @@ case errors.Is(err, theolens.ErrTransport):
 | Option | Purpose |
 |---|---|
 | `WithBaseURL(url)` | engine or edge origin (no trailing slash) |
-| `WithAPIKey(key)` | `theo_live_*` per-tenant key → `Authorization: Bearer` |
+| `WithAPIKey(key)` | `looptrace_live_*` per-tenant key → `Authorization: Bearer` |
 | `WithBasePath(path)` | `/v1` (direct) or `/v1/lens` (unified edge) |
 | `WithHTTPClient(hc)` | inject a custom `*http.Client` (timeouts, transport, tests) |
 | `WithStartTimeMs(ms)` | base epoch-ms forwarded to the engine mapper (deterministic spans) |
@@ -106,5 +106,5 @@ golangci-lint run
 
 The 18-vector cross-language contract test (`TestAll18VectorsMarshalToRunsBody`) loads the shared
 `theokit-vectors.json` — the same behavior spec the TypeScript and Python (M124) suites pin. The
-hermetic engine e2e (`TestAll18VectorsAcceptedByEngine`) is skipped unless `THEO_LENS_E2E_URL`
-(and `THEO_LENS_E2E_KEY`) are set.
+hermetic engine e2e (`TestAll18VectorsAcceptedByEngine`) is skipped unless `LOOPTRACE_E2E_URL`
+(and `LOOPTRACE_E2E_KEY`) are set.

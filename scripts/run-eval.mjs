@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * M139 — CLI do eval. A ÚNICA camada com I/O (ADR D3): lê o dataset do disco, delega ao domínio
- * puro (`@usetheo/lens-core`) e escreve o relatório.
+ * puro (`@looptrace/core`) e escreve o relatório.
  *
  * A forma vem do Phoenix (`knowledge-base/references/phoenix/.github/workflows/pxi-evals.yml`):
  * uma tabela no `GITHUB_STEP_SUMMARY` e `--fail-on-regression` decidindo o exit code
@@ -17,7 +17,7 @@ import { resolve } from "node:path";
 
 import { parse } from "yaml";
 
-import { parseEvalDataset, runEvalDataset, SHIPPED_DATASET_PATH } from "@usetheo/lens-core";
+import { parseEvalDataset, runEvalDataset, SHIPPED_DATASET_PATH } from "@looptrace/core";
 
 // O caminho é declarado no domínio (SHIPPED_DATASET_PATH), não aqui — ver eval-dataset.ts.
 const DEFAULT_DATASET = SHIPPED_DATASET_PATH;

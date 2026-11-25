@@ -24,7 +24,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { tenantScopedPool } from "./tenant-scoped-pool.js";
 import { WorkspaceScopeError, withWorkspaceScope } from "./workspace-scope.js";
 
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
 
 const APP_ROLE = "lens_app_rls_test";
@@ -168,7 +168,7 @@ suite("tenant isolation is enforced by PostgreSQL", () => {
     // every login closed. Asserted here so the exemption stays a decision rather
     // than drifting into an oversight nobody notices.
     const { rows } = await restrictedRaw.query<{ enabled: boolean }>(
-      `SELECT relrowsecurity AS enabled FROM pg_class WHERE relname = 'theo_api_keys'`,
+      `SELECT relrowsecurity AS enabled FROM pg_class WHERE relname = 'looptrace_api_keys'`,
     );
     expect(rows[0]?.enabled).toBe(false);
   });

@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   type SpanRepository,
-} from "@usetheo/lens-core";
-import { createSpanRepository, migrateLatest } from "@usetheo/lens-core/infra";
+} from "@looptrace/core";
+import { createSpanRepository, migrateLatest } from "@looptrace/core/infra";
 import type pg from "pg";
 
 import { parseResourceSpans } from "./parse-resource-spans.js";
 
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
 
 /** A real-shaped Claude Code OTLP payload (2026-06-23 capture, sanitized). */

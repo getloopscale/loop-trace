@@ -7,7 +7,7 @@
 ## What is measured
 
 The per-request latency the **multi-tenant auth path** adds — `bearerAuth` +
-`requireScopeOnPrincipal` + the SHA-256 `theo_api_keys` indexed lookup — versus
+`requireScopeOnPrincipal` + the SHA-256 `looptrace_api_keys` indexed lookup — versus
 **single-tenant** (no verifier → `DEFAULT_PRINCIPAL`, no DB lookup). Measured on the
 two hot paths: the executions **read** (`GET /v1/traces`) and the OTLP **ingest**
 (`POST /v1/traces`, empty envelope to isolate the auth cost from the persistence cost).
@@ -27,14 +27,14 @@ Every figure is a real timed `app.request` against a real DB — no fabricated n
 > Absolute numbers vary run-to-run with machine load (this run was on a busier host
 > than the 2026-06-26 baseline — note the wider read multi-tenant std). The **delta**
 > is the signal: a sub-1.2 ms p50 constant cost dominated by one SHA-256 + one indexed
-> `theo_api_keys` probe, independent of trace size. The composite-key isolation fix
+> `looptrace_api_keys` probe, independent of trace size. The composite-key isolation fix
 > touches only data-table writes (the recompute), not the auth path, so it does not
 > change the auth overhead being measured here.
 
 ## Interpretation
 
 - The added cost is the **SHA-256 hash of the bearer token + one indexed lookup** on
-  `theo_api_keys (key_hash)` (a `UNIQUE` index → single-row probe) + the scope check.
+  `looptrace_api_keys (key_hash)` (a `UNIQUE` index → single-row probe) + the scope check.
 - Sub-1.2 ms p50 is a **modest, constant** overhead, independent of trace size (the
   lookup is O(1) on the key, not on the data). It does not scale with ingest volume.
 - The read path's absolute latency is dominated by the list query, not auth.
@@ -43,9 +43,9 @@ Every figure is a real timed `app.request` against a real DB — no fabricated n
 ## Reproduce
 
 ```bash
-docker compose up -d postgres            # (THEOLENS_PG_PORT=55432)
+docker compose up -d postgres            # (LOOPTRACE_PG_PORT=55432)
 pnpm build                               # compiles dist + copies migrations
 cd packages/api
-THEOLENS_PG_URI="postgresql://theolens:theolens@localhost:55432/theolens" \
+LOOPTRACE_PG_URI="postgresql://looptrace:looptrace@localhost:55432/looptrace" \
   node ../../benchmarks/auth-overhead.mjs
 ```

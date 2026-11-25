@@ -1,7 +1,7 @@
 /**
  * M119 (D1) — the SINGLE source of truth for the SDKMessage→OTLP mapper's documented behaviors.
  *
- * The mapper is DUPLICATED by the codebase's own ADR-1 (`@usetheo/lens-sdk` stays standalone, so it
+ * The mapper is DUPLICATED by the codebase's own ADR-1 (`@looptrace/sdk` stays standalone, so it
  * carries its own copy at `packages/sdk/src/ingest/theokit.ts`, and the core copy at
  * `sdk-messages-to-otlp.ts` powers the native `POST /v1/runs`). A duplicated implementation is only
  * safe with a shared guard. This fixture encodes each named behavior as `{ name, input, assert }` and
@@ -12,7 +12,7 @@
  * prove either is correct; both are needed, per blueprint D1).
  *
  * This file is TEST-only support — it exports data + assertions, no runtime mapper logic. It lives in
- * core (imported by the SDK test via `@usetheo/lens-core`, mirroring how the SDK contract tests already
+ * core (imported by the SDK test via `@looptrace/core`, mirroring how the SDK contract tests already
  * import from core) but never imports a mapper, so it stays copy-agnostic.
  *
  * @public

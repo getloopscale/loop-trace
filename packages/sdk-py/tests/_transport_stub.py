@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, TypedDict
 
-from theo_lens_sdk.client import Response
+from looptrace_sdk.client import Response
 
 
 class Base(TypedDict):
@@ -17,7 +17,7 @@ class Base(TypedDict):
     api_key: str
 
 
-BASE: Base = {"base_url": "http://engine.test", "api_key": "theo_live_x"}
+BASE: Base = {"base_url": "http://engine.test", "api_key": "looptrace_live_x"}
 
 
 @dataclass

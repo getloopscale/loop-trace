@@ -77,7 +77,7 @@ describe("RangeProvider", () => {
   });
 
   it("test_range_provider_corrupt_value_falls_back", () => {
-    localStorage.setItem("theolens.range", "not-a-range");
+    localStorage.setItem("looptrace.range", "not-a-range");
     expect(readStoredRange()).toBe("7d");
   });
 

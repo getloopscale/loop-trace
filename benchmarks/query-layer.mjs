@@ -10,16 +10,16 @@
  *   - For each scale, measure the hot-path queries WITHOUT the 4 M95 indexes (DROP), then WITH
  *     them (CREATE) — same seeded data, ANALYZEd both times. Report mean ± std over RUNS runs
  *     and the EXPLAIN plan, so the before/after delta is the index effect and nothing else.
- *   - Requires THEOLENS_PG_URI. Missing → skip with a clear message (never fabricate numbers).
+ *   - Requires LOOPTRACE_PG_URI. Missing → skip with a clear message (never fabricate numbers).
  *
- *   THEOLENS_PG_URI=… node benchmarks/query-layer.mjs
+ *   LOOPTRACE_PG_URI=… node benchmarks/query-layer.mjs
  */
 import { createSpanRepository, migrateLatest } from "../packages/core/dist/index.js";
 import { performance } from "node:perf_hooks";
 
-const URI = process.env.THEOLENS_PG_URI;
+const URI = process.env.LOOPTRACE_PG_URI;
 if (!URI) {
-  console.error("THEOLENS_PG_URI required — skipping (no fabricated numbers).");
+  console.error("LOOPTRACE_PG_URI required — skipping (no fabricated numbers).");
   process.exit(0); // skip, not fail: mirrors the integration-suite gate
 }
 

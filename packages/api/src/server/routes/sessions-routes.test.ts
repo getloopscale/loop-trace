@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { Hono } from "hono";
-import type { SessionRepository } from "@usetheo/lens-core";
+import type { SessionRepository } from "@looptrace/core";
 
 import { registerSessionsRoutes } from "./sessions-routes.js";
 

@@ -11,7 +11,7 @@ vi.mock("../api/client.js", async (orig) => {
   return { ...actual, listTraces: vi.fn(), getTraceTree: vi.fn() };
 });
 
-const KEY = "theolens.autoRefreshMs";
+const KEY = "looptrace.autoRefreshMs";
 
 function makeWrapper() {
   const qc = new QueryClient({

@@ -39,17 +39,17 @@ export interface RetentionConfig {
 const DEFAULT_SWEEP_HOURS = 6;
 
 /**
- * Pure parse of retention env (M23, default OFF). `THEOLENS_RETENTION_DAYS` must be
+ * Pure parse of retention env (M23, default OFF). `LOOPTRACE_RETENTION_DAYS` must be
  * a positive integer to enable retention — absent/blank/`0`/negative/garbage all
  * disable it (a `0`-day window must NEVER become a delete-everything, EC). An
- * invalid `THEOLENS_RETENTION_SWEEP_HOURS` falls back to the default (a `0`-hour
+ * invalid `LOOPTRACE_RETENTION_SWEEP_HOURS` falls back to the default (a `0`-hour
  * interval would busy-loop, EC-4). Takes `env` as an argument — no global read.
  */
 export function parseRetentionConfig(
   env: Record<string, string | undefined>,
 ): RetentionConfig {
-  const daysRaw = env["THEOLENS_RETENTION_DAYS"];
-  const hoursRaw = env["THEOLENS_RETENTION_SWEEP_HOURS"];
+  const daysRaw = env["LOOPTRACE_RETENTION_DAYS"];
+  const hoursRaw = env["LOOPTRACE_RETENTION_SWEEP_HOURS"];
 
   let retentionDays: number | null = null;
   let warning: string | undefined;
@@ -58,7 +58,7 @@ export function parseRetentionConfig(
     if (parsed.success) {
       retentionDays = parsed.data;
     } else {
-      warning = `THEOLENS_RETENTION_DAYS=${daysRaw} is not a positive integer; retention disabled`;
+      warning = `LOOPTRACE_RETENTION_DAYS=${daysRaw} is not a positive integer; retention disabled`;
     }
   }
 

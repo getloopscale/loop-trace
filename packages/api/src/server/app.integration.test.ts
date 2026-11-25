@@ -8,15 +8,15 @@ import {
 } from "vitest";
 import {
   type SpanRepository,
-} from "@usetheo/lens-core";
-import { createSpanRepository, migrateLatest } from "@usetheo/lens-core/infra";
+} from "@looptrace/core";
+import { createSpanRepository, migrateLatest } from "@looptrace/core/infra";
 import type pg from "pg";
 
 import { createApp } from "./app.js";
 import { spansIngested, tracesIngested } from "./metrics.js";
 import { encodeOtlpProtobuf } from "../otlp/__fixtures__/otlp-protobuf.js";
 
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
 
 function tracesEnvelope(span: Record<string, unknown>): string {

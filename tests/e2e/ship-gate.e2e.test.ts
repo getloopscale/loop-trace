@@ -7,7 +7,7 @@ import { describe, it, expect } from "vitest";
 import { buildReplaySteps } from "../../packages/web/src/lib/replay.js";
 import type { TraceTreeNode } from "../../packages/web/src/api/types.js";
 
-const BASE = process.env["THEOLENS_E2E_BASE"] ?? "http://localhost:44318";
+const BASE = process.env["LOOPTRACE_E2E_BASE"] ?? "http://localhost:44318";
 const EXAMPLE = fileURLToPath(
   new URL("./fixtures/instrumented-agent.ts", import.meta.url),
 );
@@ -33,9 +33,9 @@ describe("V1 ship gate — 6-step Success Criteria from a clean stack (e2e)", ()
     // Step 2 — instrument + run the ≤10-line example agent against the stack.
     const out = execFileSync("pnpm", ["tsx", EXAMPLE], {
       encoding: "utf8",
-      env: { ...process.env, THEOLENS_ENDPOINT: BASE },
+      env: { ...process.env, LOOPTRACE_ENDPOINT: BASE },
     });
-    const traceId = /THEOLENS_TRACE_ID=([0-9a-f]+)/.exec(out)?.[1];
+    const traceId = /LOOPTRACE_TRACE_ID=([0-9a-f]+)/.exec(out)?.[1];
     expect(traceId, `step 2: example emitted a trace id (stdout: ${out})`).toBeTruthy();
 
     // Step 3 — spans arrived via OTLP; the execution tree appears in the Explorer.

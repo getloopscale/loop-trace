@@ -18,12 +18,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type pg from "pg";
 
-import { MAX_OFFSET, type AuthVerifier, type Principal } from "@usetheo/lens-core";
-import { createSpanRepository, migrateLatest } from "@usetheo/lens-core/infra";
+import { MAX_OFFSET, type AuthVerifier, type Principal } from "@looptrace/core";
+import { createSpanRepository, migrateLatest } from "@looptrace/core/infra";
 import { createApp } from "./app.js";
 import { usageByUserReports } from "./metrics.js";
 
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
 
 const principal = (scopes: string[], workspaceId: string): Principal => ({
@@ -150,7 +150,7 @@ suite("M140 — usage-by-user through the real route", () => {
   });
 
   it("rejects an out-of-range window and page size instead of clamping in silence", async () => {
-    // Documented in SURFACE-theo-lens § 6.3 as the most likely adversarial angle, and it is a real
+    // Documented in SURFACE-looptrace § 6.3 as the most likely adversarial angle, and it is a real
     // defect: `?limit=100000` answered 200 with at most 500 rows and NOTHING in the response said
     // so. `windowDays` is echoed, `limit` is not — so a caller paging with a large limit advances
     // `offset` by 100000 while receiving 500 rows, and reads the wrong pages with no signal.

@@ -1,4 +1,4 @@
-package theolens
+package looptrace
 
 import (
 	"context"
@@ -63,7 +63,7 @@ func TestRecordRunPostsBatchToV1Runs(t *testing.T) {
 
 	msgs, res := sampleRun()
 	var startMs int64 = 1_700_000_000_000
-	c := New(WithBaseURL(srv.URL), WithAPIKey("theo_live_x"), WithStartTimeMs(startMs))
+	c := New(WithBaseURL(srv.URL), WithAPIKey("looptrace_live_x"), WithStartTimeMs(startMs))
 	out, err := c.RecordRun(context.Background(), msgs, res)
 	if err != nil {
 		t.Fatalf("RecordRun error = %v, want nil", err)
@@ -78,8 +78,8 @@ func TestRecordRunPostsBatchToV1Runs(t *testing.T) {
 	if cap.path != "/v1/runs" {
 		t.Errorf("path = %q, want /v1/runs", cap.path)
 	}
-	if cap.authz != "Bearer theo_live_x" {
-		t.Errorf("Authorization = %q, want Bearer theo_live_x", cap.authz)
+	if cap.authz != "Bearer looptrace_live_x" {
+		t.Errorf("Authorization = %q, want Bearer looptrace_live_x", cap.authz)
 	}
 	if cap.ctype != "application/json" {
 		t.Errorf("Content-Type = %q, want application/json", cap.ctype)
@@ -205,9 +205,9 @@ func TestRecordRunMaps413ToTypedError(t *testing.T) {
 	c := New(WithBaseURL(srv.URL), WithAPIKey("k"))
 	_, err := c.RecordRun(context.Background(), msgs, nil)
 
-	var tle *TheoLensError
+	var tle *LoopTraceError
 	if !errors.As(err, &tle) {
-		t.Fatalf("err = %v, want *TheoLensError", err)
+		t.Fatalf("err = %v, want *LoopTraceError", err)
 	}
 	if tle.Status != 413 || tle.Code != "PAYLOAD_TOO_LARGE" {
 		t.Errorf("got {Status:%d Code:%q}, want {413 PAYLOAD_TOO_LARGE}", tle.Status, tle.Code)
@@ -237,9 +237,9 @@ func TestRecordRunMapsTypedErrorEnvelope(t *testing.T) {
 			msgs, _ := sampleRun()
 			c := New(WithBaseURL(srv.URL), WithAPIKey("k"))
 			_, err := c.RecordRun(context.Background(), msgs, nil)
-			var tle *TheoLensError
+			var tle *LoopTraceError
 			if !errors.As(err, &tle) {
-				t.Fatalf("err = %v, want *TheoLensError", err)
+				t.Fatalf("err = %v, want *LoopTraceError", err)
 			}
 			if tle.Status != tc.status || tle.Code != tc.code {
 				t.Errorf("got {%d %q}, want {%d %q}", tle.Status, tle.Code, tc.status, tc.code)
@@ -259,9 +259,9 @@ func TestRecordRunSurfaces429RetryAfter(t *testing.T) {
 	msgs, _ := sampleRun()
 	c := New(WithBaseURL(srv.URL), WithAPIKey("k"))
 	_, err := c.RecordRun(context.Background(), msgs, nil)
-	var tle *TheoLensError
+	var tle *LoopTraceError
 	if !errors.As(err, &tle) {
-		t.Fatalf("err = %v, want *TheoLensError", err)
+		t.Fatalf("err = %v, want *LoopTraceError", err)
 	}
 	if tle.Status != 429 || tle.Code != "RATE_LIMITED" {
 		t.Errorf("got {%d %q}, want {429 RATE_LIMITED}", tle.Status, tle.Code)
@@ -285,9 +285,9 @@ func TestRecordRunNetworkFailureWrapped(t *testing.T) {
 	if !errors.Is(err, ErrTransport) {
 		t.Errorf("errors.Is(err, ErrTransport) = false, want true; err=%v", err)
 	}
-	var tle *TheoLensError
+	var tle *LoopTraceError
 	if errors.As(err, &tle) {
-		t.Errorf("a network failure must NOT be a *TheoLensError; got %v", tle)
+		t.Errorf("a network failure must NOT be a *LoopTraceError; got %v", tle)
 	}
 }
 
@@ -315,7 +315,7 @@ func TestRecordRun_concurrent_safe(t *testing.T) {
 	defer srv.Close()
 
 	// ONE shared Client used by N goroutines (the -race detector is the oracle).
-	c := New(WithBaseURL(srv.URL), WithAPIKey("theo_live_shared"))
+	c := New(WithBaseURL(srv.URL), WithAPIKey("looptrace_live_shared"))
 	const n = 40
 	var wg sync.WaitGroup
 	errs := make([]error, n)

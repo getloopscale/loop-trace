@@ -10,8 +10,8 @@ export default defineConfig({
   dialect: "postgresql",
   dbCredentials: {
     url:
-      process.env["THEOLENS_PG_URI"] ??
-      "postgresql://theolens:theolens@localhost:5432/theolens",
+      process.env["LOOPTRACE_PG_URI"] ??
+      "postgresql://looptrace:looptrace@localhost:5432/looptrace",
   },
   verbose: true,
   strict: true,

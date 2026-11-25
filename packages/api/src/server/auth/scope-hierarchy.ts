@@ -1,10 +1,10 @@
 /**
  * Scope hierarchy — implication between API-key scopes (M22). Ported from the
- * reference capability `theo-memory` (`auth/scope-hierarchy.ts`) with a
- * `memory:` → `lens:` swap — see `theo-data/README.md § 3.3`.
+ * reference capability `loopmem` (`auth/scope-hierarchy.ts`) with a
+ * `memory:` → `lens:` swap — see `data-plane/README.md § 3.3`.
  *
  * The only implication is `observability:platform-admin ⊇ observability:admin` — the platform
- * credential the theo-cloud gateway uses to provision per-tenant keys must reach
+ * credential the loopzero-cloud gateway uses to provision per-tenant keys must reach
  * the `observability:admin`-gated key-lifecycle routes without ALSO carrying a separate
  * `observability:admin` grant. Least privilege (NIST AC-6): `platform-admin` implies ONLY
  * `admin`, NEVER a data scope — so the gateway minting key is `403` on every data

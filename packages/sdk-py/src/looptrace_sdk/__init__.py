@@ -1,11 +1,11 @@
-"""Theo Lens Python SDK — record a Claude Code / ``@theokit/sdk`` run to Theo Lens.
+"""LoopTrace Python SDK — record a Claude Code / ``@theokit/sdk`` run to LoopTrace.
 
 Public surface:
 
 - :func:`record_run` — the single entrypoint (serialize a batch + POST to ``/v1/runs``).
 - :class:`RecordRunResult` — the parsed ``partialSuccess`` outcome.
-- The typed error hierarchy: :class:`TheoLensError`, :class:`TheoLensTransportError`,
-  :class:`TheoLensSerializationError` (all under :class:`TheoLensBaseError`).
+- The typed error hierarchy: :class:`LoopTraceError`, :class:`LoopTraceTransportError`,
+  :class:`LoopTraceSerializationError` (all under :class:`LoopTraceBaseError`).
 - :data:`SDKMessage` / :class:`RunResult` — the (documentation-only) type mirror.
 """
 
@@ -13,22 +13,22 @@ from __future__ import annotations
 
 from .client import RecordRunResult, Response, Transport, record_run
 from .errors import (
-    TheoLensBaseError,
-    TheoLensError,
-    TheoLensSerializationError,
-    TheoLensTransportError,
+    LoopTraceBaseError,
+    LoopTraceError,
+    LoopTraceSerializationError,
+    LoopTraceTransportError,
 )
 from .messages import RunResult, SDKMessage
 
 __all__ = [
+    "LoopTraceBaseError",
+    "LoopTraceError",
+    "LoopTraceSerializationError",
+    "LoopTraceTransportError",
     "RecordRunResult",
     "Response",
     "RunResult",
     "SDKMessage",
-    "TheoLensBaseError",
-    "TheoLensError",
-    "TheoLensSerializationError",
-    "TheoLensTransportError",
     "Transport",
     "record_run",
 ]

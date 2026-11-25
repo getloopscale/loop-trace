@@ -44,14 +44,14 @@ import {
   askCopilotResponseSchema,
   copilotFeedbackRecordSchema,
   replayResponseSchema,
-} from "@usetheo/lens-core";
+} from "@looptrace/core";
 
 extendZodWithOpenApi(z);
 
 /**
  * Named response DTOs surfaced as OpenAPI components (generated from the Zod source of truth).
  * Built lazily (at request time, not module load) so importing this module does no work and does
- * not touch the core DTO exports — keeps composition-root boot tests that mock `@usetheo/lens-core`
+ * not touch the core DTO exports — keeps composition-root boot tests that mock `@looptrace/core`
  * from tripping on an unused export.
  */
 function namedSchemas(): Record<string, z.ZodTypeAny> {
@@ -279,7 +279,7 @@ function generateOpenApiDocument(routes: MountedRoute[], version: string): Recor
   return {
     openapi: "3.0.3",
     info: {
-      title: "Theo Lens API",
+      title: "LoopTrace API",
       version,
       description:
         "Tenant-isolated observability engine. Errors use the {code,message,details?} envelope. " +

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { RateLimiter } from "@usetheo/lens-core";
-import { createSpanRepository, migrateLatest, evaluatorRepoFromPool } from "@usetheo/lens-core/infra";
+import { RateLimiter } from "@looptrace/core";
+import { createSpanRepository, migrateLatest, evaluatorRepoFromPool } from "@looptrace/core/infra";
 import { createHash, randomBytes } from "node:crypto";
 import type pg from "pg";
 import { createApp } from "./app.js";
@@ -8,13 +8,13 @@ import { ApiKeyAuthVerifier } from "./auth/api-key-verifier.js";
 
 /**
  * M22 invariant 6 — prove cross-tenant isolation through the **ForwardAuth edge
- * contract**, end-to-end. The production edge (Traefik + theo-cloud Model B broker)
- * is the gateway side (ADR D4 — a theo-cloud follow-on); this hermetic test models
+ * contract**, end-to-end. The production edge (Traefik + loopzero-cloud Model B broker)
+ * is the gateway side (ADR D4 — a loopzero-cloud follow-on); this hermetic test models
  * its exact contract in-process so the DATA-PLANE half is proven now:
  *
  *   customer key (`cust_<tenant>`) → EDGE → (1) validate + resolve tenant
  *                                          (2) STRIP the customer key (Del)
- *                                          (3) BROKER mints a per-tenant `theo_live_*`
+ *                                          (3) BROKER mints a per-tenant `looptrace_live_*`
  *                                              bound to workspace = tenant, scopes [r/w/d]
  *                                          (4) forward with `Authorization: Bearer <minted>`
  *                                   → lens service enforces workspace isolation
@@ -24,7 +24,7 @@ import { ApiKeyAuthVerifier } from "./auth/api-key-verifier.js";
  * reaches the service (CWE-441 edge half); the service still enforces per-tenant
  * isolation (CWE-441 data-plane half) — both halves, proven together.
  */
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
 
 suite("M22 ForwardAuth edge contract (integration)", () => {
@@ -37,14 +37,14 @@ suite("M22 ForwardAuth edge contract (integration)", () => {
   async function brokerKeyFor(tenant: string): Promise<string> {
     const existing = minted.get(tenant);
     if (existing) return existing;
-    const secret = "theo_live_" + randomBytes(32).toString("base64url");
+    const secret = "looptrace_live_" + randomBytes(32).toString("base64url");
     const hash = createHash("sha256").update(secret).digest("hex");
     await pool.query(
       `INSERT INTO workspaces (id, name) VALUES ($1,$1) ON CONFLICT DO NOTHING`,
       [tenant],
     );
     await pool.query(
-      `INSERT INTO theo_api_keys (id, subject, tenant_id, workspace_id, key_name, key_hash, key_prefix, scopes)
+      `INSERT INTO looptrace_api_keys (id, subject, tenant_id, workspace_id, key_name, key_hash, key_prefix, scopes)
        VALUES ($1,$2,'self',$3,'broker',$4,$5,$6::jsonb)`,
       [
         "apk-" + randomBytes(8).toString("hex"),
@@ -303,7 +303,7 @@ suite("M22 ForwardAuth edge contract (integration)", () => {
 
   it("test_customer_key_never_reaches_the_service", async () => {
     // The service rejects the raw customer key directly (it only honors minted
-    // `theo_live_*` keys) — proving the edge MUST strip + mint, and a leaked
+    // `looptrace_live_*` keys) — proving the edge MUST strip + mint, and a leaked
     // customer key cannot authenticate against the data plane.
     const direct = await app.request(
       new Request("http://x/v1/traces", {

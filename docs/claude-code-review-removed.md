@@ -13,10 +13,10 @@ Claude Code is not installed on this repository.
 ```
 
 O secret `CLAUDE_CODE_OAUTH_TOKEN` existia; o que faltava era a **instalação do GitHub App**.
-Instalação de App pertence à conta, não ao repositório — transferir o repo para a org `usetheoai`
+Instalação de App pertence à conta, não ao repositório — transferir o repo para a org `getloopscale`
 o tirou de baixo de qualquer instalação anterior. É a mesma pegadinha do runbook de migração para
 a Blacksmith, cujo Passo 3 é literalmente "instalar o App NA ORG (não pule)". `gh api
-orgs/usetheoai/installations` lista apenas `blacksmith-sh`.
+orgs/getloopscale/installations` lista apenas `blacksmith-sh`.
 
 Um check que sempre reprova é pior que um check ausente: some no ruído, obriga quem faz merge a
 decidir a cada PR se "aquele vermelho é o de sempre", e treina o time a ignorar vermelho.
@@ -39,11 +39,11 @@ os arquivos a partir do histórico.
 
 ## Como trazer de volta
 
-1. Instalar https://github.com/apps/claude na org `usetheoai` com acesso a este repositório.
-2. Confirmar: `gh api orgs/usetheoai/installations --jq '.installations[].app_slug'`.
+1. Instalar https://github.com/apps/claude na org `getloopscale` com acesso a este repositório.
+2. Confirmar: `gh api orgs/getloopscale/installations --jq '.installations[].app_slug'`.
 3. Restaurar os arquivos do histórico (`git log --diff-filter=D -- .github/workflows/claude.yml`),
    **mantendo os SHAs fixados**.
 4. Antes de religar `claude.yml` num repo público, decidir conscientemente sobre o gatilho
    `issue_comment` — restringir por associação do autor, ou não usá-lo.
 
-Contexto completo: theo-lens#99.
+Contexto completo: looptrace#99.

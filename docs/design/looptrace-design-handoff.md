@@ -1,7 +1,7 @@
-# Theo Lens — Design Handoff
+# LoopTrace — Design Handoff
 
 **For:** the (external) professional design team
-**From:** the Theo Lens engineering team
+**From:** the LoopTrace engineering team
 **Date:** 2026-06-26
 **Status:** Ready for design — engineering has frozen the data model & screen inventory below; the team owns the visual design.
 **Current build:** v0.35.0 · live dev instance: `http://localhost:4318/`
@@ -19,7 +19,7 @@ What is **yours** (design owns): visual hierarchy, layout, density, color applic
 
 ## 1. Product context
 
-**Theo Lens** is an **OpenTelemetry-native observability platform for AI agents** — think *"Jaeger / Arize / Grafana for AI agents."* Teams point their agents' OpenTelemetry traces at Theo Lens and use it to **see what their agents did**, debug failures, and track cost/latency/quality.
+**LoopTrace** is an **OpenTelemetry-native observability platform for AI agents** — think *"Jaeger / Arize / Grafana for AI agents."* Teams point their agents' OpenTelemetry traces at LoopTrace and use it to **see what their agents did**, debug failures, and track cost/latency/quality.
 
 - **Primary users:** AI engineers, platform/observability engineers, ML/agent developers debugging multi-step agent runs in dev and production.
 - **Core job-to-be-done:** "My agent did something weird / slow / expensive — show me exactly what happened, step by step, with the inputs and outputs, so I can fix it."
@@ -228,7 +228,7 @@ For each screen/region, design the full set — these are first-class, not after
 - **Design-system package:** `@theokit/ui` v0.18.1 (Geist, tokens, primitives — see §6).
 - **Brand/voice rules:** `.claude/rules/public-copy.md` (honesty, banned framings).
 - **Studied peers (for prior-art, in repo, read-only):** `knowledge-base/references/` — `langfuse`, `laminar`, `openlit` (their `globals.css` + screens are fair inspiration for an observability aesthetic).
-- **Engineering point of contact:** the Theo Lens eng team (this repo). Questions about a field's meaning → the domain glossary (§1) or ask eng.
+- **Engineering point of contact:** the LoopTrace eng team (this repo). Questions about a field's meaning → the domain glossary (§1) or ask eng.
 
 ---
 

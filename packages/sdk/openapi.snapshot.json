@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Theo Lens API",
+    "title": "LoopTrace API",
     "version": "sdk-snapshot",
     "description": "Tenant-isolated observability engine. Errors use the {code,message,details?} envelope. List responses are paginated as {items,total,limit,offset}. Query params are snake_case; JSON response fields are camelCase. A 400 covers both syntactic and semantic validation failures at the engine boundary (the edge/BFF maps browser-actionable upstreams separately)."
   },

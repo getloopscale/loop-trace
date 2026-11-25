@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createApp, type HealthApiDeps } from "./app.js";
-import type { Span, SpanRepository } from "@usetheo/lens-core";
+import type { Span, SpanRepository } from "@looptrace/core";
 
 /** Minimal repo stub — these probes never touch it; it exists only to satisfy the signature. */
 class NoopRepo implements SpanRepository {
@@ -53,7 +53,7 @@ describe("CD probes (playbook Phase 5)", () => {
     for (const key of ["name", "version", "git_sha", "built_at", "node"]) {
       expect(body, `missing ${key}`).toHaveProperty(key);
     }
-    expect(body["name"]).toBe("theo-lens");
+    expect(body["name"]).toBe("looptrace");
   });
 
   it("test_the_probes_are_unauthenticated", async () => {

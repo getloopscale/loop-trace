@@ -2,13 +2,13 @@
 /**
  * Hermetic ForwardAuth broker shim (M22 invariant 6 — the REAL edge proof).
  *
- * Stands in for the theo-cloud Model B broker so the edge job can run with NO
- * theo-cloud dependency. Traefik's `forwardAuth` middleware calls this shim for
+ * Stands in for the loopzero-cloud Model B broker so the edge job can run with NO
+ * loopzero-cloud dependency. Traefik's `forwardAuth` middleware calls this shim for
  * every `/v1/*` request; the shim implements the gateway contract:
  *
  *   1. Read the customer key from `X-Customer-Key: cust_<tenant>`.
  *   2. No / malformed key  → 401 (Traefik denies; the service is never reached).
- *   3. First time for a tenant → mint a per-tenant `theo_live_*` key by calling the
+ *   3. First time for a tenant → mint a per-tenant `looptrace_live_*` key by calling the
  *      lens service's REAL admin endpoint (`POST /v1/admin/keys`) with the platform
  *      bootstrap token, workspace_id = tenant, scopes [read,write,delete]. Cache it.
  *   4. Respond 200 with `Authorization: Bearer <minted>` — Traefik copies it upstream
@@ -23,7 +23,7 @@ const API_URL = process.env.API_URL ?? "http://api:4318";
 const BOOTSTRAP = process.env.BOOTSTRAP ?? "";
 const PORT = Number(process.env.PORT ?? 4181);
 
-/** tenant → minted `theo_live_*` secret (mint-once, then cache). */
+/** tenant → minted `looptrace_live_*` secret (mint-once, then cache). */
 const minted = new Map();
 
 async function brokerKeyFor(tenant) {

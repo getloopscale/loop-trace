@@ -11,7 +11,7 @@ import {
   sessionListResponseSchema,
   sessionDetailResponseSchema,
   apiError,
-} from "@usetheo/lens-core";
+} from "@looptrace/core";
 
 import { getPrincipal, requireScopeOnPrincipal } from "../auth/middleware.js";
 

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { type SpanRepository } from "@usetheo/lens-core";
-import { createSpanRepository, migrateLatest } from "@usetheo/lens-core/infra";
-import { createApp } from "@usetheo/lens-api";
+import { type SpanRepository } from "@looptrace/core";
+import { createSpanRepository, migrateLatest } from "@looptrace/core/infra";
+import { createApp } from "@looptrace/api";
 import type pg from "pg";
 
 import { LensReadClient } from "./client.js";
@@ -12,13 +12,13 @@ import { LensApiError } from "./errors.js";
  * engine app (`createApp(repo)` + a real repo + a real Postgres, from the Testcontainers globalSetup),
  * with `app.fetch` injected as the client transport. In-process is MORE hermetic + deterministic than
  * a socket while exercising the exact handler → repo → DB → envelope path a customer hits. Gated on
- * THEOLENS_PG_URI like the rest of the integration suite.
+ * LOOPTRACE_PG_URI like the rest of the integration suite.
  *
- * The `theo_live_*` per-tenant auth + scope enforcement is proven end-to-end at the edge (M40
+ * The `looptrace_live_*` per-tenant auth + scope enforcement is proven end-to-end at the edge (M40
  * ForwardAuth e2e); here the engine runs single-tenant (default workspace) so the focus is the
  * request/response shape round-trip + the real `{code,message}` error envelope.
  */
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
 
 suite("LensReadClient ↔ engine contract (M105)", () => {
@@ -38,7 +38,7 @@ suite("LensReadClient ↔ engine contract (M105)", () => {
       app.fetch(new Request(typeof input === "string" ? input : input.toString(), init));
     client = new LensReadClient({
       baseUrl: "http://engine.local",
-      apiKey: "theo_live_contract_test",
+      apiKey: "looptrace_live_contract_test",
       fetch: engineFetch,
     });
   });

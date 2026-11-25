@@ -132,9 +132,9 @@ describe("M118 breaker wired into OpenAICompatibleChat (caller wiring)", () => {
     // Deterministic + fast: 1 attempt per ask (no retry sleep), a low breaker threshold. The client
     // reads env at construction (parseProviderRetry/parseProviderBreaker).
     const saved = { ...process.env };
-    process.env["THEOLENS_PROVIDER_MAX_ATTEMPTS"] = "1";
-    process.env["THEOLENS_PROVIDER_BREAKER_THRESHOLD"] = "3";
-    process.env["THEOLENS_PROVIDER_BREAKER_COOLDOWN_MS"] = "10000";
+    process.env["LOOPTRACE_PROVIDER_MAX_ATTEMPTS"] = "1";
+    process.env["LOOPTRACE_PROVIDER_BREAKER_THRESHOLD"] = "3";
+    process.env["LOOPTRACE_PROVIDER_BREAKER_COOLDOWN_MS"] = "10000";
     try {
       let fetchCalls = 0;
       const failing: typeof fetch = async () => {

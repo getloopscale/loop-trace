@@ -14,7 +14,7 @@
  * The difference is that the database now enforces the boundary underneath.
  *
  * AsyncLocalStorage is already the established mechanism for cross-tool
- * isolation in this repository (the sibling theo-memory package);
+ * isolation in this repository (the sibling loopmem package);
  * this applies the same pattern one layer down.
  *
  * @see migrations/0033_rls_fail_closed.sql — the policies this context satisfies

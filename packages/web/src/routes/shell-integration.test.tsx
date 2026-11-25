@@ -24,7 +24,7 @@ vi.mock("../api/client.js", async (orig) => {
   };
 });
 
-const KEY = "theolens.autoRefreshMs";
+const KEY = "looptrace.autoRefreshMs";
 
 function renderApp(path = "/") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });

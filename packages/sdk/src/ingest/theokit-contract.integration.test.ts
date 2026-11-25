@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { type SpanRepository } from "@usetheo/lens-core";
-import { createSpanRepository, migrateLatest } from "@usetheo/lens-core/infra";
-import { createApp } from "@usetheo/lens-api";
+import { type SpanRepository } from "@looptrace/core";
+import { createSpanRepository, migrateLatest } from "@looptrace/core/infra";
+import { createApp } from "@looptrace/api";
 import type pg from "pg";
 
 import { recordRun } from "./theokit.js";
@@ -14,9 +14,9 @@ import type { RunResult } from "./sdk-message.js";
  * `@theokit/sdk` run is translated by `recordRun` → OTLP → the REAL engine app (`createApp(repo)` +
  * Testcontainers Postgres), selected by `service.name=theokit-sdk` → the `theokit-sdk` adapter → read
  * back normalized via `LensReadClient`. In-process (`app.fetch`) is more hermetic than a socket while
- * exercising the exact ingest → adapter → repo → read path. Gated on THEOLENS_PG_URI.
+ * exercising the exact ingest → adapter → repo → read path. Gated on LOOPTRACE_PG_URI.
  */
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
 
 const RUN = "theokit-run-1";
@@ -44,7 +44,7 @@ suite("theokit ingest ↔ engine contract (M115)", () => {
     await migrateLatest(pool);
     app = createApp(repo);
     engineFetch = (input, init) => app.fetch(new Request(typeof input === "string" ? input : input.toString(), init));
-    client = new LensReadClient({ baseUrl: "http://engine.local", apiKey: "theo_live_contract", fetch: engineFetch });
+    client = new LensReadClient({ baseUrl: "http://engine.local", apiKey: "looptrace_live_contract", fetch: engineFetch });
   });
 
   beforeEach(async () => {
@@ -59,7 +59,7 @@ suite("theokit ingest ↔ engine contract (M115)", () => {
     // Timestamps ~2 min in the past so the trace lands inside the read window.
     await recordRun(
       { messages, result: runResult },
-      { baseUrl: "http://engine.local", apiKey: "theo_live_contract", fetch: engineFetch, startTimeMs: Date.now() - 120_000 },
+      { baseUrl: "http://engine.local", apiKey: "looptrace_live_contract", fetch: engineFetch, startTimeMs: Date.now() - 120_000 },
     );
 
     // The run reads back as a trace with the normalized root fields.
@@ -71,7 +71,7 @@ suite("theokit ingest ↔ engine contract (M115)", () => {
     expect(t!.totalTokens).toBe(225); // 210 + 15 from RunResult.usage
 
     // The trace detail (span tree) carries the normalized input/output on the root span.
-    const res = await engineFetch(`http://engine.local/v1/traces/${RUN}`, { headers: { authorization: "Bearer theo_live_contract" } });
+    const res = await engineFetch(`http://engine.local/v1/traces/${RUN}`, { headers: { authorization: "Bearer looptrace_live_contract" } });
     expect(res.status).toBe(200);
     const detail = (await res.json()) as { inputValue?: string; outputValue?: string };
     expect(detail.inputValue).toBe("List the files");
@@ -81,10 +81,10 @@ suite("theokit ingest ↔ engine contract (M115)", () => {
   it("test_theokit_trace_detail_has_the_tool_span", async () => {
     await recordRun(
       { messages, result: runResult },
-      { baseUrl: "http://engine.local", apiKey: "theo_live_contract", fetch: engineFetch, startTimeMs: Date.now() - 120_000 },
+      { baseUrl: "http://engine.local", apiKey: "looptrace_live_contract", fetch: engineFetch, startTimeMs: Date.now() - 120_000 },
     );
     // Read the full span tree via the trace-detail route and assert the Bash tool span is present + classified.
-    const res = await engineFetch(`http://engine.local/v1/traces/${RUN}`, { headers: { authorization: "Bearer theo_live_contract" } });
+    const res = await engineFetch(`http://engine.local/v1/traces/${RUN}`, { headers: { authorization: "Bearer looptrace_live_contract" } });
     expect(res.status).toBe(200);
     const detail = (await res.json()) as { children?: Array<{ name?: string; toolName?: string }> };
     const names = JSON.stringify(detail);

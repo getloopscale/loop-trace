@@ -10,13 +10,13 @@ import { describe, expect, it } from "vitest";
  * WHY THIS FILE EXISTS. `publish.yml`'s `image` job used to declare no `needs:`, so `ci`,
  * `integration` and `security-sast` ran *beside* the build instead of before it: a red gate did not
  * stop the push, and the `:develop` tag the dev host reconciles could point at an artifact from a
- * rejected commit. theo-rag closed the identical defect (#160) quoting the measured consequence on
- * theo-memory — 11 of 134 pushes (8.2%) published an image with the suite red on the same commit.
+ * rejected commit. looprag closed the identical defect (#160) quoting the measured consequence on
+ * loopmem — 11 of 134 pushes (8.2%) published an image with the suite red on the same commit.
  *
  * A comment saying "do not remove this" does not survive a refactor. This test does.
  *
  * HONEST NOTE (blueprint Q1): pinning a workflow with a test is STRICTER than the OSS field —
- * across opik, langfuse, phoenix, argo-cd and compose, only the first-party theo-memory does it
+ * across opik, langfuse, phoenix, argo-cd and compose, only the first-party loopmem does it
  * (`tests/integration/publish-workflow.test.ts`, 46 cases). It is our standard, adopted knowingly.
  *
  * The workflows are PARSED, never grepped. A grep for `needs:` passes on a commented-out line and on
@@ -230,7 +230,7 @@ describe("M137 — publication gates", () => {
   });
 
   /**
-   * M138 — the repo must hold no host credential. theo-lens is Apache-2.0 and headed for
+   * M138 — the repo must hold no host credential. looptrace is Apache-2.0 and headed for
    * publication; the umbrella runbook is explicit that a public repo carries no IP, path, user or
    * SSH key. Unlike most debt this does not undo itself — a published history is public
    * retroactively — so the absence is pinned rather than trusted to review.
@@ -357,7 +357,7 @@ jobs:
    * teste falhar, embora `publish.yml` continuasse declarando `uses: ./.github/workflows/eval.yml`.
    * O GitHub reprova isso no PARSE — `workflow was not found` — e um run que morre no parse aparece
    * como `startup_failure`: run criado, zero jobs, 0s. Quem olha a lista vê vermelho e presume que
-   * o gate rodou e reprovou. É a mesma família do defeito que custou 30 runs ao theo-memory
+   * o gate rodou e reprovou. É a mesma família do defeito que custou 30 runs ao loopmem
    * (`eval.yml:43-51`): o estado do check não prova que o check executou.
    */
   describe("every local workflow reference resolves (found by mutation, M139)", () => {
@@ -412,7 +412,7 @@ jobs:
   });
 
   /**
-   * usetheoai/theo#446 — the platform runs theo-lens from Amazon ECR by commit SHA, so the image job
+   * getloopscale/loopzero#446 — the platform runs looptrace from Amazon ECR by commit SHA, so the image job
    * must reach the ECR-capable reusable and hand it the registry and the role.
    *
    * Two failure modes are pinned here, and both are SILENT at startup — GitHub refuses the whole
@@ -421,7 +421,7 @@ jobs:
    *     sibling repo, five runs dead in under a second);
    *   - granting the job fewer permissions than the reusable declares.
    */
-  describe("the image reaches Amazon ECR (usetheoai/theo#446)", () => {
+  describe("the image reaches Amazon ECR (getloopscale/loopzero#446)", () => {
     const REUSABLE =
       "getloopscale/loopzero/.github/workflows/build-publish.yml@6a07e48af6d1672af21adede244c0d32ed1eb731";
     /** Declared by the reusable at the pinned SHA — `on.workflow_call.inputs`. */
@@ -456,7 +456,7 @@ jobs:
     });
 
     it("an undeclared input is refused (negative case)", () => {
-      expect(() => assertInputsAreDeclared({ with: { image: "theo-lens", attest: true } })).toThrow(/attest/);
+      expect(() => assertInputsAreDeclared({ with: { image: "looptrace", attest: true } })).toThrow(/attest/);
     });
 
     it("the ECR registry and role come from repository variables, never from text", () => {
@@ -466,7 +466,7 @@ jobs:
     });
 
     it("the ECR repository is named after the one image this service runs", () => {
-      expect(((image()?.["with"] ?? {}) as Record<string, unknown>)["image"]).toBe("theo-lens");
+      expect(((image()?.["with"] ?? {}) as Record<string, unknown>)["image"]).toBe("looptrace");
     });
 
     it("image grants every permission the reusable declares", () => {

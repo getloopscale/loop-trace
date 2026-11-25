@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { type SpanRepository, type SDKMessage } from "@usetheo/lens-core";
-import { createSpanRepository, migrateLatest } from "@usetheo/lens-core/infra";
-import { createApp } from "@usetheo/lens-api";
+import { type SpanRepository, type SDKMessage } from "@looptrace/core";
+import { createSpanRepository, migrateLatest } from "@looptrace/core/infra";
+import { createApp } from "@looptrace/api";
 import type pg from "pg";
 
 import { recordRun } from "../ingest/theokit.js";
@@ -16,9 +16,9 @@ import type { TraceTree } from "./types.js";
  *   (c) the read-back spans are BYTE-IDENTICAL across both paths (both go through the one
  *       SDKMessage→spans mapper, with the same injected `startTimeMs`) — the dual-path-divergence guard.
  * The engine's actual status for a truly-unmounted route is pinned (settles the 404-vs-405 question).
- * Deterministic via injected `startTimeMs` + injected `fetch`. Gated on THEOLENS_PG_URI.
+ * Deterministic via injected `startTimeMs` + injected `fetch`. Gated on LOOPTRACE_PG_URI.
  */
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
 
 const RUN = "dual-path-run-1";
@@ -57,7 +57,7 @@ suite("recordRun dual-path + byte-identical read-back (M117 T3.2)", () => {
     await migrateLatest(pool);
     app = createApp(repo);
     engineFetch = (input, init) => app.fetch(new Request(typeof input === "string" ? input : input.toString(), init));
-    client = new LensReadClient({ baseUrl: "http://engine.local", apiKey: "theo_live_contract", fetch: engineFetch });
+    client = new LensReadClient({ baseUrl: "http://engine.local", apiKey: "looptrace_live_contract", fetch: engineFetch });
   });
 
   beforeEach(async () => {
@@ -73,7 +73,7 @@ suite("recordRun dual-path + byte-identical read-back (M117 T3.2)", () => {
     // never-registered route with 404 (Not Found), so an older engine without /v1/runs would 404.
     const res = await engineFetch("http://engine.local/v1/definitely-not-a-route", {
       method: "POST",
-      headers: { authorization: "Bearer theo_live_contract", "content-type": "application/json" },
+      headers: { authorization: "Bearer looptrace_live_contract", "content-type": "application/json" },
       body: "{}",
     });
     expect(res.status).toBe(404);
@@ -82,7 +82,7 @@ suite("recordRun dual-path + byte-identical read-back (M117 T3.2)", () => {
   it("(a) native /v1/runs happy path — recordRun ingests and reads back", async () => {
     await recordRun(
       { messages },
-      { baseUrl: "http://engine.local", apiKey: "theo_live_contract", fetch: engineFetch, startTimeMs: START_MS },
+      { baseUrl: "http://engine.local", apiKey: "looptrace_live_contract", fetch: engineFetch, startTimeMs: START_MS },
     );
     const { traces } = await client.listTraces({ limit: 50 });
     expect(traces.some((t) => t.traceId === RUN)).toBe(true);
@@ -102,7 +102,7 @@ suite("recordRun dual-path + byte-identical read-back (M117 T3.2)", () => {
     };
     await recordRun(
       { messages },
-      { baseUrl: "http://engine.local", apiKey: "theo_live_contract", fetch: fallbackFetch, startTimeMs: START_MS },
+      { baseUrl: "http://engine.local", apiKey: "looptrace_live_contract", fetch: fallbackFetch, startTimeMs: START_MS },
     );
     const tree = await client.getTrace(RUN);
     expect(tree.traceId).toBe(RUN);
@@ -114,7 +114,7 @@ suite("recordRun dual-path + byte-identical read-back (M117 T3.2)", () => {
     // 404→/v1/traces fallback. Both paths run the one mapper with the same startTimeMs → identical spans.
     await recordRun(
       { messages },
-      { baseUrl: "http://engine.local", apiKey: "theo_live_contract", fetch: engineFetch, startTimeMs: START_MS },
+      { baseUrl: "http://engine.local", apiKey: "looptrace_live_contract", fetch: engineFetch, startTimeMs: START_MS },
     );
     const viaRuns = normalizeTree(await client.getTrace(RUN));
 
@@ -129,7 +129,7 @@ suite("recordRun dual-path + byte-identical read-back (M117 T3.2)", () => {
     };
     await recordRun(
       { messages },
-      { baseUrl: "http://engine.local", apiKey: "theo_live_contract", fetch: fallbackFetch, startTimeMs: START_MS },
+      { baseUrl: "http://engine.local", apiKey: "looptrace_live_contract", fetch: fallbackFetch, startTimeMs: START_MS },
     );
     const viaTraces = normalizeTree(await client.getTrace(RUN));
 

@@ -1,4 +1,4 @@
-# Contributing to Theo Lens (`@usetheo/lens`)
+# Contributing to LoopTrace (`@looptrace`)
 
 Notes for human contributors and downstream maintainers. This file documents only what a contributor
 needs hands-on; it does not restate the engineering process.
@@ -16,7 +16,7 @@ A pnpm workspace. The packages that matter when you are finding your way in:
 
 ## Build before you typecheck across packages
 
-`@usetheo/lens-api` resolves `@usetheo/lens-core` through its **built** `dist/`, not through source.
+`@looptrace/api` resolves `@looptrace/core` through its **built** `dist/`, not through source.
 A stale or absent `dist/` means the API typechecks against old symbols.
 
 ```bash
@@ -31,7 +31,7 @@ cross-package imports resolve to `any` and produce a wall of errors in untouched
 
 ## Integration tests need a real Postgres
 
-~48 suites gate on `THEOLENS_PG_URI` and **self-skip** when it is absent. That is correct on a
+~48 suites gate on `LOOPTRACE_PG_URI` and **self-skip** when it is absent. That is correct on a
 laptop without Docker and catastrophic in a required lane, which would report green having executed
 nothing. Always go through the script, which sets the variable and the config:
 
@@ -76,7 +76,7 @@ rather than the author.
 
 ## Redaction is the SDK's job
 
-Theo Lens stores what you emit. It does not classify span contents for sensitivity, and the judge
+LoopTrace stores what you emit. It does not classify span contents for sensitivity, and the judge
 and copilot read them later. If a prompt, tool argument, or user turn can carry a secret, redact it
 **at the SDK boundary** — after ingestion is too late, and the retention is indefinite. See
 [`SECURITY.md`](./SECURITY.md).

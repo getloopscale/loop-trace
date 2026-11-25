@@ -14,7 +14,7 @@ import { projectVectors } from "../../../scripts/export-theokit-vectors.js";
 
 const COMMITTED_PATH = fileURLToPath(new URL("./theokit-vectors.json", import.meta.url));
 const REGEN_HINT =
-  "theokit-vectors.json is stale — run `pnpm --filter @usetheo/lens-core exec tsx scripts/export-theokit-vectors.ts` to regenerate.";
+  "theokit-vectors.json is stale — run `pnpm --filter @looptrace/core exec tsx scripts/export-theokit-vectors.ts` to regenerate.";
 
 describe("theokit-vectors.json cross-language contract (M124 D3)", () => {
   it("test_committed_vectors_json_matches_mapper_vectors", () => {

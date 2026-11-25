@@ -35,7 +35,7 @@ describe("mountStatic", () => {
     mountStatic(app, FIXTURE_ROOT);
     const res = await app.request("/assets/app.js");
     expect(res.status).toBe(200);
-    expect(await res.text()).toContain("theo lens ui");
+    expect(await res.text()).toContain("looptrace ui");
   });
 
   it("test_mount_static_returns_404_for_missing_asset", async () => {

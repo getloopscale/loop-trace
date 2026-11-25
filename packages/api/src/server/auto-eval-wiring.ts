@@ -16,7 +16,7 @@ import {
   type FilterClause,
   type Queryable,
   type Span,
-} from "@usetheo/lens-core";
+} from "@looptrace/core";
 
 import {
   startAutoEvalScheduler,
@@ -60,7 +60,7 @@ export const DEFAULT_BATCH_SIZE = 20;
  * `run_after` forward forever and is never evaluated — silently, with the row
  * sitting in `queued` looking healthy.
  *
- * That is the ordinary case for this product, not an edge case: theo-lens
+ * That is the ordinary case for this product, not an edge case: looptrace
  * observes LLM agents, where a session emitting spans over minutes is a normal
  * trace. Past this window the job runs on whatever spans it has, which is a
  * strictly better outcome than never running.

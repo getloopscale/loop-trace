@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Context } from "hono";
-import { RateLimiter, EvaluatorRunJobRegistry, type EvaluatorRecord, type RunResult } from "@usetheo/lens-core";
+import { RateLimiter, EvaluatorRunJobRegistry, type EvaluatorRecord, type RunResult } from "@looptrace/core";
 
 import { createEvaluatorHandler, updateEvaluatorHandler, runEvaluatorHandler, getEvaluatorRunJobHandler, type EvaluatorApiDeps } from "./evaluators.js";
 import { evaluatorRunRateLimited } from "../metrics.js";

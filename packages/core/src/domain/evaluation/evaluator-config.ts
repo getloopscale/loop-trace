@@ -5,7 +5,7 @@
 import type { JudgeConfig } from "./llm-judge.js";
 import { positiveIntEnv } from "../provider/env.js";
 
-/** Default per-backfill trace cap (ADR D7); override with THEOLENS_EVAL_BACKFILL_MAX. */
+/** Default per-backfill trace cap (ADR D7); override with LOOPTRACE_EVAL_BACKFILL_MAX. */
 export const DEFAULT_EVAL_BACKFILL_MAX = 500;
 
 /**
@@ -15,13 +15,13 @@ export const DEFAULT_EVAL_BACKFILL_MAX = 500;
 export function parseJudgeConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): JudgeConfig | null {
-  const baseUrl = env["THEOLENS_JUDGE_BASE_URL"]?.trim();
-  const model = env["THEOLENS_JUDGE_MODEL"]?.trim();
+  const baseUrl = env["LOOPTRACE_JUDGE_BASE_URL"]?.trim();
+  const model = env["LOOPTRACE_JUDGE_MODEL"]?.trim();
   if (!baseUrl || !model) return null;
   return {
     baseUrl,
     model,
-    apiKey: env["THEOLENS_JUDGE_API_KEY"]?.trim() || undefined,
+    apiKey: env["LOOPTRACE_JUDGE_API_KEY"]?.trim() || undefined,
   };
 }
 
@@ -29,7 +29,7 @@ export function parseJudgeConfig(
 export function parseEvalSweepHours(
   env: NodeJS.ProcessEnv = process.env,
 ): number {
-  const raw = env["THEOLENS_EVAL_SWEEP_HOURS"];
+  const raw = env["LOOPTRACE_EVAL_SWEEP_HOURS"];
   if (raw === undefined) return 0;
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : 0;
@@ -37,7 +37,7 @@ export function parseEvalSweepHours(
 
 /** Per-backfill trace cap (D7). Invalid/unset → default 500; never ≤ 0. */
 export function parseBackfillMax(env: NodeJS.ProcessEnv = process.env): number {
-  const raw = env["THEOLENS_EVAL_BACKFILL_MAX"];
+  const raw = env["LOOPTRACE_EVAL_BACKFILL_MAX"];
   if (raw === undefined) return DEFAULT_EVAL_BACKFILL_MAX;
   const n = Number(raw);
   return Number.isInteger(n) && n > 0 ? n : DEFAULT_EVAL_BACKFILL_MAX;
@@ -46,7 +46,7 @@ export function parseBackfillMax(env: NodeJS.ProcessEnv = process.env): number {
 /** M33: copilot per-workspace requests/minute (D3). Invalid/unset → default 20; never ≤ 0. */
 export const DEFAULT_COPILOT_RPM = 20;
 export function parseCopilotRpm(env: NodeJS.ProcessEnv = process.env): number {
-  const raw = env["THEOLENS_COPILOT_RPM"];
+  const raw = env["LOOPTRACE_COPILOT_RPM"];
   if (raw === undefined) return DEFAULT_COPILOT_RPM;
   const n = Number(raw);
   return Number.isInteger(n) && n > 0 ? n : DEFAULT_COPILOT_RPM;
@@ -57,7 +57,7 @@ export function parseCopilotRpm(env: NodeJS.ProcessEnv = process.env): number {
  *  backfillMax=500 judge calls per request, so its RPM is deliberately low. Invalid/unset → 10; never ≤ 0. */
 export const DEFAULT_EVALUATOR_RPM = 10;
 export function parseEvaluatorRpm(env: NodeJS.ProcessEnv = process.env): number {
-  const raw = env["THEOLENS_EVALUATOR_RPM"];
+  const raw = env["LOOPTRACE_EVALUATOR_RPM"];
   if (raw === undefined) return DEFAULT_EVALUATOR_RPM;
   const n = Number(raw);
   return Number.isInteger(n) && n > 0 ? n : DEFAULT_EVALUATOR_RPM;
@@ -68,7 +68,7 @@ export function parseEvaluatorRpm(env: NodeJS.ProcessEnv = process.env): number 
  *  Invalid/unset → default 600; never ≤ 0. */
 export const DEFAULT_INGEST_RPM = 600;
 export function parseIngestRpm(env: NodeJS.ProcessEnv = process.env): number {
-  const raw = env["THEOLENS_INGEST_RPM"];
+  const raw = env["LOOPTRACE_INGEST_RPM"];
   if (raw === undefined) return DEFAULT_INGEST_RPM;
   const n = Number(raw);
   return Number.isInteger(n) && n > 0 ? n : DEFAULT_INGEST_RPM;
@@ -77,7 +77,7 @@ export function parseIngestRpm(env: NodeJS.ProcessEnv = process.env): number {
 /** M93: cap on the RAW ingest body (bytes) — bodyLimit 413s past this before buffering. Default 4 MiB. */
 export const DEFAULT_MAX_INGEST_BYTES = 4 * 1024 * 1024;
 export function parseMaxIngestBytes(env: NodeJS.ProcessEnv = process.env): number {
-  const raw = env["THEOLENS_MAX_INGEST_BYTES"];
+  const raw = env["LOOPTRACE_MAX_INGEST_BYTES"];
   if (raw === undefined) return DEFAULT_MAX_INGEST_BYTES;
   const n = Number(raw);
   return Number.isInteger(n) && n > 0 ? n : DEFAULT_MAX_INGEST_BYTES;
@@ -87,7 +87,7 @@ export function parseMaxIngestBytes(env: NodeJS.ProcessEnv = process.env): numbe
  *  (above the raw cap since gzip legitimately inflates). */
 export const DEFAULT_MAX_DECOMPRESSED_BYTES = 16 * 1024 * 1024;
 export function parseMaxDecompressedBytes(env: NodeJS.ProcessEnv = process.env): number {
-  const raw = env["THEOLENS_MAX_DECOMPRESSED_BYTES"];
+  const raw = env["LOOPTRACE_MAX_DECOMPRESSED_BYTES"];
   if (raw === undefined) return DEFAULT_MAX_DECOMPRESSED_BYTES;
   const n = Number(raw);
   return Number.isInteger(n) && n > 0 ? n : DEFAULT_MAX_DECOMPRESSED_BYTES;
@@ -121,12 +121,12 @@ export const DEFAULT_POOL_CONFIG: PoolConfig = {
 };
 export function parsePoolConfig(env: NodeJS.ProcessEnv = process.env): PoolConfig {
   return {
-    max: positiveIntEnv(env, "THEOLENS_PG_POOL_MAX", DEFAULT_POOL_CONFIG.max),
-    connectionTimeoutMillis: positiveIntEnv(env, "THEOLENS_PG_CONNECT_TIMEOUT_MS", DEFAULT_POOL_CONFIG.connectionTimeoutMillis),
-    idleTimeoutMillis: positiveIntEnv(env, "THEOLENS_PG_IDLE_TIMEOUT_MS", DEFAULT_POOL_CONFIG.idleTimeoutMillis),
-    statement_timeout: positiveIntEnv(env, "THEOLENS_PG_STATEMENT_TIMEOUT_MS", DEFAULT_POOL_CONFIG.statement_timeout),
-    query_timeout: positiveIntEnv(env, "THEOLENS_PG_QUERY_TIMEOUT_MS", DEFAULT_POOL_CONFIG.query_timeout),
-    maxLifetimeSeconds: positiveIntEnv(env, "THEOLENS_PG_MAX_LIFETIME_S", DEFAULT_POOL_CONFIG.maxLifetimeSeconds),
+    max: positiveIntEnv(env, "LOOPTRACE_PG_POOL_MAX", DEFAULT_POOL_CONFIG.max),
+    connectionTimeoutMillis: positiveIntEnv(env, "LOOPTRACE_PG_CONNECT_TIMEOUT_MS", DEFAULT_POOL_CONFIG.connectionTimeoutMillis),
+    idleTimeoutMillis: positiveIntEnv(env, "LOOPTRACE_PG_IDLE_TIMEOUT_MS", DEFAULT_POOL_CONFIG.idleTimeoutMillis),
+    statement_timeout: positiveIntEnv(env, "LOOPTRACE_PG_STATEMENT_TIMEOUT_MS", DEFAULT_POOL_CONFIG.statement_timeout),
+    query_timeout: positiveIntEnv(env, "LOOPTRACE_PG_QUERY_TIMEOUT_MS", DEFAULT_POOL_CONFIG.query_timeout),
+    maxLifetimeSeconds: positiveIntEnv(env, "LOOPTRACE_PG_MAX_LIFETIME_S", DEFAULT_POOL_CONFIG.maxLifetimeSeconds),
   };
 }
 
@@ -134,14 +134,14 @@ export function parsePoolConfig(env: NodeJS.ProcessEnv = process.env): PoolConfi
  *  hanging a socket. Default 30s. */
 export const DEFAULT_HTTP_REQUEST_TIMEOUT_MS = 30_000;
 export function parseHttpRequestTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
-  return positiveIntEnv(env, "THEOLENS_HTTP_REQUEST_TIMEOUT_MS", DEFAULT_HTTP_REQUEST_TIMEOUT_MS);
+  return positiveIntEnv(env, "LOOPTRACE_HTTP_REQUEST_TIMEOUT_MS", DEFAULT_HTTP_REQUEST_TIMEOUT_MS);
 }
 
 /** M94: graceful-shutdown drain deadline (ms) — how long SIGTERM awaits in-flight requests before a
  *  forced close. Default 10s. */
 export const DEFAULT_SHUTDOWN_DRAIN_MS = 10_000;
 export function parseShutdownDrainMs(env: NodeJS.ProcessEnv = process.env): number {
-  return positiveIntEnv(env, "THEOLENS_SHUTDOWN_DRAIN_MS", DEFAULT_SHUTDOWN_DRAIN_MS);
+  return positiveIntEnv(env, "LOOPTRACE_SHUTDOWN_DRAIN_MS", DEFAULT_SHUTDOWN_DRAIN_MS);
 }
 
 /**

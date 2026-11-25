@@ -84,7 +84,7 @@ describe("ApiKeyAuthVerifier (M22)", () => {
         },
       ]),
     );
-    const p = await v.resolvePrincipal("theo_live_abcdefghijklmnop");
+    const p = await v.resolvePrincipal("looptrace_live_abcdefghijklmnop");
     expect(p).toEqual({
       workspaceId: "ws-acme",
       userId: "u-1",
@@ -95,7 +95,7 @@ describe("ApiKeyAuthVerifier (M22)", () => {
 
   it("test_api_key_verifier_revoked_or_unknown_resolves_null", async () => {
     const v = new ApiKeyAuthVerifier(poolReturning([])); // no active row
-    expect(await v.resolvePrincipal("theo_live_abcdefghijklmnop")).toBeNull();
+    expect(await v.resolvePrincipal("looptrace_live_abcdefghijklmnop")).toBeNull();
   });
 
   it("test_api_key_verifier_jsonb_string_scopes_parsed", async () => {
@@ -109,7 +109,7 @@ describe("ApiKeyAuthVerifier (M22)", () => {
         },
       ]),
     );
-    const p = await v.resolvePrincipal("theo_live_abcdefghijklmnop");
+    const p = await v.resolvePrincipal("looptrace_live_abcdefghijklmnop");
     expect(p?.scopes).toEqual(["observability:read"]);
     expect(p?.role).toBe("member");
     expect(p?.userId).toBeNull();

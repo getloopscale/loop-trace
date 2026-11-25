@@ -5,11 +5,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  * fails, `main` must log a structured error and exit non-zero — never serve a
  * stack that cannot ingest. Mocks the core so no real Postgres is needed.
  */
-// M122: the boot concretes now resolve through the @usetheo/lens-core/infra subpath,
+// M122: the boot concretes now resolve through the @looptrace/core/infra subpath,
 // so the createSpanRepository/migrateLatest stubs mock THAT module (a bare
-// @usetheo/lens-core mock would no longer intercept them — the boot path would hit
+// @looptrace/core mock would no longer intercept them — the boot path would hit
 // real Postgres). The domain symbols the auth middleware reads stay on the root mock.
-vi.mock("@usetheo/lens-core/infra", () => ({
+vi.mock("@looptrace/core/infra", () => ({
   createSpanRepository: () => ({
     repo: {},
     pool: { end: async () => undefined },
@@ -19,7 +19,7 @@ vi.mock("@usetheo/lens-core/infra", () => ({
   }),
 }));
 
-vi.mock("@usetheo/lens-core", () => ({
+vi.mock("@looptrace/core", () => ({
   // M22: the auth middleware (imported transitively via app.ts) reads these.
   DEFAULT_WORKSPACE_ID: "default",
   DEFAULT_OWNER_USER_ID: "default-owner",
@@ -33,11 +33,11 @@ vi.mock("@hono/node-server", () => ({
 describe("composition root fail-loud on boot (contract)", () => {
   afterEach(() => {
     vi.restoreAllMocks();
-    delete process.env["THEOLENS_PG_URI"];
+    delete process.env["LOOPTRACE_PG_URI"];
   });
 
   it("test_boot_migrate_failure_exits_nonzero", async () => {
-    process.env["THEOLENS_PG_URI"] = "postgresql://stub/stub";
+    process.env["LOOPTRACE_PG_URI"] = "postgresql://stub/stub";
     const exit = vi
       .spyOn(process, "exit")
       .mockImplementation((() => undefined) as never);

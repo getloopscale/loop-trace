@@ -1,4 +1,4 @@
-package theolens
+package looptrace
 
 import (
 	"encoding/json"
@@ -9,12 +9,12 @@ import (
 // ErrTransport is the sentinel every network-level failure matches via errors.Is. A run POST is
 // non-idempotent and billable, so an ambiguous timeout surfaces here and is NEVER auto-retried
 // (the M108 lesson) — the caller owns any backoff.
-var ErrTransport = errors.New("theolens: transport failure")
+var ErrTransport = errors.New("looptrace: transport failure")
 
-// TheoLensError is a non-2xx response from the engine, carrying the parsed {code,message} envelope
+// LoopTraceError is a non-2xx response from the engine, carrying the parsed {code,message} envelope
 // plus the HTTP Status. On a 429 the Retry-After header value is surfaced verbatim (never used to
-// auto-retry). A caller recovers it with errors.As(err, &TheoLensError{}).
-type TheoLensError struct {
+// auto-retry). A caller recovers it with errors.As(err, &LoopTraceError{}).
+type LoopTraceError struct {
 	// Status is the HTTP status code (400/413/415/429/401/403/…).
 	Status int
 	// Code is the stable engine error code (e.g. PAYLOAD_TOO_LARGE); "UNKNOWN" when the body carried none.
@@ -25,8 +25,8 @@ type TheoLensError struct {
 	RetryAfter string
 }
 
-func (e *TheoLensError) Error() string {
-	return fmt.Sprintf("theolens: [%d %s] %s", e.Status, e.Code, e.Message)
+func (e *LoopTraceError) Error() string {
+	return fmt.Sprintf("looptrace: [%d %s] %s", e.Status, e.Code, e.Message)
 }
 
 // transportError wraps a network-level cause so errors.Is matches BOTH the ErrTransport sentinel
@@ -37,7 +37,7 @@ type transportError struct {
 }
 
 func (e *transportError) Error() string {
-	return fmt.Sprintf("theolens: transport POSTing to %s: %v", e.url, e.cause)
+	return fmt.Sprintf("looptrace: transport POSTing to %s: %v", e.url, e.cause)
 }
 
 func (e *transportError) Unwrap() error { return e.cause }

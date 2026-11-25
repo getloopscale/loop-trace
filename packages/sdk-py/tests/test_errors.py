@@ -8,12 +8,12 @@ from unittest import mock
 
 import pytest
 
-from theo_lens_sdk import (
-    TheoLensError,
-    TheoLensTransportError,
+from looptrace_sdk import (
+    LoopTraceError,
+    LoopTraceTransportError,
     record_run,
 )
-from theo_lens_sdk.client import Response, urllib_transport
+from looptrace_sdk.client import Response, urllib_transport
 
 from ._transport_stub import BASE, CapturingTransport, RaisingTransport
 
@@ -34,7 +34,7 @@ def _err_response(status: int, code: str, *, headers: dict[str, str] | None = No
 )
 def test_record_run_maps_non_2xx_to_typed_error(status: int, code: str) -> None:
     transport = CapturingTransport(response=_err_response(status, code))
-    with pytest.raises(TheoLensError) as excinfo:
+    with pytest.raises(LoopTraceError) as excinfo:
         record_run([], transport=transport, **BASE)
 
     err = excinfo.value
@@ -47,7 +47,7 @@ def test_429_exposes_retry_after_and_does_not_retry() -> None:
     transport = CapturingTransport(
         response=_err_response(429, "RATE_LIMITED", headers={"Retry-After": "12"})
     )
-    with pytest.raises(TheoLensError) as excinfo:
+    with pytest.raises(LoopTraceError) as excinfo:
         record_run([], transport=transport, **BASE)
 
     assert excinfo.value.retry_after == 12
@@ -55,8 +55,8 @@ def test_429_exposes_retry_after_and_does_not_retry() -> None:
 
 
 def test_network_failure_raises_typed_transport_error_no_retry() -> None:
-    transport = RaisingTransport(TheoLensTransportError("connection reset"))
-    with pytest.raises(TheoLensTransportError):
+    transport = RaisingTransport(LoopTraceTransportError("connection reset"))
+    with pytest.raises(LoopTraceTransportError):
         record_run([], transport=transport, **BASE)
     assert transport.calls == 1  # invoked exactly once — never retried on an ambiguous failure
 
@@ -65,7 +65,7 @@ def test_urllib_transport_maps_oserror_to_transport_error() -> None:
     # The default transport must translate a raw network OSError into the typed transport error.
     with (
         mock.patch("urllib.request.urlopen", side_effect=urllib.error.URLError("dns")),
-        pytest.raises(TheoLensTransportError),
+        pytest.raises(LoopTraceTransportError),
     ):
         urllib_transport(
             url="http://engine.test/v1/runs",
@@ -91,7 +91,7 @@ def test_urllib_transport_maps_incomplete_read_to_transport_error() -> None:
     cm.__exit__.return_value = False
     with (
         mock.patch("urllib.request.urlopen", return_value=cm),
-        pytest.raises(TheoLensTransportError),
+        pytest.raises(LoopTraceTransportError),
     ):
         urllib_transport(
             url="http://engine.test/v1/runs",
@@ -124,7 +124,7 @@ def test_full_success_returns_ok() -> None:
 def test_error_without_json_body_still_typed() -> None:
     # A gateway 401 with a non-JSON body (edge/ForwardAuth) must still map to a typed error.
     transport = CapturingTransport(response=Response(401, {}, b"Unauthorized"))
-    with pytest.raises(TheoLensError) as excinfo:
+    with pytest.raises(LoopTraceError) as excinfo:
         record_run([], transport=transport, **BASE)
     err: Any = excinfo.value
     assert err.status == 401

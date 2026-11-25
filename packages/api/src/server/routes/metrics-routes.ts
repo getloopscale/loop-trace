@@ -18,7 +18,7 @@ import {
   spanFacetsResponseSchema,
   isValidAttrKey,
   apiError,
-} from "@usetheo/lens-core";
+} from "@looptrace/core";
 
 import { getPrincipal, requireScopeOnPrincipal } from "../auth/middleware.js";
 import { bodyLimit413, DEFAULT_ADVANCED_MAX_BYTES } from "../body-caps.js"; // M118 (D1)

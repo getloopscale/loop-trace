@@ -21,7 +21,7 @@
  *
  * Run: pnpm tsx packages/api/scripts/m134-ingest-benchmark.ts
  */
-import type { SpanRepository } from "@usetheo/lens-core";
+import type { SpanRepository } from "@looptrace/core";
 
 import { createApp } from "../src/server/app.js";
 

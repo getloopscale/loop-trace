@@ -32,8 +32,8 @@ describe("README quickstart — doc-smoke (M106)", () => {
   it("runs the documented flow: construct → listTraces → observability → typed error", async () => {
     // ─── BEGIN quickstart (this block is mirrored verbatim in README.md — keep in sync) ───
     const client = new LensReadClient({
-      baseUrl: "https://api.usetheo.dev",
-      apiKey: process.env["LENS_API_KEY"] ?? "theo_live_demo",
+      baseUrl: "https://api.getloopscale.com",
+      apiKey: process.env["LENS_API_KEY"] ?? "looptrace_live_demo",
       // In real code, omit `fetch` to use the platform-native fetch; injected here for the doc-smoke.
       fetch: mockEngine(),
     });

@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 /**
  * Integration test config — runs *.integration.test.ts against a real Postgres.
  * M97 (B-M4): a Testcontainers globalSetup (`test/integration-global-setup.ts`) spins an ephemeral
- * `postgres:16-alpine` and sets THEOLENS_PG_URI when it is not already provided, so a bare
- * `pnpm test:integration` NEVER silently skips the query layer. An externally-set THEOLENS_PG_URI
+ * `postgres:16-alpine` and sets LOOPTRACE_PG_URI when it is not already provided, so a bare
+ * `pnpm test:integration` NEVER silently skips the query layer. An externally-set LOOPTRACE_PG_URI
  * (local docker-compose PG / CI) is honored as a fast path — no container is started.
  * Longer timeout for DB setup; fileParallelism off to avoid TRUNCATE races.
  *
@@ -22,28 +22,28 @@ export default defineConfig({
   resolve: {
     alias: {
       // M122: specific-before-base — the subpath alias MUST precede the bare
-      // `@usetheo/lens-core` alias so vite's prefix matcher routes /infra correctly.
-      "@usetheo/lens-core/infra": fileURLToPath(
+      // `@looptrace/core` alias so vite's prefix matcher routes /infra correctly.
+      "@looptrace/core/infra": fileURLToPath(
         new URL("./packages/core/src/infrastructure/db/index.ts", import.meta.url),
       ),
-      "@usetheo/lens-core/provider": fileURLToPath(
+      "@looptrace/core/provider": fileURLToPath(
         new URL("./packages/core/src/domain/provider/index.ts", import.meta.url),
       ),
-      "@usetheo/lens-core/testing": fileURLToPath(
+      "@looptrace/core/testing": fileURLToPath(
         new URL("./packages/core/src/domain/theokit/theokit-vectors.ts", import.meta.url),
       ),
-      "@usetheo/lens-core/observability": fileURLToPath(
+      "@looptrace/core/observability": fileURLToPath(
         new URL("./packages/core/src/domain/observability/index.ts", import.meta.url),
       ),
-      "@usetheo/lens-core/evaluation": fileURLToPath(
+      "@looptrace/core/evaluation": fileURLToPath(
         new URL("./packages/core/src/domain/evaluation/index.ts", import.meta.url),
       ),
-      "@usetheo/lens-core": fileURLToPath(
+      "@looptrace/core": fileURLToPath(
         new URL("./packages/core/src/index.ts", import.meta.url),
       ),
       // M105: the SDK ↔ engine contract test builds the real app via createApp (exported from the
-      // api test barrel). Mirrors the contract config so `@usetheo/lens-api` resolves to src.
-      "@usetheo/lens-api": fileURLToPath(
+      // api test barrel). Mirrors the contract config so `@looptrace/api` resolves to src.
+      "@looptrace/api": fileURLToPath(
         new URL("./packages/api/src/index.ts", import.meta.url),
       ),
     },

@@ -8,8 +8,8 @@
  * (`knowledge-base/references/phoenix/evals/pxi/harness/run_experiment.py:238-259`): um evaluator
  * que falha num exemplo cujo split contém `regression` é uma regressão; `dev` roda e não gateia.
  * Não há baseline porque não é preciso: o `expected` mora no dataset e `evaluateRule` é
- * determinístico. O theo-memory precisa de baseline com banda de tolerância porque as métricas dele
- * são contínuas e vêm de um LLM (`theo-memory/packages/eval/src/regression.ts:3-4`) — propriedade
+ * determinístico. O loopmem precisa de baseline com banda de tolerância porque as métricas dele
+ * são contínuas e vêm de um LLM (`loopmem/packages/eval/src/regression.ts:3-4`) — propriedade
  * que não temos aqui.
  */
 

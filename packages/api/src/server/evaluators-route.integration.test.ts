@@ -2,17 +2,17 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   type EngineDeps,
   type Principal,
-  type AuthVerifier, EvaluatorRunJobRegistry,} from "@usetheo/lens-core";
+  type AuthVerifier, EvaluatorRunJobRegistry,} from "@looptrace/core";
 import {
   createSpanRepository,
   migrateLatest,
   evaluatorRepoFromPool,
-} from "@usetheo/lens-core/infra";
+} from "@looptrace/core/infra";
 import type pg from "pg";
 
 import { createApp } from "./app.js";
 
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
 
 function verifierFor(map: Record<string, Principal>): AuthVerifier {
@@ -195,12 +195,12 @@ suite("M36 evaluators routes (integration)", () => {
   });
 
   // ── M135 T3.0 — the windowed carrier over HTTP ───────────────────────────────────────────────
-  // theo-cloud's evaluator reads THIS, not the observability series. The series is a workspace
+  // loopzero-cloud's evaluator reads THIS, not the observability series. The series is a workspace
   // aggregate returning one float per window; it cannot answer a per-guard question.
   //
   // The window param is VALIDATED rather than defaulted on garbage. Silently coercing an
   // unparseable window into a default reads a different span of time than the caller asked for —
-  // the same class of silent coercion as theo-cloud#247, one layer up.
+  // the same class of silent coercion as loopzero-cloud#247, one layer up.
 
   const makeGuard = async () => {
     const ev = await req("POST", "/v1/evaluators", "rw", { name: "w", kind: "rule", config: { predicate: "" } });
@@ -221,17 +221,17 @@ suite("M36 evaluators routes (integration)", () => {
     expect(body.evaluatedCount).toBe(0);
   });
 
-  // ── The wire contract theo-cloud decodes ─────────────────────────────────────────────────────
+  // ── The wire contract loopzero-cloud decodes ─────────────────────────────────────────────────────
   //
-  // theo-cloud's alert evaluator unmarshals this body into a struct and branches on `guardExists`
+  // loopzero-cloud's alert evaluator unmarshals this body into a struct and branches on `guardExists`
   // to decide whether a rule's guard has been deleted. That consumer lives in another repository,
   // so nothing here would break if a field were renamed or dropped — which is precisely how the
-  // first version shipped: theo-cloud branched on a 404 this route never emits, and both sides'
+  // first version shipped: loopzero-cloud branched on a 404 this route never emits, and both sides'
   // tests passed because each was written against its own author's intent.
   //
   // This asserts the exact key set on the wire. Dropping or renaming a key fails HERE, in the repo
   // that owns the contract, instead of silently in a consumer nobody runs in this suite.
-  it("test_breach_window_wire_contract_is_the_shape_theo_cloud_decodes", async () => {
+  it("test_breach_window_wire_contract_is_the_shape_loopzero_cloud_decodes", async () => {
     const gId = await makeGuard();
     const res = await req("GET", `/v1/guards/${gId}/breach-window?window=3600`, "rw");
     const body = (await res.json()) as Record<string, unknown>;

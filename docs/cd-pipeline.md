@@ -1,4 +1,4 @@
-# theo-lens CD pipeline
+# looptrace CD pipeline
 
 Adopted from the ecosystem playbook. This file records what is **different here** and why.
 Everything not mentioned follows the playbook unchanged.
@@ -48,19 +48,19 @@ successful `publish`, not the tip of `develop`, because `publish` has `paths-ign
 legitimately advances without producing an image. Correction and detection are deliberately
 separate: an agent that only corrects fails silently when it is itself the thing that died.
 
-## Where theo-lens differs from the reference
+## Where looptrace differs from the reference
 
-| | reference | theo-lens | Why |
+| | reference | looptrace | Why |
 |---|---|---|---|
 | Services deployed | `api` + `worker` | `api` only | no worker; evaluation runs in-process on the sweep |
 | Database | recreated with the stack | inherited, never touched | the dev database holds real data — monitors, evaluators, months of traces. A deploy that can recreate the database is a deploy that can lose it |
-| Build step in CI | none | `pnpm build` before `test:integration` | `@usetheo/lens-api` resolves `@usetheo/lens-core` through its built `dist/`, so an unbuilt core imports stale symbols. Not hypothetical: during M136 typecheck stayed green while the API imported a renamed symbol and 500'd at runtime |
+| Build step in CI | none | `pnpm build` before `test:integration` | `@looptrace/api` resolves `@looptrace/core` through its built `dist/`, so an unbuilt core imports stale symbols. Not hypothetical: during M136 typecheck stayed green while the API imported a renamed symbol and 500'd at runtime |
 | Probe paths | already canonical | migrated from `/health`, `/ready`, `/version` | the semantics were already right (M94 built the liveness/readiness split deliberately); only the paths were per-service. A gate that must learn per-service paths is a gate nobody reuses |
 
 ## Runtime config lives on the host, not in a process
 
 The host keeps a `.env` at mode `0600`. This is the playbook's rule and it earned its place the hard
-way: theo-lens ran for months as a bare `node` process launched by hand. Restarting it during a
+way: looptrace ran for months as a bare `node` process launched by hand. Restarting it during a
 deploy, the env exports were retyped from memory and the LLM-judge key was omitted — the judge
 constructs fail-closed to `null` when unconfigured and logs nothing at boot, so the environment ran
 with judge evaluation **silently disabled** and no probe would ever have reported it.
@@ -77,14 +77,14 @@ else). What remains:
 
 | Name | Kind | Purpose |
 |---|---|---|
-| `THEOLENS_PLATFORM_ADMIN_BOOTSTRAP` | secret | bootstrap admin token — mints API keys |
-| `THEOLENS_JUDGE_API_KEY` | secret | LLM-judge provider key |
-| `THEOLENS_JUDGE_BASE_URL` | variable | provider endpoint — not a secret |
+| `LOOPTRACE_PLATFORM_ADMIN_BOOTSTRAP` | secret | bootstrap admin token — mints API keys |
+| `LOOPTRACE_JUDGE_API_KEY` | secret | LLM-judge provider key |
+| `LOOPTRACE_JUDGE_BASE_URL` | variable | provider endpoint — not a secret |
 | `GITHUB_TOKEN` | auto | pushes to GHCR; no PAT |
 
 ## The integration lane cannot pass by skipping
 
-~48 integration suites gate on `THEOLENS_PG_URI` and self-skip when it is absent — correct on a
+~48 integration suites gate on `LOOPTRACE_PG_URI` and self-skip when it is absent — correct on a
 laptop without Docker, catastrophic for a required lane, which would report green having executed
 nothing.
 

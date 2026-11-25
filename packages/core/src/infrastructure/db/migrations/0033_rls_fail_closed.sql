@@ -24,7 +24,7 @@
 -- (a table without the column was included and the migration aborted), so the
 -- membership test here is the column's actual presence.
 --
--- ON `theo_api_keys`: it carries BOTH `tenant_id` and `workspace_id`. The policy
+-- ON `looptrace_api_keys`: it carries BOTH `tenant_id` and `workspace_id`. The policy
 -- uses `workspace_id`, which is the discriminator every other table in this
 -- schema uses; `tenant_id` here is a legacy column and scoping by it would
 -- create a second, divergent notion of tenancy in one database.

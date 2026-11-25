@@ -4,14 +4,14 @@ import {
   type EngineDeps,
   type ExperimentRunItem,
   type SpanRepository,
-} from "@usetheo/lens-core";
-import type { ChatClient } from "@usetheo/lens-core/provider";
+} from "@looptrace/core";
+import type { ChatClient } from "@looptrace/core/provider";
 import {
   createSpanRepository,
   evaluatorRepoFromPool,
   migrateLatest,
-} from "@usetheo/lens-core/infra";
-import { createApp } from "@usetheo/lens-api";
+} from "@looptrace/core/infra";
+import { createApp } from "@looptrace/api";
 import type pg from "pg";
 
 import { LensReadClient } from "./client.js";
@@ -27,9 +27,9 @@ import { LensReadClient } from "./client.js";
  * a guard→getMonitorBreaches, and experiment runs seeded via the repo → getExperimentRun/
  * listExperimentRuns/compareExperimentRuns. `askCopilot` is driven against a STUB chat provider
  * (the copilot fails closed 503 with no provider) to prove the `{ answer }` shape without a real LLM.
- * Gated on THEOLENS_PG_URI.
+ * Gated on LOOPTRACE_PG_URI.
  */
-const PG_URI = process.env["THEOLENS_PG_URI"];
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
 const suite = PG_URI ? describe : describe.skip;
 
 /** A deterministic stub ChatClient so `askCopilot` returns a real answer without a live provider. */
@@ -93,7 +93,7 @@ suite("LensReadClient ↔ engine — M117 HAND read parity (T2.3, drift guard)",
       app.fetch(new Request(typeof input === "string" ? input : input.toString(), init));
     client = new LensReadClient({
       baseUrl: "http://engine.local",
-      apiKey: "theo_live_contract_test",
+      apiKey: "looptrace_live_contract_test",
       fetch: engineFetch,
     });
   });

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DrizzleQueryError } from "drizzle-orm/errors";
 
 /**
- * theo-lens#136 — trava a PREMISSA de que o tratamento de erro da API depende.
+ * looptrace#136 — trava a PREMISSA de que o tratamento de erro da API depende.
  *
  * O `onError` do serviço precisa (a) ler o código do Postgres para classificar a falha e (b) NÃO
  * vazar os parâmetros ligados, que podem carregar conteúdo do usuário (o termo de busca livre de

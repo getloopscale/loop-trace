@@ -8,7 +8,7 @@ import { useState } from "react";
  * (and never an all-hidden table). The `name` column is never offered for hiding
  * by `ColumnToggle`, so it cannot be persisted hidden.
  */
-const STORAGE_KEY = "theolens.columnVisibility";
+const STORAGE_KEY = "looptrace.columnVisibility";
 
 /** Read the persisted hidden-column keys; defensive on every axis → `[]` on any failure. */
 export function readHiddenColumns(): string[] {

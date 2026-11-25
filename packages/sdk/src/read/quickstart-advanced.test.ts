@@ -36,8 +36,8 @@ describe("README advanced quickstart — doc-smoke (M114)", () => {
   it("runs the documented flow: createEvaluator → runEvaluator", async () => {
     // ─── BEGIN advanced quickstart (mirrored in README.md § Advanced — keep in sync) ───
     const client = new LensReadClient({
-      baseUrl: "https://api.usetheo.dev",
-      apiKey: process.env["LENS_API_KEY"] ?? "theo_live_demo",
+      baseUrl: "https://api.getloopscale.com",
+      apiKey: process.env["LENS_API_KEY"] ?? "looptrace_live_demo",
       fetch: mockEngine(), // in real code: omit `fetch`
     });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { AuthVerifier, Principal, SpanRepository } from "@usetheo/lens-core";
+import type { AuthVerifier, Principal, SpanRepository } from "@looptrace/core";
 import { createApp } from "./app.js";
 
 /** A fake verifier mapping a token → a Principal (M22 route-auth tests). */

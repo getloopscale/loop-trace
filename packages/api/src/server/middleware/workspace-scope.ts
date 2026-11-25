@@ -11,10 +11,10 @@
  * `/v1/admin/*` is deliberately NOT behind this: those routes are gated by
  * `requireScope` and cross workspaces by design.
  *
- * @see @usetheo/lens-core/infra — workspace-scope.ts, tenant-scoped-pool.ts
+ * @see @looptrace/core/infra — workspace-scope.ts, tenant-scoped-pool.ts
  * @see packages/core/src/infrastructure/db/migrations/0033_rls_fail_closed.sql
  */
-import { withWorkspaceScope } from "@usetheo/lens-core/infra";
+import { withWorkspaceScope } from "@looptrace/core/infra";
 import type { MiddlewareHandler } from "hono";
 
 import { getPrincipal } from "../auth/middleware.js";

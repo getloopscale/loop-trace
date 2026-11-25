@@ -1,12 +1,12 @@
 /**
  * M131 LIVE benchmark — exercises the Session Coherence evaluator end-to-end against a REAL judge
  * (OpenAI-compatible), on seeded coherent + incoherent sessions, measuring judge latency and proving
- * the cache (2nd run = 0 judge calls). Opt-in: requires THEOLENS_PG_URI + THEOLENS_JUDGE_* env.
+ * the cache (2nd run = 0 judge calls). Opt-in: requires LOOPTRACE_PG_URI + LOOPTRACE_JUDGE_* env.
  *
  * Run (key via env only — never committed):
- *   THEOLENS_PG_URI=... THEOLENS_JUDGE_BASE_URL=https://api.openai.com/v1 \
- *   THEOLENS_JUDGE_MODEL=gpt-4o-mini THEOLENS_JUDGE_API_KEY=sk-... \
- *   pnpm --filter @usetheo/lens-core exec tsx scripts/m131-coherence-benchmark.ts
+ *   LOOPTRACE_PG_URI=... LOOPTRACE_JUDGE_BASE_URL=https://api.openai.com/v1 \
+ *   LOOPTRACE_JUDGE_MODEL=gpt-4o-mini LOOPTRACE_JUDGE_API_KEY=sk-... \
+ *   pnpm --filter @looptrace/core exec tsx scripts/m131-coherence-benchmark.ts
  */
 import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -19,10 +19,10 @@ import { runSessionCoherence } from "../src/domain/evaluation/session-coherence-
 import { createPool, DrizzleSpanRepository } from "../src/infrastructure/db/observability/drizzle-span-repository.js";
 import { getSessionVerdict, upsertSessionVerdict } from "../src/infrastructure/db/evaluation/session-evaluation-repository.js";
 
-const PG_URI = process.env["THEOLENS_PG_URI"];
-if (!PG_URI) throw new Error("set THEOLENS_PG_URI");
+const PG_URI = process.env["LOOPTRACE_PG_URI"];
+if (!PG_URI) throw new Error("set LOOPTRACE_PG_URI");
 const judgeConfig = parseJudgeConfig(process.env);
-if (!judgeConfig) throw new Error("set THEOLENS_JUDGE_BASE_URL + THEOLENS_JUDGE_MODEL (+ API_KEY)");
+if (!judgeConfig) throw new Error("set LOOPTRACE_JUDGE_BASE_URL + LOOPTRACE_JUDGE_MODEL (+ API_KEY)");
 const { judge } = createProviderClients(judgeConfig);
 if (!judge) throw new Error("judge not constructed");
 

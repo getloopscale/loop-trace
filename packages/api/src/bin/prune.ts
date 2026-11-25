@@ -1,7 +1,7 @@
 import { pathToFileURL } from "node:url";
 
-import { parseRetentionConfig } from "@usetheo/lens-core";
-import { createSpanRepository } from "@usetheo/lens-core/infra";
+import { parseRetentionConfig } from "@looptrace/core";
+import { createSpanRepository } from "@looptrace/core/infra";
 
 import { runPrune } from "../server/retention-run.js";
 
@@ -12,9 +12,9 @@ import { runPrune } from "../server/retention-run.js";
  * never guesses a window. Exported for testing the fail-loud paths.
  */
 export async function main(): Promise<void> {
-  const uri = process.env["THEOLENS_PG_URI"];
+  const uri = process.env["LOOPTRACE_PG_URI"];
   if (!uri) {
-    console.error(JSON.stringify({ level: "error", msg: "THEOLENS_PG_URI is required" }));
+    console.error(JSON.stringify({ level: "error", msg: "LOOPTRACE_PG_URI is required" }));
     process.exit(1);
     return;
   }
@@ -26,7 +26,7 @@ export async function main(): Promise<void> {
     console.error(
       JSON.stringify({
         level: "error",
-        msg: "set THEOLENS_RETENTION_DAYS to a positive integer to prune",
+        msg: "set LOOPTRACE_RETENTION_DAYS to a positive integer to prune",
       }),
     );
     process.exit(1);

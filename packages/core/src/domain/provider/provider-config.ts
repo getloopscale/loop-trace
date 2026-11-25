@@ -14,8 +14,8 @@ import { positiveIntEnv } from "./env.js";
  *  config shape + defaults are the canonical ones in `provider-breaker.ts` (DRY). */
 export function parseProviderBreaker(env: NodeJS.ProcessEnv = process.env): ProviderBreakerConfig {
   return {
-    failureThreshold: positiveIntEnv(env, "THEOLENS_PROVIDER_BREAKER_THRESHOLD", DEFAULT_PROVIDER_BREAKER.failureThreshold),
-    cooldownMs: positiveIntEnv(env, "THEOLENS_PROVIDER_BREAKER_COOLDOWN_MS", DEFAULT_PROVIDER_BREAKER.cooldownMs),
+    failureThreshold: positiveIntEnv(env, "LOOPTRACE_PROVIDER_BREAKER_THRESHOLD", DEFAULT_PROVIDER_BREAKER.failureThreshold),
+    cooldownMs: positiveIntEnv(env, "LOOPTRACE_PROVIDER_BREAKER_COOLDOWN_MS", DEFAULT_PROVIDER_BREAKER.cooldownMs),
   };
 }
 
@@ -32,8 +32,8 @@ export interface ProviderRetryConfig {
 export const DEFAULT_PROVIDER_RETRY: ProviderRetryConfig = { maxAttempts: 2, baseDelayMs: 250, maxBackoffMs: 60_000 };
 export function parseProviderRetry(env: NodeJS.ProcessEnv = process.env): ProviderRetryConfig {
   return {
-    maxAttempts: positiveIntEnv(env, "THEOLENS_PROVIDER_MAX_ATTEMPTS", DEFAULT_PROVIDER_RETRY.maxAttempts),
-    baseDelayMs: positiveIntEnv(env, "THEOLENS_PROVIDER_RETRY_BASE_MS", DEFAULT_PROVIDER_RETRY.baseDelayMs),
-    maxBackoffMs: positiveIntEnv(env, "THEOLENS_PROVIDER_MAX_BACKOFF_MS", DEFAULT_PROVIDER_RETRY.maxBackoffMs),
+    maxAttempts: positiveIntEnv(env, "LOOPTRACE_PROVIDER_MAX_ATTEMPTS", DEFAULT_PROVIDER_RETRY.maxAttempts),
+    baseDelayMs: positiveIntEnv(env, "LOOPTRACE_PROVIDER_RETRY_BASE_MS", DEFAULT_PROVIDER_RETRY.baseDelayMs),
+    maxBackoffMs: positiveIntEnv(env, "LOOPTRACE_PROVIDER_MAX_BACKOFF_MS", DEFAULT_PROVIDER_RETRY.maxBackoffMs),
   };
 }

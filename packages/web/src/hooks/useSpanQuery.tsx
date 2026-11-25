@@ -8,7 +8,7 @@ import { createContext, useContext, useState, type ReactNode } from "react";
  * store falls back to "" (no filter) and never crashes boot. The string is the M30 DSL
  * (`kind:llm status:error model:gpt-4o name:"…"`), parsed server-side by `parseSpanQuery`.
  */
-const STORAGE_KEY = "theolens.spanQuery";
+const STORAGE_KEY = "looptrace.spanQuery";
 
 /** Read the persisted span-query; "" on any failure (disabled/missing store). */
 export function readStoredSpanQuery(): string {

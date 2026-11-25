@@ -37,7 +37,7 @@ export function registerEvaluatorRoutes(app: Hono, evaluators?: EvaluatorApiDeps
     app.post("/v1/evaluators/:id/run", bodyLimit413(EVALUATOR_MAX_BYTES), requireScopeOnPrincipal("observability:write"), (c) => runEvaluatorHandler(c, ev));
     // M133 — poll an async evaluator-run job's status/progress (read scope; the run itself is write).
     app.get("/v1/evaluator-run-jobs/:id", requireScopeOnPrincipal("observability:read"), (c) => getEvaluatorRunJobHandler(c, ev));
-    // M136 — /v1/monitors is canonical. "Guard" promised request-path enforcement theo-lens does
+    // M136 — /v1/monitors is canonical. "Guard" promised request-path enforcement looptrace does
     // not do (and, per the references, should not): GUARDRAIL is a span KIND labelling the inline
     // blocker in the user's own app. A threshold over async verdicts is a Monitor.
     //

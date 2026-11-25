@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-const BASE = process.env["THEOLENS_E2E_BASE"] ?? "http://localhost:44318";
+const BASE = process.env["LOOPTRACE_E2E_BASE"] ?? "http://localhost:44318";
 
 /**
  * Served-UI smoke (M7, T3.1 — DoD #1 mechanical proof): against the composed

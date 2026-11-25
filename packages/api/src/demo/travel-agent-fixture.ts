@@ -15,7 +15,7 @@
  *    with NO pipeline change. Agent spans are named `*_agent` with children →
  *    classify as `chain` and the Agent Graph groups them by name into agent nodes.
  *  - Content is ORIGINAL travel-planning text (Rome theme); no competitor copy/brand.
- *  - `service.name = theo-lens-demo-travel-agent` (ours) so demo telemetry is never
+ *  - `service.name = looptrace-demo-travel-agent` (ours) so demo telemetry is never
  *    mistaken for real production data.
  */
 
@@ -51,7 +51,7 @@ export interface BuildTravelAgentOpts {
   baseTimeUnixNanos?: bigint;
 }
 
-export const DEMO_SERVICE_NAME = "theo-lens-demo-travel-agent";
+export const DEMO_SERVICE_NAME = "looptrace-demo-travel-agent";
 
 const sv = (v: string): AnyValue => ({ stringValue: v });
 const iv = (n: number): AnyValue => ({ intValue: String(n) });

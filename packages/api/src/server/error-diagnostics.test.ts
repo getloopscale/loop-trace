@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
-import type { SpanRepository } from "@usetheo/lens-core";
+import type { SpanRepository } from "@looptrace/core";
 
 /**
- * theo-lens#136 — a falha não pode ser anônima, e o log não pode vazar.
+ * looptrace#136 — a falha não pode ser anônima, e o log não pode vazar.
  *
  * Quando `range=30d` estourava, o operador via `{"code":"INTERNAL"}` no cliente e `UPSTREAM_ERROR`
  * no dashboard. Nenhum dos dois distingue "esta consulta tem um defeito de tipo" de "o serviço está
@@ -46,7 +46,7 @@ function repoQueExplode(): SpanRepository {
   } as unknown as SpanRepository;
 }
 
-describe("diagnóstico de falha (theo-lens#136)", () => {
+describe("diagnóstico de falha (looptrace#136)", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("test_a_replica_reproduz_a_forma_travada_no_teste_do_pacote_core", () => {

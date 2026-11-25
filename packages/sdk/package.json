@@ -1,7 +1,7 @@
 {
-  "name": "@usetheo/lens-sdk",
+  "name": "@looptrace/sdk",
   "version": "0.0.0",
-  "description": "TS/Node instrumentation SDK for Theo Lens — emit OTLP gen_ai spans in ≤10 lines",
+  "description": "TS/Node instrumentation SDK for LoopTrace — emit OTLP gen_ai spans in ≤10 lines",
   "type": "module",
   "license": "Apache-2.0",
   "private": true,

@@ -20,15 +20,15 @@ import {
   EvaluatorRunJobRegistry,
   DEFAULT_WORKSPACE_ID,
   type EngineDeps,
-} from "@usetheo/lens-core";
-import { createProviderClients } from "@usetheo/lens-core/provider";
+} from "@looptrace/core";
+import { createProviderClients } from "@looptrace/core/provider";
 import {
   migrateLatest,
   evaluatorRepoFromPool,
   createPool,
   spanRepoFromPool,
   tenantScopedPool,
-} from "@usetheo/lens-core/infra";
+} from "@looptrace/core/infra";
 import type pg from "pg";
 
 import { createApp } from "./app.js";
@@ -55,7 +55,7 @@ const DEFAULT_WEB_DIST = "packages/web/dist";
  * the app + pool so the caller serves and (in tests) closes the pool. Rejects
  * loud on migration failure — a stack that cannot ingest must not come up.
  *
- * M23: when `THEOLENS_RETENTION_DAYS` is set, an opt-in retention sweep starts
+ * M23: when `LOOPTRACE_RETENTION_DAYS` is set, an opt-in retention sweep starts
  * (default OFF otherwise). `stop()` clears the sweep (a no-op when disabled) for
  * graceful shutdown + tests. The sweep timer is `unref()`'d so it never blocks exit.
  */
@@ -76,12 +76,12 @@ export async function bootstrap(
   await migrateLatest(rawPool);
   const pool = tenantScopedPool(rawPool);
   const repo = spanRepoFromPool(pool);
-  // M22: in multi-tenant mode (THEOLENS_REQUIRE_CREDENTIAL) resolve a Principal from
-  // the per-tenant `theo_api_keys` table; single-tenant dev collapses to `default`.
+  // M22: in multi-tenant mode (LOOPTRACE_REQUIRE_CREDENTIAL) resolve a Principal from
+  // the per-tenant `looptrace_api_keys` table; single-tenant dev collapses to `default`.
   const requireCredential = parseRequireCredentialEnv(
-    process.env["THEOLENS_REQUIRE_CREDENTIAL"],
+    process.env["LOOPTRACE_REQUIRE_CREDENTIAL"],
   );
-  const bootstrapRaw = process.env["THEOLENS_PLATFORM_ADMIN_BOOTSTRAP"];
+  const bootstrapRaw = process.env["LOOPTRACE_PLATFORM_ADMIN_BOOTSTRAP"];
   const bootstrapToken =
     bootstrapRaw !== undefined && bootstrapRaw.trim().length > 0
       ? bootstrapRaw
@@ -162,12 +162,12 @@ export async function bootstrap(
     // M94: readiness probe — a bounded `SELECT 1` (the pool's connectionTimeoutMillis bounds it);
     // it throwing → /ready 503 so the edge drains a DB-unreachable node.
     {
-      version: process.env["THEOLENS_VERSION"] ?? "dev",
-      // Stamped by the deploy: THEOLENS_GIT_SHA is what a human compares against the commit
+      version: process.env["LOOPTRACE_VERSION"] ?? "dev",
+      // Stamped by the deploy: LOOPTRACE_GIT_SHA is what a human compares against the commit
       // they pushed. The gate itself uses the image's OCI label, which is stronger — but only
       // a machine reads that, and "what is live?" is a question humans ask too.
-      gitSha: process.env["THEOLENS_GIT_SHA"] ?? "unknown",
-      builtAt: process.env["THEOLENS_BUILD_TIME"] ?? "unknown",
+      gitSha: process.env["LOOPTRACE_GIT_SHA"] ?? "unknown",
+      builtAt: process.env["LOOPTRACE_BUILD_TIME"] ?? "unknown",
       pingDb: async () => {
         await pool.query("SELECT 1");
       },
@@ -191,12 +191,12 @@ export async function bootstrap(
   }
 
   // M134 — automatic evaluation of new traces. Opt-in per deployment:
-  // THEOLENS_AUTO_EVAL=1 starts the claim daemon. The ingest hook is wired
+  // LOOPTRACE_AUTO_EVAL=1 starts the claim daemon. The ingest hook is wired
   // regardless (it is a no-op for a workspace with no auto evaluators), so
   // enabling the daemon later still finds the work that arrived meanwhile —
   // the queue is a table, not an in-memory buffer (ADR D1).
   let stopAutoEval = (): void => {};
-  if (process.env["THEOLENS_AUTO_EVAL"] === "1") {
+  if (process.env["LOOPTRACE_AUTO_EVAL"] === "1") {
     console.error(JSON.stringify({ level: "info", msg: "auto_eval enabled" }));
     stopAutoEval = startAutoEval(
       pool,
@@ -247,16 +247,16 @@ export async function bootstrap(
  * or migration failure.
  */
 export async function main(): Promise<void> {
-  const uri = process.env["THEOLENS_PG_URI"];
+  const uri = process.env["LOOPTRACE_PG_URI"];
   if (!uri) {
     console.error(
-      JSON.stringify({ level: "error", msg: "THEOLENS_PG_URI is required" }),
+      JSON.stringify({ level: "error", msg: "LOOPTRACE_PG_URI is required" }),
     );
     process.exit(1);
     return;
   }
 
-  const webDistDir = process.env["THEOLENS_WEB_DIST"] ?? DEFAULT_WEB_DIST;
+  const webDistDir = process.env["LOOPTRACE_WEB_DIST"] ?? DEFAULT_WEB_DIST;
 
   let app: Hono;
   let pool: pg.Pool;
@@ -276,7 +276,7 @@ export async function main(): Promise<void> {
     return;
   }
 
-  const port = Number(process.env["THEOLENS_PORT"] ?? 4318);
+  const port = Number(process.env["LOOPTRACE_PORT"] ?? 4318);
   const server = serve({ fetch: app.fetch, port });
   // M94: a DB-blocked route 503s at this ceiling instead of hanging a socket (env-tunable). The
   // default `serve` yields an HTTP/1 `http.Server` which carries `requestTimeout` (Http2Server does

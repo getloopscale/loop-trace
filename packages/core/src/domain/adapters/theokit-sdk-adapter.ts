@@ -6,7 +6,7 @@ import { toInt } from "../attr-coerce.js";
 
 /**
  * `@theokit/sdk` / Claude Code `SDKMessage` adapter (M115). The SDK-side translator
- * (`@usetheo/lens-sdk` `sdkMessagesToOtlp`) emits STANDARD `gen_ai.*` attributes — so model,
+ * (`@looptrace/sdk` `sdkMessagesToOtlp`) emits STANDARD `gen_ai.*` attributes — so model,
  * provider, input/output tokens, tool name, and input/output text come from the default adapter
  * unchanged (ADR-1). This adapter composes OVER default and overlays ONLY the prompt-cache token
  * counts the translator emits under the standard-shaped `gen_ai.usage.cache_*_input_tokens` keys,

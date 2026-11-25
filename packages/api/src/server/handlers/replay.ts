@@ -16,13 +16,13 @@ import {
   apiError,
   type RateLimiter,
   type SpanRepository,
-} from "@usetheo/lens-core";
+} from "@looptrace/core";
 import {
   ChatError,
   ProviderBreakerOpenError,
   type ChatMessage,
   type ReplayClient,
-} from "@usetheo/lens-core/provider";
+} from "@looptrace/core/provider";
 
 import { getPrincipal } from "../auth/middleware.js";
 import { replayRuns, replayRateLimited, replayUnavailable } from "../metrics.js";
