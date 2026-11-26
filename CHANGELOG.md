@@ -11,6 +11,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 - Web: the dashboard uses the LoopScale brand theme: ink background, lime as the brand color, Hanken Grotesk and JetBrains Mono. LLM spans take the neutral text color, since lime now marks agent spans. (#159)
 
+### Fixed
+
+- `POST /v1/admin/keys` no longer answers `500` when the database role is not a superuser. The mint declares the workspace it creates, so the row-level security policy on `workspaces` admits it. (#11)
+- The published image reports its build: `GET /v1/version` answers the branch or tag, the commit and the commit time, where it answered `dev` and `unknown`. (#11)
+
 ## [0.70.0] - 2026-11-25
 
 ### Changed

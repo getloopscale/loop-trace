@@ -61,6 +61,16 @@ COPY --from=build /app/packages/web/dist ./packages/web/dist
 ENV LOOPTRACE_PORT=4318
 EXPOSE 4318
 
+# What this image is, as GET /v1/version reports it. Declared after every COPY so a new
+# commit rebuilds only the layers below. Unset (a local `docker build`), the server
+# answers "dev" and "unknown".
+ARG LOOPTRACE_VERSION=dev
+ARG LOOPTRACE_GIT_SHA=unknown
+ARG LOOPTRACE_BUILD_TIME=unknown
+ENV LOOPTRACE_VERSION=${LOOPTRACE_VERSION} \
+    LOOPTRACE_GIT_SHA=${LOOPTRACE_GIT_SHA} \
+    LOOPTRACE_BUILD_TIME=${LOOPTRACE_BUILD_TIME}
+
 # Drop root. The `node` user ships with the base image (uid 1000), so this needs no useradd —
 # it only needs to be said. Surfaced by the CD SAST lane (dockerfile.security.missing-user).
 #
