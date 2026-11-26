@@ -14,7 +14,7 @@
  *  - o compose de deploy puxar de um namespace diferente do que o build publica → CI verde e
  *    `403 Forbidden` só no deploy. Aconteceu de verdade no looprag (CM3).
  *
- * The reusable lives in `getloopscale/loopzero` and no vendored copy exists today. If a copy comes
+ * The reusable lives in `getloopscale/loop-runtime` and no vendored copy exists today. If a copy comes
  * back, the `uses:` line and this test change IN THE SAME COMMIT; one moving without the other
  * turns this red, which is the point.
  */
@@ -30,7 +30,7 @@ const VENDORED = resolve(REPO_ROOT, '.github/workflows/build-publish.yml');
 const DEPLOY_COMPOSE = resolve(REPO_ROOT, 'docker-compose.deploy.yml');
 
 const LOCAL_REF = 'uses: ./.github/workflows/build-publish.yml';
-const UPSTREAM_REF = 'uses: getloopscale/loopzero/.github/workflows/build-publish.yml';
+const UPSTREAM_REF = 'uses: getloopscale/loop-runtime/.github/workflows/build-publish.yml';
 const EXPECTED_IDENTITY =
   String.raw`^https://github\.com/getloopscale/looptrace/\.github/workflows/build-publish\.yml@`;
 

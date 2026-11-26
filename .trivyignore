@@ -1,4 +1,4 @@
-# Trivy ignore list — CD image gate (getloopscale/loopzero/.github/workflows/build-publish.yml).
+# Trivy ignore list — CD image gate (getloopscale/loop-runtime/.github/workflows/build-publish.yml).
 #
 # Every entry MUST carry a justification and a review date. Prefer FIXING over ignoring: a bumped
 # dependency or a deleted package removes the vulnerability, while an ignore only removes the

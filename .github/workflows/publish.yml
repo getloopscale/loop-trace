@@ -115,7 +115,7 @@ jobs:
       packages: write
       id-token: write
       attestations: write
-    uses: getloopscale/loopzero/.github/workflows/build-publish.yml@6a07e48af6d1672af21adede244c0d32ed1eb731 # develop
+    uses: getloopscale/loop-runtime/.github/workflows/build-publish.yml@54daa7e9587cb285f4aac9e012a9949a3a1f9ad6 # develop
     with:
       # Also the ECR repository name: the reusable pushes `<ecr_registry>/looptrace:<commit sha>`.
       image: looptrace
