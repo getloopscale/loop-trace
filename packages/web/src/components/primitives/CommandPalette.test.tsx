@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ThemeProvider, violetForge } from "@theokit/ui";
 import { CommandPalette } from "./CommandPalette.js";
 
 const navigate = vi.fn();
@@ -12,9 +11,9 @@ vi.mock("react-router-dom", async (orig) => {
 
 function renderPalette() {
   return render(
-    <ThemeProvider defaultTheme="violet-forge" defaultMode="dark" themes={[violetForge]}>
+    <>
       <CommandPalette />
-    </ThemeProvider>,
+    </>,
   );
 }
 

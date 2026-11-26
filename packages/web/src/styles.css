@@ -1,10 +1,20 @@
 /* LoopTrace web — design-system entry (M17).
  *
- * `@theokit/ui/styles.css` is the design system's prebuilt Tailwind v4 entry: it
- * pulls Tailwind core, the Geist fonts, the runtime token vars `<ThemeProvider>`
- * mutates, and the `@theme` token namespace Tailwind reads to emit utilities.
+ * `@getloopscale/ui/styles.css` is the design system's Tailwind v4 entry: it pulls Tailwind
+ * core, the Geist fonts, the token variables and the `@theme` namespace Tailwind reads to emit
+ * utilities. `components.css` carries the utilities the package's own components use, so they
+ * do not depend on Tailwind scanning `node_modules`.
  * `@source "./"` adds THIS project's source so our own markup's utility classes
  * (`bg-card`, `text-display-md`, …) are generated alongside the design system's.
+ *
+ * The app is dark only: `index.html` sets `class="dark"` on `<html>`, which is the selector the
+ * tokens switch on.
  */
-@import "@theokit/ui/styles.css";
+@import "@getloopscale/ui/styles.css";
+@import "@getloopscale/ui/components.css";
 @source "./";
+
+/* Native controls and scrollbars follow the page: without this the browser draws them light. */
+:root.dark {
+  color-scheme: dark;
+}

@@ -19,7 +19,6 @@ import { SessionsListPage } from "./routes/SessionsListPage.js";
 import { SessionDetailPage } from "./routes/SessionDetailPage.js";
 import { PlaceholderPage } from "./routes/PlaceholderPage.js";
 import { AppShell } from "./components/primitives/AppShell.js";
-import { ThemeProvider, violetForge } from "@theokit/ui";
 import { AutoRefreshProvider } from "./hooks/useAutoRefresh.js";
 import { RangeProvider } from "./hooks/useRange.js";
 import { SpanQueryProvider } from "./hooks/useSpanQuery.js";
@@ -60,23 +59,15 @@ const el = document.getElementById("root");
 if (el) {
   createRoot(el).render(
     <StrictMode>
-      <ThemeProvider
-        defaultTheme="violet-forge"
-        defaultMode="dark"
-        themes={[violetForge]}
-        defaultDensity="compact"
-        storageKey="looptrace:theme"
-      >
-        <QueryClientProvider client={queryClient}>
-          <AutoRefreshProvider>
-            <RangeProvider>
-              <SpanQueryProvider>
-                <RouterProvider router={router} />
-              </SpanQueryProvider>
-            </RangeProvider>
-          </AutoRefreshProvider>
-        </QueryClientProvider>
-      </ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <AutoRefreshProvider>
+          <RangeProvider>
+            <SpanQueryProvider>
+              <RouterProvider router={router} />
+            </SpanQueryProvider>
+          </RangeProvider>
+        </AutoRefreshProvider>
+      </QueryClientProvider>
     </StrictMode>,
   );
 }

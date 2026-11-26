@@ -1,4 +1,4 @@
-import { Badge } from "@usetheo/ui";
+import { Badge } from "@getloopscale/ui";
 import type { SpanKind } from "../../lib/span-kind.js";
 import { kindColor } from "../../lib/kind-color.js";
 

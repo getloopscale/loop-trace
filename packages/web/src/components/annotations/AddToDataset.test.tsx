@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ThemeProvider, violetForge } from "@theokit/ui";
 import { AddToDataset } from "./AddToDataset.js";
 import * as client from "../../api/client.js";
 
@@ -15,9 +14,9 @@ function renderControl() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, retryDelay: 0 } } });
   return render(
     <QueryClientProvider client={qc}>
-      <ThemeProvider defaultTheme="violet-forge" defaultMode="dark" themes={[violetForge]}>
+      <>
         <AddToDataset traceId="t1" />
-      </ThemeProvider>
+      </>
     </QueryClientProvider>,
   );
 }
@@ -74,11 +73,11 @@ describe("AddToDataset (M26d)", () => {
     const user = userEvent.setup();
     render(
       <QueryClientProvider client={qc}>
-        <ThemeProvider defaultTheme="violet-forge" defaultMode="dark" themes={[violetForge]}>
+        <>
           <div onClick={rowClick}>
             <AddToDataset traceId="t1" />
           </div>
-        </ThemeProvider>
+        </>
       </QueryClientProvider>,
     );
     await user.click(screen.getByRole("button", { name: "add trace t1 to a dataset" }));

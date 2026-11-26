@@ -1,5 +1,5 @@
 import { useParams } from "react-router-dom";
-import { StatTile } from "@usetheo/ui";
+import { StatTile } from "@getloopscale/ui";
 import { Activity, AlertTriangle, Clock, Coins, DollarSign } from "lucide-react";
 import { useSessionDetail } from "../hooks/useSessions.js";
 import { TraceTable } from "../components/trace/TraceTable.js";

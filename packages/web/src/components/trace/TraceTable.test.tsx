@@ -3,7 +3,6 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ThemeProvider, violetForge } from "@theokit/ui";
 import { TraceTable } from "./TraceTable.js";
 import type { TraceListItem } from "../../api/types.js";
 import * as client from "../../api/client.js";
@@ -17,7 +16,7 @@ vi.mock("../../api/client.js", async (orig) => {
 function renderTable(props: Partial<React.ComponentProps<typeof TraceTable>> = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <ThemeProvider defaultTheme="violet-forge" defaultMode="dark" themes={[violetForge]}>
+    <>
       <QueryClientProvider client={qc}>
         <MemoryRouter>
           <TraceTable
@@ -29,7 +28,7 @@ function renderTable(props: Partial<React.ComponentProps<typeof TraceTable>> = {
           />
         </MemoryRouter>
       </QueryClientProvider>
-    </ThemeProvider>,
+    </>,
   );
 }
 

@@ -5,7 +5,7 @@ import { join, dirname } from "node:path";
 
 /**
  * The locked set of CSS classes that the retired `legacy.css` used to define.
- * The whole UI is now on `@theokit/ui` + design tokens — none of these may
+ * The whole UI is now on `@getloopscale/ui` + design tokens — none of these may
  * reappear in a production `className`. This is the Goal's observable metric
  * (`legacy_class_refs == 0`) and a regression guard for future PRs.
  */

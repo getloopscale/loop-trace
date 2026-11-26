@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ThemeProvider, violetForge } from "@theokit/ui";
 import { SpanInfoPanel } from "./SpanInfoPanel.js";
 import type { SpanNodeData } from "../../api/types.js";
 import * as client from "../../api/client.js";
@@ -23,9 +22,9 @@ function withTheme(ui: React.ReactNode) {
   });
   return (
     <QueryClientProvider client={qc}>
-      <ThemeProvider defaultTheme="violet-forge" defaultMode="dark" themes={[violetForge]}>
+      <>
         {ui}
-      </ThemeProvider>
+      </>
     </QueryClientProvider>
   );
 }

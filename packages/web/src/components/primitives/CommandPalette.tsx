@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Dialog } from "@usetheo/ui";
+import { Dialog } from "@getloopscale/ui";
 
 interface Command {
   id: string;
@@ -23,7 +23,7 @@ const COMMANDS: Command[] = [
 ];
 
 /**
- * Cmd/Ctrl+K command palette (M-UX). A controlled `@theokit/ui` Dialog (Radix —
+ * Cmd/Ctrl+K command palette (M-UX). A controlled `@getloopscale/ui` Dialog (Radix —
  * focus trap, Esc-to-close, and focus-return are handled by the primitive) hosting
  * a fuzzy-filtered command list. The global key listener only fires on the
  * Cmd/Ctrl+K chord, so it never hijacks normal typing. "Open trace by ID" switches

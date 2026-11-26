@@ -1,4 +1,4 @@
-import { DataTable, type DataTableColumn } from "@usetheo/ui";
+import { DataTable, type DataTableColumn } from "@getloopscale/ui";
 import type { CostBucket } from "../../api/types.js";
 import { formatUsd } from "../../lib/money.js";
 import { EmptyState } from "../primitives/States.js";

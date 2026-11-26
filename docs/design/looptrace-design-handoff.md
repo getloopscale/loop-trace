@@ -12,7 +12,7 @@
 
 This is a **complete brief** so the design team can design **every screen** without needing to read the codebase. It contains: product context, the design constraints you MUST work within (tech stack + design system + accessibility + honesty rules), the full information architecture, a **per-screen spec** (purpose, the *real* data fields each screen renders, user tasks, current pain points, and what to design), the design-system inventory (tokens, type scale, primitives), the states every screen needs, and the deliverables we expect back.
 
-What is **fixed** (engineering owns): the data model / fields, the routes, the underlying design-system package (`@theokit/ui`).
+What is **fixed** (engineering owns): the data model / fields, the routes, the underlying design-system package (`@getloopscale/ui`).
 What is **yours** (design owns): visual hierarchy, layout, density, color application, typography application, motion, states, iconography, the trace-detail experience, charts.
 
 ---
@@ -46,7 +46,7 @@ What is **yours** (design owns): visual hierarchy, layout, density, color applic
 ## 2. The hard constraints (non-negotiable — design within these)
 
 1. **Tech stack:** React 18 + TypeScript, Vite. No design tool export will be hand-translated blindly — deliverables must map to the component system below.
-2. **Design system — `@theokit/ui` (v0.18.1).** This is the locked foundation. It ships:
+2. **Design system — `@getloopscale/ui`.** This is the locked foundation. It ships:
    - **Fonts:** Geist (sans) + Geist Mono. *Do not introduce new font families* — design with Geist. (If a display accent is desired, propose it as a theme-level change, not per-screen.)
    - **Theme:** currently **Violet Forge, dark mode**. The package also ships alternative themes the team MAY evaluate/match: `violetForge`, `vercelMono`, `githubDark`, `dracula`, `oneDark`, `anthropicStyle`, `openaiStyle`, `linearGlass`, `classicPaper`, `auroraTerminal`. **Recommendation:** stay dark-first (observability tools are used in dark IDEs); a light mode is a *nice-to-have*, not in scope unless the team argues for it.
    - **Tokens, type scale, and primitives:** see §6. **Design using these tokens** (semantic color roles, the type scale, the spacing scale) rather than raw hex/px — anything off-scale creates engineering drift.
@@ -190,10 +190,10 @@ These global controls appear across screens — design them as a coherent top-ba
 ### Spacing — propose a strict scale (today it's ad-hoc)
 Recommend: page sections `24px`, card/section inner `16px`, item/row `8–12px`. The team should codify a rhythm and apply it everywhere.
 
-### Primitives available in `@theokit/ui` (build on these — don't reinvent)
+### Primitives available in `@getloopscale/ui` (build on these — don't reinvent)
 `Button` (+variants) · `Badge` (+variants: default/outline/accent/primary/success/warning/destructive) · `Card` · `Input` · `Textarea` · `Select` · `Checkbox` · `RadioGroup` · `Switch` · `Label` · `FormField` · `Tabs` · `Dialog` · `Tooltip` · `ScrollArea` · `Toast`/`Toaster` · `Skeleton` · `EmptyState` · `Avatar` · `Sidebar` · `TopNav` · `DataTable` · `Timestamp` · `StatTile` · `CostMeter` · `ContextWindowBar` · `RunStatusPill` · plus AI-specific parts (`ToolsList`, `SkillCard`, `TaskPlan`, `SystemPromptEditor`, `PermissionMatrix`). Icons: **lucide-react**.
 
-> If a needed pattern isn't a primitive yet (e.g. a richer code-viewer, a multi-series chart, a tree/waterfall), specify it as a **new component** in the deliverables and we'll build it into the app (and ideally upstream into `@theokit/ui`).
+> If a needed pattern isn't a primitive yet (e.g. a richer code-viewer, a multi-series chart, a tree/waterfall), specify it as a **new component** in the deliverables and we'll build it into the app (and ideally upstream into `@getloopscale/ui`).
 
 ---
 
@@ -215,7 +215,7 @@ For each screen/region, design the full set — these are first-class, not after
 1. **Foundations:** confirmed theme (dark-first), the spacing scale, the type-scale application rules, the semantic-color application (incl. span-kind usage), elevation/border rules, motion guidelines (load reveals, hover/focus, the Live pulse).
 2. **Core components (specs + Figma):** PageHeader, Toolbar/FilterBar, dense DataTable (row states, badges, previews), the **Waterfall tree**, **Span-Info metric grid**, **Code/IO viewer** (syntax-highlighted + copy + Pretty/Raw), **multi-series Chart** (legend/gridlines/tooltip), StatTile/summary strip, health Badges, empty/error/loading templates, the global top-bar (date range + Live + span-query + palette).
 3. **Every screen in §5**, designed in dark theme, at realistic data density, with all §7 states. Use the real fields in §5 (and the live instance / `../MODELOS/` references) — no lorem, no invented metrics.
-4. **Redlines / token mapping:** annotate spacing, type, and color **as `@theokit/ui` tokens** (so engineering implements without guessing).
+4. **Redlines / token mapping:** annotate spacing, type, and color **as `@getloopscale/ui` tokens** (so engineering implements without guessing).
 5. **Accessibility notes:** contrast pairs used, focus-state spec, keyboard order, color-blind-safe kind palette confirmation.
 6. **A prioritized rollout** (what ships first): we suggest **(a) foundations + PageHeader + table/toolbar**, then **(b) the trace-detail 3-pane**, then **(c) charts/dashboards**, then **(d) the remaining list screens** — but the team may re-sequence.
 
@@ -225,7 +225,7 @@ For each screen/region, design the full set — these are first-class, not after
 
 - **Live dev instance:** `http://localhost:4318/` (dark, Violet Forge, seedable demo data via the team — multi-agent travel-agent traces + real Claude Code traces).
 - **Benchmark screenshots (the bar):** `../MODELOS/` (Arize / Sigil teardowns).
-- **Design-system package:** `@theokit/ui` v0.18.1 (Geist, tokens, primitives — see §6).
+- **Design-system package:** `@getloopscale/ui` (Geist, tokens, primitives — see §6).
 - **Brand/voice rules:** `.claude/rules/public-copy.md` (honesty, banned framings).
 - **Studied peers (for prior-art, in repo, read-only):** `knowledge-base/references/` — `langfuse`, `laminar`, `openlit` (their `globals.css` + screens are fair inspiration for an observability aesthetic).
 - **Engineering point of contact:** the LoopTrace eng team (this repo). Questions about a field's meaning → the domain glossary (§1) or ask eng.
@@ -235,10 +235,10 @@ For each screen/region, design the full set — these are first-class, not after
 ## 10. Out of scope (for this engagement)
 
 - Changing the data model / API shape (fields in §5 are fixed).
-- Replacing `@theokit/ui` or introducing a new font family (theme-level proposals welcome, but not per-screen forks).
+- Replacing `@getloopscale/ui` or introducing a new font family (theme-level proposals welcome, but not per-screen forks).
 - Net-new product features/screens beyond §4 (this is a **redesign of existing screens**, not new scope).
 - Marketing site / landing pages (this is the in-product app).
 
 ---
 
-*Engineering will translate the approved designs into `@theokit/ui`-based React under the standard cycle (plan → implement → review → release), screen by screen per the §8 rollout.*
+*Engineering will translate the approved designs into `@getloopscale/ui`-based React under the standard cycle (plan → implement → review → release), screen by screen per the §8 rollout.*

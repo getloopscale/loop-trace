@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { DataTableSort } from "@usetheo/ui";
+import type { DataTableSort } from "@getloopscale/ui";
 import { useTraceList } from "../hooks/useTraces.js";
 import { useRange, rangeToWindow } from "../hooks/useRange.js";
 import { TraceTable, TOGGLEABLE_COLUMNS } from "../components/trace/TraceTable.js";

@@ -131,7 +131,7 @@ does not share your machine's memory.
 `trustPolicy: no-downgrade` and `minimumReleaseAge` immediately rejected the existing lockfile. The
 rejections split cleanly:
 
-- `@usetheo/ui`, `@theokit/ui` — **our own packages**, published inside the 7-day window. The rule
+- `@getloopscale/ui` — **our own package**, published inside the 7-day window. The rule
   exists to guard against an unknown publisher; waiting a week to consume a fix we just shipped buys
   nothing. Excluded by scope.
 - `semver@6.3.1`, `tailwind-merge@2.6.1`, `undici-types@6.21.0` — old, ubiquitous, transitive. They

@@ -3,7 +3,6 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
-import { ThemeProvider, violetForge } from "@theokit/ui";
 import { DatasetsListPage } from "./DatasetsListPage.js";
 import * as client from "../api/client.js";
 import type { DatasetsResponse } from "../api/types.js";
@@ -17,11 +16,11 @@ function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, retryDelay: 0 } } });
   return render(
     <QueryClientProvider client={qc}>
-      <ThemeProvider defaultTheme="violet-forge" defaultMode="dark" themes={[violetForge]}>
+      <>
         <MemoryRouter>
           <DatasetsListPage />
         </MemoryRouter>
-      </ThemeProvider>
+      </>
     </QueryClientProvider>,
   );
 }

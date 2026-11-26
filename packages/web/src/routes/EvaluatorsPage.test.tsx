@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ThemeProvider, violetForge } from "@theokit/ui";
 
 import { EvaluatorsPage } from "./EvaluatorsPage.js";
 import * as client from "../api/client.js";
@@ -20,9 +19,9 @@ function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, retryDelay: 0 } } });
   return render(
     <QueryClientProvider client={qc}>
-      <ThemeProvider defaultTheme="violet-forge" defaultMode="dark" themes={[violetForge]}>
+      <>
         <EvaluatorsPage />
-      </ThemeProvider>
+      </>
     </QueryClientProvider>,
   );
 }

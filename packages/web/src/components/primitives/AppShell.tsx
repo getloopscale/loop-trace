@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Sidebar, TopNav, Tabs } from "@usetheo/ui";
+import { Sidebar, TopNav, Tabs } from "@getloopscale/ui";
 import { CommandPalette } from "./CommandPalette.js";
 import { DateRangePicker } from "../filters/DateRangePicker.js";
 import { LiveToggle } from "../filters/LiveToggle.js";
@@ -65,7 +65,7 @@ function tabForPath(pathname: string): string {
 /**
  * The persistent app chrome: a left Sidebar (product nav), a TopNav (title +
  * an actions slot), the Arize project-view Tabs, and the routed content via
- * React Router's <Outlet/>. Built entirely from @theokit/ui primitives.
+ * React Router's <Outlet/>. Built entirely from @getloopscale/ui primitives.
  */
 export function AppShell() {
   const loc = useLocation();
