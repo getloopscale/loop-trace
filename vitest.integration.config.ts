@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 /**
  * Integration test config — runs *.integration.test.ts against a real Postgres.
  * M97 (B-M4): a Testcontainers globalSetup (`test/integration-global-setup.ts`) spins an ephemeral
- * `postgres:16-alpine` and sets LOOPTRACE_PG_URI when it is not already provided, so a bare
+ * `postgres:19-alpine` and sets LOOPTRACE_PG_URI when it is not already provided, so a bare
  * `pnpm test:integration` NEVER silently skips the query layer. An externally-set LOOPTRACE_PG_URI
  * (local docker-compose PG / CI) is honored as a fast path — no container is started.
  * Longer timeout for DB setup; fileParallelism off to avoid TRUNCATE races.
