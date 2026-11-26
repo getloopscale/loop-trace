@@ -179,6 +179,12 @@ export async function createKeyHandler(
     const client = await pool.connect();
     try {
       await client.query("BEGIN", []);
+      // The row-level policies (migration 0033) admit a row only for the workspace the
+      // connection declares, and this pool carries none: a mint runs before any tenant
+      // context exists. Declare the workspace being created, for this transaction only,
+      // so the setting is gone when the connection returns to the pool. A superuser
+      // never needed this, which is how it went unnoticed.
+      await client.query("SELECT set_config('app.workspace_id', $1, true)", [targetWorkspace]);
       await client.query(WORKSPACE_SQL, [targetWorkspace]);
       await client.query(KEY_SQL, keyParams);
       await client.query("COMMIT", []);
