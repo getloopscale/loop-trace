@@ -1,6 +1,6 @@
 /**
  * ModelPill (M29) — a neutral chip showing a model id with a leading colour dot.
- * The dot colour is a DETERMINISTIC hash of the model string into the Violet-Forge
+ * The dot colour is a DETERMINISTIC hash of the model string into the design-system
  * token palette (no raw hex, no Date/random), so the same model always reads the
  * same colour — the cheap, faithful equivalent of the peer "coloured model pill".
  * An absent/empty model renders an em-dash, never a blank pill (EC-1).
@@ -9,7 +9,7 @@
 /** Token text classes the dot can take — same palette family as kind colours. */
 const PALETTE = [
   "text-primary",
-  "text-accent",
+  "text-foreground",
   "text-warning",
   "text-info",
   "text-success",

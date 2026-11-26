@@ -7,6 +7,10 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Web: the dashboard uses the LoopScale brand theme: ink background, lime as the brand color, Hanken Grotesk and JetBrains Mono. LLM spans take the neutral text color, since lime now marks agent spans. (#159)
+
 ## [0.70.0] - 2026-11-25
 
 ### Changed

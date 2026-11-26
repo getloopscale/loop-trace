@@ -12,7 +12,7 @@ const ALL_KINDS: SpanKind[] = [
   "unknown",
 ];
 
-const TOKEN_CLASS = /^text-(primary|accent|warning|info|success|muted-foreground)$/;
+const TOKEN_CLASS = /^text-(primary|foreground|warning|info|success|muted-foreground)$/;
 
 describe("kindColor (M29 canonical kind→colour)", () => {
   it("test_every_kind_has_a_token_text_class", () => {
@@ -30,9 +30,9 @@ describe("kindColor (M29 canonical kind→colour)", () => {
   });
 
   it("test_maps_to_the_reference_concept", () => {
-    expect(kindColor("llm").textClass).toBe("text-accent"); // orange
-    expect(kindColor("tool").textClass).toBe("text-warning"); // amber
-    expect(kindColor("chain").textClass).toBe("text-primary"); // violet (agent)
+    expect(kindColor("llm").textClass).toBe("text-foreground"); // neutral
+    expect(kindColor("tool").textClass).toBe("text-warning"); // yellow
+    expect(kindColor("chain").textClass).toBe("text-primary"); // lime (agent)
     expect(kindColor("retriever").textClass).toBe("text-info"); // blue
   });
 
