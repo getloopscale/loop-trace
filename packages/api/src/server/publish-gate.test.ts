@@ -75,7 +75,7 @@ function assertJobIsGated(name: string, job: Record<string, unknown> | undefined
  */
 // The reusable can be referenced two ways, and BOTH must be recognised as publishing:
 // the vendored copy (`./.github/workflows/build-publish.yml`) and the upstream one
-// (`getloopscale/loopzero/.github/workflows/build-publish.yml@<ref>`). Matching only the local
+// (`getloopscale/loop-runtime/.github/workflows/build-publish.yml@<ref>`). Matching only the local
 // form is what let the org-migration cutover pass the file while this gate went blind.
 const CALLS_BUILD_PUBLISH = /(^\.\/\.github\/workflows\/|\/)build-publish\.yml(@.+)?$/u;
 
@@ -412,7 +412,7 @@ jobs:
   });
 
   /**
-   * getloopscale/loopzero#446 — the platform runs looptrace from Amazon ECR by commit SHA, so the image job
+   * getloopscale/loop-runtime#446 — the platform runs looptrace from Amazon ECR by commit SHA, so the image job
    * must reach the ECR-capable reusable and hand it the registry and the role.
    *
    * Two failure modes are pinned here, and both are SILENT at startup — GitHub refuses the whole
@@ -421,9 +421,9 @@ jobs:
    *     sibling repo, five runs dead in under a second);
    *   - granting the job fewer permissions than the reusable declares.
    */
-  describe("the image reaches Amazon ECR (getloopscale/loopzero#446)", () => {
+  describe("the image reaches Amazon ECR (getloopscale/loop-runtime#446)", () => {
     const REUSABLE =
-      "getloopscale/loopzero/.github/workflows/build-publish.yml@6a07e48af6d1672af21adede244c0d32ed1eb731";
+      "getloopscale/loop-runtime/.github/workflows/build-publish.yml@54daa7e9587cb285f4aac9e012a9949a3a1f9ad6";
     /** Declared by the reusable at the pinned SHA — `on.workflow_call.inputs`. */
     const DECLARED_INPUTS = [
       "image", "dockerfile", "context", "registry", "build_args", "sign", "verify", "trivy",

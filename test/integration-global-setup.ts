@@ -15,7 +15,7 @@ export async function setup(): Promise<void> {
     await assertReachable(process.env["LOOPTRACE_PG_URI"]);
     return; // fast path — respect an externally-provided PG
   }
-  container = await new PostgreSqlContainer("postgres:16-alpine").start();
+  container = await new PostgreSqlContainer("postgres:19-alpine").start();
   // Every worker process forks AFTER globalSetup, inheriting this env var.
   process.env["LOOPTRACE_PG_URI"] = container.getConnectionUri();
 }
