@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { DataTable, type DataTableColumn } from "@usetheo/ui";
+import { DataTable, type DataTableColumn } from "@getloopscale/ui";
 
 import { useEvaluatorDefs } from "../hooks/useEvaluatorDefs.js";
 import { Loading, ErrorState, EmptyState } from "../components/primitives/States.js";

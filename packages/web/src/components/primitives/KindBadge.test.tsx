@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { ThemeProvider, violetForge } from "@theokit/ui";
 import { KindBadge } from "./KindBadge.js";
 import {
   deriveTraceListItemKind,
@@ -11,9 +10,9 @@ import type { TraceListItem } from "../../api/types.js";
 
 function withTheme(ui: React.ReactNode) {
   return (
-    <ThemeProvider defaultTheme="violet-forge" defaultMode="dark" themes={[violetForge]}>
+    <>
       {ui}
-    </ThemeProvider>
+    </>
   );
 }
 

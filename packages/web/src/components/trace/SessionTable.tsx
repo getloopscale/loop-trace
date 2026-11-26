@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Badge, DataTable, Timestamp, type DataTableColumn } from "@usetheo/ui";
+import { Badge, DataTable, Timestamp, type DataTableColumn } from "@getloopscale/ui";
 import type { SessionListItem } from "../../api/types.js";
 import { formatUsd } from "../../lib/money.js";
 import { EmptyState } from "../primitives/States.js";

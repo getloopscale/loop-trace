@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ThemeProvider, violetForge } from "@theokit/ui";
 import { DateRangePicker } from "./DateRangePicker.js";
 import { RangeProvider, useRange } from "../../hooks/useRange.js";
 
@@ -11,12 +10,12 @@ function ShowRange() {
 
 function renderPicker() {
   return render(
-    <ThemeProvider defaultTheme="violet-forge" defaultMode="dark" themes={[violetForge]}>
+    <>
       <RangeProvider>
         <DateRangePicker />
         <ShowRange />
       </RangeProvider>
-    </ThemeProvider>,
+    </>,
   );
 }
 

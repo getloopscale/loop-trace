@@ -3,7 +3,6 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
-import { ThemeProvider, violetForge } from "@theokit/ui";
 import { AppShell } from "../components/primitives/AppShell.js";
 import { AutoRefreshProvider } from "../hooks/useAutoRefresh.js";
 import { TraceListPage } from "./TraceListPage.js";
@@ -29,12 +28,7 @@ const KEY = "looptrace.autoRefreshMs";
 function renderApp(path = "/") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <ThemeProvider
-      defaultTheme="violet-forge"
-      defaultMode="dark"
-      themes={[violetForge]}
-      defaultDensity="compact"
-    >
+    <>
       <QueryClientProvider client={qc}>
         <AutoRefreshProvider>
           <MemoryRouter initialEntries={[path]}>
@@ -50,7 +44,7 @@ function renderApp(path = "/") {
           </MemoryRouter>
         </AutoRefreshProvider>
       </QueryClientProvider>
-    </ThemeProvider>,
+    </>,
   );
 }
 

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ThemeProvider, violetForge } from "@theokit/ui";
 import { TraceRowSpanTree } from "./TraceRowSpanTree.js";
 import type { TraceTreeNode } from "../../api/types.js";
 import * as client from "../../api/client.js";
@@ -14,11 +13,11 @@ vi.mock("../../api/client.js", async (orig) => {
 function renderTree(traceId = "t1") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <ThemeProvider defaultTheme="violet-forge" defaultMode="dark" themes={[violetForge]}>
+    <>
       <QueryClientProvider client={qc}>
         <TraceRowSpanTree traceId={traceId} />
       </QueryClientProvider>
-    </ThemeProvider>,
+    </>,
   );
 }
 

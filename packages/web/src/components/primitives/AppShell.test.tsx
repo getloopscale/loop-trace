@@ -2,17 +2,11 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
-import { ThemeProvider, violetForge } from "@theokit/ui";
 import { AppShell } from "./AppShell.js";
 
 function renderShell(initialPath = "/") {
   return render(
-    <ThemeProvider
-      defaultTheme="violet-forge"
-      defaultMode="dark"
-      themes={[violetForge]}
-      defaultDensity="compact"
-    >
+    <>
       <MemoryRouter initialEntries={[initialPath]}>
         <Routes>
           <Route element={<AppShell />}>
@@ -22,7 +16,7 @@ function renderShell(initialPath = "/") {
           </Route>
         </Routes>
       </MemoryRouter>
-    </ThemeProvider>,
+    </>,
   );
 }
 

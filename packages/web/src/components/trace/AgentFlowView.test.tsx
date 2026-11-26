@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ThemeProvider, violetForge } from "@theokit/ui";
 import { AgentFlowView } from "./AgentFlowView.js";
 import { SpanQueryProvider } from "../../hooks/useSpanQuery.js";
 import type { SankeyModel } from "../../lib/agent-graph.js";
@@ -21,13 +20,13 @@ const build = (): SankeyModel => ({ nodes: [], links: [] });
 function renderFlow() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <ThemeProvider defaultTheme="violet-forge" defaultMode="dark" themes={[violetForge]}>
+    <>
       <QueryClientProvider client={qc}>
         <SpanQueryProvider>
           <AgentFlowView title="Agent Graph" ariaLabel="agent graph" build={build} emptyHint="x" />
         </SpanQueryProvider>
       </QueryClientProvider>
-    </ThemeProvider>,
+    </>,
   );
 }
 

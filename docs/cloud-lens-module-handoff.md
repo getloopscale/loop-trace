@@ -210,7 +210,7 @@ CREATE TABLE lens_exports (
 - `pages/lens.tsx`: `useRequireAuth()`; query `GET /v1/dashboard/lens/metrics` (`throwOnError:true`);
   loading → skeletons; error → `Alert` (never fabricate zeros — Memory ADR D2); success → StatTiles +
   observability charts **+ a navigable TraceList table** of `GET /v1/dashboard/lens/list`.
-- DS: import from `@usetheo/ui` (`Alert`, `Button`, `Card`, `PageShell`, `Skeleton`, `StatTile`,
+- DS: import from `@getloopscale/ui` (`Alert`, `Button`, `Card`, `PageShell`, `Skeleton`, `StatTile`,
   `TokenUsageChart`, `Table`/`DataTable`) — the Violet Forge bundle + the **TraceList** reference
   template are already at `dashboard/docs/looptrace/`.
 - Nav/sidebar: register the Lens route alongside Memory.

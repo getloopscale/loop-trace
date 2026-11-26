@@ -8,7 +8,7 @@ import {
   Timestamp,
   type DataTableColumn,
   type DataTableSort,
-} from "@usetheo/ui";
+} from "@getloopscale/ui";
 import type { TraceListItem } from "../../api/types.js";
 import { addAnnotation } from "../../api/client.js";
 import { deriveTraceListItemKind } from "../../lib/span-kind.js";

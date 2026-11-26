@@ -22,10 +22,6 @@ overrides:
   # Clears GHSA-8988-4f7v-96qf (W3C Baggage OOM, MEDIUM) pulled transitively by
   # @opentelemetry/otlp-transformer; fixed in @opentelemetry/core 2.8.0.
   "@opentelemetry/core": "^2.8.0"
-  # Clears GHSA-vqpr-j7v3-hqw9 (valibot EMOJI_REGEX ReDoS, HIGH) pulled transitively
-  # by @theokit/ui (theme-schema validation); fixed in valibot 1.2.0. Validated that
-  # @theokit/ui's ThemeProvider + barrel survive the 0.42->1.x bump via build + smoke (M17).
-  "valibot": "^1.4.1"
 
 # ── Supply-chain hardening (semgrep p/typescript, surfaced by the CD SAST lane) ──────────────
 # These are the settings that decide what pnpm is willing to install, and they matter most in
@@ -37,11 +33,10 @@ overrides:
 minimumReleaseAge: 10080
 # The 7-day rule protects against an UNKNOWN publisher shipping something malicious. Our own
 # packages have a known publisher — us — so waiting a week to consume a fix we just released
-# buys nothing and costs the whole point of releasing it. Scoped narrowly to the two org scopes;
+# buys nothing and costs the whole point of releasing it. Scoped narrowly to our own org scope;
 # everything else, including every transitive dependency, still waits.
 minimumReleaseAgeExclude:
-  - "@usetheo/*"
-  - "@theokit/*"
+  - "@getloopscale/*"
 # trustPolicy — refuse an update that DOWNGRADES a package's own security settings. Without it,
 # a malicious release can quietly turn off the protections a previous version had enabled.
 trustPolicy: no-downgrade

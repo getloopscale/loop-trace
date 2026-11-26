@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { DataTable, Timestamp, type DataTableColumn } from "@usetheo/ui";
+import { DataTable, Timestamp, type DataTableColumn } from "@getloopscale/ui";
 import { X } from "lucide-react";
 import { useDataset } from "../hooks/useDatasets.js";
 import { Loading, ErrorState, EmptyState } from "../components/primitives/States.js";

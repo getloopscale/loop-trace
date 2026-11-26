@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Tabs } from "@usetheo/ui";
+import { Tabs } from "@getloopscale/ui";
 import { useCostByPeriod } from "../hooks/useCost.js";
 import { CostByPeriod } from "../components/charts/CostByPeriod.js";
 import { AutoRefreshControl } from "../components/filters/AutoRefreshControl.js";

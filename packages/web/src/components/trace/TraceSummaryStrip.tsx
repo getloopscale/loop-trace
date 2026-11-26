@@ -1,4 +1,4 @@
-import { StatTile } from "@usetheo/ui";
+import { StatTile } from "@getloopscale/ui";
 import { Activity, Clock, Coins, DollarSign } from "lucide-react";
 import { useObservability } from "../../hooks/useObservability.js";
 import { useRange } from "../../hooks/useRange.js";

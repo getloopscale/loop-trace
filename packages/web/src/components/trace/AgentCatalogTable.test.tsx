@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, within } from "@testing-library/react";
-import { ThemeProvider, violetForge } from "@theokit/ui";
 import { AgentCatalogTable } from "./AgentCatalogTable.js";
 import type { Agent } from "../../api/types.js";
 
@@ -23,9 +22,9 @@ function agent(over: Partial<Agent> = {}): Agent {
 
 function renderTable(agents: Agent[]) {
   return render(
-    <ThemeProvider defaultTheme="violet-forge" defaultMode="dark" themes={[violetForge]}>
+    <>
       <AgentCatalogTable agents={agents} />
-    </ThemeProvider>,
+    </>,
   );
 }
 
